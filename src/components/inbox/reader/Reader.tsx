@@ -1,3 +1,4 @@
+import type { FinanceDestination } from "../../finances/financesNavigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion as Motion, useReducedMotion } from "motion/react";
 import AddTaskPanel from "../../todoist/AddTaskPanel";
@@ -49,7 +50,7 @@ export default function Reader({
   showDraft: boolean;
   billOpen: boolean;
   setBillOpen: Dispatch<SetStateAction<boolean>>;
-  onOpenRecordedBill?: (target: { date: string; itemId: string }) => void;
+  onOpenRecordedBill?: (target: FinanceDestination) => void;
   isMobile?: boolean;
   readOnly?: boolean;
   onWorkspaceDirtyChange?: (dirty: boolean) => void;

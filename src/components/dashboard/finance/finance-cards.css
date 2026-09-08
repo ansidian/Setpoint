@@ -23,10 +23,21 @@
 .dashboard-finance-category { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px 12px; margin:11px 0; font-size:11px; }
 .dashboard-finance-track { grid-column:1/-1; height:3px; border-radius:3px; background:rgba(255,255,255,.07); overflow:hidden; }
 .dashboard-finance-track > span { display:block; height:100%; background:var(--sp-accent); border-radius:inherit; opacity:.7; }
-.dashboard-finance-activity { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:22px; }
-.dashboard-finance-activity section { min-width:0; }
+.dashboard-finance-review-row { align-items:flex-start; }
+.dashboard-finance-row-end { display:flex; flex-direction:column; align-items:flex-end; gap:5px; flex-shrink:0; max-width:44%; }
+.dashboard-finance-review-row .dashboard-finance-amount { color:var(--sp-lavender); overflow-wrap:anywhere; }
+.dashboard-finance-review-row .dashboard-finance-amount[data-direction=inflow] { color:var(--sp-income); }
+.dashboard-finance-completed { margin-top:12px; border-top:1px solid #ffffff12; padding-top:8px; }
+.dashboard-finance-completed-toggle { display:flex; align-items:center; gap:8px; min-height:36px; padding:8px 4px; border-radius:6px; color:var(--color-text-secondary,#a6adc8); font-size:12px; transition:background 160ms,transform 160ms; }
+.dashboard-finance-completed-toggle:hover { background:#ffffff0b; transform:translateY(-1px); }
+.dashboard-finance-completed-toggle:focus-visible { outline:2px solid var(--sp-accent); outline-offset:2px; transform:translateY(-1px); }
+.dashboard-finance-completed-toggle:active { transform:translateY(1px); }
+.dashboard-finance-completed-toggle svg { transition:transform 160ms; }
+.dashboard-finance-completed-toggle[aria-expanded=true] svg { transform:rotate(180deg); }
 .dashboard-finance-status { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; font-size:11px; color:var(--color-text-secondary,#a6adc8); }
-@media(max-width:1050px) { .dashboard-finance-grid,.dashboard-finance-activity { grid-template-columns:minmax(0,1fr); } }
+@media(max-width:1050px) { .dashboard-finance-grid { grid-template-columns:minmax(0,1fr); } }
 @media(max-width:767px) { .dashboard-finance-card { padding:16px; } }
 @media(pointer:coarse) { .dashboard-finance-button { min-height:44px; } .dashboard-finance-row { min-height:48px; } }
 @media(prefers-reduced-motion:reduce) { .dashboard-finance-button,.dashboard-finance-row { transition:none; transform:none!important; } }
+@media(max-width:767px) { .dashboard-finance-completed-toggle,.dashboard-finance-review .dashboard-finance-button { min-height:44px; } }
+@media(prefers-reduced-motion:reduce) { .dashboard-finance-completed-toggle,.dashboard-finance-completed-toggle svg { transition:none; } .dashboard-finance-completed-toggle { transform:none!important; } }

@@ -45,6 +45,7 @@ export interface FinancialDocument {
   candidate: BillCandidate | null;
   correction?: NonNullable<FinancialEmailPlan["workflow"]>["correction"];
   correctedEntry?: (FinancialEventCompletionEntry & { payeeId?: string | null; scheduleId?: string }) | null;
+  correctedResolution?: 'kept_actual';
   ownerConfirmedEntry: FinancialEventCompletionEntry | null;
   ownerConfirmationConflict: boolean;
   nextAttemptAt: number | null;
@@ -85,9 +86,9 @@ export interface FinancialEvent {
 const DOCUMENT_SELECT = `SELECT d.*, e.subject, e.body_text, e.from_name, e.from_address,
   e.email_date_utc, e.thread_id, e.message_id, e.sender_authentication_json,
   owner_event.owner_completion_json AS event_owner_completion_json,
-  (SELECT json_extract(c.effective_result_json, '$.entry') FROM ea_financial_effective_corrections c
+  (SELECT c.effective_result_json FROM ea_financial_effective_corrections c
    JOIN ea_financial_activity_occurrences o ON o.user_id=c.user_id AND o.activity_id=c.activity_id
-   WHERE o.user_id=d.user_id AND o.owner='event' AND o.record_id=d.event_id) AS correction_entry_json,
+   WHERE o.user_id=d.user_id AND o.owner='event' AND o.record_id=d.event_id) AS correction_result_json,
   (SELECT json_object('id', c.id, 'state', c.state, 'revision', c.revision) FROM ea_financial_corrections c
    JOIN ea_financial_activity_occurrences o ON o.user_id=c.user_id AND o.activity_id=c.activity_id
    WHERE o.user_id=d.user_id AND o.owner='event' AND o.record_id=d.event_id
@@ -127,6 +128,9 @@ function writeJson(value: unknown): string {
 }
 
 export function documentFromRow(row: Row): FinancialDocument {
+  const result = readJson<{ resolution?: string; entry?: FinancialDocument['correctedEntry'] }>(row.correction_result_json);
+  const correction = readJson<FinancialDocument['correction']>(row.correction_json) || undefined;
+  const kept = result?.resolution === 'kept_actual';
   return {
     id: Number(row.id), userId: String(row.user_id), accountId: String(row.account_id),
     emailUid: String(row.email_uid), revision: Number(row.revision),
@@ -134,9 +138,10 @@ export function documentFromRow(row: Row): FinancialDocument {
     attempts: Number(row.attempts), claimToken: nullableString(row.claim_token),
     claimedAt: nullableNumber(row.claimed_at), eventId: nullableString(row.event_id),
     contentHash: nullableString(row.content_hash), candidate: readJson<BillCandidate>(row.candidate_json),
-    correction: readJson<FinancialDocument["correction"]>(row.correction_json) || undefined,
-    correctedEntry: readJson<FinancialEventCompletionEntry>(row.correction_entry_json),
-    ownerConfirmedEntry: readJson<FinancialEventCompletionEntry>(row.correction_entry_json) || readJson<FinancialOwnerCompletion>(row.event_owner_completion_json)?.entry || null,
+    correction: correction && { ...correction, ...(kept && correction.state === 'completed' ? { resolution: 'kept_actual' as const } : {}) },
+    correctedEntry: result?.entry || null,
+    ...(kept ? { correctedResolution: 'kept_actual' as const } : {}),
+    ownerConfirmedEntry: result?.entry || (kept ? null : readJson<FinancialOwnerCompletion>(row.event_owner_completion_json)?.entry || null),
     ownerConfirmationConflict: Number(row.owner_confirmation_conflict) === 1,
     nextAttemptAt: nullableNumber(row.next_attempt_at), error: nullableString(row.last_error),
     createdAt: Number(row.created_at), updatedAt: Number(row.updated_at),

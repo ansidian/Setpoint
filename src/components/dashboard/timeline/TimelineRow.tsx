@@ -217,6 +217,7 @@ function TimelineRow({
     <div
       data-testid={isMobile ? "timeline-row-mobile" : "timeline-row-desktop"}
       data-needs-you-reference={showNeedsYouReference ? "true" : undefined}
+      data-dashboard-detail-trigger={onJump ? "true" : undefined}
       className={`${isPast ? "timeline-row--past " : ""}${isMobile ? "timeline-mobile-row " : ""}dashboard-item-trigger sp-focus-ring`}
       role="button"
       tabIndex={0}

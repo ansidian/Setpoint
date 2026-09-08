@@ -42,6 +42,7 @@ export function StartHereStrip({
       <button
         type="button"
         className="start-here-strip__open dashboard-item-trigger sp-focus-ring"
+        data-dashboard-detail-trigger={!card.email ? "true" : undefined}
         aria-label={`${action}: ${card.title}. ${detail}`}
         title={`${card.title} — ${detail}`}
         onClick={(event) => onActivate(card, event.currentTarget)}

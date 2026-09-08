@@ -1,3 +1,4 @@
+import { readImportRun } from './transaction-import.test-utils.ts';
 import { createClient, type Client } from "@libsql/client";
 import { readFileSync } from "fs";
 import { dirname, join } from "path";
@@ -35,12 +36,10 @@ describe("transaction import store", () => {
     return store().createRun({
       id,
       userId: "owner-1",
-      trigger: "historical_scan",
+      trigger: "arrival",
       optionsKey: "gmail-1:amazon:2026-01-01:2026-02-01",
       gmailAccountIds: ["gmail-1"],
       sources: ["amazon"],
-      startDate: "2026-01-01",
-      endDate: "2026-02-01",
     });
   }
 
@@ -73,6 +72,26 @@ describe("transaction import store", () => {
     };
   }
 
+  it("executes only arrival items while retaining saved history for inspection", async () => {
+    const subject = store();
+    await createRun("saved-history");
+    await db.execute("UPDATE ea_transaction_import_runs SET trigger = 'historical_scan', start_date = '2026-01-01', end_date = '2026-02-01' WHERE id = 'saved-history'");
+    for (const status of ["queued", "ready", "failed", "needs_review"] as const) {
+      await subject.insertItem(itemInput({ id: status, runId: "saved-history", candidateKey: status, importedId: status, status }));
+    }
+    expect(await subject.claimNextItem("old")).toBeNull();
+    expect(await subject.getNextWakeAt()).toBeNull();
+    expect(await subject.retryItem("owner-1", "failed")).toBe(false);
+    expect(await subject.confirmItem("owner-1", "saved-history", "needs_review", { date: "2026-01-15", amountCents: -2599, payee: "Amazon", notes: "", actualAccountId: "card", actualCategoryId: null })).toBe(false);
+    expect(await subject.getItem("owner-1", "ready")).toMatchObject({ status: "ready" });
+    expect((await subject.listItemsForEmail("owner-1", itemInput().emailUid))[0]).toMatchObject({ runTrigger: "historical_scan" });
+    expect((await subject.readDashboardActivity("owner-1")).reviewCount).toBe(0);
+    await createRun();
+    await subject.insertItem(itemInput());
+    expect(await subject.claimNextItem("new")).toMatchObject({ id: "item-1" });
+    expect(await subject.claimNextItem("old-again")).toBeNull();
+  });
+
   it("suppresses corrected receipt aliases while allowing a different order from the same email", async () => {
     await createRun();
     const subject = store();
@@ -81,7 +100,7 @@ describe("transaction import store", () => {
     await db.execute("UPDATE ea_transaction_import_runs SET status='completed' WHERE id='run-1'");
     await createRun('run-2');
     await subject.insertItem(itemInput({ id: 'repeat', runId: 'run-2', status: 'ready' }));
-    const repeat = (await subject.getRunDetail('owner-1', 'run-2'))!.items.find(item => item.id === 'repeat');
+    const repeat = (await readImportRun(db, subject, 'owner-1', 'run-2'))!.items.find(item => item.id === 'repeat');
     expect(repeat).toMatchObject({ status: 'needs_review', automaticSafe: false });
     expect(await subject.claimNextItem('replay')).toBeNull();
     expect(await subject.confirmItem('owner-1', 'run-2', 'repeat', { date: '2026-01-15', amountCents: -2599, payee: 'Amazon', notes: '', actualAccountId: 'checking', actualCategoryId: null })).toBe(false);
@@ -106,15 +125,18 @@ describe("transaction import store", () => {
     expect(await subject.listItemsForEmail('another-owner', itemInput().emailUid)).toEqual([]);
   });
 
-  it("coalesces an identical active historical run and admits a new one after completion", async () => {
-    const first = await createRun("run-1");
-    const coalesced = await createRun("run-2");
-    expect(first.created).toBe(true);
-    expect(coalesced).toMatchObject({ created: false, run: { id: "run-1" } });
-
-    await db.execute("UPDATE ea_transaction_import_runs SET status = 'completed' WHERE id = 'run-1'");
-    const next = await createRun("run-2");
-    expect(next).toMatchObject({ created: true, run: { id: "run-2" } });
+  it("keeps an accepted result without inventing original receipt values in Dashboard", async () => {
+    await createRun();
+    const subject = store();
+    await subject.insertItem(itemInput({ status: 'added' }));
+    const occurrence = await db.execute("SELECT activity_id FROM ea_financial_activity_occurrences WHERE record_id='item-1' AND owner='import'");
+    const activityId = String(occurrence.rows[0]!.activity_id);
+    const effective = { correctionId: 'kept', outcome: 'kept', resolution: 'kept_actual', evidence: { budgetId: 'budget', objects: [] }, snapshot: {} };
+    await db.execute({ sql: "INSERT INTO ea_financial_correction_previews VALUES ('kept-preview','owner-1',?,'{}',1)", args: [activityId] });
+    await db.execute({ sql: "INSERT INTO ea_financial_corrections (id,user_id,activity_id,budget_id,preview_id,idempotency_key,state,effective_result_json,updated_at) VALUES ('kept','owner-1',?,'budget','kept-preview','kept','completed',?,2)", args: [activityId, JSON.stringify(effective)] });
+    expect((await subject.listItemsForEmail('owner-1', itemInput().emailUid))[0]?.effectiveResult).toEqual(effective);
+    expect((await subject.readDashboardActivity('owner-1')).recent[0]).toMatchObject({ amountCents: null, description: 'Current Actual result kept' });
+    expect(await subject.getItem('owner-1', 'item-1')).toMatchObject({ amountCents: -2599, payee: 'Amazon' });
   });
 
   it("projects bounded owner-wide review and automatic history without evidence or misleading counts", async () => {
@@ -159,32 +181,6 @@ describe("transaction import store", () => {
     });
   });
 
-  it("pages every pending-review run with an owner-scoped total and no automatic-ready work", async () => {
-    const subject = store();
-    for (let index = 0; index < 16; index++) {
-      now += 100;
-      const runId = `pending-${index}`;
-      await subject.createRun({ id: runId, userId: "owner-1", trigger: "arrival", optionsKey: runId, gmailAccountIds: ["gmail-1"], sources: ["amazon"] });
-      await subject.insertItem(itemInput({
-        id: `candidate-${index}`, runId, status: index < 14 ? "needs_review" : "ready",
-      }));
-    }
-    const first = await subject.listReviewRuns("owner-1");
-    expect(first.total).toBe(14);
-    expect(first.offset).toBe(0);
-    expect(first.runs.map((run) => run.id)).toEqual(Array.from({ length: 12 }, (_, index) => `pending-${13 - index}`));
-    const next = await subject.listReviewRuns("owner-1", 12, 12);
-    expect(next.total).toBe(14);
-    expect(next.offset).toBe(12);
-    expect(next.runs.map((run) => run.id)).toEqual(["pending-1", "pending-0"]);
-    expect(await subject.listReviewRuns("different-owner")).toEqual({ runs: [], total: 0, offset: 0 });
-    expect((await subject.listReviewRuns("owner-1", 100, -1)).runs).toHaveLength(14);
-    await subject.dismissItem("owner-1", "candidate-13");
-    const afterDismiss = await subject.listReviewRuns("owner-1");
-    expect(afterDismiss.total).toBe(13);
-    expect(afterDismiss.runs[0]?.id).toBe("pending-12");
-  });
-
   it("persists cursors and item evidence without raw message bodies", async () => {
     await createRun();
     const subject = store();
@@ -197,7 +193,7 @@ describe("transaction import store", () => {
       queued: 1,
     });
 
-    const detail = await subject.getRunDetail("owner-1", "run-1");
+    const detail = await readImportRun(db, subject, "owner-1", "run-1");
     expect(detail).toMatchObject({
       cursor: { gmailAccountIndex: 0, pageToken: "next-page" },
       counts: { discovered: 1, parsed: 1, queued: 1 },
@@ -209,7 +205,7 @@ describe("transaction import store", () => {
       }],
     });
     expect(JSON.stringify(detail)).not.toMatch(/html|message body/i);
-    await expect(subject.getRunDetail("different-owner", "run-1")).resolves.toBeNull();
+    await expect(readImportRun(db, subject, "different-owner", "run-1")).resolves.toBeNull();
   });
 
   it("admits one observe-only generic item per stable financial-email identity", async () => {
@@ -277,16 +273,13 @@ describe("transaction import store", () => {
     });
   });
 
-  it("lists recent runs and bounded subject-bearing email items by owner", async () => {
+  it("lists bounded subject-bearing email items by owner", async () => {
     await createRun();
     const subject = store();
     await subject.insertItem(itemInput({
       emailSubject: "Your Amazon.com order #111-222",
     }));
 
-    await expect(subject.listRuns("owner-1", 5)).resolves.toEqual([
-      expect.objectContaining({ id: "run-1" }),
-    ]);
     await expect(subject.listItemsForEmail("owner-1", "gmail-gmail-1-message-1")).resolves.toEqual([
       expect.objectContaining({
         id: "item-1",
@@ -304,19 +297,14 @@ describe("transaction import store", () => {
       (user_id, source, mode, actual_account_id, actual_category_id, created_at, updated_at)
       VALUES ('owner-1', 'amazon', 'automatic', 'checking-new', 'shopping-new', 1000, 2000)`);
 
-    const detail = await subject.getRunDetail("owner-1", "run-1");
+    const detail = await readImportRun(db, subject, "owner-1", "run-1");
     expect(detail!.items[0]).toMatchObject({ actualAccountId: "checking-old", actualCategoryId: "shopping-old", automationMode: "observe" });
   });
 
-  it("uses conditional updates so concurrent run and item claims have one winner", async () => {
+  it("uses conditional updates so concurrent item claims have one winner", async () => {
     await createRun();
     const subjectA = store();
     const subjectB = store();
-    const runClaims = await Promise.all([
-      subjectA.claimNextRun("run-worker-a"),
-      subjectB.claimNextRun("run-worker-b"),
-    ]);
-    expect(runClaims.filter(Boolean)).toHaveLength(1);
 
     await subjectA.insertItem(itemInput());
     const itemClaims = await Promise.all([
@@ -362,57 +350,25 @@ describe("transaction import store", () => {
     await createRun();
     const subject = store();
     await subject.insertItem(itemInput());
-    await subject.claimNextRun("run-worker");
     await subject.claimNextItem("item-worker");
-    await db.execute(`UPDATE ea_transaction_import_runs SET attempts = 2, claimed_at = 100 WHERE id = 'run-1'`);
     await db.execute(`UPDATE ea_transaction_import_items SET attempts = 2, claimed_at = 100 WHERE id = 'item-1'`);
 
     now = 5_000;
     await expect(subject.recoverStaleClaims(1_000, 3)).resolves.toEqual({
-      runsRecovered: 1,
-      runsFailed: 0,
       itemsRecovered: 1,
       itemsFailed: 0,
     });
-    let run = await subject.getRun("owner-1", "run-1");
-    let detail = await subject.getRunDetail("owner-1", "run-1");
-    expect(run).toMatchObject({ status: "retry", lastError: expect.stringContaining("interrupted") });
+    let detail = await readImportRun(db, subject, "owner-1", "run-1");
     expect(detail!.items[0]).toMatchObject({ status: "queued", lastError: expect.stringContaining("interrupted") });
 
-    await subject.claimNextRun("run-worker-2");
     await subject.claimNextItem("item-worker-2");
-    await db.execute(`UPDATE ea_transaction_import_runs SET attempts = 3, claimed_at = 100 WHERE id = 'run-1'`);
     await db.execute(`UPDATE ea_transaction_import_items SET attempts = 3, claimed_at = 100 WHERE id = 'item-1'`);
     await expect(subject.recoverStaleClaims(1_000, 3)).resolves.toEqual({
-      runsRecovered: 0,
-      runsFailed: 1,
       itemsRecovered: 0,
       itemsFailed: 1,
     });
-    run = await subject.getRun("owner-1", "run-1");
-    detail = await subject.getRunDetail("owner-1", "run-1");
-    expect(run!.status).toBe("failed");
+    detail = await readImportRun(db, subject, "owner-1", "run-1");
     expect(detail!.items[0]).toMatchObject({ status: "failed", reconciliationStatus: "failed" });
-  });
-
-  it("immediately reclaims an abandoned historical scan after restart without reclaiming Actual work", async () => {
-    await createRun();
-    const subject = store();
-    await subject.insertItem(itemInput());
-    await subject.claimNextRun("run-worker");
-    await subject.claimNextItem("item-worker");
-
-    now = 5_000;
-    await expect(subject.recoverAbandonedHistoricalRuns()).resolves.toEqual({
-      runsRecovered: 1,
-    });
-    expect(await subject.getRun("owner-1", "run-1")).toMatchObject({
-      status: "retry",
-      lastError: expect.stringContaining("server restart"),
-    });
-    expect((await subject.getRunDetail("owner-1", "run-1"))!.items[0]).toMatchObject({
-      status: "reconciling",
-    });
   });
 
   it("recovers an interrupted pre-call import claim back to ready", async () => {
@@ -430,7 +386,7 @@ describe("transaction import store", () => {
 
     now = 5_000;
     await subject.recoverStaleClaims(1_000, 3);
-    expect((await subject.getRunDetail("owner-1", "run-1"))!.items[0]).toMatchObject({
+    expect((await readImportRun(db, subject, "owner-1", "run-1"))!.items[0]).toMatchObject({
       status: "ready",
       reconciliationStatus: "would_add",
       lastError: expect.stringContaining("interrupted"),

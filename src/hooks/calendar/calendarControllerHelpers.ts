@@ -3,7 +3,6 @@
 // functions in the controller; moving them here shrinks the orchestrator
 // without changing any behavior. Each function is a pure transform over its
 // arguments and is unit-testable directly.
-import billsView from "../../components/calendar/views/billsView.tsx";
 import eventsView from "../../components/calendar/views/eventsView.tsx";
 import { deadlineItemsFromData } from "../../components/calendar/views/deadlines/deadlinesModel.ts";
 import type { CalendarSearchResult, NormalizedCalendarEvent } from "../../../shared/types/calendar";
@@ -48,7 +47,6 @@ export type CalendarSearchResultLike = Omit<Partial<CalendarSearchResult>, "acti
 
 export const VIEWS = {
   events: eventsView,
-  bills: billsView,
 };
 export const SCROLL_IDLE_THRESHOLD_MS = 400;
 

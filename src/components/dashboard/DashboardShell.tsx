@@ -1,11 +1,12 @@
+import useWorkspaceTabRoute from './useWorkspaceTabRoute';
+import type { FinanceDestination } from '../finances/financesNavigation';
+import { financesHref } from '../finances/financesNavigation';
 import MobileShellActions from "../shell/MobileShellActions";
 import { useState, useEffect, useLayoutEffect, useMemo, lazy, Suspense, useCallback, startTransition } from "react";
 import type { ComponentType, Dispatch, RefObject, SetStateAction } from "react";
-import { useMatch, useNavigate } from "react-router";
 import ShellHeader from "../shell/ShellHeader";
 import { MobileBottomNav } from "../shell/MobileBottomNav";
 import { useDashboard } from "../../context/DashboardContext";
-import { readDemoSafeLocalStorage, writeDemoSafeLocalStorage } from "../../demo/demoSafeLocalStorage";
 import { isDemoMode } from "../../demo/config";
 import useIsMobile from "../../hooks/useIsMobile";
 import { MOBILE_MEDIA_QUERY } from "../../lib/breakpoints";
@@ -55,6 +56,7 @@ const importNotesTab = () => import("../notes/NotesTab");
 const NotesTab = lazy(importNotesTab);
 const importNewsTab = () => import("../news/NewsTab");
 const NewsTab = lazy(importNewsTab);
+const FinancesWorkspace = lazy(() => import("../finances/FinancesWorkspace"));
 const AlfredPanel = lazy(() => import("../alfred/AlfredPanel"));
 
 // Former Customize defaults, now hardcoded. The accent is also baked into the
@@ -107,27 +109,14 @@ export function DashboardShell({
   const calendarRange = calendarRangeInput as ReturnType<typeof useCalendarRange>;
   const isMobile = useIsMobile();
   const demoMode = isDemoMode();
-  const settingsOpen = useMatch("/settings") !== null;
+  const financesRoute = useWorkspaceTabRoute(isMobile,demoMode);
+  const { tab,setTab,location,navigate,settingsOpen,financialOpen } = financesRoute;
   const {
     handleAddTask,
     handleCompleteTask,
     handleDeleteTask,
     handleMoveTask,
   } = useDashboard();
-  const [tab, setTab] = useState<DashboardTab>(() => {
-    if (settingsOpen) return "dashboard";
-    try {
-      const saved = readDemoSafeLocalStorage("ea:tab");
-      if (saved === "inbox") return "inbox";
-      if (saved === "notes" && !isMobile && !demoMode) return "notes";
-      return "dashboard";
-    } catch {
-      return "dashboard";
-    }
-  });
-  useEffect(() => {
-    writeDemoSafeLocalStorage("ea:tab", tab);
-  }, [tab]);
   useEffect(() => {
     if (demoMode) return undefined;
     const mobileQuery = window.matchMedia(MOBILE_MEDIA_QUERY);
@@ -136,7 +125,7 @@ export function DashboardShell({
     };
     mobileQuery.addEventListener("change", leaveDesktopNotes);
     return () => mobileQuery.removeEventListener("change", leaveDesktopNotes);
-  }, [demoMode]);
+  }, [demoMode, setTab]);
   // Let the shell hide calendar-owned body portals before paint when inactive.
   useLayoutEffect(() => {
     document.documentElement.dataset.activeTab = tab;
@@ -158,8 +147,11 @@ export function DashboardShell({
   const [newsMounted, setNewsMounted] = useState(false);
   const [notesMounted, setNotesMounted] = useState(tab === "notes");
   const setShellTab = useCallback((nextTab: DashboardTab) => {
-    if (nextTab !== "dashboard" && nextTab !== "inbox" && nextTab !== "calendar" && nextTab !== "notes" && nextTab !== "news") return;
+    if (nextTab !== "dashboard" && nextTab !== "inbox" && nextTab !== "calendar" && nextTab !== "notes" && nextTab !== "news" && nextTab !== "finances") return;
     if (nextTab === "notes" && (isMobile || demoMode)) return;
+    if (settingsOpen || financialOpen) return;
+    if (nextTab === 'finances') { navigate(financesHref()); return; }
+    if (location.pathname === '/finances') navigate('/', { state: { shellTab: nextTab } });
     if (nextTab !== tab) window.dispatchEvent(new CustomEvent("ea-dashboard-tab-change", { detail: { tab: nextTab } }));
     if (nextTab === "calendar") setCalendarMounted(true); // mount-on-first-visit
     if (nextTab === "news") setNewsMounted(true); // mount-on-first-visit
@@ -174,7 +166,7 @@ export function DashboardShell({
       return;
     }
     startTransition(() => setTab(nextTab));
-  }, [demoMode, isMobile, returnHome, tab]);
+  }, [demoMode, isMobile, returnHome, tab, settingsOpen, financialOpen, location.pathname, navigate, setTab]);
 
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [historicalSnapshotView, setHistoricalSnapshotView] = useState<SnapshotView | null>(null);
@@ -260,7 +252,7 @@ export function DashboardShell({
   const handleHeaderToggleHistory = useCallback(() => setHistoryOpen((v) => !v), [setHistoryOpen]);
 
   // Foreground overlays suspend shell navigation while retaining the active tab.
-  const anyBlockingOverlayOpen = analyticsOpen || historyOpen || settingsOpen;
+  const anyBlockingOverlayOpen = analyticsOpen || historyOpen || settingsOpen || financialOpen;
 
   useDashboardShellHotkeys({
     activeTab: tab,
@@ -331,9 +323,10 @@ export function DashboardShell({
     openEvent: openDashboardEvent,
     openInCalendar: openItemSheetInCalendar,
   } = useDashboardItemSheet({ tab, openCalendar });
-  const handleInboxOpenRecordedBill = useCallback(({ date, itemId }: { date: string; itemId: string }) => {
-    openDashboardBill(date, itemId);
-  }, [openDashboardBill]);
+  const handleInboxOpenRecordedBill = useCallback((target: FinanceDestination) => {
+    closeAlfred();
+    navigate(financesHref(target));
+  }, [navigate, closeAlfred]);
   const billPayLinksByScheduleId = useUtilityPayLinks();
 
   const {
@@ -342,10 +335,9 @@ export function DashboardShell({
     scrollToTop: scrollDashboardToTop,
   } = useMobileDashboardScrollRestoration({ isMobile, tab });
 
-  const navigate = useNavigate();
   const handlePaletteAction = useCallback((item: { kind: string; payload?: string }) => {
     if (item.kind === "tab" && item.payload) setShellTab(item.payload as DashboardTab);
-    else if (item.kind === "calendar-view" && item.payload === "bills") openCalendar("bills");
+    else if (item.kind === "calendar-view" && item.payload === "bills") navigate(financesHref());
     else if (item.kind === "calendar-view" && item.payload === "events") openCalendar("events");
     else if (item.kind === "analytics") {
       closePalette();
@@ -525,6 +517,9 @@ export function DashboardShell({
             </Suspense>
           ) : null}
         </DashboardTabPanel>
+        <DashboardTabPanel tab="finances" active={tab === "finances"} isMobile={isMobile}>
+          {financesRoute.mounted && <Suspense fallback={<p>Loading Finances…</p>}><FinancesWorkspace search={financesRoute.search} active={tab === 'finances'} /></Suspense>}
+        </DashboardTabPanel>
         <DashboardTabPanel tab="notes" active={tab === "notes"} isMobile={isMobile}>
           {notesMounted && !isMobile && !demoMode ? (
             <Suspense fallback={<div className="notes-canvas-loading" aria-label="Loading notes canvas" />}>
@@ -588,6 +583,7 @@ export function DashboardShell({
             handoff={alfredHandoff}
             emailHandoff={alfredEmailHandoff}
             newChatTick={alfredNewChatTick}
+            onOpenFinances={handleInboxOpenRecordedBill}
             onOpenCalendarItem={handleAlfredOpenCalendarItem}
             onReviewCalendarProposal={handleAlfredReviewCalendarProposal}
           />

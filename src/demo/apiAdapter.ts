@@ -1,3 +1,4 @@
+import { handleDemoFinances } from './financesWorkspace';
 import { completeDemoFinancialEvent, demoCompletionPlan } from "./financialCompletion";
 import type { FinancialEventCompletionRequest } from "../../shared/types/financial-operations";
 import { createDemoApiError } from "./config.ts";
@@ -29,8 +30,7 @@ type DemoRemoteContentTrustEntry = {
   sender_address: string;
   created_at: string;
 };
-const clone = <T>(value: T): T => value == null ? value : structuredClone(value);
-let demoRemoteContentTrustEntries: DemoRemoteContentTrustEntry[] = [];
+const clone = <T>(value: T): T => value == null ? value : structuredClone(value);let demoRemoteContentTrustEntries: DemoRemoteContentTrustEntry[] = [];
 function route(path: string): URL {
   return new URL(path, "http://setpoint-demo.local");
 }
@@ -288,6 +288,7 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
   const pathname = url.pathname;
   const method = String(options.method || "GET").toUpperCase();
   const body = parseBody(options);
+  if (pathname.startsWith("/api/briefing/finances")) { const result=handleDemoFinances(url,method,getDemoSeed()); if(result!==NO_DEMO_API_RESPONSE)return result; }
   const targetedRefresh = pathname === "/api/dashboard/current/refresh" && method === "POST" && body.source != null;
   const readOnlyPost = !targetedRefresh && (pathname === "/api/dashboard/current/refresh" || pathname === "/api/dashboard/current/sync");
   const seed = method === "GET" || readOnlyPost ? getDemoSeed() : forkDemoSeedForMutation();

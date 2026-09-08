@@ -18,6 +18,7 @@ Calendar UI root: `CalendarModal.tsx` is the entry point (named for history; the
 - `CalendarRailStates.tsx` — rail state transitions: loading, expanded, collapsed
 - `CalendarSelectedDayEmptyRail.tsx` — empty state with nearby activity and primary action
 - `DetailRailPrimitives.tsx` — hero cards, meta chips, section containers
+- `detail-cards.css` — shared item-detail card, aligned facts, type header, and action/close states across Dashboard and Calendar
 - `TimelineDetailRail.tsx` — timeline layout with collapsible sections and motion
 - `NearbyActivityCard.tsx` — adjacent days' activity with neighbor navigation
 - `GoogleSpecialDateBadge.tsx` — birthday/anniversary badge with color customization

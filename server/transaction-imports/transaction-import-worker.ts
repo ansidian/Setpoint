@@ -1,13 +1,6 @@
 import { isTransferImport, processTransferImportItem } from "./financial-email-transfer.ts";
 import { publishCurrentDashboardEvent } from "../dashboard/current-events.ts";
 import { randomUUID } from "crypto";
-import type { Client } from "@libsql/client";
-import db from "../db/connection.ts";
-import { GmailTransactionSearchError } from "../email/transaction-email-search.ts";
-import { searchTransactionEmails } from "./transaction-email-discovery.ts";
-import type { ConfiguredEmailAccount } from "../email/transaction-email-search.ts";
-import { prepareTransactionImportItems } from "./transaction-import-service.ts";
-import { planTransactionImportItems } from "./transaction-import-planner-adapter.ts";
 import { transactionImportStore, type ClaimedItem, type TransactionImportStore } from "./transaction-import-store.ts";
 import { importTransactionGroups } from "../actual/actual.ts";
 import { invalidateActualAfterTransactionImport } from "../bills/bills-service.ts";
@@ -24,7 +17,6 @@ const MAX_ATTEMPTS = 5;
 const STALE_CLAIM_MS = 15 * 60 * 1000;
 const RETRY_BASE_MS = 30_000;
 
-type WorkerDb = Pick<Client, "execute">;
 
 function conciseError(error: unknown): string {
   const candidate = error instanceof Error ? error.message : String(error);
@@ -59,123 +51,17 @@ function itemGroups(items: ClaimedItem[]): ActualImportAccountGroup[] {
 
 export function createTransactionImportWorker({
   store = transactionImportStore,
-  dbClient = db,
-  searchPage = searchTransactionEmails,
   importGroups = importTransactionGroups,
   invalidateAfterCommit = invalidateActualAfterTransactionImport,
   createId = randomUUID,
   now = Date.now,
-  planItems = planTransactionImportItems,
 }: {
   store?: TransactionImportStore;
-  dbClient?: WorkerDb;
-  searchPage?: typeof searchTransactionEmails;
   importGroups?: typeof importTransactionGroups;
   invalidateAfterCommit?: typeof invalidateActualAfterTransactionImport;
   createId?: () => string;
   now?: () => number;
-  planItems?: typeof planTransactionImportItems;
 } = {}) {
-  async function loadGmailAccount(userId: string, accountId: string): Promise<ConfiguredEmailAccount | null> {
-    const result = await dbClient.execute({
-      sql: `SELECT * FROM ea_accounts WHERE user_id = ? AND id = ? AND type = 'gmail' LIMIT 1`,
-      args: [userId, accountId],
-    });
-    return result.rows[0] as unknown as ConfiguredEmailAccount || null;
-  }
-
-  async function processNextHistoricalPage(): Promise<boolean> {
-    const claimToken = createId();
-    const run = await store.claimNextRun(claimToken);
-    if (!run) return false;
-    if (run.trigger !== "historical_scan" || !run.startDate || !run.endDate) {
-      await store.settleRun(run.userId, run.id, claimToken, { status: "failed", cursor: run.cursor, lastError: "Invalid transaction import run" });
-      return true;
-    }
-    const accountIndex = Number(run.cursor.accountIndex || 0);
-    const sourceIndex = Number(run.cursor.sourceIndex || 0);
-    const accountId = run.gmailAccountIds[accountIndex];
-    const source = run.sources[sourceIndex];
-    if (!accountId || !source || source === "generic") {
-      await store.settleRun(run.userId, run.id, claimToken, { status: "completed", cursor: { complete: true } });
-      return true;
-    }
-    const account = await loadGmailAccount(run.userId, accountId);
-    if (!account) {
-      await store.settleRun(run.userId, run.id, claimToken, {
-        status: "failed",
-        cursor: run.cursor,
-        lastError: `Gmail account is unavailable: ${accountId}`,
-        failed: 1,
-      });
-      return true;
-    }
-
-    try {
-      const page = await searchPage(account, {
-        source,
-        start: run.startDate,
-        end: run.endDate,
-        pageSize: 50,
-        pageToken: typeof run.cursor.pageToken === "string" ? run.cursor.pageToken : undefined,
-      });
-      const managed = new Set(await store.listManagedEmailUids(run.userId, page.emails.map((email) => email.uid)));
-      const legacyEmails = page.emails.filter((email) => !managed.has(email.uid));
-      const prepared = prepareTransactionImportItems(run.userId, run.id, legacyEmails, createId);
-      const plannedItems = await planItems(run.userId, prepared.items);
-      let insertedQueued = 0;
-      let insertedReview = 0;
-      let insertedDuplicates = 0;
-      const insertedMessages = new Set<string>();
-      for (const item of plannedItems) {
-        if (await store.insertItem(item)) {
-          insertedMessages.add(item.gmailMessageId);
-          if (item.status === "queued") insertedQueued++;
-          else if (item.status === "already_present") insertedDuplicates++;
-          else insertedReview++;
-        }
-      }
-
-      let nextAccountIndex = accountIndex;
-      let nextSourceIndex = sourceIndex;
-      const nextPageToken: string | null = page.nextPageToken;
-      if (!nextPageToken) {
-        nextSourceIndex++;
-        if (nextSourceIndex >= run.sources.length) {
-          nextSourceIndex = 0;
-          nextAccountIndex++;
-        }
-      }
-      const complete = nextAccountIndex >= run.gmailAccountIds.length;
-      await store.settleRun(run.userId, run.id, claimToken, {
-        status: complete ? "completed" : "queued",
-        cursor: complete ? { complete: true } : {
-          accountIndex: nextAccountIndex,
-          sourceIndex: nextSourceIndex,
-          ...(nextPageToken ? { pageToken: nextPageToken } : {}),
-        },
-        discovered: insertedMessages.size,
-        parsed: insertedMessages.size,
-        queued: insertedQueued,
-        review: insertedReview,
-        failed: page.failures.length,
-        lastError: page.failures.length ? `${page.failures.length} Gmail messages could not be fetched` : null,
-      });
-      if (insertedDuplicates) await store.incrementRunOutcomes(run.userId, run.id, { duplicate: insertedDuplicates });
-      return true;
-    } catch (error) {
-      const isReauth = error instanceof GmailTransactionSearchError && error.code === "reauth_required";
-      const resetPage = error instanceof GmailTransactionSearchError && error.code === "page_token_expired";
-      await store.settleRun(run.userId, run.id, claimToken, {
-        status: run.attempts >= MAX_ATTEMPTS ? "failed" : isReauth ? "paused" : "retry",
-        cursor: resetPage ? { ...run.cursor, pageToken: null } : run.cursor,
-        lastError: conciseError(error),
-        failed: run.attempts >= MAX_ATTEMPTS ? 1 : 0,
-      });
-      return true;
-    }
-  }
-
   async function claimItemBatch(): Promise<ClaimedItem[]> {
     const items: ClaimedItem[] = [];
     for (let index = 0; index < MAX_BATCH_ITEMS; index++) {
@@ -358,19 +244,13 @@ export function createTransactionImportWorker({
     return store.recoverStaleClaims(now() - STALE_CLAIM_MS, MAX_ATTEMPTS);
   }
 
-  async function recoverAbandonedHistoricalRuns(): Promise<Awaited<ReturnType<TransactionImportStore["recoverAbandonedHistoricalRuns"]>>> {
-    return store.recoverAbandonedHistoricalRuns();
-  }
-
   async function getNextWakeAt(): Promise<number | null> {
     return store.getNextWakeAt();
   }
 
   return {
-    processNextHistoricalPage,
     processNextItemBatch,
     recoverStaleClaims,
-    recoverAbandonedHistoricalRuns,
     getNextWakeAt,
   };
 }

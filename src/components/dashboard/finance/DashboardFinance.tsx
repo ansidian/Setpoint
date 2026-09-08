@@ -1,13 +1,9 @@
-import { financialHref } from "../../financial/financialNavigation";
-import type { DashboardFinanceActivityItem } from "../../../../shared/types/dashboard-finance";
-import { useNavigate } from "react-router";
 import { RefreshCw } from "lucide-react";
 import AnimatedHeight from "../../shared/AnimatedHeight";
 import { useDashboardFinance } from "./useDashboardFinance";
 import MoneyAheadCard from "./MoneyAheadCard";
 import SpendingSnapshotCard from "./SpendingSnapshotCard";
 import FinancialActivityCard from "./FinancialActivityCard";
-import FinancialEventReviewPreview from "./FinancialEventReviewPreview";
 import type { NeedsYouBill } from "../needsYou/needsYouModel";
 import type { BillsMirrorHealth } from "../../../../shared/types/bills";
 
@@ -18,21 +14,18 @@ export default function DashboardFinance({ bills, billsLoading, configured, heal
   health: BillsMirrorHealth | null;
   refreshing: boolean;
   onOpenBill: (bill: NeedsYouBill, anchor: HTMLElement) => void;
-  onOpenTransactions: (date: string) => void;
+  onOpenTransactions: () => void;
 }) {
   const finance = useDashboardFinance(refreshing);
-  const navigate = useNavigate();
-  const openReview = (item?: DashboardFinanceActivityItem, completed = false) => navigate(financialHref({ view: completed ? "completed" : "needs_attention", ...(item ? { runId:item.runId } : {}) }, item ? { owner:"import", id:item.id, runId:item.runId } : undefined));
   return <div className="dashboard-finance">
+    <AnimatedHeight><FinancialActivityCard review={finance.review} completed={finance.completed} loading={finance.loading} reviewError={finance.reviewError} completedError={finance.completedError} /></AnimatedHeight>
     <div className="dashboard-finance-grid">
       <MoneyAheadCard bills={bills} loading={billsLoading} configured={configured} health={health} onOpen={onOpenBill} />
       <AnimatedHeight><SpendingSnapshotCard spending={finance.data?.spending} loading={finance.loading} onOpen={onOpenTransactions} /></AnimatedHeight>
     </div>
-    <AnimatedHeight><FinancialEventReviewPreview /></AnimatedHeight>
-    <AnimatedHeight><FinancialActivityCard activity={finance.data?.activity} loading={finance.loading} onOpenReview={openReview} /></AnimatedHeight>
     <div className="dashboard-finance-status">
-      <span role={finance.error ? "status" : undefined}>{finance.error ? "Couldn’t refresh financial data. Showing the last available information." : finance.loading ? "Refreshing financial context…" : "Financial context from Actual and email imports"}</span>
-      <button type="button" className="dashboard-finance-button" disabled={finance.loading} onClick={finance.retry}><RefreshCw size={12} />Refresh</button>
+      <span role={finance.error ? "status" : undefined}>{finance.error ? "Couldn’t refresh the financial summary. Showing the last available information." : finance.loading ? "Refreshing finance…" : "Financial context from Actual and email imports"}</span>
+      <button type="button" className="dashboard-finance-button" aria-label="Refresh finance" disabled={finance.loading} onClick={finance.retry}><RefreshCw size={12} />Refresh</button>
     </div>
   </div>;
 }

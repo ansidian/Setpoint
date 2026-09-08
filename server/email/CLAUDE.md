@@ -25,7 +25,6 @@ Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and
 - `email-ai-models.ts` — email-triage defaults, provider inference, and validation facade over the centralized AI model catalog
 - `gmail.ts` — Gmail message API client: list, fetch, search, and mutate; re-exports the credential entry points
 - `gmail-credentials.ts` — Gmail credential lifecycle: OAuth callback exchange/profile validation/canonical persistence plus access-token refresh, encryption, and reauth signaling
-- `transaction-email-search.ts` — documented cross-domain entry for allowlisted, bounded all-mail transaction discovery
 - `gmail-oauth-url.ts` — combined Gmail + Calendar scope set and canonical Google authorization-URL construction
 - `gmail-sync.ts` — Gmail history/push-driven incremental sync and durable settlement; re-exports watch lifecycle entry points
 - `gmail-watch-lifecycle.ts` — Gmail watch registration/renewal lifecycle: due selection, topic resolution, persistence, and per-account failure isolation

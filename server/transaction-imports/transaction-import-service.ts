@@ -4,17 +4,9 @@ import { type TransactionEmailInput } from "./transaction-import-types.ts";
 import { transactionImportStore, type InsertItemInput, type TransactionImportStore } from "./transaction-import-store.ts";
 import type {
   TransactionImportConfirmation,
-  TransactionImportParserSource,
   TransactionImportSource,
 } from "../../shared/types/transaction-imports.ts";
 import { planTransactionImportItems } from "./transaction-import-planner-adapter.ts";
-
-export interface HistoricalScanOptions {
-  gmailAccountIds: string[];
-  sources: TransactionImportParserSource[];
-  startDate: string;
-  endDate: string;
-}
 
 function normalizedUnique(values: string[]): string[] {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))].sort();
@@ -28,31 +20,6 @@ function isValidYmd(value: string): boolean {
   const day = Number(match[3]);
   const date = new Date(Date.UTC(year, month - 1, day));
   return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
-}
-
-export function historicalScanOptionsKey(options: HistoricalScanOptions): string {
-  return JSON.stringify({
-    gmailAccountIds: normalizedUnique(options.gmailAccountIds),
-    sources: normalizedUnique(options.sources),
-    startDate: options.startDate,
-    endDate: options.endDate,
-  });
-}
-
-function validateHistoricalOptions(options: HistoricalScanOptions): HistoricalScanOptions {
-  const gmailAccountIds = normalizedUnique(options.gmailAccountIds);
-  const sources = normalizedUnique(options.sources) as TransactionImportParserSource[];
-  if (!gmailAccountIds.length) throw Object.assign(new Error("At least one Gmail account is required"), { status: 400 });
-  if (!sources.length || sources.some((source) => source !== "amazon" && source !== "paypal")) {
-    throw Object.assign(new Error("At least one supported transaction source is required"), { status: 400 });
-  }
-  const start = new Date(`${options.startDate}T00:00:00.000Z`).getTime();
-  const end = new Date(`${options.endDate}T00:00:00.000Z`).getTime();
-  if (!isValidYmd(options.startDate) || !isValidYmd(options.endDate)
-    || !Number.isFinite(start) || !Number.isFinite(end) || start >= end) {
-    throw Object.assign(new Error("A valid increasing scan date range is required"), { status: 400 });
-  }
-  return { gmailAccountIds, sources, startDate: options.startDate, endDate: options.endDate };
 }
 
 interface PreparedItems {
@@ -155,22 +122,6 @@ export function createTransactionImportService({
   createId?: () => string;
   planItems?: typeof planTransactionImportItems;
 } = {}) {
-  async function startHistoricalScan(userId: string, rawOptions: HistoricalScanOptions): Promise<{ runId: string; created: boolean }> {
-    const options = validateHistoricalOptions(rawOptions);
-    const result = await store.createRun({
-      id: createId(),
-      userId,
-      trigger: "historical_scan",
-      optionsKey: historicalScanOptionsKey(options),
-      gmailAccountIds: options.gmailAccountIds,
-      sources: options.sources,
-      startDate: options.startDate,
-      endDate: options.endDate,
-    });
-    if (!result.created && result.run.status === "paused") await store.resumePausedRun(userId, result.run.id);
-    return { runId: result.run.id, created: result.created };
-  }
-
   async function ingestArrivals(userId: string, emails: TransactionEmailInput[]): Promise<{ queued: number; review: number; runId: string | null }> {
     if (!emails.length) return { queued: 0, review: 0, runId: null };
     const managed = new Set(await store.listManagedEmailUids(userId, emails.map((email) => email.uid)));
@@ -187,8 +138,6 @@ export function createTransactionImportService({
       optionsKey: `arrival:${runId}`,
       gmailAccountIds: normalizedUnique(legacyEmails.map((email) => email.gmailAccountId)),
       sources: normalizedUnique(prepared.items.map((item) => item.source)) as TransactionImportSource[],
-      startDate: null,
-      endDate: null,
     });
     let queued = 0;
     let review = 0;
@@ -278,10 +227,7 @@ export function createTransactionImportService({
   }
 
   return {
-    startHistoricalScan,
     ingestArrivals,
-    getRun: store.getRunDetail,
-    listRuns: store.listRuns,
     listItemsForEmail: store.listItemsForEmail,
     commitItems,
     retryItem,

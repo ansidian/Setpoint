@@ -48,23 +48,8 @@ describe("resolveAlfredChipAction", () => {
     expect(action.request.options.forceDeadlineOverlay).toBe(true);
   });
 
-  it("maps a bill chip to the bills view focused on its next date", () => {
-    const action = expectCalendarAction(resolveAlfredChipAction("bill", {
-      id: "b1", name: "Rent", next_date: "2026-06-14", paid: false,
-    }));
-    expect(action.request).toEqual({
-      viewKey: "bills",
-      focusDate: "2026-06-14",
-      focusItemId: "b1",
-      options: { source: "dashboard", openDetail: true },
-    });
-  });
-
-  it("returns null for a bill whose open action is disabled (e.g. paid) so the chip isn't a dead end", () => {
-    const action = resolveAlfredChipAction("bill", {
-      id: "b1", name: "Rent", next_date: "2026-06-14", paid: true, openActionDisabled: true,
-    });
-    expect(action).toBeNull();
+  it("opens both due and paid bill occurrences in Finances", () => {
+    for(const paid of [false,true])expect(resolveAlfredChipAction("bill", {id:"b1:2026-06-14",scheduleId:"b1",next_date:"2026-06-14",paid,openActionDisabled:paid})).toEqual({type:"finances",target:{view:"schedule",scheduleId:"b1",date:"2026-06-14"}});
   });
 
   it("returns null for missing items, missing ids, and unknown kinds", () => {
@@ -74,7 +59,8 @@ describe("resolveAlfredChipAction", () => {
     expect(resolveAlfredChipAction("bill", {})).toBeNull();
   });
 
-  it("transactions are non-interactive (no chip action)", () => {
+  it("transaction chips require an exact dated target", () => {
     expect(resolveAlfredChipAction("transaction", { id: "t1", payee: "Trader Joes", amount: 42.1 })).toBeNull();
+    expect(resolveAlfredChipAction("transaction", {id:"t1",date:"2026-07-23"})).toEqual({type:"finances",target:{view:"journal",transactionId:"t1",date:"2026-07-23"}});
   });
 });

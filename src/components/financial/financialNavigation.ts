@@ -26,9 +26,8 @@ export function legacyFinancialHref(location: { pathname: string; search: string
   const pending = params.get('reviewPending') === '1';
   const managed = location.hash === '#financial-event-review';
   const imports = location.hash === '#transaction-import-review';
-  const backfill = location.hash === '#email-transaction-imports';
-  if (!params.has('financial') && !params.has('financialEmail') && !legacyRun && !pending && !managed && !imports && !backfill) return null;
-  if (!params.has('financial')) params.set('financial', backfill && !legacyRun && !pending ? 'backfill' : 'list');
+  if (!params.has('financial') && !params.has('financialEmail') && !legacyRun && !pending && !managed && !imports) return null;
+  if (!params.has('financial')) params.set('financial', 'list');
   if (legacyRun) params.set('runId', legacyRun);
   if (managed && !params.has('source')) params.set('source', 'managed');
   if (pending) params.set('view', 'needs_attention');

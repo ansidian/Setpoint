@@ -47,6 +47,8 @@ import {
   type AlfredPendingEmailContext,
 } from "./alfredEmailContextModel";
 
+import type { FinanceDestination } from "../finances/financesNavigation";
+
 const text = "var(--sp-text)";
 
 export interface AlfredPanelProps {
@@ -57,11 +59,12 @@ export interface AlfredPanelProps {
   handoff: { id: string | number; query: string } | null;
   emailHandoff?: { id: string | number; source: AlfredEmailContextSource } | null;
   newChatTick: number;
+  onOpenFinances?: (target: FinanceDestination) => void;
   onOpenCalendarItem?: (request: CalendarOpenRequest) => void;
   onReviewCalendarProposal?: (request: CalendarOpenRequest) => void;
 }
 
-function AlfredPanel({ dockTarget = null, open, onClose, accent, handoff, emailHandoff = null, newChatTick, onOpenCalendarItem, onReviewCalendarProposal }: AlfredPanelProps) {
+function AlfredPanel({ dockTarget = null, open, onClose, accent, handoff, emailHandoff = null, newChatTick, onOpenFinances, onOpenCalendarItem, onReviewCalendarProposal }: AlfredPanelProps) {
   const {
     messages,
     busy,
@@ -268,11 +271,14 @@ function AlfredPanel({ dockTarget = null, open, onClose, accent, handoff, emailH
   const onActivateChip = useCallback((action: AlfredChipAction) => {
     if (action.type === "email") {
       setPreviewItem(action.item);
+    } else if (action.type === "finances") {
+      setPreviewItem(null);
+      onOpenFinances?.(action.target);
     } else if (action.type === "calendar") {
       setPreviewItem(null);
       onOpenCalendarItem?.(action.request);
     }
-  }, [onOpenCalendarItem]);
+  }, [onOpenCalendarItem, onOpenFinances]);
 
   const onPreviewAttachment = useCallback((attachment: AlfredEmailAttachmentRef) => {
     setPreviewItem(emailAttachmentPreviewItem(attachment));

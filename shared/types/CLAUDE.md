@@ -9,7 +9,7 @@ Cross-layer, serializable contracts used by the server and client. Keep domain b
 - `actual.ts`, `bills.ts`, `transactions.ts`, `transaction-imports.ts` — Actual Budget, bills and zero-configuration financial-email plan contracts, transaction reads, and email transaction-import contracts
 - `financial-operations.ts` — budget-bound, preview/write-once/recover contracts for signed transactions, completed paired transfers and utility schedules
 - `financial-activity.ts` — exact cross-owner activity references, saved history, immutable original receipts and budget-bound object evidence
-- `financial-review.ts` — paginated managed financial exceptions and bounded actionable-change cursors for browser alerts
+- `financial-review.ts` — managed attention projection and bounded actionable-change cursors for browser alerts
 - `bills.ts` also carries live financial-event status and the owner/window-scoped document/event outcome report
 - `alfred.ts` — Alfred assistant request/response, tool, calendar-proposal, and SSE contracts
 - `ai-usage.ts` — triage/financial-email provider-call usage rollups and production/evaluation dimensions
@@ -20,3 +20,5 @@ Cross-layer, serializable contracts used by the server and client. Keep domain b
 - Provider SDK types and database row shapes stay in their owning server domains.
 
 - `financial-corrections.ts` — frozen correction preview, step journal, exact SDK snapshot and status contracts
+
+- `finances.ts` — budget-bound utilities, statement evidence, reviewable capture and Journal topology

@@ -27,6 +27,7 @@ export interface ActualSchedule {
   rule?: string | null;
   next_date?: string | null;
   completed?: boolean;
+  posts_transaction?: boolean;
   type?: ActualScheduleType;
   transferAccountId?: string | null;
   conditions?: ActualScheduleCondition[];
@@ -80,6 +81,7 @@ export interface ActualBillOccurrence {
   amount: number;
   next_date: string;
   paid: boolean;
+  paymentTransactionIds?: string[];
   type: ActualScheduleType;
   openActionDisabled: boolean;
 }

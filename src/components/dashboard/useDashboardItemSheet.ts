@@ -1,6 +1,7 @@
+import { useNavigate } from 'react-router';
+import { financesHref } from '../finances/financesNavigation';
 import { useCallback, useLayoutEffect, useState } from "react";
 import {
-  dashboardBillCalendarRequest,
   dashboardDeadlineCalendarRequest,
   dashboardEventCalendarRequest,
   nextItemSheet,
@@ -12,6 +13,7 @@ type OpenCalendar = (view: "events" | "bills", date?: string | null, itemId?: st
 interface DashboardSheetRecord extends Record<string, unknown> { id?: string | number }
 
 export default function useDashboardItemSheet({ tab, openCalendar }: { tab: DashboardTab; openCalendar: OpenCalendar }) {
+  const navigate = useNavigate();
   const [itemSheet, setItemSheet] = useState<DashboardGlanceSheet | null>(null);
   const close = useCallback(() => setItemSheet(null), []);
 
@@ -32,10 +34,10 @@ export default function useDashboardItemSheet({ tab, openCalendar }: { tab: Dash
     }));
   }, []);
 
-  const openBillInCalendar = useCallback((date?: string | null, itemId?: string | number | null) => {
-    const request = dashboardBillCalendarRequest(date, itemId);
-    openCalendar(request.viewKey, request.focusDate, request.focusItemId, request.options);
-  }, [openCalendar]);
+  const openBillInFinances = useCallback((date?: string | null, itemId?: string | number | null) => {
+    const scheduleId = String(itemId || '').replace(/^bill:/,'').replace(/:\d{4}-\d{2}-\d{2}$/, '');
+    navigate(financesHref(scheduleId ? { view:'schedule',scheduleId,date:date || undefined } : { view:'utilities' }));
+  }, [navigate]);
 
   const openEventInCalendar = useCallback((date?: string | null, itemId?: string | number | null) => {
     const request = dashboardEventCalendarRequest(date, itemId);
@@ -44,7 +46,7 @@ export default function useDashboardItemSheet({ tab, openCalendar }: { tab: Dash
 
   const openBill = useCallback((date: string | null, itemId: string | number | null, item?: DashboardSheetRecord | null, anchor?: unknown) => {
     if (!item) {
-      openBillInCalendar(date, itemId);
+      openBillInFinances(date, itemId);
       return;
     }
     setItemSheet((current) => nextItemSheet(current, {
@@ -54,7 +56,7 @@ export default function useDashboardItemSheet({ tab, openCalendar }: { tab: Dash
       itemId,
       anchorRef: { current: anchor || null },
     }));
-  }, [openBillInCalendar]);
+  }, [openBillInFinances]);
 
   const openEvent = useCallback((date: string | null, itemId: string | number | null, item?: DashboardSheetRecord | null, anchor?: unknown) => {
     if (!item) {
@@ -80,11 +82,11 @@ export default function useDashboardItemSheet({ tab, openCalendar }: { tab: Dash
       const request = dashboardDeadlineCalendarRequest(sheet.item as DashboardDeadline);
       openCalendar(request.viewKey, request.focusDate, request.focusItemId, request.options);
     } else if (sheet.kind === "bill") {
-      openBillInCalendar(sheet.date, sheet.itemId);
+      openBillInFinances(sheet.date, sheet.itemId);
     } else {
       openEventInCalendar(sheet.date, sheet.itemId);
     }
-  }, [close, openBillInCalendar, openCalendar, openEventInCalendar]);
+  }, [close, openBillInFinances, openCalendar, openEventInCalendar]);
 
   return {
     itemSheet,

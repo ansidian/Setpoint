@@ -158,6 +158,8 @@ Reuse the shared implementations rather than introducing per-surface timings or 
 - Use `AnimatedCollapse` from `src/components/shared/AnimatedCollapse.tsx` for content that mounts/unmounts with a disclosure; keep spacing inside its height envelope and make exiting content inert immediately.
 - For explicit height targets, use `heightTransition` from `src/lib/motion.ts` for Motion and `--sp-motion-height` / `--sp-ease-height` for CSS. Ordinary notes expand on focus, remain expanded with content, and collapse when empty on blur.
 
+Measured resize bursts have a 250ms animation budget, retaining the 160ms base curve. `AnimatedHeight` follows an already animated DOM descendant directly rather than easing its intermediate heights again; the final measurement stays immediate until the burst is quiet. Portaled surfaces remain independent. CSS height/min-height/max-height transitions are detected through browser animations; native disclosures also use their DOM toggle signal because browsers may hide pseudo-element animations; custom Motion height owners must expose `data-height-animating="true"` for their active movement (including exit), then clear it on completion. This budget limits animation time, not data fetching or deliberate completion-receipt holds.
+
 Preserve viewport height limits and scrolling so taller content remains reachable. Reduced motion makes height changes immediate. Direct manipulation, virtualized geometry, and streamed text retain immediate sizing. This height rule does not replace separate entrance/exit or hover/focus motion. Verify growth, shrinkage, rapid switching, small-screen scrolling, and reduced motion when adopting it on a new surface.
 
 ## Colors
@@ -222,6 +224,8 @@ Setpoint uses a dense, viewport-bound shell with stable scan paths. Desktop work
 
 Notes is desktop-only. Its canvas fills the entire tab panel beneath the narrow Setpoint shell, with no inner card, max-width container, page padding, or independent page scroll. The canvas itself clips overflow and isolates its stacking context so native tldraw edge controls retain the full instrument surface. Mobile and demo omit Notes rather than presenting a reduced substitute.
 
+Finances owns its scrolling workspace inside a centered container (1440px maximum), with dense Utilities rows beside a darker inline detail pane. Wide desktop uses a 1.15:0.85 overview/detail ratio with a 24px gap; at 1000px and below the ratio changes to 0.8:1.2 to protect detail readability. At 767px and below it becomes one column, and selecting a utility replaces the overview with its detail; the close control returns to the overview. Journal uses one centered reading column (860px maximum), grouped by date. These are Finances surface rules, not global dashboard layouts.
+
 **The Instrument Owns the Work Area Rule.** When a native spatial tool is the product surface, let it occupy the full available workspace; keep Setpoint framing at the shell boundary.
 
 ## Elevation & Depth
@@ -272,9 +276,21 @@ Setpoint uses gently rounded, border-led geometry. Dense controls use 6px to 8px
 
 ### Navigation
 
-- **Desktop:** A slim, persistent shell prioritizes orientation across Dashboard, Inbox, Calendar, Notes, and News. Use text tabs with a restrained accent active state, quiet inactive labels, and no repeated icons or permanent shortcut badges. Keep Alfred compact with a visible open state and retain a clickable `⌘K` control. Health stays visible in a stable right-hand position, signals refresh activity and issues, and contains the clickable Sync now action. Analytics, Snapshots, and Settings live in overflow. Avoid individually boxing every resting control.
-- **Mobile:** Tabs and sheets must meet the `--sp-touch-min` (44px) canonical hit-target size and avoid reflowing labels into cramped controls. Text inputs must render at ≥16px on mobile viewports to prevent iOS auto-zoom.
-- **Keyboard:** Preserve existing shortcuts, including `1–5`, the Notes navigation chord, Alfred, and `R` for sync. Tab and Alfred shortcut hints live in tooltips; the command palette retains its visible `⌘K` affordance.
+- **Desktop:** A slim, persistent shell prioritizes orientation across Dashboard, Inbox, Calendar, Notes, News, and Finances. Finances is the sixth tab and opens Utilities at `/finances`; retained record and review work stays in the guarded `/finance` foreground. Use text tabs with a restrained accent active state, quiet inactive labels, and no repeated icons or permanent shortcut badges. Keep Alfred compact with a visible open state and retain a clickable `⌘K` control. Health stays visible in a stable right-hand position, signals refresh activity and issues, and contains the clickable Sync now action. Analytics, Snapshots, and Settings live in overflow. Avoid individually boxing every resting control.
+- **Mobile:** Finances is the fourth bottom-navigation destination, after Dashboard, Inbox, and Calendar. Tabs and sheets must meet the `--sp-touch-min` (44px) canonical hit-target size and avoid reflowing labels into cramped controls. Text inputs must render at ≥16px on mobile viewports to prevent iOS auto-zoom.
+- **Keyboard:** Preserve existing shortcuts, including `1–6` (Finances on `6`, Calendar events/deadlines on `3`), the Notes navigation chord, Alfred, and `R` for sync. Tab and Alfred shortcut hints live in tooltips; the command palette retains its visible `⌘K` affordance.
+
+### Finances Workspace
+
+Utilities is the default view, with Coming due and Paid this month as primary row groups, explicit Nothing due and unavailable-history groups when needed, and Other recurring payments in a quiet disclosure. Keep Needs attention, Activity, and Import history as subordinate entrances to the existing financial foreground.
+
+- **Material And Type:** Reuse the incumbent muted neutrals, lavender selection, green recorded-payment status, yellow due status, and cyan Journal inflows with text/sign cues. The inline detail pane uses a near-black fill (`#11111b`), an 8px radius, and a quiet 1px border without a shadow. Workspace type stays compact: 12px body, 11px supporting facts, 16px detail titles, and a tabular 28px bill amount. This local hierarchy does not introduce a new global type scale or palette.
+- **Selected Bill:** Due month controls the whole hero: month/year, amount, comparison, payment evidence, and related actions. Keep Nothing due, account credit, schedule estimates, and unavailable statements explicit. A sparse annual bar chart and equivalent month selector drive the same selection; missing history is a gap, never a fabricated zero. Use three-letter month labels, angled at compact widths. Do not add a competing historical amount summary beneath the chart.
+- **Source History:** Keep Statement & record history beneath the chart with its disclosure, provider/source heading, and distinct Amount billed, Due, and Received facts. Statement date, source email, corrections, processing fees, and the dated activity trail remain separately labeled when available. Preserve dated notices without due dates as a separate selection rather than assigning them a month.
+- **Journal:** Payee or transfer endpoints, amount, and one supporting detail lead each date-grouped row. Expansion reveals account, category, recorded status, split detail, and supported bill links in the same reading column. A date input supports day navigation; exact payment links connect utility history and Journal without adding an analytics grid.
+- **Controls:** Compact controls use restrained 160ms hover/focus/press feedback and visible lavender focus outlines; reduced motion suppresses transitions and transforms. Search placeholders use full-opacity subtext for legibility. Mobile controls meet 44px targets, and inputs/selects use 16px text. The utility detail close action remains visible through the mobile replacement flow.
+
+**The Selected Bill Rule.** In Finances, selecting a due month updates the entire bill detail, while missing source facts and payment links remain explicitly unavailable.
 
 ### Reminders
 
@@ -283,6 +299,10 @@ Event and deadline editors use **Reminders** as the section title and **Delivere
 ### Floating Panels
 
 Floating panels must be portaled to `document.body`, fixed-positioned from the trigger rect, opaque `#16161e`, isolated with `isolation: isolate`, and scroll-contained. Outside click must check both trigger and portal refs.
+
+Item details in Dashboard and Calendar use one shared layered treatment: the outer panel owns the single type label, icon, close control, and dragging; the inner card owns the title, facts, and action dock. Keep the inner card opaque with a restrained 4% domain tint over `#20202a`, a quiet border, 13px radius, and 15px compact padding. Do not repeat the type label inside the card.
+
+Use aligned, unboxed label/value rows for deadline and bill facts. Give bills a prominent 29px outflow-colored amount; give events a 15px source-colored time range and icon-led location/duration metadata. Titles remain 17px on desktop and wrap naturally. Keep urgency in a separate text badge, ordinary metadata unboxed, and reminders visibly distinct. Payment wording describes whether a payment is recorded in Actual, never provider-confirmed settlement. Separate the compact action dock with one quiet divider. Preserve Calendar's anchoring, caret, selection, editing, and mobile-sheet behavior when refining this shared presentation.
 
 ### Notes Canvas
 

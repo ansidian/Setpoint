@@ -4,9 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import CalendarScrollContainer from "./CalendarScrollContainer";
 import { monthBlockHeight, monthIndexToDate } from "../../../hooks/calendar/calendarScrollModel";
 import eventsView from "../views/eventsView.tsx";
-import billsView from "../views/billsView.tsx";
 import type { CalendarGridItemLike } from "./calendarGridCellModel";
-import type { CalendarGridActiveViewContract, CalendarGridLayout } from "./CalendarGrid";
+import type { CalendarGridLayout } from "./CalendarGrid";
 
 // Every test here drives the settle/alignment logic through real-time
 // waitFor polling: the settle is a setTimeout(SCROLL_SETTLE_MS) and the scroll
@@ -102,28 +101,6 @@ function getScrollElement(container: HTMLElement): HTMLElement {
 }
 
 describe("CalendarScrollContainer", () => {
-
-  it("renders bills in a non-active mounted month (chips don't vanish past the active+cached pair)", () => {
-    // Bills' itemsByDate spans the whole fetched range (it is not month-scoped
-    // like events). A bill due two months ahead must still render in that
-    // month's mounted block — the regression handed every non-active,
-    // non-cached month emptyObj, so chips only survived in the active month and
-    // the one previously-active (cached) month.
-    const julyBill = { id: "b-jul", scheduleId: "s-jul", name: "Narwhal", amount: 3.99, next_date: "2026-07-15", type: "bill", paid: false };
-    const paidMayBill = { id: "b-may", scheduleId: "s-may", name: "Torbox", amount: 10, next_date: "2026-03-15", type: "bill", paid: true };
-    const { container } = renderContainer({
-      view: "bills",
-      activeView: billsView as unknown as CalendarGridActiveViewContract,
-      itemsByDate: { "2026-07-15": [julyBill], "2026-03-15": [paidMayBill] },
-    });
-
-    const julyBlock = container.querySelector("[data-testid='month-block-2026-6']");
-    expect(julyBlock?.textContent).toContain("Narwhal");
-
-    // A paid bill two months back renders too (task: stop dropping paid bills).
-    const marchBlock = container.querySelector("[data-testid='month-block-2026-2']");
-    expect(marchBlock?.textContent).toContain("Torbox");
-  });
 
   it("renders event and deadline ghosts in a trailing week owned by the next month block", () => {
     const { container } = renderContainer({

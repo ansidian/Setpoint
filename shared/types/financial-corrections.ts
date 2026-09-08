@@ -1,7 +1,7 @@
 import type { FinancialActivityReference, FinancialOriginalReceipt, FinancialWriteEvidence } from './financial-activity.ts';
 
 export interface FinancialCorrectionDraft {
-  type: 'payment' | 'income' | 'transfer' | 'bill';
+  type: 'payment' | 'income' | 'transfer' | 'bill' | 'transfer_schedule';
   amountCents: number;
   date: string;
   accountId?: string;
@@ -80,4 +80,16 @@ export interface FinancialCorrection {
   revision: number;
   effectiveResult: unknown;
   updatedAt: number;
+}
+
+/** Frozen synchronized result the owner may explicitly keep without writing to Actual. */
+export interface FinancialCorrectionKeepPreview {
+  id: string;
+  correctionId: string;
+  correctionRevision: number;
+  reference: FinancialActivityReference;
+  sourceRevision: string;
+  snapshot: CorrectionSnapshot;
+  targets: CorrectionTargets;
+  reviewedAt: number;
 }

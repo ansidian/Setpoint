@@ -19,6 +19,7 @@ import type {
 
 interface RawSdkTransaction {
   id?: string;
+  account?: string;
   payee?: string | null;
   amount?: number | null;
   date: string;
@@ -160,6 +161,8 @@ export function mapRecentTransactions(rawTxns: RawSdkTransaction[], payeeMap: Re
   return rawTxns
     .filter(t => t.payee && t.amount)
     .map(t => ({
+      id: t.id,
+      accountId: t.account || null,
       payee: t.payee ? payeeMap[t.payee] || "" : "",
       payeeId: t.payee,
       amount: Math.abs(t.amount ?? 0) / 100,

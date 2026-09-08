@@ -1,6 +1,6 @@
 import { apiFetch } from './apiFetch';
 import type { FinancialActivityReference } from '../../shared/types/financial-activity';
-import type { FinancialCorrection, FinancialCorrectionDraft, FinancialCorrectionInspection, FinancialCorrectionPreview } from '../../shared/types/financial-corrections';
+import type { FinancialCorrection, FinancialCorrectionDraft, FinancialCorrectionInspection, FinancialCorrectionKeepPreview, FinancialCorrectionPreview } from '../../shared/types/financial-corrections';
 
 export function inspectFinancialCorrection(reference: FinancialActivityReference): Promise<FinancialCorrectionInspection> {
   return apiFetch('/api/briefing/financial-corrections/inspect', { method: 'POST', body: JSON.stringify({ reference }) });
@@ -13,4 +13,15 @@ export function confirmFinancialCorrection(previewId: string, idempotencyKey: st
 }
 export function getFinancialCorrection(id: string): Promise<FinancialCorrection> {
   return apiFetch(`/api/briefing/financial-corrections/${encodeURIComponent(id)}`);
+}
+
+export function recheckFinancialCorrection(reference: FinancialActivityReference, correctionId: string): Promise<FinancialCorrectionInspection> {
+  return apiFetch('/api/briefing/financial-corrections/recheck', { method: 'POST', body: JSON.stringify({ reference, correctionId }) });
+}
+
+export function previewKeepFinancialResult(reference: FinancialActivityReference, correctionId: string): Promise<FinancialCorrectionKeepPreview> {
+  return apiFetch('/api/briefing/financial-corrections/keep-preview', { method:'POST', body:JSON.stringify({reference,correctionId}) });
+}
+export function confirmKeepFinancialResult(previewId: string): Promise<FinancialCorrection> {
+  return apiFetch('/api/briefing/financial-corrections/keep-confirm', { method:'POST', body:JSON.stringify({previewId}) });
 }

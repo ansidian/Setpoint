@@ -4,7 +4,7 @@ import type { DashboardDeadline } from "../../context/dashboardTaskProjection";
 import type { RefObject } from "react";
 import type { CalendarEventCreateRequest } from "../../hooks/calendar/calendarEventCreateBridge";
 
-export type DashboardTab = "dashboard" | "inbox" | "calendar" | "notes" | "news";
+export type DashboardTab = "dashboard" | "inbox" | "calendar" | "notes" | "news" | "finances";
 export type DashboardGlanceSheet = {
   kind: "deadline" | "bill" | "event";
   item?: DashboardDeadline | Record<string, unknown>;
@@ -93,18 +93,6 @@ export function dashboardDeadlineCalendarRequest(taskOrId: DeadlineFocusInput, d
       openDetail: !!focusItemId,
       forceDeadlineOverlay: true,
       forceCompletedDeadlineOverlay: !!focusItemId,
-    },
-  };
-}
-
-export function dashboardBillCalendarRequest(date?: string | null, itemId?: string | number | null): CalendarOpenRequest {
-  return {
-    viewKey: "bills",
-    focusDate: date || null,
-    focusItemId: itemId ? String(itemId) : null,
-    options: {
-      source: "dashboard",
-      openDetail: !!itemId,
     },
   };
 }
@@ -268,6 +256,7 @@ export function resolveShellTabHotkey({
   if (key === "3") return "calendar";
   if (key === "4" && notesEnabled) return "notes";
   if (key === "5") return "news";
+  if (key === "6") return "finances";
   return null;
 }
 
@@ -278,7 +267,7 @@ export type NotesNavigationChordCommand =
   | { action: "navigate"; tab: DashboardTab };
 
 // Notes gives the number row to tldraw's tool shortcuts. A backtick leader
-// creates a short shell-owned window where 1-5 once again mean app tabs.
+// creates a short shell-owned window where 1-6 once again mean app tabs.
 export function resolveNotesNavigationChord({
   key,
   code = "",
@@ -322,6 +311,7 @@ export function resolveNotesNavigationChord({
   if (digit === "3") return { action: "navigate", tab: "calendar" };
   if (digit === "4") return { action: "navigate", tab: "notes" };
   if (digit === "5") return { action: "navigate", tab: "news" };
+  if (digit === "6") return { action: "navigate", tab: "finances" };
   return { action: "cancel" };
 }
 

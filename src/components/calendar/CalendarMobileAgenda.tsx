@@ -7,7 +7,6 @@ import CalendarModalAgendaRailContent from "./modal/CalendarModalAgendaRailConte
 import CalendarFloatingDetailContent from "./modal/CalendarFloatingDetailContent";
 import type { CalendarModalShellProps } from "./modal/CalendarModalShell";
 
-const VIEW_LABELS = { events: "Events", bills: "Bills" };
 
 // Mobile-only calendar root (rendered by useCalendarModalController when useIsMobile()).
 // Agenda-only: compact page/view header + month navigation + the full-width agenda
@@ -16,7 +15,7 @@ const VIEW_LABELS = { events: "Events", bills: "Bills" };
 // unaffected — this component only mounts on a phone.
 export default function CalendarMobileAgenda(input: Record<string, unknown>) {
   const shellProps = input as unknown as CalendarModalShellProps;
-  const { viewState, viewModel, data, selection, editors, quickActions, agenda, floating, handlers, availableCalendarViews, refs } = shellProps;
+  const { viewState, viewModel, data, selection, editors, quickActions, agenda, floating, handlers, refs } = shellProps;
   const { view, viewYear, viewMonth, currentYear, currentMonth, todayDate } = viewState;
   const {
     layout, monthName, monthYear, canGoPrev, computed,
@@ -35,11 +34,11 @@ export default function CalendarMobileAgenda(input: Record<string, unknown>) {
     onCancelFloatingEditor, onFloatingDeadlineDeleted,
     onFloatingDeadlineSaved, onFloatingEditorDirtyChange, onFloatingEditorSaveRequest,
   } = floating;
-  const { navigateMonth, onViewChange, focusDeadlineTask, navigateToToday } = handlers;
+  const { navigateMonth, focusDeadlineTask, navigateToToday } = handlers;
 
   const detailOpen = !!floatingDetail?.open;
   const floatingDeadlineDetail = floatingDetail?.detailKind === "deadline";
-  const views = (availableCalendarViews || ["events"]).filter((value): value is keyof typeof VIEW_LABELS => value === "events" || value === "bills");
+
 
   // This component mounts inside the calendar KeepAliveTab (Activity): switching
   // shell tabs hides it, which runs effect cleanup exactly like an unmount would,
@@ -60,15 +59,6 @@ export default function CalendarMobileAgenda(input: Record<string, unknown>) {
     <div className="mobile-calendar">
       <header className="mobile-calendar-header">
         <h1><img src={publicAssetUrl("favicon.svg")} alt="" width={22} height={22} />Calendar</h1>
-        {views.length > 1 && (
-          <div className="mobile-calendar-views" role="group" aria-label="Calendar view">
-            {views.map((value) => (
-              <button key={value} type="button" aria-pressed={value === view} onClick={() => { if (value !== view) onViewChange?.(value); }}>
-                {VIEW_LABELS[value]}
-              </button>
-            ))}
-          </div>
-        )}
         {input.mobileShellActions as ReactNode}
       </header>
       <div className="mobile-calendar-navigation" aria-label="Month navigation">

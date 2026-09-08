@@ -1,3 +1,4 @@
+import type { FinanceDestination } from "../finances/financesNavigation";
 import type { ReactNode } from "react";
 import type { InboxControllerState } from "./useInboxController";
 import type { InboxAccount } from "./inboxTypes";
@@ -29,7 +30,7 @@ export type InboxPaneProps = InboxControllerState & {
   liveEmailsLoading?: boolean;
   processingCount?: number;
   activeSnapshotError?: string | null;
-  onOpenRecordedBill?: (target: { date: string; itemId: string }) => void;
+  onOpenRecordedBill?: (target: FinanceDestination) => void;
   onRefresh: () => void | Promise<void>;
   readOnly?: boolean;
   snapshotNavigation?: InboxSnapshotNavigation | null;

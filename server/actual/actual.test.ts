@@ -254,7 +254,7 @@ describe("actual.ts metadata cache", () => {
       expect.objectContaining({ id: "s2", type: "income" }),
     ]);
     expect(metadata.recentTransactions).toEqual([
-      { payee: "Test Payee", payeeId: "p1", amount: 122.34, date: "2026-05-11", scheduleId: "s1" },
+      { id: "t1", accountId: null, payee: "Test Payee", payeeId: "p1", amount: 122.34, date: "2026-05-11", scheduleId: "s1" },
     ]);
   });
 

@@ -49,3 +49,5 @@ Actual Budget engine integration: write paths, the forked SDK worker, and the lo
 
 - `server/bills/bills-service.ts` — drives writes and owns Actual-metadata invalidation fan-out
 - `src/lib/actualMetadata.ts` — frontend cache mirroring this metadata
+
+- `actual-journal-read.ts` — bounded SDK-free Journal read with exact split/transfer relative hydration

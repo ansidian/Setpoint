@@ -57,7 +57,8 @@ export default function ComingUpCard({ items = [], isMobile = false, onJump, onC
 
   return (
     <section data-testid="context-coming-up" className={`dashboard-ahead${isMobile ? " dashboard-ahead--mobile" : ""}`}>
-      <SectionHeader isMobile={isMobile} title="Ahead" right={<span className="dashboard-ahead-horizon">Next 7 days</span>} />
+      {isMobile ? <header className="dashboard-ahead-heading"><h3><CalendarClock size={16} aria-hidden="true" />Ahead</h3><span className="dashboard-ahead-horizon">Next 7 days</span></header>
+        : <SectionHeader title="Ahead" right={<span className="dashboard-ahead-horizon">Next 7 days</span>} />}
       <AnimatedHeight>
         <div className="dashboard-ahead-days">
           {displayedDays.map(([day, rows]) => {
@@ -72,7 +73,7 @@ export default function ComingUpCard({ items = [], isMobile = false, onJump, onC
                     {displayed.map((row) => (
                       <CompletionTransition key={occurrenceKey(row)} itemId={occurrenceKey(row)}>
                         <div className="dashboard-ahead-row">
-                          <button type="button" className="dashboard-ahead-open" onClick={(event) => onJump?.(row, event.currentTarget)}>
+                          <button type="button" className="dashboard-ahead-open" data-dashboard-detail-trigger={onJump ? "true" : undefined} onClick={(event) => onJump?.(row, event.currentTarget)}>
                             <span className="dashboard-ahead-title">{row.title}</span>
                             <span className="dashboard-ahead-meta">{row.time ? `${row.time} · ` : ""}{row.meta}</span>
                           </button>

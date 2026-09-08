@@ -1,90 +1,27 @@
 import { useState } from "react";
-import type { ComponentType, MouseEvent, ReactNode } from "react";
+import type { ComponentType, CSSProperties, MouseEvent, ReactNode } from "react";
 import { isDemoMode } from "../../demo/config.ts";
+import "./detail-cards.css";
 
 export function RailHeroCard({ accent = "var(--ea-accent)", compact = false, actions, children }: { accent?: string; compact?: boolean; actions?: ReactNode; children?: ReactNode }) {
-  const pad = compact ? 12 : 14;
   return (
-    <div
-      data-accent={accent}
-      style={{
-        minHeight: 0,
-        padding: pad,
-        borderRadius: compact ? 14 : 16,
-        border: `1px solid color-mix(in srgb, ${accent} 18%, rgba(255,255,255,0.05))`,
-        background: `radial-gradient(circle at top left, color-mix(in srgb, ${accent} 14%, transparent), transparent 44%), linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02))`,
-        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
-        display: "flex",
-        flexDirection: "column",
-        gap: compact ? 8 : 10,
-      }}
-    >
+    <div className="detail-card" data-accent={accent} style={{ "--detail-accent": accent, "--detail-padding": compact ? "15px" : "16px" } as CSSProperties}>
       {children}
-      {actions ? (
-        <>
-          <div
-            style={{
-              height: 1,
-              background: "rgba(255,255,255,0.05)",
-              margin: `0 -${pad}px`,
-            }}
-          />
-          <div
-            data-testid="timeline-detail-action-dock"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "flex-start",
-              gap: compact ? 6 : 8,
-              flexWrap: "wrap",
-              minWidth: 0,
-            }}
-          >
-            {actions}
-          </div>
-        </>
-      ) : null}
+      {actions ? <div className="detail-card-actions" data-testid="timeline-detail-action-dock">{actions}</div> : null}
     </div>
   );
 }
 
 export function RailMetaChip({ children, tone = "default", color = null, compact = false }: { children?: ReactNode; tone?: "default" | "quiet" | "accent"; color?: string | null; compact?: boolean }) {
-  const styles = tone === "quiet"
-    ? {
-        color: "rgba(205,214,244,0.62)",
-        border: "1px solid rgba(255,255,255,0.05)",
-        background: "rgba(255,255,255,0.018)",
-      }
-    : tone === "accent"
-      ? {
-          color: color || "#f5e0dc",
-          border: `1px solid ${color ? `${color}38` : "rgba(245,224,220,0.14)"}`,
-          background: color ? `${color}16` : "rgba(245,224,220,0.08)",
-        }
-      : {
-          color: "rgba(205,214,244,0.78)",
-          border: "1px solid rgba(255,255,255,0.06)",
-          background: "rgba(255,255,255,0.03)",
-        };
-
   return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 6,
-        padding: compact ? "4px 8px" : "5px 10px",
-        borderRadius: 999,
-        fontSize: compact ? 10 : 11,
-        fontWeight: 600,
-        letterSpacing: 0.12,
-        whiteSpace: "nowrap",
-        ...styles,
-      }}
-    >
+    <span className="detail-card-meta-value" style={{ color: tone === "accent" ? color || "#f5e0dc" : undefined, fontSize: compact ? 10 : 11 }}>
       {children}
     </span>
   );
+}
+
+export function RailDueBadge({ color, children }: { color: string; children: ReactNode }) {
+  return <span className="detail-card-due" style={{ color }}>{children}</span>;
 }
 
 export function RailReminderIndicator({ children, compact = false }: { children?: ReactNode; compact?: boolean }) {
@@ -112,65 +49,8 @@ export function RailReminderIndicator({ children, compact = false }: { children?
   );
 }
 
-export function RailFactTile({
-  label,
-  value,
-  color,
-  valueNoWrap = false,
-  valueFontSize = null,
-  compact = false,
-}: { label: ReactNode; value: ReactNode; color?: string; valueNoWrap?: boolean; valueFontSize?: number | string | null; compact?: boolean }) {
-  return (
-    <div
-      style={{
-        minWidth: 0,
-        padding: compact ? "10px" : "12px",
-        borderRadius: 12,
-        border: "1px solid rgba(255,255,255,0.05)",
-        background: "rgba(255,255,255,0.016)",
-        display: "flex",
-        flexDirection: "column",
-        gap: compact ? 5 : 7,
-      }}
-    >
-      <div
-        style={{
-          color: "var(--color-text-faint)",
-          letterSpacing: 1.4,
-          textTransform: "uppercase",
-          fontSize: compact ? 8.5 : 9,
-          fontWeight: 700,
-        }}
-      >
-        {label}
-      </div>
-      <div
-        style={{
-          color: color || "rgba(205,214,244,0.88)",
-          fontWeight: 500,
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          fontSize: valueFontSize || (compact ? 12 : 13),
-          lineHeight: 1.35,
-          minHeight: 18,
-          whiteSpace: valueNoWrap ? "nowrap" : compact ? "normal" : "normal",
-          overflow: valueNoWrap || compact ? "hidden" : "visible",
-          textOverflow: valueNoWrap ? "ellipsis" : "clip",
-          fontVariantNumeric: valueNoWrap ? "tabular-nums" : undefined,
-          ...(compact && !valueNoWrap
-            ? {
-                display: "-webkit-box",
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: "vertical",
-              }
-            : {}),
-        }}
-      >
-        {value}
-      </div>
-    </div>
-  );
+export function RailFactRow({ label, color, children }: { label: ReactNode; color?: string; children: ReactNode }) {
+  return <div className="detail-card-fact"><dt>{label}</dt><dd style={{ color }}>{children}</dd></div>;
 }
 
 export function RailActionGroup({ align = "start", children }: { align?: "start" | "end"; children?: ReactNode }) {

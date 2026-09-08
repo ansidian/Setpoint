@@ -1,3 +1,5 @@
+import { useNavigate } from 'react-router';
+import { financesHref } from '../finances/financesNavigation';
 import { memo, useState, useEffect, useMemo, useCallback, useRef } from "react";
 import TodayTimeline from "./TodayTimeline";
 import NeedsYouBand from "./needsYou/NeedsYouBand";
@@ -71,6 +73,7 @@ function DashboardBodyInner({
   domainRefreshing = false,
   onOpenEmail, onOpenInbox, onOpenDeadline, onOpenBillsCalendar, onOpenEventsCalendar,
 }: DashboardBodyProps) {
+  const navigate = useNavigate();
   const liveData = liveDataInput as unknown as CurrentDashboardLiveData;
   const { handleCompleteTask } = useDashboard();
   const seededEvents = useMemo(() => liveData.liveCalendar || [], [liveData.liveCalendar]);
@@ -247,6 +250,12 @@ function DashboardBodyInner({
       scrollContained={false} />
   );
 
+  const contextColumn = (
+    <ContextColumn accent={accent} isMobile={isMobile} liveWeather={liveData.liveWeather}
+      liveDeadlines={deadlines} activeSnapshot={activeSnapshot} excludedEmailIds={excludedEmailIds}
+      onJump={handleRailJump} onOpenInbox={handleOpenInbox} onCompleteDeadline={handleCompleteDeadline} />
+  );
+
   const timelinePanel = (
     <div className="dashboard-main-stack">
       <DashboardSurface isMobile={isMobile}>
@@ -254,20 +263,15 @@ function DashboardBodyInner({
           onOpenEvent={(event, anchor) => handleRailJump({ kind: "event", id: event.id, data: event }, anchor)} />
         {timeline}
       </DashboardSurface>
+      {isMobile && contextColumn}
       <DashboardFinance bills={bills} billsLoading={liveData.billsLoading} configured={liveData.actualConfigured}
         health={liveData.billsSyncHealth} refreshing={domainRefreshing}
         onOpenBill={(bill, anchor) => handleRailJump({ kind: "bill", id: bill.id, date: bill.next_date, data: bill }, anchor)}
-        onOpenTransactions={(date) => onOpenBillsCalendar(date, null)} />
+        onOpenTransactions={() => navigate(financesHref({view:"journal"}))} />
     </div>
   );
 
-  const contextColumn = (
-    <ContextColumn accent={accent} isMobile={isMobile} liveWeather={liveData.liveWeather}
-      liveDeadlines={deadlines} activeSnapshot={activeSnapshot} excludedEmailIds={excludedEmailIds}
-      onJump={handleRailJump} onOpenInbox={handleOpenInbox} onCompleteDeadline={handleCompleteDeadline} />
-  );
-
-  return <ThreeTierLayout isMobile={isMobile} band={band} timelinePanel={timelinePanel} contextColumn={contextColumn} />;
+  return <ThreeTierLayout isMobile={isMobile} band={band} timelinePanel={timelinePanel} contextColumn={isMobile ? null : contextColumn} />;
 }
 
 // Memoized so the dashboard poll loop / SSE refetch / 5-min refresh skip

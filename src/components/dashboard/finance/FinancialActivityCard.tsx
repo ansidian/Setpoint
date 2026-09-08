@@ -1,39 +1,45 @@
-import { CircleCheck, CircleAlert } from "lucide-react";
-import type { DashboardFinanceActivity, DashboardFinanceActivityItem } from "../../../../shared/types/dashboard-finance";
-import { timeAgo } from "../rails/railModel";
+import { useState } from 'react';
+import { Link } from 'react-router';
+import { ChevronDown, Wallet } from 'lucide-react';
+import type { FinancialActivity, FinancialActivityPage } from '../../../../shared/types/financial-activity';
+import AnimatedCollapse from '../../shared/AnimatedCollapse';
+import { financialHref } from '../../financial/financialNavigation';
+import { activityAmount, activityFacts, activityOutcome, activityReviewReason } from '../../financial/financialActivityPresentation';
 
-function amountLabel(item: DashboardFinanceActivityItem) {
-  if (item.amountCents == null) return "Amount unknown";
-  const amount = Math.abs(item.amountCents / 100);
-  if (!item.currency) return `${amount.toFixed(2)} · currency unknown`;
-  try { return new Intl.NumberFormat("en-US", { style: "currency", currency: item.currency }).format(amount); }
-  catch { return `${amount.toFixed(2)} ${item.currency || ""}`; }
-}
-
-export default function FinancialActivityCard({ activity, loading, onOpenReview }: {
-  activity?: DashboardFinanceActivity;
+export default function FinancialActivityCard({ review, completed, loading, reviewError, completedError }: {
+  review: FinancialActivityPage | null;
+  completed: FinancialActivityPage | null;
   loading: boolean;
-  onOpenReview: (item?: DashboardFinanceActivityItem, completed?: boolean) => void;
+  reviewError: boolean;
+  completedError: boolean;
 }) {
-  const row = (item: DashboardFinanceActivityItem) => <button key={item.id} type="button" className="dashboard-finance-row" onClick={() => onOpenReview(item, ["added", "updated", "already_present"].includes(item.status))}>
-    <span><span className="dashboard-finance-row-title">{item.payee || "Financial email"}</span><span className="dashboard-finance-row-detail">{item.description} · Updated {timeAgo(new Date(item.updatedAt).toISOString())}</span></span>
-    <span className="dashboard-finance-amount">{amountLabel(item)}</span>
-  </button>;
-  return <div className="dashboard-finance-card dashboard-finance-activity">
-    <section aria-label="Historical import review">
-      <div className="dashboard-finance-heading"><h3><CircleAlert size={15} />Historical imports{activity?.status === "ready" && activity.reviewCount > 0 ? ` · ${activity.reviewCount}` : ""}</h3><button type="button" className="dashboard-finance-button" onClick={() => onOpenReview()}>Open review</button></div>
-      {!activity && loading ? <p className="dashboard-finance-note">Loading financial activity…</p>
-        : activity?.status !== "ready" ? <p className="dashboard-finance-note">Financial review is temporarily unavailable.</p>
-        : activity.reviewCount === 0 ? <p className="dashboard-finance-note">No imports need your review.</p>
-        : activity.review.map(row)}
-      {activity?.status === "ready" && activity.reviewCount > activity.review.length && <p className="dashboard-finance-note">Showing {activity.review.length} of {activity.reviewCount} items needing review.</p>}
-    </section>
-    <section aria-label="Recent automation">
-      <div className="dashboard-finance-heading"><h3><CircleCheck size={15} />Recent Automation</h3><button type="button" className="dashboard-finance-button" onClick={() => onOpenReview(undefined, true)}>View all</button></div>
-      {!activity && loading ? <p className="dashboard-finance-note">Loading recorded outcomes…</p>
-        : activity?.status !== "ready" ? <p className="dashboard-finance-note">Automation history is temporarily unavailable.</p>
-        : activity.recent.length === 0 ? <p className="dashboard-finance-note">No recent automatic imports.</p>
-        : activity.recent.map(row)}
-    </section>
-  </div>;
+  const [showCompleted,setShowCompleted] = useState(false);
+  const row = (item: FinancialActivity) => <Link key={item.id} className="dashboard-finance-row dashboard-finance-review-row" to={financialHref({ view:item.status === 'completed' ? 'completed' : 'needs_attention' },item.reference)}>
+    <span><span className="dashboard-finance-row-title">{item.payee || item.subject || 'Financial record'}</span>
+      <span className="dashboard-finance-row-detail">{item.status === 'completed' ? `${activityOutcome(item)} · ${activityFacts(item).label}` : activityReviewReason(item)}</span>
+    </span>
+    <span className="dashboard-finance-row-end"><span className="dashboard-finance-amount" data-direction={(item.amountCents ?? 0) > 0 ? 'inflow' : 'outflow'}>{activityAmount(item)}</span>
+      <span className="dashboard-finance-caption">{item.status === 'completed' ? 'View result' : item.correction ? 'Review correction' : item.actions.complete ? 'Review details' : 'Review record'}</span>
+    </span>
+  </Link>;
+  return <section className="dashboard-finance-card dashboard-finance-review" aria-label="Finance review">
+    <div className="dashboard-finance-heading"><h3><Wallet size={15} />Finance{review ? ` · ${review.total} to review` : ''}</h3>
+      <Link className="dashboard-finance-button" to={financialHref({ view:'needs_attention' })}>View all<span className="sr-only"> financial reviews</span></Link>
+    </div>
+    {reviewError && <p role="status" className="dashboard-finance-note dashboard-finance-error">Couldn’t refresh reviews.{review ? ' Showing the last available records.' : ' Try Refresh below.'}</p>}
+    {!review && loading && <p className="dashboard-finance-note">Loading financial reviews…</p>}
+    {review?.total === 0 && <p className="dashboard-finance-note">Nothing needs your review.</p>}
+    {review?.items.slice(0,3).map(row)}
+    {review && review.total > 3 && <p className="dashboard-finance-note">Showing 3 of {review.total} records.</p>}
+    <div className="dashboard-finance-completed">
+      <button type="button" className="dashboard-finance-completed-toggle" aria-expanded={showCompleted} onClick={() => setShowCompleted(value => !value)}><ChevronDown size={14} aria-hidden="true" />Completed activity</button>
+      {completedError && <p role="status" className="dashboard-finance-note dashboard-finance-error">Couldn’t refresh completed activity.{completed ? ' Saved results are still shown.' : ' Try Refresh below.'}</p>}
+      <AnimatedCollapse open={showCompleted}><div>
+        {!completed && loading && <p className="dashboard-finance-note">Loading completed activity…</p>}
+        {completed?.total === 0 && <p className="dashboard-finance-note">No completed activity yet.</p>}
+        {completed?.items.slice(0,3).map(row)}
+        <Link className="dashboard-finance-button" to={financialHref({ view:'completed' })}>View all completed activity</Link>
+      </div></AnimatedCollapse>
+    </div>
+  </section>;
 }

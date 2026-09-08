@@ -26,7 +26,10 @@ export function publishDemoFinanceSnapshot(before: CorrectionSnapshot, after: Co
   seed.transactions = seed.transactions.filter(row => !affectedTransactions.has(row.id));
   for (const row of after.transactions) {
     const amount = Number(row.amount);
-    seed.transactions.push({ id: row.id, amount: Math.abs(amount) / 100, date: dateKey(row.date),
+    seed.transactions.push({ id: row.id, accountId:String(row.acct || ''), payeeId:String(row.description || ''),
+      scheduleId:row.schedule ? String(row.schedule) : null, transferId:row.transferred_id ? String(row.transferred_id) : null,
+      parentId:row.parent_id ? String(row.parent_id) : null, isParent:!!row.is_parent, isChild:!!row.is_child, cleared:!!row.cleared, reconciled:!!row.reconciled,
+      amount: Math.abs(amount) / 100, date: dateKey(row.date),
       direction: amount > 0 ? 'income' : 'expense',
       transferAccountId: row.transferred_id ? String(after.transactions.find(other => other.id === row.transferred_id)?.acct || '') : null,
       account: seed.actualMetadata.accounts.find(account => account.id === row.acct)?.name || 'Demo account',
@@ -42,9 +45,12 @@ export function publishDemoFinanceSnapshot(before: CorrectionSnapshot, after: Co
     const value = (field: string) => conditions.find(condition => condition.field === field)?.value;
     const date = after.dates.find(date => date.schedule_id === row.id);
     const nextDate = dateKey(date?.local_next_date || date?.base_next_date);
-    const payee = String(after.payees.find(payee => payee.id === value('payee'))?.name || row.name || 'Fictional bill');
+    const schedulePayee = after.payees.find(payee => payee.id === value('payee'));
+    const payee = String(schedulePayee?.name || row.name || 'Fictional bill');
+    const amountCents = Number(value('amount') || 0);
+    const type = schedulePayee?.transfer_acct ? 'transfer' : amountCents > 0 ? 'income' : 'bill';
     seed.bills.push({ id: `${row.id}:${nextDate}`, scheduleId: row.id, name: String(row.name || payee), payee,
-      amount: Math.abs(Number(value('amount') || 0)) / 100, next_date: nextDate, paid: false, type: 'bill', openActionDisabled: true });
+      amount: Math.abs(amountCents) / 100, next_date: nextDate, paid: false, paymentTransactionIds:[], type, openActionDisabled: true });
     seed.currentDashboard.payeeMap[row.id] = payee;
   }
   seed.currentDashboard.bills = seed.bills;

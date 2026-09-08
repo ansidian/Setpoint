@@ -6,16 +6,13 @@ import { financialEventIntake } from "../financial-events/financial-event-intake
 const SATURATED_DRAIN_RECHECK_MS = 30_000;
 const SAFETY_BACKSTOP_MS = 5 * 60_000;
 const MAX_TIMER_MS = 2_147_483_647;
-const MAX_RUN_PAGES_PER_DRAIN = 5;
 const MAX_ITEM_BATCHES_PER_DRAIN = 10;
 const MAX_FINANCIAL_DOCUMENTS_PER_DRAIN = 10;
 const MAX_FINANCIAL_EVENTS_PER_DRAIN = 10;
 const MAX_FINANCIAL_INTAKE_PAGES_PER_DRAIN = 5;
 
 type TransactionImportWorker = Pick<typeof transactionImportWorker,
-  | "recoverAbandonedHistoricalRuns"
   | "recoverStaleClaims"
-  | "processNextHistoricalPage"
   | "processNextItemBatch"
   | "getNextWakeAt"
 >;
@@ -89,16 +86,12 @@ export function createTransactionImportRuntime(worker: TransactionImportWorker, 
         MAX_FINANCIAL_EVENTS_PER_DRAIN,
         financeWorker.processNextEvent,
       ) : false;
-      const historicalSaturated = await drainBounded(
-        MAX_RUN_PAGES_PER_DRAIN,
-        worker.processNextHistoricalPage,
-      );
       const itemsSaturated = await drainBounded(
         MAX_ITEM_BATCHES_PER_DRAIN,
         worker.processNextItemBatch,
       );
       if (stopping) return;
-      if (intakeSaturated || documentsSaturated || eventsSaturated || historicalSaturated || itemsSaturated) {
+      if (intakeSaturated || documentsSaturated || eventsSaturated || itemsSaturated) {
         scheduleDrainAt(Date.now() + SATURATED_DRAIN_RECHECK_MS);
         return;
       }
@@ -139,7 +132,6 @@ export function createTransactionImportRuntime(worker: TransactionImportWorker, 
 
   async function start(): Promise<void> {
     stopping = false;
-    await worker.recoverAbandonedHistoricalRuns();
     await worker.recoverStaleClaims();
     await financeWorker?.recoverStaleClaims();
     await financeIntake?.recoverStaleClaims();

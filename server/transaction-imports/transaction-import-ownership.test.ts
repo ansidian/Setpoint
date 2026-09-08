@@ -1,8 +1,9 @@
+import { readImportRun } from './transaction-import.test-utils.ts';
 import { createClient, type Client } from "@libsql/client";
 import { readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ActualImportAccountGroup, ActualImportBatchResult } from "../../shared/types/transaction-imports.ts";
 import { createFinancialEmailPlanner } from "../bills/financial-email-planner.ts";
 import { emailFixture } from "./parsers/fixtures.ts";
@@ -82,7 +83,7 @@ describe("transaction import planner ownership", () => {
     const arrival = await service.ingestArrivals("owner-1", [emailFixture({ gmailAccountId: "gmail-1" })]);
     const ledger: Array<{ accountId: string; categoryId: string | null; importedId: string; amountCents: number }> = [];
     const worker = createTransactionImportWorker({
-      store, dbClient: db, createId,
+      store, createId,
       importGroups: async (_userId, groups, dryRun) => {
         if (!dryRun) for (const group of groups) for (const transaction of group.transactions) {
           ledger.push({
@@ -97,7 +98,7 @@ describe("transaction import planner ownership", () => {
       invalidateAfterCommit: async () => undefined,
     });
 
-    expect((await store.getRunDetail("owner-1", arrival.runId!))!.items[0]).toMatchObject({
+    expect((await readImportRun(db, store, "owner-1", arrival.runId!))!.items[0]).toMatchObject({
       status: "queued", actualAccountId: "current-card", actualCategoryId: "shopping",
       importedId: "amazon-111-2222222-3333333", amountCents: -2704,
       automationMode: "automatic", automaticSafe: false, confirmedAt: null,
@@ -105,59 +106,18 @@ describe("transaction import planner ownership", () => {
     });
     await worker.processNextItemBatch();
     expect(ledger).toEqual([]);
-    expect((await store.getRunDetail("owner-1", arrival.runId!))!.items[0]).toMatchObject({
+    expect((await readImportRun(db, store, "owner-1", arrival.runId!))!.items[0]).toMatchObject({
       status: "ready", automaticSafe: true, confirmedAt: null,
     });
     await worker.processNextItemBatch();
     expect(ledger).toEqual([{
       accountId: "current-card", categoryId: "shopping", importedId: "amazon-111-2222222-3333333", amountCents: -2704,
     }]);
-    expect((await store.getRunDetail("owner-1", arrival.runId!))!.items[0]).toMatchObject({
+    expect((await readImportRun(db, store, "owner-1", arrival.runId!))!.items[0]).toMatchObject({
       status: "added", confirmedAt: null,
       financialPlan: { candidate: { transaction_import: { executionOwner: "planner" } } },
     });
     await expect(worker.processNextItemBatch()).resolves.toBe(false);
-  });
-
-  it("persists each historical page cursor and resumes without restarting", async () => {
-    const { store, service } = setup();
-    const started = await service.startHistoricalScan("owner-1", {
-      gmailAccountIds: ["gmail-1"],
-      sources: ["amazon"],
-      startDate: "2026-01-01",
-      endDate: "2026-02-01",
-    });
-    const searchPage = vi.fn()
-      .mockResolvedValueOnce({ emails: [emailFixture()], nextPageToken: "page-2", resultSizeEstimate: 2, failures: [] })
-      .mockResolvedValueOnce({ emails: [emailFixture({ gmailMessageId: "msg-2", uid: "gmail-personal-msg-2", subject: "Your Amazon.com order #444-5555555-6666666", text: "Order 444-5555555-6666666 Order Total: $8.72" })], nextPageToken: null, resultSizeEstimate: 2, failures: [] });
-    const worker = createTransactionImportWorker({
-      store,
-      dbClient: db,
-      searchPage,
-      createId,
-      planItems: (userId, items) => planTransactionImportItems(userId, items, createFinancialEmailPlanner({
-        metadataReader: async () => ({
-          accounts: [], payees: [], payeeMap: {}, categories: [], schedules: [], recentTransactions: [],
-          syncHealth: { state: "current", lastSuccessAt: "2026-01-15T00:00:00.000Z" },
-        }),
-        occurrenceReader: async () => ({ schedules: [], syncHealth: { state: "current", lastSuccessAt: "2026-01-15T00:00:00.000Z" } }),
-        transactionReader: async () => ({ transactions: [] }),
-        now: () => new Date("2026-01-15T00:00:00.000Z"),
-      })),
-    });
-
-    await expect(worker.processNextHistoricalPage()).resolves.toBe(true);
-    expect(await store.getRun("owner-1", started.runId)).toMatchObject({
-      status: "queued",
-      cursor: { accountIndex: 0, sourceIndex: 0, pageToken: "page-2" },
-    });
-    await expect(worker.processNextHistoricalPage()).resolves.toBe(true);
-    const detail = await store.getRunDetail("owner-1", started.runId);
-    expect(detail).toMatchObject({ status: "completed", cursor: { complete: true } });
-    expect(detail!.items).toHaveLength(2);
-    expect(detail!.items.every((item) => item.status === "needs_review" && !item.actualAccountId)).toBe(true);
-    // test-architecture: allow-boundary-interaction -- Gmail search is the outbound provider boundary; durable resume must send the exact stored page token on the second request.
-    expect(searchPage).toHaveBeenNthCalledWith(2, expect.anything(), expect.objectContaining({ pageToken: "page-2" }));
   });
 
 });

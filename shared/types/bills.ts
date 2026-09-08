@@ -109,7 +109,21 @@ export interface BillTransactionImportEvidence {
   currency?: string | null;
 }
 
+export interface StatementSourceFacts {
+  statement_date: string | null;
+  statement_date_evidence: string | null;
+  no_payment_required: boolean | null;
+  no_payment_evidence: string | null;
+  account_credit: number | null;
+  account_credit_evidence: string | null;
+  new_charges: number | null;
+  new_charges_evidence: string | null;
+  carried_balance: number | null;
+  carried_balance_evidence: string | null;
+}
+
 export interface BillCandidate {
+  statement_facts?: StatementSourceFacts | null;
   document_role?: "merchant_receipt" | "processor_receipt" | "bank_notification" | "statement" | "payment_notice" | "other" | null;
   currency?: string | null;
   payee?: string;

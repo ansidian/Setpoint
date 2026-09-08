@@ -1,6 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
 import { CheckCircle2, Circle, CircleDashed } from "lucide-react";
-import { RailMetaChip } from "../../DetailRailPrimitives.tsx";
 import { normalizeStatus, statusLabel } from "./deadlinesModel.ts";
 import type { LucideIcon } from "lucide-react";
 
@@ -48,17 +47,5 @@ export function DeadlineStatusValue({ status, size = 12, testId }: { status?: un
       <DeadlineStatusIcon status={status} size={size} />
       <span>{label}</span>
     </span>
-  );
-}
-
-export function DeadlineStatusBadge({ status, compact = false, testId }: { status?: unknown; compact?: boolean; testId?: string }) {
-  return (
-    <RailMetaChip tone="quiet" compact={compact}>
-      <DeadlineStatusValue
-        status={status}
-        size={compact ? 11 : 12}
-        testId={testId}
-      />
-    </RailMetaChip>
   );
 }

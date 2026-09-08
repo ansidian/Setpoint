@@ -64,6 +64,7 @@ async function writeBudgetFixture(budgetDir: string, {
       rule TEXT,
       next_date INTEGER,
       completed INTEGER,
+      posts_transaction INTEGER DEFAULT 0,
       tombstone INTEGER,
       _conditions TEXT
     );
@@ -72,6 +73,7 @@ async function writeBudgetFixture(budgetDir: string, {
       date INTEGER,
       amount INTEGER,
       payee TEXT,
+      account TEXT,
       schedule TEXT,
       tombstone INTEGER
     );
@@ -87,10 +89,10 @@ async function writeBudgetFixture(budgetDir: string, {
     INSERT INTO categories VALUES
       ('cat-1', 'Utilities', 'group-1', 1, 0),
       ('cat-internal', 'Transfer', 'internal', 1, 0);
-    INSERT INTO v_schedules VALUES
+    INSERT INTO v_schedules(id,name,rule,next_date,completed,tombstone,_conditions) VALUES
       ('sched-1', 'Power Bill', 'rule-1', 20260510, 0, 0, '[{"field":"description","value":"payee-1"},{"field":"amount","value":-12234},{"field":"acct","value":"acct-1"}]'),
       ('sched-income', 'Paycheck', 'rule-2', 20260515, 0, 0, '[{"field":"description","value":"payee-1"},{"field":"amount","value":250000}]');
-    INSERT INTO v_transactions VALUES
+    INSERT INTO v_transactions(id,date,amount,payee,schedule,tombstone) VALUES
       ('txn-1', 20260511, -12234, 'payee-1', 'sched-1', 0),
       ('txn-zero', 20260512, 0, 'payee-1', NULL, 0);
   `);
@@ -148,6 +150,7 @@ async function writeSyncPullFixture(budgetDir: string, { lastSyncedTimestamp }: 
       rule TEXT,
       next_date INTEGER,
       completed INTEGER,
+      posts_transaction INTEGER DEFAULT 0,
       tombstone INTEGER,
       _conditions TEXT
     );
@@ -164,7 +167,7 @@ async function writeSyncPullFixture(budgetDir: string, { lastSyncedTimestamp }: 
       sort_order REAL
     );
     CREATE VIEW v_transactions AS
-      SELECT t.id, t.date, t.amount, pm.targetId AS payee, t.schedule, t.tombstone
+      SELECT t.id, t.date, t.amount, pm.targetId AS payee, t.acct AS account, t.schedule, t.tombstone
       FROM transactions t
       LEFT JOIN payee_mapping pm ON pm.id = t.description
       WHERE t.date IS NOT NULL
@@ -271,7 +274,7 @@ describe("readLocalActualMetadata", () => {
       expect.objectContaining({ id: "sched-income", type: "income" }),
     ]);
     expect(metadata.recentTransactions).toEqual([
-      { payee: "Power Co", payeeId: "payee-1", amount: 122.34, date: "2026-05-11", scheduleId: "sched-1" },
+      { id: "txn-1", accountId: "", payee: "Power Co", payeeId: "payee-1", amount: 122.34, date: "2026-05-11", scheduleId: "sched-1" },
     ]);
   });
 
@@ -312,7 +315,7 @@ describe("readLocalActualMetadata", () => {
 
     expect(syncResult).toMatchObject({ applied: 6, recorded: 6, since: baseTimestamp });
     expect(metadata.recentTransactions).toEqual([
-      { payee: "Power Co", payeeId: "payee-1", amount: 18.88, date: "2026-05-18", scheduleId: "sched-1" },
+      { id: "txn-remote", accountId: "acct-1", payee: "Power Co", payeeId: "payee-1", amount: 18.88, date: "2026-05-18", scheduleId: "sched-1" },
     ]);
     expect(savedMetadata.lastSyncedTimestamp).toBe(String(remoteMessages.at(-1)!.timestamp));
     // test-architecture: allow-boundary-interaction -- This is the outbound Actual sync protocol boundary; URL, media type, and session token are not observable from the applied local rows.

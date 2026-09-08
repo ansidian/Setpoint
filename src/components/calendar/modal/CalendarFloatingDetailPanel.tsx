@@ -1,6 +1,7 @@
 import { AnimatePresence, motion as Motion, useReducedMotion } from "motion/react";
 import type { Transition } from "motion/react";
 import { createPortal } from "react-dom";
+import { CalendarDays, CircleCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 import CalendarFloatingDetailCaret from "./CalendarFloatingDetailCaret";
@@ -71,6 +72,7 @@ export default function CalendarFloatingDetailPanel({
   const mode = detail?.mode || "detail";
   const editorMode = mode === "edit" || mode === "create";
   const eventEditorMode = editorMode && detail?.view === "events";
+  const DetailIcon = detail?.detailKind === "deadline" ? CircleCheck : CalendarDays;
   const contentKey = `${mode}-${detail?.view || "view"}-${detail?.itemId || "item"}-${detail?.dateKey || "date"}`;
 
   const {
@@ -214,7 +216,7 @@ export default function CalendarFloatingDetailPanel({
             borderRadius: 16,
             border: "1px solid rgba(255,255,255,0.09)",
             background: "var(--sp-panel)",
-            boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
+            boxShadow: "0 13px 26px -12px rgba(0,0,0,.6)",
             isolation: "isolate",
             overflow: "hidden",
             overscrollBehavior: "contain",
@@ -239,29 +241,22 @@ export default function CalendarFloatingDetailPanel({
               alignItems: "center",
               justifyContent: "space-between",
               gap: 10,
-              minHeight: 36,
-              padding: "9px 10px 8px 12px",
+              minHeight: 43,
+              padding: "6px 12px 5px 14px",
               cursor: dragging ? "grabbing" : "grab",
-              borderBottom: "1px solid rgba(255,255,255,0.06)",
-              background: "rgba(255,255,255,0.018)",
               userSelect: "none",
               touchAction: "none",
             }}
           >
             <div
+              className="detail-panel-label"
               style={{
                 minWidth: 0,
                 overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: 1.7,
-                textTransform: "uppercase",
-                color: "var(--color-text-faint)",
               }}
             >
-              {label}
+              <DetailIcon size={14} aria-hidden="true" />
+              <span>{label}</span>
             </div>
             <CalendarFloatingDetailCloseButton editorMode={editorMode} onClose={onClose} />
           </div>
@@ -276,10 +271,10 @@ export default function CalendarFloatingDetailPanel({
               flex: eventEditorMode ? 1 : undefined,
               overflowY: eventEditorMode ? "hidden" : "auto",
               overscrollBehavior: "contain",
-              padding: 12,
+              padding: editorMode ? 12 : "0 8px 8px",
               minHeight: 0,
-              maxHeight: Math.max(120, resolvedPlacement.maxHeight - 37),
-              scrollbarGutter: "stable",
+              maxHeight: Math.max(120, resolvedPlacement.maxHeight - 43),
+              scrollbarGutter: editorMode ? "stable" : undefined,
             }}
           >
             <div

@@ -4,8 +4,8 @@ import { isManagedEmail, listManagedEmailUids } from "../financial-events/financ
 import type {
   TransactionImportItem, TransactionImportItemStatus,
   TransactionImportPlanShadow, TransactionImportReconciliationStatus,
-  TransactionImportRunDetail, TransactionImportRunStatus, TransactionImportRunSummary,
-  TransactionImportRunTrigger, TransactionImportSource,
+  TransactionImportRunStatus, TransactionImportRunSummary,
+  TransactionImportSource,
 } from "../../shared/types/transaction-imports.ts";
 import type { FinancialEmailPlan } from "../../shared/types/bills.ts";
 import type { FinancialWriteEvidence } from "../../shared/types/financial-activity.ts";
@@ -15,18 +15,17 @@ import {
   projectTransactionImportRun as projectRun,
 } from "./transaction-import-store-projections.ts";
 
+const ARRIVAL_ITEM = `EXISTS (SELECT 1 FROM ea_transaction_import_runs run WHERE run.user_id = ea_transaction_import_items.user_id AND run.id = ea_transaction_import_items.run_id AND run.trigger = 'arrival')`;
 const ORIGINAL_UNGUARDED = `NOT EXISTS (SELECT 1 FROM ea_financial_corrected_sources g WHERE g.user_id=ea_transaction_import_items.user_id AND g.owner='import' AND g.record_id=ea_transaction_import_items.id)`;
 
 type StoreDb = Pick<Client, "execute">;
 export interface CreateRunInput {
   id: string;
   userId: string;
-  trigger: TransactionImportRunTrigger;
+  trigger: "arrival";
   optionsKey: string;
   gmailAccountIds: string[];
   sources: TransactionImportSource[];
-  startDate?: string | null;
-  endDate?: string | null;
 }
 
 export interface InsertItemInput {
@@ -59,11 +58,6 @@ export interface InsertItemInput {
   status: TransactionImportItemStatus;
 }
 
-export interface ClaimedRun extends TransactionImportRunSummary {
-  userId: string;
-  claimToken: string;
-}
-
 export interface ClaimedItem extends TransactionImportItem {
   userId: string;
   claimToken: string;
@@ -74,7 +68,7 @@ function numberValue(value: unknown): number {
 }
 
 export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.now) {
-  const { readDashboardActivity, listReviewRuns } = createTransactionImportActivity(dbClient);
+  const { readDashboardActivity } = createTransactionImportActivity(dbClient);
   async function createRun(input: CreateRunInput): Promise<{ run: TransactionImportRunSummary; created: boolean }> {
     const timestamp = now();
     const result = await dbClient.execute({
@@ -89,8 +83,8 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
         input.optionsKey,
         JSON.stringify(input.gmailAccountIds),
         JSON.stringify(input.sources),
-        input.startDate ?? null,
-        input.endDate ?? null,
+        null,
+        null,
         timestamp,
         timestamp,
       ],
@@ -99,19 +93,9 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
       const created = await getRun(input.userId, input.id);
       return { run: created!, created: true };
     }
-    if (input.trigger === "arrival") {
-      const existing = await getRun(input.userId, input.id);
-      if (existing) return { run: existing, created: false };
-    }
-    const active = await dbClient.execute({
-      sql: `SELECT * FROM ea_transaction_import_runs
-            WHERE user_id = ? AND options_key = ? AND trigger = 'historical_scan'
-              AND status IN ('queued', 'running', 'retry', 'paused')
-            ORDER BY created_at ASC LIMIT 1`,
-      args: [input.userId, input.optionsKey],
-    });
-    if (!active.rows[0]) throw new Error("Transaction import run could not be created");
-    return { run: projectRun(active.rows[0]), created: false };
+    const existing = await getRun(input.userId, input.id);
+    if (existing) return { run: existing, created: false };
+    throw new Error("Transaction import run could not be created");
   }
 
   async function getRun(userId: string, runId: string): Promise<TransactionImportRunSummary | null> {
@@ -120,37 +104,6 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
       args: [userId, runId],
     });
     return result.rows[0] ? projectRun(result.rows[0]) : null;
-  }
-
-  async function listRuns(userId: string, limit = 12): Promise<TransactionImportRunSummary[]> {
-    const result = await dbClient.execute({
-      sql: `SELECT * FROM ea_transaction_import_runs
-            WHERE user_id = ?
-            ORDER BY created_at DESC, id DESC
-            LIMIT ?`,
-      args: [userId, Math.max(1, Math.min(50, Math.trunc(limit)))],
-    });
-    return result.rows.map(projectRun);
-  }
-
-  async function resumePausedRun(userId: string, runId: string): Promise<boolean> {
-    const result = await dbClient.execute({
-      sql: `UPDATE ea_transaction_import_runs SET status = 'retry', last_error = NULL,
-              next_attempt_at = NULL, claim_token = NULL, claimed_at = NULL, updated_at = ?
-            WHERE user_id = ? AND id = ? AND status = 'paused'`,
-      args: [now(), userId, runId],
-    });
-    return Number(result.rowsAffected || 0) === 1;
-  }
-
-  async function getRunDetail(userId: string, runId: string): Promise<TransactionImportRunDetail | null> {
-    const run = await getRun(userId, runId);
-    if (!run) return null;
-    const result = await dbClient.execute({
-      sql: `SELECT * FROM ea_transaction_import_items WHERE user_id = ? AND run_id = ? ORDER BY created_at, id`,
-      args: [userId, runId],
-    });
-    return { ...run, items: result.rows.map(projectItem) };
   }
 
   async function getItem(userId: string, itemId: string): Promise<TransactionImportItem | null> {
@@ -163,7 +116,7 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
 
   async function listItemsForEmail(userId: string, emailUid: string): Promise<TransactionImportItem[]> {
     const result = await dbClient.execute({
-      sql: `SELECT items.*, (SELECT c.effective_result_json FROM ea_financial_effective_corrections c
+      sql: `SELECT items.*, (SELECT run.trigger FROM ea_transaction_import_runs run WHERE run.user_id = items.user_id AND run.id = items.run_id) AS run_trigger, (SELECT c.effective_result_json FROM ea_financial_effective_corrections c
               JOIN ea_financial_activity_occurrences o ON o.user_id=c.user_id AND o.activity_id=c.activity_id
               WHERE o.user_id=items.user_id AND o.owner='import' AND o.record_id=items.id) AS effective_result_json,
             (SELECT json_object('id', c.id, 'state', c.state, 'revision', c.revision) FROM ea_financial_corrections c
@@ -199,7 +152,7 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
               claim_token = NULL, claimed_at = NULL, next_attempt_at = NULL, updated_at = ?
             WHERE user_id = ? AND run_id = ? AND id = ?
               AND status IN ('needs_review', 'paused', 'failed', 'ready')
-              AND original_attempted_at IS NULL AND ${ORIGINAL_UNGUARDED}
+              AND original_attempted_at IS NULL AND ${ORIGINAL_UNGUARDED} AND ${ARRIVAL_ITEM}
               AND NOT EXISTS (SELECT 1 FROM ea_financial_identity_conflicts conflict WHERE conflict.user_id = ea_transaction_import_items.user_id AND conflict.record_id = ea_transaction_import_items.id)`,
       args: [
         input.date, input.amountCents, input.payee, input.notes, input.actualAccountId,
@@ -217,7 +170,7 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
                 ELSE 'queued'
               END,
               last_error = NULL, next_attempt_at = NULL, claim_token = NULL, claimed_at = NULL, updated_at = ?
-            WHERE user_id = ? AND id = ? AND status IN ('failed', 'paused')`,
+            WHERE user_id = ? AND id = ? AND ${ARRIVAL_ITEM} AND status IN ('failed', 'paused')`,
       args: [now(), userId, itemId],
     });
     return Number(result.rowsAffected || 0) === 1;
@@ -307,36 +260,11 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
     return Number(result.rowsAffected || 0) === 1;
   }
 
-  async function claimNextRun(claimToken: string): Promise<ClaimedRun | null> {
-    const timestamp = now();
-    const selected = await dbClient.execute({
-      sql: `SELECT * FROM ea_transaction_import_runs
-            WHERE status IN ('queued', 'retry') AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
-            ORDER BY created_at, id LIMIT 1`,
-      args: [timestamp],
-    });
-    const row = selected.rows[0];
-    if (!row) return null;
-    const claimed = await dbClient.execute({
-      sql: `UPDATE ea_transaction_import_runs
-            SET status = 'running', claim_token = ?, claimed_at = ?, attempts = attempts + 1,
-                started_at = COALESCE(started_at, ?), updated_at = ?
-            WHERE id = ? AND status IN ('queued', 'retry') AND claim_token IS NULL`,
-      args: [claimToken, timestamp, timestamp, timestamp, String(row.id)],
-    });
-    if (Number(claimed.rowsAffected || 0) !== 1) return null;
-    return {
-      ...projectRun({ ...row, status: "running", attempts: numberValue(row.attempts) + 1, updated_at: timestamp }),
-      userId: String(row.user_id),
-      claimToken,
-    };
-  }
-
   async function claimNextItem(claimToken: string): Promise<ClaimedItem | null> {
     const timestamp = now();
     const selected = await dbClient.execute({
       sql: `SELECT * FROM ea_transaction_import_items
-            WHERE ${ORIGINAL_UNGUARDED} AND status IN ('queued', 'ready') AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
+            WHERE ${ARRIVAL_ITEM} AND ${ORIGINAL_UNGUARDED} AND status IN ('queued', 'ready') AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
               AND NOT EXISTS (SELECT 1 FROM ea_financial_identity_conflicts conflict WHERE conflict.user_id = ea_transaction_import_items.user_id AND conflict.record_id = ea_transaction_import_items.id)
             ORDER BY created_at, id LIMIT 1`,
       args: [timestamp],
@@ -347,7 +275,7 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
     const claimed = await dbClient.execute({
       sql: `UPDATE ea_transaction_import_items
             SET status = ?, claim_token = ?, claimed_at = ?, attempts = attempts + 1, updated_at = ?
-            WHERE id = ? AND status = ? AND claim_token IS NULL AND ${ORIGINAL_UNGUARDED}`,
+            WHERE id = ? AND status = ? AND claim_token IS NULL AND ${ORIGINAL_UNGUARDED} AND ${ARRIVAL_ITEM}`,
       args: [nextStatus, claimToken, timestamp, timestamp, String(row.id), String(row.status)],
     });
     if (Number(claimed.rowsAffected || 0) !== 1) return null;
@@ -358,40 +286,11 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
     };
   }
 
-  async function settleRun(userId: string, runId: string, claimToken: string, input: {
-    status: TransactionImportRunStatus;
-    cursor: Record<string, unknown>;
-    discovered?: number;
-    parsed?: number;
-    review?: number;
-    queued?: number;
-    failed?: number;
-    lastError?: string | null;
-  }): Promise<boolean> {
-    const timestamp = now();
-    const terminal = input.status === "completed" || input.status === "failed";
-    const result = await dbClient.execute({
-      sql: `UPDATE ea_transaction_import_runs SET
-              status = ?, cursor_json = ?, discovered_count = discovered_count + ?,
-              parsed_count = parsed_count + ?, review_count = review_count + ?,
-              queued_count = queued_count + ?, failed_count = failed_count + ?,
-              last_error = ?, claim_token = NULL, claimed_at = NULL,
-              completed_at = CASE WHEN ? THEN ? ELSE completed_at END, updated_at = ?
-            WHERE user_id = ? AND id = ? AND claim_token = ?`,
-      args: [
-        input.status, JSON.stringify(input.cursor), input.discovered ?? 0, input.parsed ?? 0,
-        input.review ?? 0, input.queued ?? 0, input.failed ?? 0, input.lastError ?? null,
-        terminal ? 1 : 0, timestamp, timestamp, userId, runId, claimToken,
-      ],
-    });
-    return Number(result.rowsAffected || 0) === 1;
-  }
-
   async function markTransferAttempt(userId: string, itemId: string, claimToken: string, attemptedAt: string): Promise<boolean> {
     const result = await dbClient.execute({
       sql: `UPDATE ea_transaction_import_items
             SET financial_email_plan_json = json_set(financial_email_plan_json, '$.transferExecution.attemptedAt', ?), updated_at = ?
-            WHERE user_id = ? AND id = ? AND claim_token = ? AND status = 'importing' AND ${ORIGINAL_UNGUARDED}
+            WHERE user_id = ? AND id = ? AND claim_token = ? AND status = 'importing' AND ${ORIGINAL_UNGUARDED} AND ${ARRIVAL_ITEM}
               AND source = 'generic'
               AND json_extract(financial_email_plan_json, '$.operation.intended') = 'create_transfer_schedule'
               AND json_extract(financial_email_plan_json, '$.transferExecution.budgetId') IS NOT NULL
@@ -417,7 +316,7 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
                 automatic_safe = COALESCE(?, automatic_safe),
                 actual_result_json = COALESCE(?, actual_result_json),
                 claim_token = NULL, claimed_at = NULL, updated_at = ?
-            WHERE user_id = ? AND id = ? AND claim_token = ? AND ${ORIGINAL_UNGUARDED}`,
+            WHERE user_id = ? AND id = ? AND claim_token = ? AND ${ORIGINAL_UNGUARDED} AND ${ARRIVAL_ITEM}`,
       args: [
         input.status, input.reconciliationStatus ?? null, input.lastError ?? null,
         input.nextAttemptAt ?? null, input.financialPlan ? JSON.stringify(input.financialPlan) : null,
@@ -432,7 +331,7 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
   async function admitOriginalImport(item: ClaimedItem, evidence: FinancialWriteEvidence): Promise<boolean> {
     const result = await dbClient.execute({
       sql: `UPDATE ea_transaction_import_items SET prepared_actual_json = ?, original_attempted_at = ?
-        WHERE user_id = ? AND id = ? AND claim_token = ? AND status = 'importing' AND ${ORIGINAL_UNGUARDED} AND original_attempted_at IS NULL`,
+        WHERE user_id = ? AND id = ? AND claim_token = ? AND status = 'importing' AND ${ORIGINAL_UNGUARDED} AND ${ARRIVAL_ITEM} AND original_attempted_at IS NULL`,
       args: [JSON.stringify(evidence), now(), item.userId, item.id, item.claimToken],
     });
     return result.rowsAffected === 1;
@@ -454,32 +353,15 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
   }
 
   async function recoverStaleClaims(staleBefore: number, maxAttempts: number): Promise<{
-    runsRecovered: number;
-    runsFailed: number;
     itemsRecovered: number;
     itemsFailed: number;
   }> {
     const timestamp = now();
-    const failedRuns = await dbClient.execute({
-      sql: `UPDATE ea_transaction_import_runs
-            SET status = 'failed', claim_token = NULL, claimed_at = NULL,
-                last_error = 'Transaction import run exceeded retry limit after interruption',
-                completed_at = ?, updated_at = ?
-            WHERE status = 'running' AND claimed_at <= ? AND attempts >= ?`,
-      args: [timestamp, timestamp, staleBefore, maxAttempts],
-    });
-    const recoveredRuns = await dbClient.execute({
-      sql: `UPDATE ea_transaction_import_runs
-            SET status = 'retry', claim_token = NULL, claimed_at = NULL,
-                last_error = 'Transaction import run interrupted before completion', updated_at = ?
-            WHERE status = 'running' AND claimed_at <= ? AND attempts < ?`,
-      args: [timestamp, staleBefore, maxAttempts],
-    });
     const failedItems = await dbClient.execute({
       sql: `UPDATE ea_transaction_import_items
             SET status = 'failed', reconciliation_status = 'failed', claim_token = NULL, claimed_at = NULL,
                 last_error = 'Transaction import item exceeded retry limit after interruption', updated_at = ?
-            WHERE status IN ('reconciling', 'importing') AND claimed_at <= ? AND attempts >= ?`,
+            WHERE ${ARRIVAL_ITEM} AND status IN ('reconciling', 'importing') AND claimed_at <= ? AND attempts >= ?`,
       args: [timestamp, staleBefore, maxAttempts],
     });
     const recoveredItems = await dbClient.execute({
@@ -487,38 +369,21 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
             SET status = CASE WHEN status = 'importing' THEN 'ready' ELSE 'queued' END,
                 claim_token = NULL, claimed_at = NULL,
                 last_error = 'Transaction import item interrupted before completion', updated_at = ?
-            WHERE status IN ('reconciling', 'importing') AND claimed_at <= ? AND attempts < ?`,
+            WHERE ${ARRIVAL_ITEM} AND status IN ('reconciling', 'importing') AND claimed_at <= ? AND attempts < ?`,
       args: [timestamp, staleBefore, maxAttempts],
     });
     return {
-      runsRecovered: numberValue(recoveredRuns.rowsAffected),
-      runsFailed: numberValue(failedRuns.rowsAffected),
       itemsRecovered: numberValue(recoveredItems.rowsAffected),
       itemsFailed: numberValue(failedItems.rowsAffected),
     };
   }
 
-  async function recoverAbandonedHistoricalRuns(): Promise<{ runsRecovered: number }> {
-    const timestamp = now();
-    const recoveredRuns = await dbClient.execute({
-      sql: `UPDATE ea_transaction_import_runs
-            SET status = 'retry', claim_token = NULL, claimed_at = NULL,
-                last_error = 'Transaction import run resumed after server restart', updated_at = ?
-            WHERE trigger = 'historical_scan' AND status = 'running'`,
-      args: [timestamp],
-    });
-    return {
-      runsRecovered: numberValue(recoveredRuns.rowsAffected),
-    };
-  }
   async function getNextWakeAt(): Promise<number | null> {
     const timestamp = now();
     const result = await dbClient.execute({
-      sql: `SELECT MIN(wake_at) AS next_wake_at FROM (
-              SELECT MIN(COALESCE(next_attempt_at, ?)) AS wake_at FROM ea_transaction_import_runs WHERE status IN ('queued', 'retry')
-              UNION ALL SELECT MIN(COALESCE(next_attempt_at, ?)) AS wake_at FROM ea_transaction_import_items WHERE ${ORIGINAL_UNGUARDED} AND status IN ('queued', 'ready')
-            )`,
-      args: [timestamp, timestamp],
+      sql: `SELECT MIN(COALESCE(next_attempt_at, ?)) AS next_wake_at FROM ea_transaction_import_items
+            WHERE ${ARRIVAL_ITEM} AND ${ORIGINAL_UNGUARDED} AND status IN ('queued', 'ready')`,
+      args: [timestamp],
     });
     const value = result.rows[0]?.next_wake_at;
     const nextWakeAt = value == null ? Number.NaN : Number(value);
@@ -527,13 +392,9 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
   return {
     createRun,
     getRun,
-    listRuns,
-    resumePausedRun,
-    getRunDetail,
     getItem,
     listItemsForEmail,
     readDashboardActivity,
-    listReviewRuns,
     confirmItem,
     admitOriginalImport,
     retryItem,
@@ -541,14 +402,11 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
     updateRunProgress,
     incrementRunOutcomes,
     insertItem,
-    claimNextRun,
-    settleRun,
     claimNextItem,
     settleItem,
     markTransferAttempt,
     persistFinancialPlanForEmail,
     recoverStaleClaims,
-    recoverAbandonedHistoricalRuns,
     getNextWakeAt,
     isManagedEmail: (userId: string, uid: string) => isManagedEmail(userId, uid, { dbClient }),
     listManagedEmailUids: (userId: string, uids: string[]) => listManagedEmailUids(userId, uids, { dbClient }),

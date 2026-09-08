@@ -31,7 +31,6 @@ function setup() {
     setDeadlineDraftPreview: noop,
     setSuppressFocusRing: noop,
     setFloatingDetail: noop,
-    cycleView: noop,
     cancelFloatingEditor: noop,
     shakeFloatingEditor: noop,
     setViewDate: noop,
@@ -86,9 +85,10 @@ describe("calendar browser shortcut ownership", () => {
     expect(dispatch(input, { key: "3" })).toBe(false);
   });
 
-  it("consumes plain 3 while leaving browser and other shell shortcuts untouched", () => {
+  it("leaves Calendar, Finances, and browser shortcuts to their owners", () => {
     setup();
-    expect(dispatch(document.body, { key: "3" })).toBe(true);
+    expect(dispatch(document.body, { key: "3" })).toBe(false);
+    expect(dispatch(document.body, { key: "6" })).toBe(false);
     for (const init of [
       { key: "3", metaKey: true }, { key: "3", ctrlKey: true },
       { key: "1" }, { key: "1", metaKey: true }, { key: "1", ctrlKey: true },

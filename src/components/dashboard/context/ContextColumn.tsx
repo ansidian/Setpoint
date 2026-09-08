@@ -72,9 +72,10 @@ export default function ContextColumn({
         overflowX: "hidden", overflowY: "auto", overscrollBehavior: "contain",
       }}
     >
-      <WeatherCard weather={liveWeather} />
+      {!isMobile && <WeatherCard weather={liveWeather} />}
       <ComingUpCard items={comingUp} isMobile={isMobile} onJump={handleComingUpJump} onComplete={onCompleteDeadline ? handleComingUpComplete : undefined} />
-      {showInboxPeek && (
+      {isMobile && <WeatherCard weather={liveWeather} />}
+      {showInboxPeek && !isMobile && (
         <InboxPeek accent={accent} activeSnapshot={activeSnapshot} excludedEmailIds={excludedEmailIds} onJump={onJump} onOpenInbox={onOpenInbox} isMobile={isMobile} />
       )}
     </div>

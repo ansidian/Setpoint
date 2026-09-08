@@ -196,7 +196,7 @@ describe("CalendarModal search workflow", () => {
     expect(screen.getByTestId("calendar-modal-panel")).toBeTruthy();
   });
 
-  it("cycles the rendered Calendar view while search is open and focus is outside the rail", async () => {
+  it("keeps Events and search open on repeated Calendar shortcut", async () => {
     window.innerWidth = 1900;
     setMatchMedia(false);
     render(wrapWithDashboard(<ControlledViewSearchCalendar />));
@@ -206,7 +206,8 @@ describe("CalendarModal search workflow", () => {
     fireEvent.keyDown(document, { key: "3" });
 
     await waitFor(() => {
-      expect(screen.getByRole("tab", { name: "Bills" }).getAttribute("aria-selected")).toBe("true");
+      expect(screen.getByRole("textbox", { name: "Calendar search" })).toBeTruthy();
+      expect(screen.queryByRole("tab", { name: "Bills" })).toBeNull();
     });
   });
 

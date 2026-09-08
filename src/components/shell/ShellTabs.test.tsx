@@ -33,7 +33,7 @@ describe("ShellTabs WAI-ARIA tabs pattern", () => {
     dashboardTab.focus();
     fireEvent.keyDown(dashboardTab, { key: "ArrowLeft" });
 
-    expect(screen.getByRole("tab", { name: /News/ }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("tab", { name: /Finances/ }).getAttribute("aria-selected")).toBe("true");
   });
 
   it("Home and End jump to the first and last tab", () => {
@@ -42,9 +42,9 @@ describe("ShellTabs WAI-ARIA tabs pattern", () => {
     const calendarTab = screen.getByRole("tab", { name: /Calendar/ });
     calendarTab.focus();
     fireEvent.keyDown(calendarTab, { key: "End" });
-    expect(screen.getByRole("tab", { name: /News/ }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("tab", { name: /Finances/ }).getAttribute("aria-selected")).toBe("true");
 
-    fireEvent.keyDown(screen.getByRole("tab", { name: /News/ }), { key: "Home" });
+    fireEvent.keyDown(screen.getByRole("tab", { name: /Finances/ }), { key: "Home" });
     expect(screen.getByRole("tab", { name: /Dashboard/ }).getAttribute("aria-selected")).toBe("true");
   });
 

@@ -7,7 +7,7 @@ const dateLabel = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateSt
 export default function SpendingSnapshotCard({ spending, loading, onOpen }: {
   spending?: DashboardSpendingSnapshot;
   loading: boolean;
-  onOpen: (date: string) => void;
+  onOpen: () => void;
 }) {
   const current = spending?.current;
   const previous = spending?.previous;
@@ -30,7 +30,7 @@ export default function SpendingSnapshotCard({ spending, loading, onOpen }: {
           <span>{category.label}</span><span className="dashboard-finance-amount">{formatAmount(category.amount)}</span>
           <div className="dashboard-finance-track" aria-hidden="true"><span style={{ width: `${current.total! > 0 ? Math.min(100, category.amount / current.total! * 100) : 0}%` }} /></div>
         </div>)}
-        <button type="button" className="dashboard-finance-button" onClick={() => onOpen(current.start)}>View transactions</button>
+        <button type="button" className="dashboard-finance-button" onClick={onOpen}>Recent transactions</button>
         {spending.lastSyncedAt && <p className="dashboard-finance-note">Actual synced {new Date(spending.lastSyncedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</p>}
       </>}
   </section>;

@@ -1,3 +1,4 @@
+import type { FinanceDestination } from "../../finances/financesNavigation";
 import { CalendarDays } from "lucide-react";
 import type { ReactNode } from "react";
 import BillBadge from "../../bills/BillBadge";
@@ -5,7 +6,7 @@ import FinancialEventStatus from "../../bills/FinancialEventStatus";
 import { canCreateManualActualRecord } from "../../bills/manualActualRecordPolicy";
 import { Button } from "../../ui/button";
 import ActualActionStatus from "./ActualActionStatus";
-import { isActualActioned, resolveActualCalendarTarget } from "./actualActionStatusModel";
+import { isActualActioned, resolveActualFinanceTarget } from "./actualActionStatusModel";
 import { resolveBillExtractionBody } from "./billExtractionBody";
 import { resolveBillSeed } from "./billSeedModel";
 import { asBillCandidate, type BillResolutionState, type EmailBodyState } from "./readerTypes";
@@ -20,14 +21,14 @@ export default function ActualRecordWorkspace({ email, bodyState, billResolution
   bodyState: EmailBodyState;
   billResolution: BillResolutionState;
   isMobile?: boolean;
-  onOpenRecordedBill?: (target: { date: string; itemId: string }) => void;
+  onOpenRecordedBill?: (target: FinanceDestination) => void;
 }) {
   const { plan, status, retry } = billResolution;
   // A missing ownership result must never fall through to the historical writer.
   if (!plan) return <RecordLookupStatus error={status === "error"} retry={retry} />;
 
   const extractionBody = resolveBillExtractionBody(bodyState);
-  const calendarTarget = resolveActualCalendarTarget(billResolution.actualStatus);
+  const calendarTarget = resolveActualFinanceTarget(billResolution.actualStatus);
   const form = <BillBadge
     key={String(email.uid || email.email_id || email.id)}
     layout={isMobile ? "mobile" : "drawer"}
@@ -51,7 +52,7 @@ export default function ActualRecordWorkspace({ email, bodyState, billResolution
     {calendarTarget && onOpenRecordedBill && <Button type="button" variant="outline"
       onClick={() => onOpenRecordedBill(calendarTarget)}
       className="mt-3 hover:-translate-y-px focus-visible:-translate-y-px active:translate-y-0 motion-reduce:transform-none motion-reduce:transition-none">
-      <CalendarDays aria-hidden="true" /> View in Calendar
+      <CalendarDays aria-hidden="true" /> View in Finances
     </Button>}
   </>;
 }

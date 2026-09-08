@@ -128,7 +128,7 @@ describe("mapRecentTransactions", () => {
       { payee: null, amount: -100, date: "2026-05-12" },
       { payee: "payee-1", amount: 0, date: "2026-05-13" },
     ], payeeMap)).toEqual([
-      { payee: "Power Co", payeeId: "payee-1", amount: 122.34, date: "2026-05-11", scheduleId: "s1" },
+      { id: undefined, accountId:null, payee: "Power Co", payeeId: "payee-1", amount: 122.34, date: "2026-05-11", scheduleId: "s1" },
     ]);
   });
 });
@@ -162,7 +162,7 @@ describe("projectSdkMetadata", () => {
     expect(result.categories).toEqual([{ group_name: "Bills", categories: [{ id: "c1", name: "Utilities" }] }]);
     expect(result.schedules[0]!.type).toBe("bill");
     expect(result.recentTransactions).toEqual([
-      { payee: "Power Co", payeeId: "payee-1", amount: 122.34, date: "2026-05-11", scheduleId: "s1" },
+      { id: undefined, accountId:null, payee: "Power Co", payeeId: "payee-1", amount: 122.34, date: "2026-05-11", scheduleId: "s1" },
     ]);
   });
 });

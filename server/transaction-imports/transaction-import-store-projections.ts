@@ -71,6 +71,7 @@ export function projectTransactionImportItem(row: Row): TransactionImportItem {
     ...(row.original_attempted_at != null ? { originalAttemptedAt: Number(row.original_attempted_at) } : {}),
     id: String(row.id),
     runId: String(row.run_id),
+    ...(row.run_trigger ? { runTrigger: String(row.run_trigger) as TransactionImportRunTrigger } : {}),
     gmailAccountId: String(row.gmail_account_id),
     gmailMessageId: String(row.gmail_message_id),
     emailUid: String(row.email_uid),

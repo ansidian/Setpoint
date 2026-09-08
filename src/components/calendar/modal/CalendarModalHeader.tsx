@@ -1,17 +1,12 @@
 import { useCallback, useRef, useState } from "react";
 import type { ComponentType, CSSProperties, MouseEvent as ReactMouseEvent } from "react";
-import { Calendar as CalendarIcon, ChevronDown, ChevronLeft, ChevronRight, Receipt, RefreshCw, Search } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, RefreshCw, Search } from "lucide-react";
 import CalendarJumpToMonth from "./CalendarJumpToMonth";
 import type useCalendarEventEditor from "../events/useCalendarEventEditor";
 import type { CalendarModalSearchController } from "../../../hooks/calendar/useCalendarModalSearch";
 
 const TITLE_MONTH_WHITE = "#f8faff";
 const TITLE_YEAR_RED = "#ff453a";
-
-const ALL_VIEW_OPTIONS = [
-  { key: "events", label: "Events", Icon: CalendarIcon },
-  { key: "bills", label: "Bills", Icon: Receipt },
-];
 
 function parseDateKey(dateKey: unknown): { year: number; month: number; day: number } | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateKey || ""));
@@ -79,50 +74,7 @@ function resetHeaderButtonHover(event: ReactMouseEvent<HTMLButtonElement>, activ
   event.currentTarget.style.transform = "translateY(0)";
 }
 
-function viewToggleStyle(active: boolean, stretched = false): CSSProperties {
-  return {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: stretched ? "center" : "flex-start",
-    gap: 8,
-    width: stretched ? "100%" : "auto",
-    padding: stretched ? "8px 10px" : "8px 14px",
-    borderRadius: 8,
-    fontSize: 11,
-    fontWeight: 600,
-    letterSpacing: 0.24,
-    border: `1px solid ${active ? "color-mix(in srgb, var(--sp-accent) 22%, transparent)" : "transparent"}`,
-    cursor: active ? "default" : "pointer",
-    fontFamily: "inherit",
-    background: active ? "color-mix(in srgb, var(--sp-accent) 12%, transparent)" : "transparent",
-    color: active ? "var(--sp-accent)" : "rgba(205,214,244,0.56)",
-    transform: "translateY(0)",
-    transition: "transform 140ms, background 150ms, color 150ms, border-color 150ms",
-  };
-}
-
-function viewHintStyle(active: boolean): CSSProperties {
-  return {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minWidth: 18,
-    height: 18,
-    padding: "0 4px",
-    fontSize: 9.5,
-    fontFamily: "Fira Code, ui-monospace, monospace",
-    fontWeight: 500,
-    color: active ? "var(--sp-accent)" : "var(--color-text-faint)",
-    background: active ? "color-mix(in srgb, var(--sp-accent) 10%, transparent)" : "rgba(255,255,255,0.04)",
-    border: `1px solid ${active ? "color-mix(in srgb, var(--sp-accent) 24%, transparent)" : "rgba(255,255,255,0.06)"}`,
-    borderRadius: 4,
-    letterSpacing: 0,
-    marginLeft: 2,
-  };
-}
-
 export default function CalendarModalHeader({
-  view,
   monthName,
   monthYear,
   layout,
@@ -131,8 +83,6 @@ export default function CalendarModalHeader({
   jumpToMonth,
   currentYear,
   currentMonth,
-  onViewChange,
-  availableCalendarViews,
   HeaderExtras,
   viewData,
   computed,
@@ -276,7 +226,7 @@ export default function CalendarModalHeader({
                 color: "var(--color-text-faint)",
               }}
             >
-              Calendar Workspace · {viewLabel || "Bills"}
+              Calendar Workspace · {viewLabel || "Events"}
             </div>
             <button
               ref={titleRef}
@@ -352,96 +302,7 @@ export default function CalendarModalHeader({
           </div>
         </div>
 
-        {(availableCalendarViews?.length ?? 0) > 1 ? (
-          <div
-            style={{
-              gridArea: "views",
-              display: "flex",
-              alignItems: "center",
-              gap: 4,
-              justifySelf: layout.headerStacked ? "stretch" : "center",
-            }}
-          >
-            <div
-              role="tablist"
-              aria-label="Calendar view"
-              data-suspend-calendar-hotkeys="true"
-              style={{
-                display: "grid",
-                gridTemplateColumns: layout.headerStacked
-                  ? `repeat(${(availableCalendarViews?.length ?? 2)}, minmax(0, 1fr))`
-                  : `repeat(${(availableCalendarViews?.length ?? 2)}, auto)`,
-                alignItems: "center",
-                flex: layout.headerStacked ? 1 : undefined,
-                background: "rgba(255,255,255,0.03)",
-                border: "1px solid rgba(255,255,255,0.05)",
-                borderRadius: 12,
-                padding: 4,
-                gap: 4,
-                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
-              }}
-              onKeyDown={(event) => {
-                const views = availableCalendarViews ?? [];
-                const currentIndex = views.indexOf(view);
-                let nextIndex = -1;
-                if (event.key === "ArrowRight") {
-                  event.preventDefault();
-                  nextIndex = currentIndex < views.length - 1 ? currentIndex + 1 : currentIndex;
-                } else if (event.key === "ArrowLeft") {
-                  event.preventDefault();
-                  nextIndex = currentIndex > 0 ? currentIndex - 1 : currentIndex;
-                } else if (event.key === "Home") {
-                  event.preventDefault();
-                  nextIndex = 0;
-                } else if (event.key === "End") {
-                  event.preventDefault();
-                  nextIndex = views.length - 1;
-                }
-                if (nextIndex >= 0 && nextIndex !== currentIndex) {
-                  const nextView = views[nextIndex];
-                  if (nextView) onViewChange?.(nextView);
-                }
-              }}
-            >
-              {ALL_VIEW_OPTIONS.filter((o) => (availableCalendarViews ?? ["events", "bills"]).includes(o.key)).map((option) => {
-                const active = view === option.key;
-                const { Icon } = option;
-                return (
-                  <button
-                    type="button"
-                    key={option.key}
-                    role="tab"
-                    aria-selected={active}
-                    tabIndex={active ? 0 : -1}
-                    onClick={() => !active && onViewChange?.(option.key)}
-                    data-calendar-focus-ring="true"
-                    onMouseEnter={(event) => {
-                      if (active) return;
-                      event.currentTarget.style.background = "rgba(255,255,255,0.06)";
-                      event.currentTarget.style.color = "rgba(205,214,244,0.82)";
-                      event.currentTarget.style.borderColor = "rgba(255,255,255,0.08)";
-                      event.currentTarget.style.transform = "translateY(-1px)";
-                    }}
-                    onMouseLeave={(event) => {
-                      if (active) return;
-                      event.currentTarget.style.background = "transparent";
-                      event.currentTarget.style.color = "rgba(205,214,244,0.56)";
-                      event.currentTarget.style.borderColor = "transparent";
-                      event.currentTarget.style.transform = "translateY(0)";
-                    }}
-                    style={viewToggleStyle(active, layout.headerStacked)}
-                  >
-                    <Icon size={11} strokeWidth={1.8} />
-                    {option.label}
-                  </button>
-                );
-              })}
-            </div>
-            <kbd style={viewHintStyle(false)}>3</kbd>
-          </div>
-        ) : (
-          <div style={{ gridArea: "views" }} />
-        )}
+        <div style={{ gridArea: "views" }} />
 
         <div
           style={{

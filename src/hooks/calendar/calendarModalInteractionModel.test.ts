@@ -9,9 +9,9 @@ import {
 } from "./calendarModalInteractionModel";
 
 describe("calendar modal interaction model", () => {
-  it("limits top-level calendar workspaces to Events and Bills", () => {
+  it("normalizes retired workspace preferences to Events", () => {
     expect(normalizeCalendarWorkspaceView("events")).toBe("events");
-    expect(normalizeCalendarWorkspaceView("bills")).toBe("bills");
+    expect(normalizeCalendarWorkspaceView("bills")).toBe("events");
     expect(normalizeCalendarWorkspaceView("legacy")).toBe("events");
     expect(normalizeCalendarWorkspaceView("todoist")).toBe("events");
     expect(normalizeCalendarWorkspaceView(null)).toBe("events");
@@ -98,9 +98,8 @@ describe("calendar modal interaction model", () => {
       usesFloatingEditor: true,
       view: "bills",
     })).toMatchObject({
-      view: "bills",
+      view: "events",
       itemId: "bill-1",
-      anchorKind: "grid-chip",
     });
   });
 

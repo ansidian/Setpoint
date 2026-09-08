@@ -1,4 +1,5 @@
-import { ArrowDownLeft, ArrowUpRight, Landmark, Wallet } from "lucide-react";
+import { ArrowDownLeft, ArrowLeft, ArrowUpRight, Landmark, Wallet } from "lucide-react";
+import PaymentConfirmation from '../financial/PaymentConfirmation';
 import Dropdown from "../shared/Dropdown";
 import DateField from "../shared/pickers/DateField";
 import SearchableDropdown from "../shared/SearchableDropdown";
@@ -33,12 +34,13 @@ function Field({ name, icon, children }: { name: string; icon?:ReactNode; childr
   return <div className="flex min-w-0 flex-col gap-1 text-[11px] font-medium text-foreground/85">{searchable ? <span className="flex items-center gap-1.5">{label}</span> : <label className="flex items-center gap-1.5" htmlFor={id}>{label}</label>}{searchable ? children : cloneElement(children, { id })}</div>;
 }
 
-export default function FinancialEventCompletionForm({ plan, onCancel, onQueued, onDirty, onRepair }: {
+export default function FinancialEventCompletionForm({ plan, onCancel, onQueued, onDirty, onRepair, onConfirming }: {
   plan: FinancialEmailPlan;
   onCancel: () => void;
   onQueued: (plan: FinancialEmailPlan) => void;
   onDirty?: (dirty: boolean) => void;
   onRepair?: () => void;
+  onConfirming?: (confirming:boolean) => void;
 }) {
   // Capture the displayed revision once. A poll must not silently authorize an
   // entry against source changes the owner has not reviewed.
@@ -58,6 +60,9 @@ export default function FinancialEventCompletionForm({ plan, onCancel, onQueued,
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [stale, setStale] = useState(false);
+  const [confirming,setConfirming] = useState(false);
+  const reviewTrigger = useRef<HTMLButtonElement>(null);
+  useEffect(() => { onConfirming?.(confirming); return () => onConfirming?.(false); },[confirming,onConfirming]);
   const submitted = useRef(false);
   const alive = useRef(true);
   useEffect(() => {
@@ -73,6 +78,7 @@ export default function FinancialEventCompletionForm({ plan, onCancel, onQueued,
   const payeeOptions = [...new Set((metadata?.payees || []).filter(item => !item.transfer_acct).map(item => item.name))].map(name => ({ id:name,name }));
   const transfer = kind === "transfer" || kind === "transfer_schedule";
   const scheduled = kind === "bill" || kind === "transfer_schedule";
+  const ordinaryPayment = !transfer && !scheduled;
   const hasAccount = (value: string) => accounts.some((account) => account.id === value);
   const canSend = !sending && !stale && Number(amount) > 0 && !!date && (transfer
     ? hasAccount(fromAccountId) && hasAccount(toAccountId) && fromAccountId !== toAccountId
@@ -88,6 +94,7 @@ export default function FinancialEventCompletionForm({ plan, onCancel, onQueued,
     event.preventDefault();
     event.stopPropagation();
     if (!canSend || submitted.current) return;
+    if (ordinaryPayment && !confirming) { setConfirming(true); return; }
     submitted.current = true;
     setSending(true);
     setError("");
@@ -105,6 +112,7 @@ export default function FinancialEventCompletionForm({ plan, onCancel, onQueued,
       if (!alive.current) return;
       const conflict = cause && typeof cause === "object" && "status" in cause && cause.status === 409;
       setStale(Boolean(conflict));
+      setConfirming(false);
       setError(conflict ? "This record changed or was already confirmed. Close this form and check its current status before sending again."
         : cause instanceof Error ? cause.message : "Could not confirm this record. Your entered details are still here; try again.");
     } finally {
@@ -114,8 +122,9 @@ export default function FinancialEventCompletionForm({ plan, onCancel, onQueued,
   }
 
   return (
-    <form onSubmit={send} className="mt-3 space-y-3 border-t border-white/10 pt-3 text-foreground"
+    <form onSubmit={send} className="space-y-3 text-foreground"
       aria-label="Complete financial record" onClick={(event) => event.stopPropagation()}>
+      {confirming ? <PaymentConfirmation amountCents={Math.round(Number(amount) * 100) * (kind === 'income' ? 1 : -1)} account={accounts.find(account => account.id === accountId)?.name || 'Account unavailable'} payee={payee.trim()} date={date} category={metadata?.categories.find(category => category.id === categoryId)?.name} notes={notes} /> : <>
       <p className="text-xs leading-relaxed text-foreground/85">Confirm the details you know. Category is optional; Actual can categorize the entry later.</p>
       <Field name="Record as">
         <Dropdown ariaLabel="Record as" value={kind} onChange={value => setKind(value as EntryKind)} disabled={sending} options={kinds.map(([id,name]) => ({ id,name }))} />
@@ -139,6 +148,7 @@ export default function FinancialEventCompletionForm({ plan, onCancel, onQueued,
       </>}
       {scheduled && <Field name="Schedule name (optional)"><Input className={inputClass} value={scheduleName} maxLength={200} onChange={(event) => setScheduleName(event.target.value)} disabled={sending} placeholder={payee || "Payment"} /></Field>}
       <Field name="Notes (optional)"><Input className={inputClass} value={notes} maxLength={1000} onChange={(event) => setNotes(event.target.value)} disabled={sending} /></Field>
+      </>}
       {!metadata && <p role="status" className="text-xs text-foreground/80">Loading Actual accounts…</p>}
       {metadata && !accounts.length && <div className="flex flex-wrap items-center gap-2 text-xs text-foreground/85">
         <span>Actual accounts are unavailable.</span><Button type="button" variant="ghost" className={actionClass} onClick={() => {
@@ -147,9 +157,9 @@ export default function FinancialEventCompletionForm({ plan, onCancel, onQueued,
         {onRepair && <Button type="button" variant="ghost" className={actionClass} onClick={onRepair}>Repair Actual connection</Button>}
       </div>}
       {error && <p role="alert" className="break-words text-xs leading-relaxed text-[var(--sp-rose)]">{error}</p>}
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        <Button type="button" variant="outline" className={actionClass} disabled={sending} onClick={onCancel}>{stale ? "Close and check status" : "Cancel"}</Button>
-        <Button type="submit" className={actionClass} disabled={!canSend}>{sending ? "Confirming…" : "Send to Actual"}</Button>
+      <div className={`flex flex-wrap items-center gap-2 ${confirming ? '' : 'justify-end'}`}>
+        <Button type="button" variant="outline" className={actionClass} disabled={sending} onClick={confirming ? () => { setConfirming(false); requestAnimationFrame(() => reviewTrigger.current?.focus()); } : onCancel}>{confirming ? <><ArrowLeft size={14} />Back to details</> : stale ? "Close and check status" : "Cancel"}</Button>
+        <Button ref={reviewTrigger} type="submit" className={actionClass} disabled={!canSend}>{sending ? "Confirming…" : ordinaryPayment ? confirming ? "Record in Actual" : "Review before sending" : "Send to Actual"}</Button>
       </div>
       <p className="text-[11px] leading-relaxed text-foreground/75">Actual is checked before this record is added. Its status updates here when processing finishes.</p>
     </form>

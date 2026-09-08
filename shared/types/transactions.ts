@@ -21,6 +21,13 @@ export interface TransactionFilters {
 export interface TransactionRecord {
   id: string;
   importedId?: string | null;
+  scheduleId?: string | null;
+  transferId?: string | null;
+  parentId?: string | null;
+  isParent?: boolean;
+  isChild?: boolean;
+  cleared?: boolean;
+  reconciled?: boolean;
   date: string;
   amount: number;
   direction: Exclude<TransactionDirection, "all">;

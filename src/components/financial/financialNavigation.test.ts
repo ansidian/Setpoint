@@ -14,10 +14,9 @@ describe('financial entry routing', () => {
     expect(financialReference(url.searchParams)).toEqual({ owner:'import', id:'item two', runId:'batch/other' });
   });
 
-  it('defaults bare Finance to the activity list without overriding explicit record or backfill views', () => {
+  it('defaults bare Finance to the activity list without overriding explicit record views', () => {
     expect(financialSearch('')).toBe('?financial=list&view=needs_attention');
     expect(financialSearch('?financial=record&view=completed')).toBe('?financial=record&view=completed');
-    expect(financialSearch('?financial=backfill')).toBe('?financial=backfill&view=needs_attention');
   });
 
   it('preserves exact record identity and list state from saved Settings links', () => {
@@ -25,12 +24,11 @@ describe('financial entry routing', () => {
     expect(legacy(source)).toBe(source.replace('/settings', '/finance'));
   });
 
-  it('normalizes historical review, selected batches, and the backfill entrance', () => {
-    const pending = new URL(legacy('/settings?tab=finance&reviewPending=1&importRun=batch%2F1#email-transaction-imports')!, 'http://localhost');
+  it('normalizes record review and selected batches', () => {
+    const pending = new URL(legacy('/settings?tab=finance&reviewPending=1&importRun=batch%2F1')!, 'http://localhost');
     expect(Object.fromEntries(pending.searchParams)).toEqual({ financial:'list', runId:'batch/1', view:'needs_attention' });
     // Legacy import runs also include arrival-triggered imports; never infer a scan-only filter.
     expect(pending.searchParams.has('context')).toBe(false);
-    expect(legacy('/settings?tab=finance#email-transaction-imports')).toBe('/finance?financial=backfill&view=needs_attention');
     expect(legacy('/settings?tab=finance#transaction-import-review')).toBe('/finance?financial=list&view=needs_attention');
   });
 

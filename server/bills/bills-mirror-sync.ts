@@ -121,7 +121,7 @@ export async function readBillsMirrorRange(userId: string, { start, end }: Actua
     getBillsMirrorState(userId, { dbClient }),
     dbClient.execute({
       sql: `SELECT occurrence_id, schedule_id, occurrence_date, name, payee, amount,
-                   type, paid, open_action_disabled
+                   type, paid, open_action_disabled, raw_json
             FROM ea_bill_occurrence_mirror
             WHERE user_id = ?
               AND occurrence_date >= ?

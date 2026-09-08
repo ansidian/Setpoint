@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { BillCandidate, FinancialEmailPlan, FinancialPlanReasonCode } from "../../shared/types/bills.ts";
 import { createFinancialEventCompletion } from "./financial-event-completion.ts";
 import { ownerCompletionPlan } from "./financial-event-completion-model.ts";
-import { listFinancialEventReview, readFinancialReviewChanges } from "./financial-event-review.ts";
+import { projectReviewItem, readFinancialReviewChanges } from "./financial-event-review.ts";
 import { resolveManagedFinancialPlan } from "./financial-event-status.ts";
 import { createFinancialEventStore } from "./financial-event-store.ts";
 
@@ -20,7 +20,7 @@ function blockedPlan(codes: FinancialPlanReasonCode[]): FinancialEmailPlan {
     reviewReasons: codes.map((code) => ({ code, message: "Provider wording may change", blocking: true })) };
 }
 
-describe("durable financial event review projection", () => {
+describe("durable financial attention changes", () => {
   let db: Client;
   beforeEach(async () => {
     db = createClient({ url: "file::memory:" });
@@ -60,8 +60,6 @@ describe("durable financial event review projection", () => {
     for (const uid of uids) await db.execute({ sql: "UPDATE ea_financial_documents SET event_id = ?, status = 'associated' WHERE user_id = ? AND email_uid = ?", args: [id, owner, uid] });
   }
 
-  const queue = (offset = 0) => listFinancialEventReview(OWNER, { offset, dbClient: db });
-
   it("groups related receipts, keeps known financial retries, and excludes other owners, negatives and unassessed failures", async () => {
     await event("shared", { uids: ["processor-receipt", "merchant-receipt"], createdAt: 100 });
     await source("known-retry", { reason: "Waiting for evidence that distinguishes similar purchases.", createdAt: 200 });
@@ -73,19 +71,9 @@ describe("durable financial event review projection", () => {
     await event("another-owner", { owner: "other" });
     await source("another-owner-retry", { owner: "other" });
 
-    const response = await queue();
-    expect(response).toEqual({ items: [
-      { id: expect.stringMatching(/^document:/), emailUid: "known-retry", subject: "Receipt known-retry", from: "Example Market",
-        receivedAt: RECEIVED_AT, payee: "Example Market", amount: 12, currency: "USD", state: "waiting",
-        reason: "Waiting for evidence that distinguishes similar purchases.", relatedEmails: 1, createdAt: 200, nextAttemptAt: 50000,
-        canComplete: true, attention: "complete_details" },
-      { id: "event:shared", emailUid: "processor-receipt", subject: "Receipt processor-receipt", from: "Example Market",
-        receivedAt: RECEIVED_AT, payee: "Example Market", amount: 12, currency: "USD", state: "waiting", reason: DETAILS_REASON,
-        relatedEmails: 2, createdAt: 100, nextAttemptAt: 50000, canComplete: true, attention: "complete_details" },
-    ], total: 2, offset: 0, limit: 20 });
+    const response = await readFinancialReviewChanges(OWNER, { dbClient: db });
+    expect(response.items.map((item) => item.emailUid)).toEqual(["processor-receipt", "known-retry"]);
     expect(JSON.stringify(response)).not.toContain("PRIVATE");
-    expect((await readFinancialReviewChanges(OWNER, { dbClient: db })).items.map((item) => item.emailUid))
-      .toEqual(["processor-receipt", "known-retry"]);
   });
 
   it("uses the oldest available source and never links an absent or differently owned index row", async () => {
@@ -94,19 +82,8 @@ describe("durable financial event review projection", () => {
     await event("changed-owner");
     await db.execute("DELETE FROM ea_email_index WHERE uid IN ('gone', 'unavailable')");
     await db.execute("UPDATE ea_email_index SET user_id = 'other' WHERE uid = 'changed-owner'");
-    expect(await queue()).toMatchObject({ total: 1, items: [{ id: "event:related", emailUid: "available", relatedEmails: 2 }] });
-  });
-
-  it("paginates events by original creation time with a matching total even beyond the last page", async () => {
-    for (let index = 0; index < 22; index++) await event(`event-${String(index).padStart(2, "0")}`, { createdAt: index });
-    const first = await queue();
-    expect(first.items).toHaveLength(20);
-    expect(first.items.map((item) => item.emailUid)).toEqual(Array.from({ length: 20 }, (_, index) => `event-${String(21 - index).padStart(2, "0")}`));
-    expect(first.total).toBe(22);
-    expect(await queue(20)).toMatchObject({ items: [{ emailUid: "event-01" }, { emailUid: "event-00" }], total: 22, offset: 20, limit: 20 });
-    expect(await queue(40)).toEqual({ items: [], total: 22, offset: 40, limit: 20 });
-    await db.execute("UPDATE ea_financial_events SET updated_at = 99999, attempts = 12 WHERE id = 'event-00'");
-    expect((await queue()).items[0]!.emailUid).toBe("event-21");
+    expect((await readFinancialReviewChanges(OWNER, { dbClient: db })).items)
+      .toEqual([{ key: expect.stringMatching(/^financial-review:/), emailUid: "available" }]);
   });
 
   it("separates detail blockers, Actual conflicts and automatic retries without using category or arbitrary wording", async () => {
@@ -129,18 +106,6 @@ describe("durable financial event review projection", () => {
     await source("auth", { reason: "Waiting for verified sender authentication." });
     await source("assessment", { reason: "Financial assessment will retry: API is offline" });
 
-    const items = (await queue()).items;
-    const byUid = new Map(items.map((item) => [item.emailUid, item]));
-    for (const uid of ["missing-account", "missing-date", "source-conflict", "fresh-conflict"]) {
-      expect(byUid.get(uid)).toMatchObject({ attention: "complete_details", canComplete: true });
-    }
-    expect(byUid.get("actual-conflict")).toMatchObject({ attention: "check_actual", canComplete: true });
-    for (const uid of ["attempted-conflict", "already-recorded", "recorded-plan"]) {
-      expect(byUid.get(uid)).toMatchObject({ attention: "check_actual", canComplete: false });
-    }
-    for (const uid of ["category", "unknown", "stale-account", "provider", "paused", "recovery", "auth", "assessment"]) {
-      expect(byUid.get(uid)?.attention).toBe("retrying");
-    }
     expect((await readFinancialReviewChanges(OWNER, { dbClient: db })).items.map((item) => item.emailUid).sort())
       .toEqual(["actual-conflict", "already-recorded", "attempted-conflict", "fresh-conflict", "missing-account", "missing-date", "recorded-plan", "source-conflict"]);
   });
@@ -195,7 +160,6 @@ describe("durable financial event review projection", () => {
       await db.execute({ sql: `UPDATE ea_financial_events SET status = 'needs_review', updated_at = ?,
         reason = 'New source details arrived after your confirmation. Review and confirm the entry again.' WHERE id = 'reopened'`, args: [now + 500] });
       const reopened = await readFinancialReviewChanges(OWNER, { dbClient: db, after: previous.cursor! });
-      expect((await queue()).items[0]).toMatchObject({ emailUid: "reopened", attention: "complete_details", canComplete: true });
       expect(reopened.items[0]!.key).not.toBe(previous.items[0]!.key);
       await db.execute({ sql: `UPDATE ea_financial_events SET updated_at = ?, revision = revision + 1,
         reason = 'The explanation changed after another check.' WHERE id = 'reopened'`, args: [now + 600] });
@@ -204,36 +168,34 @@ describe("durable financial event review projection", () => {
     }
   });
 
-  it("opens fresh completion through the primary email, then removes the queued entry without writing to Actual", async () => {
+  it("stops alerting after owner completion queues the entry without an Actual write", async () => {
     await event("incomplete", { uids: ["primary", "complementary"] });
-    const item = (await queue()).items[0]!;
-    const status = await resolveManagedFinancialPlan(OWNER, item.emailUid, { dbClient: db });
-    expect(status!.workflow!.completion).toMatchObject({ emailUid: "primary", canComplete: item.canComplete });
+    const first = await readFinancialReviewChanges(OWNER, { dbClient: db });
+    const emailUid = first.items[0]!.emailUid;
+    const status = await resolveManagedFinancialPlan(OWNER, emailUid, { dbClient: db });
+    expect(status!.workflow!.completion).toMatchObject({ emailUid: "primary", canComplete: true });
     const store = createFinancialEventStore(db, () => 2000);
     await createFinancialEventCompletion({ store, now: () => 2000 }).complete(OWNER, { ...status!.workflow!.completion, entry });
-    expect(await queue()).toEqual({ items: [], total: 0, offset: 0, limit: 20 });
-    expect(await store.getEventForEmail(OWNER, item.emailUid)).toMatchObject({ status: "pending", attemptedAt: null, operation: null });
-    await db.execute("UPDATE ea_financial_events SET status = 'waiting' WHERE id = 'incomplete'");
-    expect((await queue()).items[0]).toMatchObject({ amount: 14, payee: "Confirmed Merchant", currency: "USD" });
+    expect((await readFinancialReviewChanges(OWNER, { dbClient: db, after: first.cursor! })).items).toEqual([]);
+    expect(await store.getEventForEmail(OWNER, emailUid)).toMatchObject({ status: "pending", attemptedAt: null, operation: null });
   });
 
-  it("reports canonical amounts without inventing a total, currency or merchant", async () => {
-    await source("statement", { value: { event_kind: "statement_issued", amount: 3, amount_kind: "minimum_due", currency: "USD",
-      amount_candidates: [{ value: 3, kind: "minimum_due" }, { value: 47, kind: "statement_balance" }] } });
-    await source("missing", { value: { type: "expense", event_kind: "purchase" } });
-    const items = (await queue()).items;
-    expect(items.find((item) => item.emailUid === "statement")).toMatchObject({ amount: 47, currency: "USD", payee: null });
-    expect(items.find((item) => item.emailUid === "missing")).toMatchObject({ amount: null, currency: null, payee: null });
-  });
-
-  it("returns empty cursors and rejects invalid pagination without changing owner state", async () => {
+  it("returns empty cursors and rejects invalid cursors without changing owner state", async () => {
     expect(await readFinancialReviewChanges(OWNER, { dbClient: db })).toEqual({ items: [], cursor: null, hasMore: false });
-    expect(await queue()).toEqual({ items: [], total: 0, offset: 0, limit: 20 });
-    for (const offset of [-1, 0.5, NaN, Number.MAX_SAFE_INTEGER + 1]) {
-      await expect(queue(offset)).rejects.toMatchObject({ status: 400 });
-    }
     await expect(readFinancialReviewChanges(OWNER, { dbClient: db, after: { updatedAt: -1, id: "event:x" } }))
       .rejects.toMatchObject({ status: 400 });
+  });
+});
+
+describe("financial review amount projection", () => {
+  it("uses canonical statement totals and leaves absent financial facts unknown", () => {
+    const statement = projectReviewItem({ state: "waiting", candidate_json: JSON.stringify({
+      event_kind: "statement_issued", amount: 3, amount_kind: "minimum_due", currency: "USD",
+      amount_candidates: [{ value: 3, kind: "minimum_due" }, { value: 47, kind: "statement_balance" }],
+    }) });
+    const missing = projectReviewItem({ state: "waiting", candidate_json: JSON.stringify({ type: "expense", event_kind: "purchase" }) });
+    expect(statement).toMatchObject({ amount: 47, currency: "USD", payee: null });
+    expect(missing).toMatchObject({ amount: null, currency: null, payee: null });
   });
 });
 

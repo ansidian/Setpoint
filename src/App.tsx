@@ -150,6 +150,7 @@ export default function App(): ReactElement {
           }>
             <Route index element={null} />
             <Route path="/finance" element={null} />
+            <Route path="/finances" element={null} />
             <Route path="/settings" element={
               <RecoverableErrorBoundary>
                 <Suspense fallback={<SettingsChrome />}>

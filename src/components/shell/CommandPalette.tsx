@@ -65,7 +65,7 @@ function CommandPaletteInner({ open, reduceMotion, accent, onClose, onAction }: 
   const items = useMemo<CommandPaletteItem[]>(() => [
     { id: "go-dashboard", icon: LayoutList, label: "Go to Dashboard", aliases: ["home", "today", "overview", "briefing"], kind: "tab", payload: "dashboard" },
     { id: "go-inbox",     icon: Inbox,      label: "Go to Inbox",     aliases: ["email", "mail", "messages"], kind: "tab", payload: "inbox" },
-    { id: "bills",        icon: CreditCard, label: "Go to Bills",     aliases: ["payments", "payables"], kind: "calendar-view", payload: "bills" },
+    { id: "bills",        icon: CreditCard, label: "Go to Finances",  aliases: ["bills", "utilities", "payments", "payables"], kind: "tab", payload: "finances" },
     { id: "events",       icon: CalendarDays, label: "Go to Events",  aliases: ["calendar", "schedule", "meetings"], kind: "calendar-view", payload: "events" },
     ...(!isDemoMode() ? [{ id: "go-notes", icon: Notebook, label: "Go to Notes", aliases: ["ideas", "canvas", "tldraw"], kind: "tab", payload: "notes" }] : []),
     { id: "go-news",      icon: Newspaper,  label: "Go to News",      aliases: ["articles", "headlines", "feed"], kind: "tab", payload: "news" },

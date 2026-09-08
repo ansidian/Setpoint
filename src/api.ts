@@ -1,9 +1,10 @@
-export { inspectFinancialCorrection, previewFinancialCorrection, confirmFinancialCorrection, getFinancialCorrection } from './lib/financialCorrectionApi';
+export { getFinances, getFinanceJournal } from './lib/financesApi';
+export { previewKeepFinancialResult, confirmKeepFinancialResult, recheckFinancialCorrection, inspectFinancialCorrection, previewFinancialCorrection, confirmFinancialCorrection, getFinancialCorrection } from './lib/financialCorrectionApi';
 import type { SnoozedEmailEntry } from "../shared/types/email";
 export { listFinancialActivity, getFinancialActivity, inspectFinancialActivityBinding } from "./lib/financialActivityApi";
 import { isDemoMode } from "./demo/config.ts";
 import { apiFetch } from "./lib/apiFetch";
-import type { DashboardFinanceResponse, DashboardFinanceReviewRunsResponse } from "../shared/types/dashboard-finance.ts";
+import type { DashboardFinanceResponse } from "../shared/types/dashboard-finance.ts";
 import type { EmailAiUsageStats } from "../shared/types/ai-usage.ts";
 import type {
   AuthenticationResponseJSON,
@@ -273,7 +274,6 @@ export const getDashboardHealth = (): Promise<CurrentDashboardHealthResponse> =>
 // The demo adapter explicitly serves a fictional, refresh-reset financial projection.
 export const getDashboardFinance = (): Promise<DashboardFinanceResponse> => apiFetch("/api/dashboard/finance");
 // Demo serves the same bounded pending-run projection from its in-memory imports.
-export const getDashboardFinanceReviewRuns = (offset = 0): Promise<DashboardFinanceReviewRunsResponse> => apiFetch(`/api/dashboard/finance/review-runs?offset=${offset}`);
 export const requestCurrentDashboardRefresh = (source?: CurrentDashboardCacheKey): Promise<CurrentDashboardResponse> => apiFetch("/api/dashboard/current/refresh", {
   method: "POST",
   ...(source ? { body: JSON.stringify({ source }), timeoutMs: 30_000 } : {}),

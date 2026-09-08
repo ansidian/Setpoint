@@ -1,13 +1,12 @@
 import { createHash } from "node:crypto";
 import db from "../db/connection.ts";
 import type { BillCandidate, FinancialEmailPlan, FinancialPlanReasonCode } from "../../shared/types/bills.ts";
-import type { FinancialEventReviewItem, FinancialEventReviewResponse, FinancialReviewAttention,
+import type { FinancialEventReviewItem, FinancialReviewAttention,
   FinancialReviewChangeCursor, FinancialReviewChangesResponse } from "../../shared/types/financial-review.ts";
 import { selectSemanticBillAmount } from "../bills/financial-email-planner.ts";
 import { completionBlocker, type FinancialOwnerCompletion } from "./financial-event-completion-model.ts";
 import type { FinancialStatusDb } from "./financial-event-store.ts";
 
-const PAGE_SIZE = 20;
 const CHANGE_PAGE_SIZE = 50;
 
 // Select only current, owner-scoped source links. A related receipt is a source
@@ -122,23 +121,6 @@ export function projectReviewItem(row: Record<string, unknown>): FinancialEventR
 }
 
 function invalid(message: string): never { throw Object.assign(new Error(message), { status: 400 }); }
-
-/** Read-only queue; displaying it never assesses email or retries an Actual write. */
-export async function listFinancialEventReview(userId: string, {
-  offset = 0, dbClient = db,
-}: { offset?: number; dbClient?: FinancialStatusDb } = {}): Promise<FinancialEventReviewResponse> {
-  if (!userId || !Number.isSafeInteger(offset) || offset < 0) invalid("Financial review offset must be a nonnegative integer");
-  // The count and page use the same statement and snapshot, including an empty
-  // page beyond the end of the queue.
-  const result = await dbClient.execute({
-    sql: `${REVIEW_ROWS}, total AS (SELECT COUNT(*) AS total FROM review),
-      page AS (SELECT * FROM review ORDER BY created_at DESC, entity_id DESC LIMIT ${PAGE_SIZE} OFFSET ?)
-      SELECT page.*, total.total FROM total LEFT JOIN page ON 1 = 1 ORDER BY page.created_at DESC, page.entity_id DESC`,
-    args: [userId, userId, offset],
-  });
-  return { items: result.rows.filter((row) => row.entity_id != null).map(projectReviewItem),
-    total: Number(result.rows[0]?.total || 0), offset, limit: PAGE_SIZE };
-}
 
 /** Advance through silent exceptions too, so retries cannot hide a later alert. */
 export async function readFinancialReviewChanges(userId: string, {

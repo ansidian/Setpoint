@@ -75,9 +75,10 @@ export interface TransactionImportRunSummary {
 }
 
 export interface TransactionImportItem {
+  runTrigger?: TransactionImportRunTrigger;
   correction?: FinancialActivity["correction"];
   /** Latest verified correction for read-only consumers; original import fields remain immutable history. */
-  effectiveResult?: { correctionId: string; entry: FinancialCorrectionDraft & { payee?: string }; scheduleId?: string; transactionId?: string };
+  effectiveResult?: { correctionId: string; resolution?: 'kept_actual'; entry?: FinancialCorrectionDraft & { payee?: string }; scheduleId?: string; transactionId?: string };
   preparedEvidence?: FinancialWriteEvidence;
   originalAttemptedAt?: number | null;
   id: string;
@@ -117,21 +118,10 @@ export interface TransactionImportRunDetail extends TransactionImportRunSummary 
   items: TransactionImportItem[];
 }
 
-export interface TransactionImportRunListResponse {
-  runs: TransactionImportRunSummary[];
-}
-
 export interface TransactionImportEmailStatusResponse {
   emailUid: string;
   items: TransactionImportItem[];
   financialEvent?: FinancialEmailPlan | null;
-}
-
-export interface TransactionImportHistoricalScanRequest {
-  gmailAccountIds: string[];
-  sources: TransactionImportParserSource[];
-  startDate: string;
-  endDate: string;
 }
 
 export interface TransactionImportConfirmation {

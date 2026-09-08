@@ -18,7 +18,7 @@ The desktop-only Alfred Panel (CONTEXT.md): a centered workbench or an Inbox-int
 - `alfredEmailContextModel.ts` — pure pending-context projection into display references and preview items
 - `AlfredRows.tsx` — verbatim domain rows: bill/event/deadline/email/transaction (cite-by-reference; never reshape values)
 - `AlfredEmailPreview.tsx` — read-only email preview overlay opened from an email chip (Esc/outside-click close it, never the panel)
-- `alfredChipActionModel.ts` — pure chip-click → navigation action resolver (email preview vs calendar request via the dashboard's request builders)
+- `alfredChipActionModel.ts` — pure chip-click → navigation action resolver (email preview, exact Finances targets, or calendar request via the dashboard's request builders)
 - `alfredRowOrdering.ts` — pure sort/section logic for surfaced rows: ordering rules and kind-based sectioning for the Alfred panel result list
 - `AlfredTransactionBreakdown.tsx` — auto-rendered breakdown card for the summarize_transactions tool result (spending or income): accent-driven proportional bars, period/group-by header, "Other" greyed, reduced-motion-safe bar-grow animation
 - `AlfredBreakdown.tsx` — auto-rendered grouped-count card for the group_items tool result: count bars + adaptive drill-down (buckets ≤5 inline, >5 collapse) reusing the per-kind leaf row components exported from `AlfredRows.tsx`; cite-by-reference (ADR 0006)
@@ -32,7 +32,7 @@ The desktop-only Alfred Panel (CONTEXT.md): a centered workbench or an Inbox-int
 - SSE consumption is fetch + `src/lib/sseStream.ts` (EventSource can't POST).
 - Email handoff preparation is model-free. The browser keeps display metadata plus an opaque context ID; successful `run_end` is the server-side consumption boundary.
 - Calendar proposal Review sends a typed seed through the dashboard bridge and performs no write. The panel closes only after editor acceptance; Calendar completion updates the mounted card from the normalized saved event.
-- Chips are interactive: rows resolve their navigation action via `alfredChipActionModel.ts`; calendar actions bubble to DashboardShell (closes the panel, opens the calendar), email actions stay panel-local.
+- Chips are interactive: rows resolve their navigation action via `alfredChipActionModel.ts`; calendar and financial actions bubble to DashboardShell (closes the panel, opens the matching workspace), email actions stay panel-local.
 - Layering: the panel portals to `document.body` (zIndex 60, above the calendar modal's 49) and carries `data-suspend-calendar-hotkeys="all"` — a marker the calendar honors to ignore BOTH its global hotkeys and its outside-click dismissal for events originating inside the overlay (so clicking Alfred over an open calendar never closes it). The panel owns Esc ordering (preview first, panel second) via a document-capture listener.
 
 ## Related

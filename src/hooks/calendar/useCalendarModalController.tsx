@@ -152,7 +152,7 @@ export default function useCalendarModalController({
   const viewYear = activeViewDate.year;
   const fetchYear = fetchAnchor.year;
   const fetchMonth = fetchAnchor.month;
-  const activeView = VIEWS[view] || eventsView;
+  const activeView = VIEWS[view as keyof typeof VIEWS] || eventsView;
   const activeLayout = getCalendarLayoutMetrics(viewportWidth);
   const usesFloatingEditor = !activeLayout.stacked;
 
@@ -307,8 +307,7 @@ export default function useCalendarModalController({
     deadlineQuickActions,
     handleViewChange,
     availableCalendarViews,
-    cycleView,
-    focusDeadlineTask,
+      focusDeadlineTask,
   } = useCalendarControllerActions({
     eventSelection: {
       view, activeView, activeLayout, visibleCalendarEvents, activeSelectedItemId,
@@ -512,7 +511,7 @@ export default function useCalendarModalController({
       setSelectedDay, setSelectedDateKey, setSelectedItemId,
     },
     navigation: {
-      handleViewChange, cycleView, setViewDate, setFetchAnchor, setLabelMonth,
+      handleViewChange, setViewDate, setFetchAnchor, setLabelMonth,
       requestAgendaScroll,
       resolveSelectedAgendaEditAnchor: agendaInteractions.resolveSelectedAgendaEditAnchor,
       navigateMonthRef: monthNavigation.navigateMonthRef,

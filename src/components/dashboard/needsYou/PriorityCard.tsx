@@ -101,6 +101,7 @@ export function PriorityCard({ card, variant = "urgent", isMobile = false, onOpe
   return (
     <div
       className={bodyClickable ? "needs-you-priority-card dashboard-item-trigger sp-focus-ring" : "needs-you-priority-card"}
+      data-dashboard-detail-trigger={!card.email && card.jumpKind != null ? "true" : undefined}
       style={
         !hover
           ? style

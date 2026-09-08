@@ -12,8 +12,6 @@ const mockApi = vi.hoisted(() => ({
   hydrateActualBudgetCache: vi.fn(),
   testActualBudget: vi.fn(),
   updateSettings: vi.fn(),
-  listTransactionImportRuns: vi.fn(),
-  getTransactionImportRun: vi.fn(),
 }));
 
 // test-architecture: allow-boundary-mock -- Actual metadata and transaction-import reads cross authenticated provider/storage HTTP boundaries while the real Finance controls render.
@@ -23,8 +21,6 @@ vi.mock("@/api", () => ({
   hydrateActualBudgetCache: mockApi.hydrateActualBudgetCache,
   testActualBudget: mockApi.testActualBudget,
   updateSettings: mockApi.updateSettings,
-  listTransactionImportRuns: mockApi.listTransactionImportRuns,
-  getTransactionImportRun: mockApi.getTransactionImportRun,
 }));
 
 const { default: ActualBudgetSettingsSection } = await import("./ActualBudgetSettingsSection");
@@ -112,8 +108,6 @@ beforeEach(() => {
     dbSizeBytes: 50_000_000,
     backupCount: 1,
   });
-  mockApi.listTransactionImportRuns.mockResolvedValue({ runs: [] });
-  mockApi.getTransactionImportRun.mockResolvedValue(null);
 });
 
 describe("ActualBudgetSettingsSection", () => {

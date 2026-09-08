@@ -10,9 +10,10 @@ export function buildDemoTransactions(todayKey: string, yesterdayKey: string): T
   return [
     { id: "demo-transfer-from", date: todayKey, amount: 250, direction: "expense", transferAccountId: "demo-savings", payee: "Emergency Fund", category: "Uncategorized", account: "Demo Checking", notes: "Fictional transfer" },
     { id: "demo-transfer-to", date: todayKey, amount: 250, direction: "income", transferAccountId: "demo-checking", payee: "Demo Checking", category: "Uncategorized", account: "Emergency Fund", notes: "Fictional transfer" },
+    { id: "demo-internet-payment", date: yesterdayKey, amount:79.99, direction:"expense", payee:"Fiber Co-op", payeeId:"demo-internet", scheduleId:"demo-internet", accountId:"demo-checking", category:"Utilities", account:"Demo Checking", notes:"Fictional recorded utility payment" },
     { id: "demo-txn-payroll", date: todayKey, amount: 4200, direction: "income", payee: "Northstar Payroll", category: "Income", account: "Demo Checking", notes: "Demo direct deposit" },
     { id: "demo-txn-market", date: todayKey, amount: 68.42, direction: "expense", payee: "Corner Market", category: "Groceries", account: "Demo Checking", notes: "Demo grocery run" },
-    { id: "demo-txn-refund", date: yesterdayKey, amount: 34.99, direction: "income", payee: "Cloud Sandbox", category: "Refunds", account: "Demo Checking", notes: "Demo service credit" },
+    { id: "demo-txn-refund", date: yesterdayKey, amount: 34.99, direction: "income", payee: "Cloud Sandbox", category: "Income", account: "Demo Checking", notes: "Demo service credit" },
     { id: "demo-txn-coffee", date: yesterdayKey, amount: 6.75, direction: "expense", payee: "Signal Coffee", category: "Dining", account: "Demo Card", notes: "Demo coffee" },
     { id: "demo-transaction-item-automatic", date: todayKey, amount: 38.47, direction: "expense", payee: "Cloud Sandbox", category: "Cloud Services", account: "Demo Checking", notes: "Fictional automatically imported PayPal receipt" },
     { id: "demo-txn-prior-market", date: priorDate, amount: 88, direction: "expense", payee: "Corner Market", category: "Groceries", account: "Demo Checking", notes: "Fictional prior-month groceries" },

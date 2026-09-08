@@ -18,7 +18,7 @@ type SelectionState = Pick<CalendarHotkeyOptions,
   | "setSelectedDay" | "setSelectedDateKey" | "setSelectedItemId"
 >;
 type NavigationState = Pick<CalendarHotkeyOptions,
-  | "handleViewChange" | "cycleView" | "setViewDate" | "setFetchAnchor" | "setLabelMonth"
+  | "handleViewChange" | "setViewDate" | "setFetchAnchor" | "setLabelMonth"
   | "requestAgendaScroll" | "resolveSelectedAgendaEditAnchor" | "navigateMonthRef"
 >;
 type OverlayState = Pick<CalendarHotkeyOptions,

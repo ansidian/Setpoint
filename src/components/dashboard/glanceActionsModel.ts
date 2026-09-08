@@ -1,5 +1,5 @@
 import { normalizeStatus } from "../calendar/views/deadlines/deadlinesModel";
-import { getScheduleUrl, payUrlForBill } from "../calendar/views/bills/billsModel";
+import { getScheduleUrl, payUrlForBill } from "../finances/recurringPaymentModel";
 import { calendarActionUrl } from "../calendar/views/events/eventDetailModel";
 import { extractNonZoomEventUrl, extractZoomMeetingUrl } from "../../lib/calendar-links";
 import type { ActualBillOccurrence } from "../../../shared/types/actual";
@@ -57,7 +57,7 @@ function billActions(bill: DashboardGlanceBill, ctx: GlanceActionContext): Glanc
   if (payUrl) {
     out.push({ key: "pay", label: "Pay online", type: "link", href: payUrl, tone: "accent" });
   }
-  out.push(openInCalendarAction());
+  out.push(openInCalendarAction("Open in Finances"));
   return out;
 }
 

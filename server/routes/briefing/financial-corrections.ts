@@ -7,6 +7,18 @@ router.post('/financial-corrections/inspect', async (req, res, next) => {
   try { res.json(await financialCorrections.inspect(process.env.EA_USER_ID!, req.body?.reference)); }
   catch (error) { next(error); }
 });
+router.post('/financial-corrections/recheck', async (req, res, next) => {
+  try { res.json(await financialCorrections.recheck(process.env.EA_USER_ID!, req.body?.reference, req.body?.correctionId)); }
+  catch (error) { next(error); }
+});
+router.post('/financial-corrections/keep-preview', async (req, res, next) => {
+  try { res.json(await financialCorrections.previewKeep(process.env.EA_USER_ID!,req.body?.reference,req.body?.correctionId)); }
+  catch (error) { next(error); }
+});
+router.post('/financial-corrections/keep-confirm', async (req, res, next) => {
+  try { res.json(await financialCorrections.confirmKeep(process.env.EA_USER_ID!,req.body?.previewId)); }
+  catch (error) { next(error); }
+});
 router.post('/financial-corrections/preview', async (req, res, next) => {
   try { res.json(await financialCorrections.preview(process.env.EA_USER_ID!, req.body?.reference, req.body?.draft)); }
   catch (error) { next(error); }

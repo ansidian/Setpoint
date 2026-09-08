@@ -1,5 +1,3 @@
-import type { TransactionImportRunSummary } from "./transaction-imports.ts";
-
 export interface DashboardSpendingPeriod {
   start: string;
   end: string;
@@ -44,10 +42,4 @@ export interface DashboardFinanceResponse {
   fetchedAt: string;
   spending: DashboardSpendingSnapshot;
   activity: DashboardFinanceActivity;
-}
-
-export interface DashboardFinanceReviewRunsResponse {
-  runs: TransactionImportRunSummary[];
-  total: number;
-  offset: number;
 }

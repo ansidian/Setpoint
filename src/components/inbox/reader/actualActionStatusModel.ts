@@ -1,3 +1,4 @@
+import type { FinanceDestination } from "../../finances/financesNavigation";
 import type {
   FinancialEmailReconciliation,
   FinancialPlanReasonCode,
@@ -71,16 +72,16 @@ export function isActualActioned(actualStatus: FinancialEmailReconciliation | nu
   return actualStatus ? ACTIONED_STATUSES.has(actualStatus.status) : false;
 }
 
-export function resolveActualCalendarTarget(
+export function resolveActualFinanceTarget(
   actualStatus: FinancialEmailReconciliation | null | undefined,
-): { date: string; itemId: string } | null {
+): FinanceDestination | null {
   if (!actualStatus || !ACTIONED_STATUSES.has(actualStatus.status)) return null;
   const date = actualStatus.evidence?.dueDate;
   const itemId = actualStatus.status === "already_scheduled"
     ? actualStatus.evidence?.scheduleId
     : actualStatus.evidence?.transactionId;
   if (!date || !itemId) return null;
-  return { date, itemId };
+  return actualStatus.status === "already_scheduled" ? { view:"schedule",date,scheduleId:itemId } : { view:"journal",date,transactionId:itemId };
 }
 
 export type ActualActionStatusTone = "success" | "warning" | "neutral" | "checking" | "unavailable";

@@ -172,6 +172,7 @@ function bill({ id, payee, day, amount, paid = false }: { id: string; payee: str
     paid,
     type: "bill",
     openActionDisabled: true,
+    paymentTransactionIds: [] as string[],
   };
 }
 
@@ -278,13 +279,17 @@ function makeDemoSeed(now = new Date()) {
     bill({ id: "demo-electric", payee: "Demo Electric", day: tomorrow, amount: 146.32 }),
     bill({ id: "demo-water", payee: "Northstar Water", day: later, amount: 58.11 }),
     bill({ id: "demo-internet", payee: "Fiber Co-op", day: yesterday, amount: 79.99, paid: true }),
-    bill({ id: "demo-rent", payee: "Northstar Lofts", day: monthDay(today, 1), amount: 2450.00, paid: true }),
-    bill({ id: "demo-phone", payee: "Signal Mobile", day: monthDay(today, 12), amount: 64.20, paid: true }),
+    bill({ id: "demo-rent", payee: "Northstar Lofts", day: monthDay(today, 1), amount: 2450.00 }),
+    bill({ id: "demo-phone", payee: "Signal Mobile", day: monthDay(today, 12), amount: 64.20 }),
     bill({ id: "demo-cloud", payee: "Cloud Sandbox", day: addDays(today, 5), amount: 38.47 }),
     bill({ id: "demo-card", payee: "Everyday Card", day: today, amount: 512.84 }),
     bill({ id: "demo-student-loan", payee: "Student Loan Servicer", day: addDays(today, 6), amount: 220.00 }),
   ];
   const transactions = buildDemoTransactions(dateKey(today), dateKey(yesterday));
+  for (const occurrence of bills) {
+    occurrence.paymentTransactionIds = transactions.filter(row => row.scheduleId === occurrence.scheduleId && row.date === occurrence.next_date).map(row => row.id);
+    occurrence.paid = occurrence.paymentTransactionIds.length > 0;
+  }
   const payeeMap = Object.fromEntries(bills.map((entry) => [entry.scheduleId, entry.payee]));
 
   const providerHealth = {

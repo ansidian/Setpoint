@@ -16,6 +16,7 @@ const now = Date.now();
 
 const item: TransactionImportItem = {
   id: "demo-transaction-item-1",
+  runTrigger: "arrival",
   runId: "demo-transaction-run-1",
   gmailAccountId: "demo-gmail",
   gmailMessageId: "demo-paypal-message",
@@ -50,12 +51,12 @@ const item: TransactionImportItem = {
 
 let runs: TransactionImportRunDetail[] = [{
   id: "demo-transaction-run-1",
-  trigger: "historical_scan",
+  trigger: "arrival",
   status: "completed",
   gmailAccountIds: ["demo-gmail"],
   sources: ["paypal"],
-  startDate: new Date(now - 30 * 86_400_000).toISOString().slice(0, 10),
-  endDate: new Date(now).toISOString().slice(0, 10),
+  startDate: null,
+  endDate: null,
   cursor: { complete: true },
   counts: { discovered: 2, parsed: 2, review: 1, queued: 0, added: 1, updated: 0, duplicate: 0, failed: 0 },
   attempts: 1,
@@ -108,13 +109,6 @@ export function handleDemoTransactionImportRequest({
   body: Record<string, unknown>;
   seed: DemoSeed;
 }): unknown {
-  if (pathname === "/api/dashboard/finance/review-runs" && method === "GET") {
-    const requestedOffset = Number(url.searchParams.get("offset") || 0);
-    const offset = Number.isFinite(requestedOffset) ? Math.max(0, Math.floor(requestedOffset)) : 0;
-    const pending = runs.filter((run) => run.items.some(needsReview))
-      .sort((a, b) => b.updatedAt - a.updatedAt || a.id.localeCompare(b.id));
-    return { runs: clone(pending.slice(offset, offset + 12).map(({ items: _items, ...run }) => run)), total: pending.length, offset };
-  }
   if (method === "GET" && (pathname === "/api/briefing/email/demo-email-paypal-receipt" || pathname === "/api/briefing/email/demo-email-cloud-receipt")) {
     const automatic = pathname.endsWith("demo-email-cloud-receipt");
     return {
@@ -125,39 +119,6 @@ export function handleDemoTransactionImportRequest({
   }
   if (!pathname.startsWith("/api/briefing/transaction-imports/")) {
     return NO_DEMO_TRANSACTION_IMPORT_RESPONSE;
-  }
-  if (pathname.endsWith("/runs") && method === "GET") {
-    const limit = Math.max(1, Math.min(50, Number(url.searchParams.get("limit") || 12)));
-    return { runs: clone(runs.slice(0, limit).map(({ items: _items, ...run }) => run)) };
-  }
-  if (pathname.endsWith("/runs") && method === "POST") {
-    const runId = `demo-transaction-run-${Date.now()}`;
-    const createdAt = Date.now();
-    const run: TransactionImportRunDetail = {
-      id: runId,
-      trigger: "historical_scan",
-      status: "completed",
-      gmailAccountIds: Array.isArray(body.gmailAccountIds) ? body.gmailAccountIds.map(String) : ["demo-gmail"],
-      sources: Array.isArray(body.sources)
-        ? body.sources.filter((source): source is "amazon" | "paypal" => source === "amazon" || source === "paypal")
-        : ["amazon", "paypal"],
-      startDate: typeof body.startDate === "string" ? body.startDate : null,
-      endDate: typeof body.endDate === "string" ? body.endDate : null,
-      cursor: { complete: true, demo: true },
-      counts: { discovered: 0, parsed: 0, review: 0, queued: 0, added: 0, updated: 0, duplicate: 0, failed: 0 },
-      attempts: 1,
-      lastError: null,
-      createdAt,
-      updatedAt: createdAt,
-      items: [],
-    };
-    runs = [run, ...runs];
-    return { runId, created: true };
-  }
-  const runMatch = pathname.match(/\/runs\/([^/]+)$/);
-  if (runMatch && method === "GET") {
-    const run = runs.find((entry) => entry.id === decodeURIComponent(runMatch[1]!));
-    return run ? clone(run) : null;
   }
   const commitMatch = pathname.match(/\/runs\/([^/]+)\/commit$/);
   if (commitMatch && method === "POST") {

@@ -237,7 +237,7 @@ describe("Bills mirror", () => {
 
   it("forces a fresh local Actual projection before rebuilding the mirror", async () => {
     const fresh = billMetadata({
-      recentTransactions: [{ payeeId: "payee-1", amount: 1500, date: "2026-05-10" }],
+      recentTransactions: [{ id: "paid-1", scheduleId: "sched-1", payeeId: "payee-1", amount: 1500, date: "2026-05-10" }],
     });
     mockActualLocal.readLocalActualMetadata.mockResolvedValueOnce(fresh);
 

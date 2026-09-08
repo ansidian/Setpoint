@@ -41,6 +41,8 @@ Tests are not listed here; follow `AGENTS.md` behavior-ownership guidance.
 ## Boundaries
 
 - Unsupported API exports must fail explicitly rather than fall through to `/api/*`, authentication, providers, SSE, AI, or external-service navigation.
-- Finance spending and calendar transactions share `seed.transactions`; managed completion, import confirmation and correction settlement update that same in-memory ledger. Transfers remain paired in raw correction inspection, with signed income/expense directions and transfer-account identity in the ledger; spending and Calendar exclude them like production. Bill changes update the shared Dashboard/Calendar schedule projection. Unconfirmed review candidates must not already count as recorded spending.
+- Finance spending and Journal transactions share `seed.transactions`; managed completion, import confirmation and correction settlement update that same in-memory ledger. Transfers remain paired in raw correction inspection, with signed income/expense directions and transfer-account identity in the ledger; spending excludes them like production while Journal retains their exact reciprocal topology. Bill changes update the shared Dashboard/Finances schedule projection. Unconfirmed review candidates must not already count as recorded spending.
 - Demo connection flags describe simulated state only. Keep real passwords, tokens, provider operations, and persistent settings out of this directory.
 - Canonical product behavior and provider writes remain in their production domains; this directory supplies only the walkthrough contract.
+
+- `financesWorkspace.ts` — Utilities/Journal from preserved fictional statement evidence and exact shared ledger relationships

@@ -89,7 +89,7 @@ export function ThreeTierLayout({ isMobile = false, band, timelinePanel, context
         style={{ width: "100%", maxWidth: 640, margin: "0 auto", padding: "0 0 32px" }}>
         <DashboardSceneRegion delay={dashboardStageDelays.hero} style={{ padding: "14px 16px 0" }}>{band}</DashboardSceneRegion>
         <DashboardSceneRegion delay={dashboardStageDelays.primary} initial={{ opacity: 0, y: 16, scale: 0.994 }} style={{ padding: "14px 16px 0" }}>{timelinePanel}</DashboardSceneRegion>
-        <DashboardSceneRegion delay={dashboardStageDelays.secondary} initial={{ opacity: 0, y: 12, scale: 0.996 }} style={{ padding: "14px 16px 0" }}>{contextColumn}</DashboardSceneRegion>
+        {contextColumn && <DashboardSceneRegion delay={dashboardStageDelays.secondary} initial={{ opacity: 0, y: 12, scale: 0.996 }} style={{ padding: "14px 16px 0" }}>{contextColumn}</DashboardSceneRegion>}
       </DashboardLayoutFrame>
     );
   }

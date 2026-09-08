@@ -16,18 +16,12 @@ const { requireCookieSession } = await import("../../middleware/auth.ts");
 const { createTransactionImportRouter } = await import("./transaction-imports.ts");
 const { createFinancialEventStore } = await import("../../financial-events/financial-event-store.ts");
 const { createFinancialEventCompletion } = await import("../../financial-events/financial-event-completion.ts");
-const { listFinancialEventReview, readFinancialReviewChanges } = await import("../../financial-events/financial-event-review.ts");
+const { readFinancialReviewChanges } = await import("../../financial-events/financial-event-review.ts");
 const sessionHash = `sha256:${crypto.createHash("sha256").update("session-token").digest("hex")}`;
 
 function serviceMock() {
   return {
-    startHistoricalScan: async (userId: string, input: { gmailAccountIds: string[] }) => ({
-      runId: `${userId}:${input.gmailAccountIds.join(",")}`,
-      created: true,
-    }),
-    listRuns: async (userId: string, limit: number) => [{ id: `${userId}:${limit}` }],
     listItemsForEmail: async (userId: string, emailUid: string) => [{ id: `${userId}:${emailUid}` }],
-    getRun: async (_userId: string, runId: string) => ({ id: runId, items: [] }),
     commitItems: async (userId: string, runId: string, items: unknown[]) => ({
       accepted: items.length,
       owner: userId,
@@ -47,7 +41,6 @@ function makeApp(service = serviceMock(), financialCompletion?: ReturnType<typeo
     service: service as never,
     financialStatus: async () => null,
     financialCompletion,
-    financialReview: financialDb ? (userId, options) => listFinancialEventReview(userId, { ...options, dbClient: financialDb }) : undefined,
     financialReviewChanges: financialDb ? (userId, options) => readFinancialReviewChanges(userId, { ...options, dbClient: financialDb }) : undefined,
     wake: () => { wakeCount += 1; },
   }));
@@ -106,37 +99,27 @@ describe("transaction import routes", () => {
     } finally { db.close(); }
   });
 
-  it("serves owner-scoped financial exceptions and notification changes without changing their durable state", async () => {
+  it("serves owner-scoped notification changes without changing their durable state", async () => {
     const db = await managedDb();
     try {
       await db.execute({ sql: `UPDATE ea_financial_documents SET status = 'retry', candidate_json = ?,
         last_error = 'Waiting for evidence that distinguishes similar purchases.', updated_at = 1000`,
       args: [JSON.stringify({ type: "expense", event_kind: "purchase", amount: 12, amount_kind: "transaction_amount", currency: "USD" })] });
       const { app } = makeApp(serviceMock(), undefined, db);
-      const reviewPath = "/api/briefing/financial-events/review";
       const changesPath = "/api/briefing/financial-events/review-changes";
-      expect((await request(app).get(reviewPath)).status).toBe(401);
       expect((await request(app).get(changesPath)).status).toBe(401);
-      const response = await authenticated(request(app).get(`${reviewPath}?userId=other`));
-      expect(response.status).toBe(200);
-      expect(response.body).toMatchObject({ total: 1, offset: 0, limit: 20,
-        items: [{ emailUid: "managed", state: "waiting", amount: 12, canComplete: true, attention: "complete_details" }] });
       const changes = await authenticated(request(app).get(`${changesPath}?afterAt=0&afterId=&userId=other`));
       expect(changes.status).toBe(200);
       expect(changes.body).toEqual({ items: [{ key: expect.stringMatching(/^financial-review:/), emailUid: "managed" }],
-        cursor: { updatedAt: 1000, id: response.body.items[0].id }, hasMore: false });
+        cursor: { updatedAt: 1000, id: expect.stringMatching(/^document:/) }, hasMore: false });
       const second = await authenticated(request(app).get(changesPath).query({ afterAt: changes.body.cursor.updatedAt, afterId: changes.body.cursor.id }));
       expect(second.body).toEqual({ items: [], cursor: changes.body.cursor, hasMore: false });
-      expect((await authenticated(request(app).get(`${reviewPath}?offset=20`))).body).toEqual({ items: [], total: 1, offset: 20, limit: 20 });
       expect(await createFinancialEventStore(db).getDocumentForEmail("owner-1", "managed")).toMatchObject({ status: "retry", attempts: 0, eventId: null });
     } finally { db.close(); }
   });
 
-  it("rejects malformed financial review pagination and incomplete cursors", async () => {
+  it("rejects malformed and incomplete financial review cursors", async () => {
     const { app } = makeApp();
-    for (const query of ["offset=-1", "offset=1.5", "offset=", "offset=Infinity", "offset=9007199254740992", "offset=0&offset=1"]) {
-      expect((await authenticated(request(app).get(`/api/briefing/financial-events/review?${query}`))).status).toBe(400);
-    }
     for (const query of ["afterAt=1", "afterId=event:x", "afterAt=-1&afterId=x", "afterAt=1.5&afterId=x", "afterAt=0&afterId=a&afterId=b", `afterAt=0&afterId=${"a".repeat(601)}`]) {
       expect((await authenticated(request(app).get(`/api/briefing/financial-events/review-changes?${query}`))).status).toBe(400);
     }
@@ -146,13 +129,17 @@ describe("transaction import routes", () => {
     const { app } = makeApp();
     expect((await request(app).get("/api/briefing/transaction-imports/runs")).status).toBe(401);
 
-    const response = await authenticated(request(app).get("/api/briefing/transaction-imports/runs?limit=8"));
+    const response = await authenticated(request(app).get("/api/briefing/transaction-imports/email-status?emailUid=message"));
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ runs: [{ id: "owner-1:8" }] });
+    expect(response.body).toMatchObject({ items: [{ id: "owner-1:message" }] });
   });
 
-  it("does not expose retired mapping read or write endpoints", async () => {
+  it("does not expose retired mapping and history endpoints", async () => {
     const { app } = makeApp();
+    for (const path of ['/transaction-imports/runs', '/transaction-imports/runs/saved', '/financial-events/review']) {
+      expect((await authenticated(request(app).get(`/api/briefing${path}`))).status).toBe(404);
+    }
+    expect((await authenticated(request(app).post('/api/briefing/transaction-imports/runs')).send({})).status).toBe(404);
     expect((await authenticated(request(app)
       .get("/api/briefing/transaction-imports/mappings"))).status).toBe(404);
     expect((await authenticated(request(app)
@@ -160,27 +147,22 @@ describe("transaction import routes", () => {
       .send({ mode: "automatic", actualAccountId: "actual-1", actualCategoryId: "category-1" }))).status).toBe(404);
   });
 
-  it("returns 202 for scan, commit, and retry admission and wakes the worker", async () => {
+  it("returns 202 for commit and retry admission and wakes the worker", async () => {
     const { app, wakeCount } = makeApp();
-    const scan = await authenticated(request(app)
-      .post("/api/briefing/transaction-imports/runs")
-      .send({ gmailAccountIds: ["gmail-1"], sources: ["amazon"], startDate: "2026-01-01", endDate: "2026-02-01" }));
     const commit = await authenticated(request(app)
       .post("/api/briefing/transaction-imports/runs/run-1/commit")
       .send({ items: [{ itemId: "item-1" }] }));
     const retry = await authenticated(request(app)
       .post("/api/briefing/transaction-imports/items/item-1/retry"));
 
-    expect([scan.status, commit.status, retry.status]).toEqual([202, 202, 202]);
-    expect(scan.body).toMatchObject({ runId: "owner-1:gmail-1", created: true });
+    expect([commit.status, retry.status]).toEqual([202, 202]);
     expect(commit.body).toMatchObject({ accepted: 1, owner: "owner-1", runId: "run-1" });
     expect(retry.body).toMatchObject({ accepted: true, owner: "owner-1", itemId: "item-1" });
-    expect(wakeCount()).toBe(3);
+    expect(wakeCount()).toBe(2);
   });
 
   it("shapes owner-scoped status and dismiss responses", async () => {
     const service = serviceMock();
-    service.getRun = async () => null as never;
     const { app } = makeApp(service);
     expect((await authenticated(request(app).get("/api/briefing/transaction-imports/runs/not-owned"))).status).toBe(404);
 
@@ -189,14 +171,11 @@ describe("transaction import routes", () => {
     expect(dismissed.body).toEqual({ dismissed: true, owner: "owner-1", itemId: "item-1" });
   });
 
-  it("lists recent runs and email status through owner-scoped read paths", async () => {
+  it("lists email status through owner-scoped read paths", async () => {
     const { app } = makeApp();
-    const runs = await authenticated(request(app).get("/api/briefing/transaction-imports/runs?limit=8"));
     const status = await authenticated(request(app)
       .get("/api/briefing/transaction-imports/email-status?emailUid=gmail-demo-message"));
 
-    expect(runs.status).toBe(200);
-    expect(runs.body).toEqual({ runs: [{ id: "owner-1:8" }] });
     expect(status.status).toBe(200);
     expect(status.body).toEqual({
       emailUid: "gmail-demo-message",

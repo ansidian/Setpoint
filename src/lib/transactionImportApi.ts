@@ -2,23 +2,7 @@ import { apiFetch } from "./apiFetch";
 import type {
   TransactionImportConfirmation,
   TransactionImportEmailStatusResponse,
-  TransactionImportHistoricalScanRequest,
-  TransactionImportRunDetail,
-  TransactionImportRunListResponse,
 } from "../../shared/types/transaction-imports";
-
-export const listTransactionImportRuns = (limit = 12): Promise<TransactionImportRunListResponse> =>
-  apiFetch(`/api/briefing/transaction-imports/runs?limit=${encodeURIComponent(limit)}`);
-
-export const startTransactionImportScan = (
-  request: TransactionImportHistoricalScanRequest,
-): Promise<{ runId: string; created: boolean }> => apiFetch("/api/briefing/transaction-imports/runs", {
-  method: "POST",
-  body: JSON.stringify(request),
-});
-
-export const getTransactionImportRun = (runId: string): Promise<TransactionImportRunDetail> =>
-  apiFetch(`/api/briefing/transaction-imports/runs/${encodeURIComponent(runId)}`);
 
 export const commitTransactionImportItems = (
   runId: string,

@@ -21,7 +21,7 @@ let loseReply = false;
 let partialCreate: 'rule' | 'date' | false = false;
 let rejectLedger = false;
 let unavailableDispatch = false;
-const migrations = ['001_ea_tables.sql','013_email_index_normalized_date.sql','025_email_thread_identity.sql','030_owner_bootstrap.sql','041_email_transaction_imports.sql','042_transaction_import_item_subject.sql','053_transaction_import_financial_plans.sql','054_email_sender_authentication.sql','055_generic_financial_email_imports.sql','056_generic_financial_email_automation.sql','058_generic_financial_email_income_automation.sql','059_generic_financial_email_transfer_automation.sql','062_financial_events.sql','063_financial_activity.sql','064_financial_corrections.sql'];
+const migrations = ['001_ea_tables.sql','013_email_index_normalized_date.sql','025_email_thread_identity.sql','030_owner_bootstrap.sql','041_email_transaction_imports.sql','042_transaction_import_item_subject.sql','053_transaction_import_financial_plans.sql','054_email_sender_authentication.sql','055_generic_financial_email_imports.sql','056_generic_financial_email_automation.sql','058_generic_financial_email_income_automation.sql','059_generic_financial_email_transfer_automation.sql','062_financial_events.sql','063_financial_activity.sql','064_financial_corrections.sql','066_financial_correction_keep.sql'];
 const facade = (changed: () => Promise<void> = async () => undefined) => createFinancialCorrections({ store: createFinancialCorrectionStore(db), reader: createFinancialActivityReader(db),
   inspect: async (_owner, budgetId, targets) => { await sdk.sync(); return readCorrectionSnapshot(sdk, budgetId, targets); },
   dispatch: async (_owner, budgetId, step, expected) => {
@@ -61,6 +61,61 @@ beforeEach(async () => {
 });
 afterEach(async () => { await actualApi.shutdown(); db.close(); await removeTempDir(directory); });
 describe('durable correction facade with an offline Actual budget', () => {
+  it('keeps the reviewed Actual result without replay, preserves failed steps, and supports a later correction', async () => {
+    const service = facade();
+    const preview = await service.preview('owner',reference,{type:'income',amountCents:9000,date:'2026-09-02',accountId:account});
+    await service.confirm('owner',preview.id,'keep-conflict');
+    const send = sdk.internal.send;
+    sdk.internal.send = async (command,payload) => {
+      const result = await send(command,payload);
+      if (command === 'transactions-batch-update') sdk.sync = async () => {
+        sdk.sync = async () => undefined;
+        await actualApi.updateAccount(account,{name:'Changed checking'});
+        await actualApi.updateTransaction(transaction,{amount:9500});
+      };
+      return result;
+    };
+    const stopped = await service.apply('owner',preview.id);
+    expect(stopped?.state).toBe('attention');
+    expect(stopped?.steps[0]?.state).toBe('conflict');
+    await db.execute("UPDATE ea_financial_events SET revision=revision+1 WHERE id='event'");
+    expect((await db.execute("SELECT status FROM ea_financial_events WHERE id='event' AND user_id='owner'")).rows[0]?.status).toBe('needs_review');
+    const review = await service.previewKeep('owner',reference,preview.id);
+    await expect(service.confirmKeep('another-owner',review.id)).rejects.toThrow('not found');
+    const before = await readCorrectionSnapshot(sdk,'budget',preview.targets);
+    const kept = await facade().confirmKeep('owner',review.id);
+    expect(kept.state).toBe('completed');
+    expect(kept.steps).toEqual(stopped!.steps);
+    expect((await db.execute("SELECT status FROM ea_financial_events WHERE id='event' AND user_id='owner'")).rows[0]?.status).toBe('settled');
+    expect(kept.effectiveResult).toMatchObject({resolution:'kept_actual',entry:{type:'income',amountCents:9500},keepPreviewId:review.id});
+    expect(await readCorrectionSnapshot(sdk,'budget',preview.targets)).toEqual(before);
+    expect((await facade().confirmKeep('owner',review.id)).revision).toBe(kept.revision);
+    const activity = await createFinancialActivityReader(db).detail('owner',reference);
+    expect(activity).toMatchObject({status:'completed',amountCents:9500,correction:{resolution:'kept_actual'}});
+    expect(activity?.originalReceipts[0]?.evidence?.objects[0]?.after?.amount).toBe(-1000);
+    expect(activity?.history?.corrections.at(-1)).toMatchObject({resolution:'kept_actual',steps:[{state:'conflict'}]});
+    await expect(facade().preview('owner',reference,{type:'income',amountCents:9700,date:'2026-09-02',accountId:account})).resolves.toMatchObject({predecessorId:preview.id});
+  });
+  it('rejects stale Actual, changed source, stale revision, and non-stopped keep reviews', async () => {
+    const service=facade();
+    const preview=await service.preview('owner',reference,{type:'income',amountCents:9000,date:'2026-09-02',accountId:account});
+    await service.confirm('owner',preview.id,'stale-keep');
+    await actualApi.updateTransaction(transaction,{amount:-9500});
+    const stopped=await service.apply('owner',preview.id);
+    expect(stopped?.state).toBe('attention');
+    let review=await service.previewKeep('owner',reference,preview.id);
+    await actualApi.updateTransaction(transaction,{amount:-9600});
+    await expect(service.confirmKeep('owner',review.id)).rejects.toThrow('Actual changed');
+    expect((await service.read('owner',preview.id))?.state).toBe('attention');
+    review=await service.previewKeep('owner',reference,preview.id);
+    await db.execute("UPDATE ea_financial_events SET revision=revision+1 WHERE id='event'");
+    await expect(service.confirmKeep('owner',review.id)).rejects.toThrow('source or correction changed');
+    review=await service.previewKeep('owner',reference,preview.id);
+    await createFinancialCorrectionStore(db).state(preview.id,'attention');
+    await expect(service.confirmKeep('owner',review.id)).rejects.toThrow('correction changed');
+    await createFinancialCorrectionStore(db).state(preview.id,'recovering');
+    await expect(service.previewKeep('owner',reference,preview.id)).rejects.toThrow('stopped correction');
+  });
   it('inspects current edits without changing original receipts or admitting correction work', async () => {
     await actualApi.updateTransaction(transaction, { amount: -1400, notes: 'Changed in Actual' });
     const inspection = await facade().inspect('owner', reference);
@@ -87,6 +142,7 @@ describe('durable correction facade with an offline Actual budget', () => {
     await service.confirm('owner', preview.id, 'transfer');
     loseReply = true;
     await expect(service.apply('owner', preview.id)).rejects.toThrow('Lost provider reply');
+    await expect(service.recheck('owner', reference, preview.id)).rejects.toThrow('attempt has not stopped');
     const recovered = await facade().apply('owner', preview.id);
     expect(recovered?.state).toBe('completed');
     const negative = await actualApi.getTransactions(account, '2026-09-03', '2026-09-03');
@@ -310,6 +366,25 @@ describe('durable correction facade with an offline Actual budget', () => {
     expect(stopped?.steps.at(-1)?.state).toBe('conflict');
     expect(stopped?.effectiveResult).toBeNull();
     expect((await actualApi.getSchedules())[0]!.name).toBe('External edit');
+    await expect(service.recheck('another-owner', reference, preview.id)).rejects.toThrow('no completed original result');
+    await expect(service.recheck('owner', reference, 'stale-correction')).rejects.toThrow('correction changed');
+    const conflictedSnapshot = await readCorrectionSnapshot(sdk, 'budget', preview.targets);
+    const stillConflicted = await facade().recheck('owner', reference, preview.id);
+    expect(stillConflicted.correction?.state).toBe('attention');
+    expect(await readCorrectionSnapshot(sdk, 'budget', preview.targets)).toEqual(conflictedSnapshot);
+    // Simulate the owner restoring the intended value in Actual, then recheck through a rebuilt facade.
+    await send('schedule/update', { schedule: { id:schedule.id, name:preview.snapshot.schedules[0]!.name } });
+    const restoredSnapshot = await readCorrectionSnapshot(sdk, 'budget', preview.targets);
+    const resolved = await facade().recheck('owner', reference, preview.id);
+    expect(resolved.correction?.state).toBe('completed');
+    expect(resolved.correction?.steps.every(step => step.state === 'applied')).toBe(true);
+    expect(await readCorrectionSnapshot(sdk, 'budget', preview.targets)).toEqual(restoredSnapshot);
+    expect((await createFinancialActivityReader(db).detail('owner', reference))?.status).toBe('completed');
+    const observations = (await db.execute({ sql:'SELECT state FROM ea_financial_correction_observations WHERE correction_id=? ORDER BY id', args:[preview.id] })).rows.map(row => row.state);
+    expect(observations).toContain('conflict');
+    expect(observations.at(-1)).toBe('applied');
+    expect((await facade().recheck('owner', reference, preview.id)).correction?.state).toBe('completed');
+
   });
   it('blocks original recovery and settlement for a completed source without an admitted operation', async () => {
     const service = facade();
@@ -418,6 +493,68 @@ describe('durable correction facade with an offline Actual budget', () => {
     await expect(facade().preview('owner', reference, { type: 'income', amountCents: 1000, date: '2026-09-01', accountId: account })).rejects.toThrow('split');
     const rows = await readCorrectionSnapshot(sdk, 'budget', { transactionIds: [transaction], scheduleIds: [], ruleIds: [] });
     expect(rows.transactions.filter(row => row.parent_id === transaction)).toHaveLength(2);
+  });
+  it.each([1, -1])('edits a transfer schedule with orientation %s without changing its rule identity or posting to the ledger', async sign => {
+    const scheduleId = 'transfer-schedule';
+    const recurring = { frequency: 'monthly', interval: 1, start: '2090-09-03', patterns: [], endMode: 'never', skipWeekend: false };
+    const payees = await actualApi.getPayees();
+    const opposite = payees.find(payee => payee.transfer_acct === (sign > 0 ? account : destination))!.id;
+    await sdk.internal.send('schedule/create', { schedule: { id: scheduleId, name: 'Saved transfer', posts_transaction: 0 }, conditions: [
+      { field: 'date', op: 'is', value: sign > 0 ? '2090-09-03' : recurring },
+      { field: 'account', op: 'is', value: sign > 0 ? destination : account },
+      { field: 'payee', op: 'is', value: opposite }, { field: 'amount', op: 'is', value: sign * 1000 },
+    ] });
+    const targets = { transactionIds: [], scheduleIds: [scheduleId], ruleIds: [] };
+    const original = await readCorrectionSnapshot(sdk, 'budget', targets);
+    const evidence: FinancialWriteEvidence = { budgetId: 'budget', objects: [{ kind: 'schedule', id: scheduleId, role: 'primary', provenance: 'created', beforeState: 'confirmed_absent', before: null, after: original.schedules[0]! }] };
+    await db.execute("INSERT INTO ea_financial_events(id,user_id,status,created_at,updated_at) VALUES('transfer-event','owner','pending',1,1)");
+    await db.execute({ sql: "UPDATE ea_financial_events SET status='settled',outcome_json=? WHERE id='transfer-event'", args: [JSON.stringify({ outcome: 'added', evidence })] });
+    const source = { owner: 'event' as const, id: 'transfer-event' };
+    const service = facade();
+    const draft = { type: 'transfer_schedule' as const, amountCents: 2300, date: '2090-10-03', fromAccountId: destination, toAccountId: account, name: 'Edited transfer', notes: 'Updated transfer note' };
+    const preview = await service.preview('owner', source, draft);
+    await service.confirm('owner', preview.id, 'transfer-schedule');
+    const result = await service.apply('owner', preview.id);
+    expect(result?.state).toBe('completed');
+    const after = await readCorrectionSnapshot(sdk, 'budget', targets);
+    expect(after.schedules).toEqual([expect.objectContaining({ id: scheduleId, rule: original.schedules[0]!.rule, posts_transaction: 0, name: 'Edited transfer' })]);
+    expect(after.rules).toEqual([expect.objectContaining({ id: original.rules[0]!.id })]);
+    expect(correctionConditions(after.rules[0]!.conditions)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: 'amount', value: sign * 2300 }),
+      expect.objectContaining({ field: 'account', value: sign > 0 ? account : destination }),
+      expect.objectContaining({ field: 'payee', value: payees.find(payee => payee.transfer_acct === (sign > 0 ? destination : account))!.id }),
+      expect.objectContaining({ field: 'date', value: sign > 0 ? draft.date : { ...recurring, start: draft.date } }),
+    ]));
+    expect(after.dates[0]).toMatchObject({ id: original.dates[0]!.id, base_next_date: 20901003 });
+    expect(await actualApi.getTransactions(account, '2026-09-01', '2090-12-31')).toEqual([expect.objectContaining({ id: transaction, amount: -1000 })]);
+    expect(await actualApi.getTransactions(destination, '2026-09-01', '2090-12-31')).toHaveLength(0);
+    expect(result?.effectiveResult).toMatchObject({ scheduleId, entry: { type: 'transfer_schedule', fromAccountId: destination, toAccountId: account }, evidence: { objects: expect.arrayContaining([expect.objectContaining({ kind: 'schedule', id: scheduleId, role: 'primary' })]) } });
+    expect((await service.inspect('owner', source)).evidence.objects.find(object => object.role === 'primary')?.id).toBe(scheduleId);
+    // A second correction must retain the schedule identity established by the first.
+    expect((await service.preview('owner', source, { ...draft, amountCents: 2500 })).targets.scheduleIds).toEqual([scheduleId]);
+  });
+  it('rejects transfer schedule conversions, past dates, identical accounts, and ambiguous transfer payees before any write', async () => {
+    const service = facade();
+    const draft = { type: 'transfer_schedule' as const, amountCents: 1000, date: '2090-09-03', fromAccountId: account, toAccountId: destination };
+    await expect(service.preview('owner', reference, draft)).rejects.toThrow('exact existing transfer schedule');
+    const payeeId = (await actualApi.getPayees()).find(payee => payee.transfer_acct === account)!.id;
+    await sdk.internal.send('schedule/create', { schedule: { id: 'transfer-schedule', posts_transaction: 0 }, conditions: [
+      { field: 'date', op: 'is', value: '2090-09-03' }, { field: 'account', op: 'is', value: destination },
+      { field: 'payee', op: 'is', value: payeeId }, { field: 'amount', op: 'is', value: 1000 },
+    ] });
+    const snapshot = await readCorrectionSnapshot(sdk, 'budget', { transactionIds: [], scheduleIds: ['transfer-schedule'], ruleIds: [] });
+    const evidence: FinancialWriteEvidence = { budgetId: 'budget', objects: [{ kind: 'schedule', id: 'transfer-schedule', role: 'primary', provenance: 'created', beforeState: 'confirmed_absent', before: null, after: snapshot.schedules[0]! }] };
+    await db.execute("INSERT INTO ea_financial_events(id,user_id,status,created_at,updated_at) VALUES('transfer-event','owner','pending',1,1)");
+    await db.execute({ sql: "UPDATE ea_financial_events SET status='settled',outcome_json=? WHERE id='transfer-event'", args: [JSON.stringify({ outcome: 'added', evidence })] });
+    const source = { owner: 'event' as const, id: 'transfer-event' };
+    await expect(service.preview('owner', source, { ...draft, date: '2020-09-03' })).rejects.toThrow('future transfer date');
+    await expect(service.preview('owner', source, { ...draft, toAccountId: account })).rejects.toThrow('distinct');
+    await expect(service.preview('owner', source, { ...draft, fromAccountId: 'missing' })).rejects.toThrow('available open Actual account');
+    // Raw duplicate transfer payees are possible in the provider graph; don't guess which one to use.
+    await sdk.internal.db!.all('INSERT INTO payees (id, name, transfer_acct, tombstone) VALUES (?, ?, ?, 0) RETURNING id', ['duplicate-transfer', 'Duplicate', account]);
+    await expect(service.preview('owner', source, draft)).rejects.toThrow('one available Actual transfer payee');
+    expect(await actualApi.getSchedules()).toEqual([expect.objectContaining({ id: 'transfer-schedule', amount: 1000, date: '2090-09-03' })]);
+    expect((await db.execute('SELECT * FROM ea_financial_corrections')).rows).toHaveLength(0);
   });
   it('admits only one of two independently previewed corrections', async () => {
     const service = facade();

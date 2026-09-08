@@ -1,4 +1,4 @@
-import { amountConditionBounds, amountConditionCents } from "./actual-amount-condition.ts";
+import { amountConditionCents } from "./actual-amount-condition.ts";
 import type {
   ActualBillOccurrence,
   ActualDateRange,
@@ -29,35 +29,19 @@ function schedulePayeeName(schedule: ActualSchedule, payeeMap: Record<string, st
   return payeeCondition && typeof payeeCondition.value === "string" ? payeeMap[payeeCondition.value] : schedule.name;
 }
 
-function schedulePayeeId(schedule: ActualSchedule): string | undefined {
-  const value = schedule.conditions?.find((condition) => condition.field === "payee")?.value;
-  return typeof value === "string" ? value : undefined;
-}
-
-function daysBetweenYmd(a: string, b: string): number {
-  const ms = new Date(`${a}T00:00:00Z`).getTime() - new Date(`${b}T00:00:00Z`).getTime();
-  return Math.round(ms / 86400000);
+/** Actual recognizes posted schedule transactions independently of clearing or amount. */
+export function schedulePaymentTransactions(schedule: ActualSchedule, transactions: ActualRecentTransaction[] = [], historical = false): ActualRecentTransaction[] {
+  if (!schedule.id || !schedule.next_date) return [];
+  const exactDate = schedule.conditions?.some(condition => condition.field === 'date' && condition.op === 'is');
+  const lower = new Date(`${schedule.next_date}T00:00:00Z`);
+  if (!exactDate && !schedule.posts_transaction) lower.setUTCDate(lower.getUTCDate() - 2);
+  const start = lower.toISOString().slice(0, 10);
+  return transactions.filter(transaction => transaction.scheduleId === schedule.id && transaction.date >= start
+    && (!historical || transaction.date <= schedule.next_date!));
 }
 
 export function isSchedulePaid(schedule: ActualSchedule, recentTransactions: ActualRecentTransaction[] = []): boolean {
-  if (!schedule.next_date) return false;
-  const payeeId = schedulePayeeId(schedule);
-  const bounds = amountConditionBounds(scheduleAmountCondition(schedule));
-  // Match anywhere in the [num1, num2] band for range schedules; a fixed
-  // amount collapses to lo === hi, preserving the original +/-$0.01 behaviour.
-  const lo = Math.abs(bounds.lo) / 100;
-  const hi = Math.abs(bounds.hi) / 100;
-  const bandLo = Math.min(lo, hi) - 0.01;
-  const bandHi = Math.max(lo, hi) + 0.01;
-  const nextDate = schedule.next_date;
-  return recentTransactions.some((transaction) => {
-    const dayDiff = Math.abs(daysBetweenYmd(transaction.date, nextDate));
-    if (transaction.scheduleId && transaction.scheduleId === schedule.id) return dayDiff <= 14;
-    if (!payeeId || transaction.payeeId !== payeeId) return false;
-    const transactionAmount = transaction.amount ?? 0;
-    if (transactionAmount < bandLo || transactionAmount > bandHi) return false;
-    return dayDiff <= 3;
-  });
+  return schedulePaymentTransactions(schedule, recentTransactions).length > 0;
 }
 
 export function isBillLikeSchedule(schedule: ActualSchedule): boolean {
@@ -89,6 +73,7 @@ export function billOccurrenceFromSchedule(schedule: ActualSchedule, {
     amount: Math.abs(amountCents) / 100,
     next_date: schedule.next_date || "",
     paid,
+    paymentTransactionIds: schedulePaymentTransactions(schedule, recentTransactions).flatMap(transaction => transaction.id ? [transaction.id] : []),
     type: schedule.type || "bill",
     openActionDisabled: paid,
   };

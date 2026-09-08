@@ -4,7 +4,6 @@ import {
   shouldClearCalendarFocusOnLeave,
 } from "./dashboardShellModel";
 import { normalizeCalendarWorkspaceView } from "../../hooks/calendar/calendarModalInteractionModel";
-import { readDemoSafeLocalStorage, writeDemoSafeLocalStorage } from "../../demo/demoSafeLocalStorage";
 import type { Dispatch, SetStateAction } from "react";
 import type { CalendarView } from "../../../shared/types/calendar";
 import type { CurrentDashboardLiveData } from "../../hooks/currentDashboardModel";
@@ -45,9 +44,7 @@ export default function useCalendarWorkspaceState({
   tab,
   setShellTab,
   setCalendarMounted,
-  liveData,
   loadCalendarDeadlines,
-  loadCalendarBills,
   onCalendarWorkspaceChange,
 }: CalendarWorkspaceOptions) {
   const [calendarOpenRequestId, setCalendarOpenRequestId] = useState(0);
@@ -58,14 +55,8 @@ export default function useCalendarWorkspaceState({
   // the month (the bare navigateToToday reset, overlay-preserving — same semantics
   // as re-tapping the in-agenda Events/Bills toggle).
   const [calendarJumpTodayRequestId, setCalendarJumpTodayRequestId] = useState(0);
-  const [calendarView, setCalendarView] = useState<CalendarView>(() => {
-    try {
-      const saved = readDemoSafeLocalStorage("calendar:lastView");
-      if (saved === "bills" || saved === "events") return saved;
-      return "events";
-    } catch { return "events"; }
-  });
-  const showBills = !!liveData.actualConfigured;
+  const [calendarView, setCalendarView] = useState<CalendarView>("events");
+  const showBills = false;
   const [calendarFocus, setCalendarFocus] = useState<string | null>(null);
   const [calendarFocusItemId, setCalendarFocusItemId] = useState<string | null>(null);
   const [calendarFocusOpenDetail, setCalendarFocusOpenDetail] = useState(false);
@@ -86,7 +77,6 @@ export default function useCalendarWorkspaceState({
     });
     if (!request) return;
     setCalendarView(request.view);
-    writeDemoSafeLocalStorage("calendar:lastView", request.view);
     setCalendarFocus(request.focusDate);
     setCalendarFocusItemId(request.focusItemId);
     setCalendarFocusOpenDetail(request.focusOpenDetail);
@@ -117,8 +107,7 @@ export default function useCalendarWorkspaceState({
     setCalendarMounted(true);
     setShellTab("calendar");
     if (request.shouldLoadDeadlines) loadCalendarDeadlines();
-    if (request.shouldLoadBills) loadCalendarBills({ refreshLive: true });
-  }, [calendarView, showBills, loadCalendarDeadlines, loadCalendarBills, setShellTab, setCalendarMounted]);
+  }, [calendarView, showBills, loadCalendarDeadlines, setShellTab, setCalendarMounted]);
 
   const jumpCalendarToToday = useCallback(() => {
     setCalendarJumpTodayRequestId((value) => value + 1);
@@ -127,8 +116,6 @@ export default function useCalendarWorkspaceState({
   const changeCalendarView = (v: string) => {
     const nextView = normalizeCalendarWorkspaceView(v);
     setCalendarView(nextView);
-    writeDemoSafeLocalStorage("calendar:lastView", nextView);
-    if (nextView === "bills") loadCalendarBills({ refreshLive: true });
   };
 
   useEffect(() => {

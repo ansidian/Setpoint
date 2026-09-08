@@ -1,8 +1,7 @@
 import type { Client } from "@libsql/client";
-import type { DashboardFinanceActivity, DashboardFinanceActivityItem, DashboardFinanceReviewRunsResponse } from "../../shared/types/dashboard-finance.ts";
-import { projectTransactionImportRun as projectRun } from "./transaction-import-store-projections.ts";
+import type { DashboardFinanceActivity, DashboardFinanceActivityItem } from "../../shared/types/dashboard-finance.ts";
 
-const DASHBOARD_REVIEW_FILTER = `(status IN ('needs_review', 'failed', 'paused') OR
+const DASHBOARD_REVIEW_FILTER = `EXISTS (SELECT 1 FROM ea_transaction_import_runs run WHERE run.user_id = ea_transaction_import_items.user_id AND run.id = ea_transaction_import_items.run_id AND run.trigger = 'arrival') AND (status IN ('needs_review', 'failed', 'paused') OR
   (status = 'ready' AND confirmed_at IS NULL AND (automation_mode = 'observe' OR automatic_safe = 0)))`;
 
 export function createTransactionImportActivity(dbClient: Pick<Client, "execute">) {
@@ -45,13 +44,14 @@ export function createTransactionImportActivity(dbClient: Pick<Client, "execute"
         : status === "updated" ? "Updated in Actual"
         : transfer ? "Transfer scheduled in Actual" : "Recorded in Actual";
       const effective = typeof row.effective_result_json === 'string'
-        ? JSON.parse(row.effective_result_json) as { entry?: { type?: string; amountCents?: number; payee?: string } } : null;
+        ? JSON.parse(row.effective_result_json) as { resolution?: string; entry?: { type?: string; amountCents?: number; payee?: string } } : null;
+      const kept = effective?.resolution === 'kept_actual';
       return {
         id: String(row.id), runId: String(row.run_id), emailUid: String(row.email_uid),
         payee: effective?.entry?.payee ?? (row.payee == null ? null : String(row.payee)),
-        amountCents: effective?.entry?.amountCents ?? (row.amount_cents == null ? null : Number(row.amount_cents)),
+        amountCents: effective?.entry?.amountCents ?? (kept || row.amount_cents == null ? null : Number(row.amount_cents)),
         currency: row.currency == null ? null : String(row.currency),
-        status, description: effective ? effective.entry?.type === 'bill' ? "Corrected schedule in Actual" : "Corrected record in Actual" : description, updatedAt: Number(row.updated_at),
+        status, description: kept ? "Current Actual result kept" : effective ? effective.entry?.type === 'bill' ? "Corrected schedule in Actual" : "Corrected record in Actual" : description, updatedAt: Number(row.updated_at),
       };
     }
     return {
@@ -60,24 +60,5 @@ export function createTransactionImportActivity(dbClient: Pick<Client, "execute"
     };
   }
 
-  async function listReviewRuns(userId: string, limit = 12, offset = 0): Promise<DashboardFinanceReviewRunsResponse> {
-    const pageLimit = Number.isSafeInteger(limit) ? Math.max(1, Math.min(50, limit)) : 12;
-    const pageOffset = Number.isSafeInteger(offset) ? Math.max(0, offset) : 0;
-    const hasReview = `EXISTS (SELECT 1 FROM ea_transaction_import_items
-      WHERE user_id = runs.user_id AND run_id = runs.id AND ${DASHBOARD_REVIEW_FILTER})`;
-    const [count, page] = await Promise.all([
-      dbClient.execute({
-        sql: `SELECT COUNT(*) AS total FROM ea_transaction_import_runs AS runs WHERE user_id = ? AND ${hasReview}`,
-        args: [userId],
-      }),
-      dbClient.execute({
-        sql: `SELECT * FROM ea_transaction_import_runs AS runs WHERE user_id = ? AND ${hasReview}
-              ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
-        args: [userId, pageLimit, pageOffset],
-      }),
-    ]);
-    return { runs: page.rows.map(projectRun), total: Number(count.rows[0]?.total || 0), offset: pageOffset };
-  }
-
-  return { readDashboardActivity, listReviewRuns };
+  return { readDashboardActivity };
 }

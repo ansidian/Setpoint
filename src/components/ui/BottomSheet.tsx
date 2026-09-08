@@ -213,7 +213,7 @@ export default function BottomSheet({ open, onClose, title, children, maxHeight 
             <button
               type="button"
               onClick={onClose}
-              className="text-muted-foreground/60 hover:text-foreground focus-visible:text-foreground p-2 min-w-[var(--sp-touch-min)] min-h-[var(--sp-touch-min)] flex items-center justify-center rounded-lg hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none transition-[color,background-color,transform] duration-150 motion-safe:hover:scale-110 motion-safe:active:scale-95"
+              className="text-muted-foreground/60 hover:text-foreground focus-visible:text-foreground p-2 min-w-[var(--sp-touch-min)] min-h-[var(--sp-touch-min)] flex items-center justify-center rounded-lg hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 transition-[color,background-color,transform] duration-150 motion-safe:hover:scale-110 motion-safe:focus-visible:scale-110 motion-safe:active:scale-95"
               aria-label="Close"
             >
               <X size={16} />

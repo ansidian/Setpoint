@@ -1,3 +1,4 @@
+import type { FinanceDestination } from "../../finances/financesNavigation";
 import type {
   BillCandidate,
   FinancialEmailPlan,
@@ -58,7 +59,7 @@ export interface ReaderSurfaceProps {
   billOpen: boolean;
   billMounted?: boolean;
   setBillOpen: Dispatch<SetStateAction<boolean>>;
-  onOpenRecordedBill?: (target: { date: string; itemId: string }) => void;
+  onOpenRecordedBill?: (target: FinanceDestination) => void;
   snoozeBtnRef?: RefObject<HTMLButtonElement | null>;
   snoozeOpen: boolean;
   setSnoozeOpen: Dispatch<SetStateAction<boolean>>;

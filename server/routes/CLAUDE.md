@@ -19,7 +19,7 @@ The HTTP surface: Express routers that validate input, apply auth, and delegate 
 - `briefing/tasks.ts` — Todoist projects and labels listing
 - `briefing/financial-corrections.ts` — authenticated synchronized editor inspection, preview, idempotent confirmation and saved correction status
 - `briefing/financial-activity.ts` — authenticated shared history, exact activity detail and explicit old imported-identity binding inspection
-- `briefing/transaction-imports.ts` — transaction-import scans, status, confirm/commit, retry, dismiss, resume and revision-checked owner completion of managed financial events; paginated managed review and actionable-change reads; no source configuration endpoints
+- `briefing/transaction-imports.ts` — saved receipt status, confirm/commit, retry, dismiss and revision-checked owner completion of managed financial events; actionable-change reads for browser notifications; no historical scan or source configuration endpoints
 - `briefing/dev.ts` — dev-only email re-indexing endpoint
 
 ### Domains + integrations
@@ -50,3 +50,5 @@ The HTTP surface: Express routers that validate input, apply auth, and delegate 
 
 - `server/<domain>/` directories — service layers these routes delegate to (see their maps)
 - `dashboard.ts` SSE stream is the push channel the frontend caches listen to
+
+- `briefing/finances.ts` — authenticated Utilities/Journal reads and explicit history preview/accept

@@ -49,6 +49,7 @@
     "src/components/calendar/CalendarModal.test-utils.tsx": "Shared calendar DashboardProvider, interaction, and animation-frame helpers with multiple active consumers",
     "src/components/inbox/test-utils/inboxFixtures.ts": "Shared inbox email and snapshot factories with multiple active model and component consumers",
     "src/components/inbox/test-utils/mobileInboxActions.test-utils.ts": "Shared mobile action-sheet and search drivers used by both rendered Inbox behavior suites",
-    "server/transaction-imports/parsers/fixtures.ts": "Sanitized parser fixtures are test-only support data"
+    "server/transaction-imports/parsers/fixtures.ts": "Sanitized parser fixtures are test-only support data",
+    "server/transaction-imports/transaction-import.test-utils.ts": "Shared ephemeral import-state reader used by store, worker, ownership, and cutover behavior suites"
   }
 }

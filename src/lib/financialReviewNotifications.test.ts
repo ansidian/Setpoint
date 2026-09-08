@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createFinancialReviewNotifications } from "./financialReviewNotifications";
-import { getFinancialEventReview, getFinancialReviewChanges } from "./financialReviewApi";
+import { getFinancialReviewChanges } from "./financialReviewApi";
 import type { FinancialReviewChangesResponse } from "../../shared/types/financial-review";
 
 const storageKey = "ea_financial_review_notifications_v1";
@@ -132,14 +132,6 @@ describe("financial review browser delivery", () => {
     vi.stubGlobal("fetch", async () => { throw new Error("Demo must not reach the network"); });
     const controller = createFinancialReviewNotifications(() => {});
     await controller.refresh();
-    expect(await getFinancialEventReview()).toMatchObject({
-      items: expect.arrayContaining([
-        expect.objectContaining({ id: "event:demo-event-review", canComplete: true }),
-        expect.objectContaining({ id: "event:demo-event-partial", canComplete: false }),
-        expect.objectContaining({ id: "event:demo-event-uncertain", canComplete: false }),
-      ]),
-      total: 3, offset: 0, limit: 20,
-    });
     expect(await getFinancialReviewChanges(null)).toEqual({ items: [], cursor: null, hasMore: false });
     expect(notices).toHaveLength(0);
     expect(localStorage.getItem(storageKey)).toBeNull();

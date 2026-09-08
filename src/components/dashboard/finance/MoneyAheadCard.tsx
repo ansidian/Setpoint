@@ -27,7 +27,7 @@ export default function MoneyAheadCard({ bills, loading, configured, health, onO
   const total = upcoming.reduce((sum, bill) => sum + Math.round(Math.abs(bill.amount || 0) * 100), 0) / 100;
   const unavailable = !health?.lastSuccessAt && health?.state !== "current";
   const renderBill = (bill: NeedsYouBill) => (
-    <button type="button" className="dashboard-finance-row" key={`${bill.scheduleId || bill.id}:${bill.next_date}`} onClick={(event) => onOpen(bill, event.currentTarget)}>
+    <button type="button" className="dashboard-finance-row" data-dashboard-detail-trigger="true" key={`${bill.scheduleId || bill.id}:${bill.next_date}`} onClick={(event) => onOpen(bill, event.currentTarget)}>
       <span><span className="dashboard-finance-row-title">{bill.name || bill.payee || "Scheduled bill"}</span><span className="dashboard-finance-row-detail">{bill.next_date && new Date(`${bill.next_date}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" })}</span></span>
       <span className="dashboard-finance-amount">{typeof bill.amount === "number" ? formatAmount(Math.abs(bill.amount)) : "Amount unknown"}</span>
     </button>
@@ -43,7 +43,7 @@ export default function MoneyAheadCard({ bills, loading, configured, health, onO
         {health?.state !== "current" && <p className="dashboard-finance-note">Showing the last available schedule data.</p>}
         {upcoming.slice(0, 3).map(renderBill)}
         <AnimatedCollapse open={expanded}>{upcoming.slice(3).map(renderBill)}</AnimatedCollapse>
-        {upcoming.length > 3 && <button type="button" className="dashboard-finance-button" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{expanded ? "Show less" : `View all ${upcoming.length}`}<ChevronDown size={12} /></button>}
+        {upcoming.length > 3 && <button type="button" className="dashboard-finance-button" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{expanded ? "Show less" : `View ${upcoming.length - 3} more`}<ChevronDown size={12} /></button>}
       </>}
   </section>;
 }

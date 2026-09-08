@@ -1,10 +1,8 @@
 import { forwardRef } from "react";
 import type { ForwardRefExoticComponent, RefAttributes } from "react";
-import BillsAgendaRail from "../views/bills/BillsAgendaRail.tsx";
 import EventsAgendaRail from "../views/events/EventsAgendaRail.tsx";
 
 type LegacyAgendaRail = ForwardRefExoticComponent<Record<string, unknown> & RefAttributes<unknown>>;
-const BillsAgendaRailCompat = BillsAgendaRail as unknown as LegacyAgendaRail;
 const EventsAgendaRailCompat = EventsAgendaRail as unknown as LegacyAgendaRail;
 
 export interface CalendarModalAgendaRailContentProps {
@@ -54,7 +52,6 @@ const CalendarModalAgendaRailContent = forwardRef<unknown, CalendarModalAgendaRa
   viewMonth,
   viewData,
   weatherData,
-  computed,
   selectedDateKey,
   selectedItemId,
   scrollCommand,
@@ -74,9 +71,6 @@ const CalendarModalAgendaRailContent = forwardRef<unknown, CalendarModalAgendaRa
   eventsRange = null,
   deadlinesRange = null,
   dataRevision = 0,
-  getMonthBills = null,
-  billsRange = null,
-  billsDataRevision = 0,
   hideMiniCalendar = false,
   mobileAgenda = false,
 }, ref) {
@@ -126,36 +120,6 @@ const CalendarModalAgendaRailContent = forwardRef<unknown, CalendarModalAgendaRa
     );
   }
 
-  if (view === "bills") {
-    return (
-      <BillsAgendaRailCompat
-        ref={ref}
-        viewYear={viewYear}
-        viewMonth={viewMonth}
-        computed={computed}
-        selectedDateKey={selectedDateKey}
-        selectedItemId={selectedItemId}
-        scrollCommand={scrollCommand}
-        entryScrollTargetDateKey={entryScrollTargetDateKey}
-        currentYear={currentYear}
-        currentMonth={currentMonth}
-        todayDate={todayDate}
-        canGoPrev={miniCalendarNavigation.canGoPrev}
-        onPreviousMonth={miniCalendarNavigation.onPreviousMonth}
-        onNextMonth={miniCalendarNavigation.onNextMonth}
-        onPassiveDateChange={onPassiveDateChange}
-        onDateAction={onDateAction}
-        onMiniCalendarDateAction={miniCalendarActions?.onDateAction}
-        onMiniCalendarDateCreate={miniCalendarActions?.onDateCreate}
-        onBillAction={onEventAction}
-        getMonthBills={getMonthBills}
-        billsRange={billsRange}
-        dataRevision={billsDataRevision}
-        hideMiniCalendar={hideMiniCalendar}
-        mobileAgenda={mobileAgenda}
-      />
-    );
-  }
 
   return null;
 });

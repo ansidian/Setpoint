@@ -1,18 +1,15 @@
-// Maps a clicked Alfred chip (kind + verbatim domain row) to a navigation
-// action: email rows open the read-only preview overlay; event/deadline/bill
-// rows become calendar requests. Calendar requests reuse the dashboard's
-// builders so Alfred deep-links behave exactly like dashboard rail clicks
-// (deadline occurrence ids, completed-deadline overlay, bills-view fallback).
-// Pure: no React (docs/exec-plans/active/2026-06-12-alfred-clickable-chips.md).
+// Exact financial targets open Finances; event and deadline targets open Calendar.
 import {
-  dashboardBillCalendarRequest,
   dashboardDeadlineCalendarRequest,
 } from "../dashboard/dashboardShellModel";
 import { pacificYMD } from "../calendar/calendarDateUtils";
 import type { AlfredEmailItem, AlfredItemKind } from "../../../shared/types/alfred";
 import type { CalendarOpenRequest } from "../dashboard/dashboardShellModel";
 
+import type { FinanceDestination } from "../finances/financesNavigation";
+
 export type AlfredChipAction =
+  | { type: "finances"; target: FinanceDestination }
   | { type: "email"; item: AlfredEmailItem }
   | { type: "calendar"; request: CalendarOpenRequest };
 
@@ -43,18 +40,12 @@ export function resolveAlfredChipAction(
     return { type: "calendar", request: dashboardDeadlineCalendarRequest(item) };
   }
   if (kind === "bill") {
-    // openActionDisabled (e.g. a paid occurrence) means the bills view offers no
-    // open action, so a chip click would dead-end — leave it non-interactive.
-    if (!item.id || item.openActionDisabled) return null;
-    return { type: "calendar", request: dashboardBillCalendarRequest(
-      typeof item.next_date === "string" ? item.next_date : null,
-      String(item.id),
-    ) };
+    if (!item.id) return null;
+    return { type: "finances", target: { view: "schedule", scheduleId: String(item.scheduleId || item.id).replace(/:\d{4}-\d{2}-\d{2}$/, ""), date: typeof item.next_date === "string" ? item.next_date : undefined } };
   }
   if (kind === "transaction") {
-    // Read-only: no per-transaction navigation target. Non-interactive until the
-    // future edit/confirm flow lands (see the transaction-access design spec).
-    return null;
+    if (!item.id || typeof item.date !== "string") return null;
+    return { type: "finances", target: { view: "journal", transactionId: String(item.id), date: item.date } };
   }
   return null;
 }

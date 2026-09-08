@@ -1,11 +1,12 @@
-import { useRef, useState } from "react";
-import { CalendarDays, Check, CreditCard, ExternalLink, Pencil, Video } from "lucide-react";
+import { useLayoutEffect, useRef, useState } from "react";
+import { ArrowUpRight, CalendarDays, Check, CircleCheck, CreditCard, ExternalLink, Pencil, ReceiptText, Video } from "lucide-react";
 import AnchoredFloatingPanel from "../shared/pickers/AnchoredFloatingPanel";
 import { RailAction, RailActionGroup } from "../calendar/DetailRailPrimitives";
 import DeadlineDetailCard from "../calendar/views/deadlines/DeadlineDetailCard";
 import EventSelectedCard from "../calendar/views/events/EventSelectedCard";
-import BillSelectedCard from "../calendar/views/bills/BillSelectedCard";
+import RecurringPaymentCard from "../finances/RecurringPaymentCard";
 import { eventAccent } from "../calendar/views/events/eventDetailModel";
+import { deadlineAccentFor } from "../calendar/views/deadlines/deadlinesModel";
 import { useDashboard } from "../../context/DashboardContext";
 import AddTaskPanel from "../todoist/AddTaskPanel";
 import { selectGlanceActions } from "./glanceActionsModel";
@@ -32,6 +33,7 @@ interface DashboardItemDetailSheetProps {
 // (via AnchoredFloatingPanel). Replaces DeadlineDetailPopover + CalendarItemDetailSheet.
 
 const KIND_LABEL = { deadline: "Deadline", bill: "Bill", event: "Event" };
+const KIND_ICON = { deadline: CircleCheck, bill: ReceiptText, event: CalendarDays };
 
 const ACTION_ICON = {
   complete: Check,
@@ -54,19 +56,37 @@ export default function DashboardItemDetailSheet({
   onClose,
   onOpenInCalendar,
 }: DashboardItemDetailSheetProps) {
+  const placementKey = `${kind}:${String(item?.id || item?.uid || item?.title || "item")}`;
   const [editing, setEditing] = useState(false);
   const [completing, setCompleting] = useState(false);
+  const [selectionKey, setSelectionKey] = useState(placementKey);
+  const completionTimer = useRef<number | undefined>(undefined);
   const editAnchorRef = useRef<HTMLDivElement | null>(null);
   const { handleCompleteTask, handleUpdateTask } = useDashboard();
 
+  // Keep the moving shell, but reset the previous item's interaction state.
+  if (selectionKey !== placementKey) {
+    setSelectionKey(placementKey);
+    setEditing(false);
+    setCompleting(false);
+  }
+  useLayoutEffect(() => () => {
+    window.clearTimeout(completionTimer.current);
+    completionTimer.current = undefined;
+  }, [placementKey]);
+
   if (!item) return null;
-  const placementKey = `${kind}:${String(item.id || item.uid || item.title || "item")}`;
+  const KindIcon = KIND_ICON[kind];
+  const detailAccent = kind === "bill" ? "var(--sp-outflow)" : kind === "deadline" ? deadlineAccentFor(item) : eventAccent(item);
 
   function doComplete() {
     setCompleting(true);
     const deadline = item as DashboardDeadline;
-    Promise.resolve(handleCompleteTask(String(deadline.id), deadline)).catch(() => setCompleting(false));
-    window.setTimeout(() => onClose(), 720);
+    const timer = window.setTimeout(() => { completionTimer.current = undefined; onClose(); }, 720);
+    completionTimer.current = timer;
+    Promise.resolve(handleCompleteTask(String(deadline.id), deadline)).catch(() => {
+      if (completionTimer.current === timer) setCompleting(false);
+    });
   }
 
   const commandHandlers: Partial<Record<GlanceActionKey, () => void>> = {
@@ -84,7 +104,7 @@ export default function DashboardItemDetailSheet({
   const actionRow = actions.length ? (
     <RailActionGroup>
       {actions.map((action) => {
-        const Icon = ACTION_ICON[action.key];
+        const Icon = kind === "bill" && action.key === "openInCalendar" ? ArrowUpRight : ACTION_ICON[action.key];
         if (action.type === "link") {
           return (
             <RailAction
@@ -107,7 +127,7 @@ export default function DashboardItemDetailSheet({
             label={isComplete && completing ? "Completing…" : action.label}
             onClick={commandHandlers[action.key]}
             href={undefined}
-            tone={action.tone}
+            tone={kind === "bill" && action.key === "openInCalendar" ? "default" : action.tone}
             size="compact"
             accent={accent}
             disabled={isComplete && completing}
@@ -129,7 +149,7 @@ export default function DashboardItemDetailSheet({
       />
     );
   } else if (kind === "bill") {
-    card = <BillSelectedCard bill={item} actions={actionRow} />;
+    card = <RecurringPaymentCard bill={item} actions={actionRow} />;
   } else {
     card = <EventSelectedCard ev={item} accent={eventAccent(item)} actions={actionRow} />;
   }
@@ -141,32 +161,22 @@ export default function DashboardItemDetailSheet({
         onClose={onClose}
         ariaLabel={KIND_LABEL[kind] || "Details"}
         open={!editing}
-        hideTitle
         width={360}
         maxWidth={380}
         animatePosition
+        dismissIgnoreSelector="[data-dashboard-detail-trigger='true']"
         draggable
-        dragHandleLabel={KIND_LABEL[kind]}
+        dragHandleLabel={<span className="detail-panel-label" style={{ color: `color-mix(in srgb, ${detailAccent} 75%, #cdd6f4)` }}><KindIcon size={14} aria-hidden="true" />{KIND_LABEL[kind]}</span>}
         placementKey={placementKey}
-        // Blend into the dashboard instead of reading as a bolted-on modal: wear
-        // the dashboard's own elevated-surface color (--sp-surface #24243a),
-        // slightly translucent so it reads as the canvas lifting up, in place of
-        // the near-black floating-panel slab (--sp-panel #16161e); and a soft,
-        // accent-tinted elevation in place of the heavy 0 20px 60px rgba(0,0,0,.7)
-        // drop shadow. No backdrop-blur on purpose — PRODUCT.md lists
-        // glassmorphism as an anti-reference and the shell avoids live
-        // backdrop-filter for perf, so translucency alone carries the frost.
-        // Border stays off: the reused hero card supplies the only edge, so a
-        // panel border would read as a doubled card-in-a-card.
         style={{
           padding: 0,
           borderRadius: 16,
-          border: "none",
-          background: "color-mix(in srgb, var(--sp-surface) 88%, transparent)",
-          boxShadow: `0 18px 44px -22px rgba(0,0,0,0.55), 0 4px 16px -8px color-mix(in srgb, ${accent} 22%, transparent)`,
+          border: "1px solid rgba(255,255,255,.09)",
+          background: "#16161e",
+          boxShadow: "0 13px 26px -12px rgba(0,0,0,.6)",
         }}
       >
-        <div ref={editAnchorRef} style={{ padding: 8 }}>{card}</div>
+        <div key={placementKey} ref={editAnchorRef} style={{ padding: "0 8px 8px" }}>{card}</div>
       </AnchoredFloatingPanel>
 
       {editing && (

@@ -4,6 +4,8 @@ Shared, mostly-pure helpers with no owning feature directory — cross-cutting u
 
 ## Files
 
+- `clientId.ts` — UUID v4 request identifiers using Web Crypto, including plain-HTTP LAN development where randomUUID is unavailable
+
 - `actualMetadata.ts` — shared Actual Budget metadata cache (accounts/payees/categories), single fetch, invalidated on the bills SSE change signal
 - `apiFetch.ts` — shared JSON request transport, timeout/auth error handling, and build-time demo adapter boundary
 - `alfredApi.ts` — Alfred context preparation/discard, conversation deletion, identity-only proposal Created acknowledgement, and demo-gated POST/SSE run transport
@@ -16,11 +18,11 @@ Shared, mostly-pure helpers with no owning feature directory — cross-cutting u
 - `financialCorrectionApi.ts` — correction inspection/preview/confirm/status transport through the demo-safe API boundary
 - `financialActivityApi.ts` — demo-safe shared activity list/detail and explicit binding inspection transport
 - `financialEmailApi.ts` — financial extraction, planning, retained bill writes and revision-bound owner completion; completion refreshes reader status and has a fictional in-memory demo adapter
-- `financialReviewApi.ts` — demo-safe managed financial queue/change reads and direct Finance record URLs
+- `financialReviewApi.ts` — demo-safe managed attention-change reads and direct Finance record URLs
 - `financialReviewNotifications.ts` — browser delivery owner: bounded change-feed draining, overlap cursor recovery, stable per-record/action deduplication, and clickable Finance alerts; no demo or server delivery
 - `gmailPubSubSetupApi.ts` — authenticated Gmail Pub/Sub setup/status client calls through the demo-safe API boundary
 - `instanceCredentialPendingApi.ts` — version-bound pending-credential discard calls shared by Settings and the central API export surface
-- `motion.ts` — shared Motion React durations, ease-out curve, and reduced-motion-aware transition builders; height changes use the event notes field's 160ms CSS-ease curve
+- `motion.ts` — shared Motion React durations, ease-out curve, and reduced-motion-aware transition builders; height changes use the event notes field's 160ms CSS-ease curve, with a 250ms measured resize-burst budget and immediate following of animated descendants
 - `icons.ts` — lucide icon name → component resolver (`resolveIcon`) for briefing/category icon fields
 - `Icon.tsx` — universal icon renderer (lucide name or known emoji); unknown input falls back to Sparkles
 - `onboardingModel.ts` — locked capability-led sequence, allowlisted provider targets, persisted-progress projection, and continue-setup selection
@@ -38,3 +40,5 @@ Shared, mostly-pure helpers with no owning feature directory — cross-cutting u
 - `utils.ts` — `cn()` — clsx + tailwind-merge className combinator
 
 (Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)
+
+- `financesApi.ts` — explicit Utilities/Journal and history capture transport

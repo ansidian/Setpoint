@@ -4,7 +4,6 @@ import type { getCalendarLayoutMetrics } from "../../components/calendar/calenda
 import useDeadlineQuickActions, { type UseDeadlineQuickActionsOptions } from "../../components/calendar/views/deadlines/useDeadlineQuickActions.ts";
 import { getDeadlineSelectionId } from "../../components/calendar/views/deadlines/deadlinesModel.ts";
 import useCalendarEventSelectionSet from "./useCalendarEventSelectionSet";
-import { nextCalendarView } from "./calendarModalInteractionModel";
 import type { CalendarFloatingDetail } from "./useCalendarFloatingDetail";
 import type { DeadlineEditorState, FloatingEditorItem } from "./useFloatingEditorRouting";
 
@@ -57,7 +56,6 @@ export default function useCalendarControllerActions({
   const {
     view,
     onViewChange,
-    billsAvailable,
     floatingDetailRef,
     setFloatingDetail,
     shakeFloatingEditor,
@@ -105,14 +103,8 @@ export default function useCalendarControllerActions({
     onViewChange?.(nextView);
   }, [floatingDetailRef, onViewChange, setFloatingDetail, shakeFloatingEditor, view]);
 
-  const availableCalendarViews = useMemo(
-    () => (billsAvailable ? ["events", "bills"] : ["events"]),
-    [billsAvailable],
-  );
-  const cycleView = useCallback((reverse = false) => {
-    const next = nextCalendarView({ current: view, views: availableCalendarViews, reverse });
-    if (next && next !== view) handleViewChange(next);
-  }, [availableCalendarViews, handleViewChange, view]);
+  const availableCalendarViews = useMemo(() => ["events"], []);
+
 
   function focusDeadlineTask(task: FloatingEditorItem | null | undefined) {
     if (task?.due_date) focusDateKey(task.due_date);
@@ -127,7 +119,6 @@ export default function useCalendarControllerActions({
     deadlineQuickActions,
     handleViewChange,
     availableCalendarViews,
-    cycleView,
     focusDeadlineTask,
   };
 }

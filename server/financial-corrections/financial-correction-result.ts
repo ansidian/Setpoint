@@ -7,7 +7,7 @@ export function correctionResult(preview: FinancialCorrectionPreview, snapshot: 
   const transactionId = desiredRows.find(row => row.id === originalPrimary?.id)?.id
     || desiredRows.find(row => Number(row.amount) < 0)?.id || desiredRows[0]?.id;
   const scheduleId = preview.steps.find(step => step.after.schedule)?.after.schedule?.id;
-  const primaryId = preview.draft.type === 'bill' ? scheduleId : transactionId;
+  const primaryId = preview.draft.type === 'bill' || preview.draft.type === 'transfer_schedule' ? scheduleId : transactionId;
   const evidence: FinancialWriteEvidence = { budgetId: snapshot.budgetId, objects: [] };
   for (const [kind, rows] of [['transaction', snapshot.transactions], ['schedule', snapshot.schedules], ['rule', snapshot.rules], ['schedule_next_date', snapshot.dates]] as const) {
     for (const row of rows.filter(row => !row.tombstone)) {

@@ -24,19 +24,3 @@ export function daysUntil(dateStr?: string | null): number | null {
   if (Number.isNaN(dueMs)) return null;
   return Math.round((dueMs - todayMs) / 86400000);
 }
-
-export function daysLabel(days: number): string {
-  if (days === 0) return "Today";
-  if (days === 1) return "Tomorrow";
-  if (days < 0) return `${Math.abs(days)}d overdue`;
-  return `in ${days}d`;
-}
-
-export function urgencyColor(days: number | null): { accent: string; text: string; bg: string } {
-  if (days === null) return { accent: "#6c7086", text: "var(--color-text-faint)", bg: "rgba(205,214,244,0.04)" };
-  if (days < 0) return { accent: "#f38ba8", text: "#f38ba8", bg: "rgba(243,139,168,0.1)" };
-  if (days === 0) return { accent: "#f97316", text: "#f97316", bg: "rgba(249,115,22,0.1)" };
-  if (days === 1) return { accent: "#fab387", text: "#fab387", bg: "rgba(250,179,135,0.1)" };
-  if (days <= 3) return { accent: "#f9e2af", text: "#f9e2afcc", bg: "rgba(249,226,175,0.08)" };
-  return { accent: "#a6e3a1", text: "var(--color-text-faint)", bg: "rgba(205,214,244,0.04)" };
-}

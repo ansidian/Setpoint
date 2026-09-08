@@ -1,6 +1,6 @@
 import type { Client, Row } from "@libsql/client";
 import db from "../db/connection.ts";
-import { capturedActivityDisplay, capturedActivitySources } from "./financial-activity-display.ts";
+import { activitySignedAmountCents, capturedActivityDisplay, capturedActivitySources } from "./financial-activity-display.ts";
 import type { FinancialActivity, FinancialActivityPage, FinancialActivityQuery, FinancialActivityReference,
   FinancialOriginalReceipt, FinancialWriteEvidence } from "../../shared/types/financial-activity.ts";
 import { projectReviewItem } from "../financial-events/financial-event-review.ts";
@@ -97,7 +97,8 @@ export function createFinancialActivityReader(dbClient: Pick<Client, "batch"> = 
       const plan = docs[0] ? projectManagedFinancialPlan(docs[0], event) : event?.plan || null;
       return { id, reference, occurrences: [reference, ...docs.filter(() => !isDocument).map((doc): FinancialActivityReference => ({ owner: "document", id: String(doc.id) }))], source: "managed", contexts: ["arrival"],
         emailUids: docs.map((doc) => doc.emailUid), subject: review.subject, payee: review.payee,
-        amountCents: review.amount == null ? null : Math.round(review.amount * 100), currency: review.currency,
+        amountCents: activitySignedAmountCents(review.amount == null ? null : Math.round(review.amount * 100),
+          event?.ownerCompletion?.entry.kind || plan?.candidate.type), currency: review.currency,
         ...(successful ? capturedActivityDisplay(originalReceipts[0]) : {}),
         createdAt: Number(row.created_at), updatedAt: Number(row.updated_at),
         status: inactive ? "dismissed" : attention ? "needs_attention" : successful ? "completed" : "processing",
@@ -126,6 +127,7 @@ export function createFinancialActivityReader(dbClient: Pick<Client, "batch"> = 
       const selected = rows.find((row) => completed.has(String(row.status))) || rows[0]!;
       const item = projectTransactionImportItem(selected);
       const policy = transactionImportActivityActions(item);
+      const arrival = runMap.get(item.runId)?.trigger === "arrival";
       const identityConflict = conflicts!.some((conflict) => rows.some((row) => row.id === conflict.record_id));
       const reference: FinancialActivityReference = { owner: "import", id: item.id, runId: item.runId };
       const activityRuns = [...new Set(rows.map((row) => String(row.run_id)))].flatMap((id) => runMap.get(id) || []);
@@ -136,9 +138,9 @@ export function createFinancialActivityReader(dbClient: Pick<Client, "batch"> = 
         payee: item.payee, amountCents: item.amountCents, currency: item.currency,
         ...(successful ? capturedActivityDisplay(originalReceipts[0]) : {}),
         createdAt: Math.min(...rows.map((row) => Number(row.created_at))), updatedAt: Math.max(...rows.map((row) => Number(row.updated_at))),
-        status: identityConflict ? "needs_attention" : successful ? "completed" : policy.attention ? "needs_attention" : item.status === "dismissed" ? "dismissed" : "processing",
-        reason: identityConflict ? "Original financial identity aliases conflict; resolve the exact source before importing." : item.lastError || item.status.replaceAll("_", " "),
-        actions: { complete: !identityConflict && !successful && policy.complete, retry: !identityConflict && !successful && policy.retry, inspect: true, correct: false },
+        status: successful ? "completed" : !arrival ? "dismissed" : identityConflict ? "needs_attention" : policy.attention ? "needs_attention" : item.status === "dismissed" ? "dismissed" : "processing",
+        reason: !arrival && !successful ? "History import was retired. This saved record remains available for inspection." : identityConflict ? "Original financial identity aliases conflict; resolve the exact source before importing." : item.lastError || item.status.replaceAll("_", " "),
+        actions: { complete: arrival && !identityConflict && !successful && policy.complete, retry: arrival && !identityConflict && !successful && policy.retry, inspect: true, correct: false },
         originalReceipts, sourceEvidence: rows.map((row) => parse(occurrenceMap.get(`import:${row.id}`)?.source_snapshot_json)), targetBindings: targets(id), liveState: "not_checked", effectiveResult: originalReceipts[0]?.result || null,
         completionPlan: item.financialPlan, importItem: item, runs: activityRuns });
     }
@@ -153,6 +155,7 @@ export function createFinancialActivityReader(dbClient: Pick<Client, "batch"> = 
         }),
         corrections: activityCorrections.map(row => ({ id: String(row.id), predecessorId: row.predecessor_id == null ? null : String(row.predecessor_id),
           state: row.state as NonNullable<FinancialActivity['correction']>['state'], updatedAt: Number(row.updated_at),
+          ...(parse<{ resolution?: string }>(row.effective_result_json)?.resolution === 'kept_actual' ? { resolution: 'kept_actual' as const } : {}),
           steps: (correctionSteps || []).filter(step => step.correction_id === row.id).map(step => ({
             state: step.state as NonNullable<FinancialActivity['history']>['corrections'][number]['steps'][number]['state'],
             attemptedAt: step.attempted_at == null ? null : Number(step.attempted_at),
@@ -161,26 +164,33 @@ export function createFinancialActivityReader(dbClient: Pick<Client, "batch"> = 
       };
       const effective = effectiveCorrections!.find(row => row.activity_id === activity.id);
       if (effective) {
-        const result = parse<{ entry?: { amountCents?: number; payee?: string } }>(effective.effective_result_json);
+        const result = parse<{ resolution?: string; entry?: { type?: string; amountCents?: number; payee?: string } }>(effective.effective_result_json);
         activity.effectiveResult = result;
-        activity.amountCents = result?.entry?.amountCents ?? activity.amountCents;
+        if (result?.entry?.amountCents != null) activity.amountCents = Math.abs(result.entry.amountCents) * (result.entry.type === 'income' ? 1 : -1);
+        else if (result?.resolution === 'kept_actual') activity.amountCents = null;
         activity.payee = result?.entry?.payee ?? activity.payee;
       }
       activity.actions.correct = !activity.identityConflict && activity.originalReceipts.length > 0 && activity.targetBindings.length === 1;
       if (current) {
-        activity.correction = { id: String(current.id), state: current.state as NonNullable<FinancialActivity['correction']>['state'], revision: Number(current.revision) };
+        const kept = parse<{ resolution?: string }>(current.effective_result_json)?.resolution === 'kept_actual';
+        activity.correction = { id: String(current.id), state: current.state as NonNullable<FinancialActivity['correction']>['state'], revision: Number(current.revision), ...(kept ? { resolution: 'kept_actual' as const } : {}) };
         activity.actions.complete = false; activity.actions.retry = false;
         if (['applying', 'recovering'].includes(String(current.state))) {
           activity.status = 'processing'; activity.reason = current.state === 'applying' ? 'Applying the confirmed correction.' : 'Recovering the correction; its attempted steps will not be replayed.';
           activity.actions.correct = false;
         } else if (current.state === 'attention') {
           activity.status = 'needs_attention'; activity.reason = 'The correction stopped and requires attention. Its observed effects are preserved.';
+        } else if (current.state === 'completed' && kept) {
+          activity.status = 'completed'; activity.reason = 'You kept the current Actual result. No further correction was applied.';
         }
       }
     }
     return output.sort((a, b) => b.createdAt - a.createdAt || b.id.localeCompare(a.id));
   }
   return {
+    async forWorkspace(userId: string, start: string): Promise<FinancialActivity[]> {
+      return (await snapshot(userId, true)).filter(item => item.updatedAt >= Date.parse(start)).slice(0, 500);
+    },
     async list(userId: string, query: FinancialActivityQuery = {}): Promise<FinancialActivityPage> {
       const offset = query.offset ?? 0;
       if (!Number.isSafeInteger(offset) || offset < 0) invalid("Financial activity offset must be a nonnegative integer");

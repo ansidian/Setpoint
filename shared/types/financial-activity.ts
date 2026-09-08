@@ -39,6 +39,7 @@ export interface FinancialCorrectionHistory {
   id: string;
   predecessorId: string | null;
   state: FinancialCorrection['state'];
+  resolution?: 'kept_actual';
   updatedAt: number;
   steps: Array<Pick<CorrectionStepStatus, 'state' | 'attemptedAt'>>;
 }
@@ -73,7 +74,7 @@ export interface FinancialActivity {
   /** Saved evidence only; a read of history does not query or synchronize Actual. */
   liveState: "not_checked";
   effectiveResult: unknown;
-  correction?: { id: string; state: FinancialCorrection['state']; revision: number };
+  correction?: { id: string; state: FinancialCorrection['state']; revision: number; resolution?: 'kept_actual' };
   completionPlan: FinancialEmailPlan | null;
   importItem: TransactionImportItem | null;
   runs: TransactionImportRunSummary[];

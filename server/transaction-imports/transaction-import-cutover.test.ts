@@ -1,3 +1,4 @@
+import { readImportRun } from './transaction-import.test-utils.ts';
 import type { Client } from "@libsql/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createMigratedDb } from "../triage/triage-worker.test-utils.ts";
@@ -5,7 +6,6 @@ import { createFinancialEmailPlanner } from "../bills/financial-email-planner.ts
 import { createFinancialEventStore } from "../financial-events/financial-event-store.ts";
 import { createTransactionImportStore } from "./transaction-import-store.ts";
 import { createTransactionImportService } from "./transaction-import-service.ts";
-import { createTransactionImportWorker } from "./transaction-import-worker.ts";
 import { planTransactionImportItems } from "./transaction-import-planner-adapter.ts";
 import { stageFinancialEmailPreflight } from "./financial-email-preflight.ts";
 import { emailFixture } from "./parsers/fixtures.ts";
@@ -78,28 +78,8 @@ describe("financial event source ownership", () => {
     await capture(email);
     const { store, service } = setup();
     expect(await service.ingestArrivals("owner-1", [email])).toEqual({ queued: 0, review: 0, runId: null });
-    expect(await store.listRuns("owner-1")).toEqual([]);
+    expect(await store.listItemsForEmail("owner-1", email.uid)).toEqual([]);
     expect(await createFinancialEventStore(db).getDocumentForEmail("owner-1", email.uid)).toMatchObject({ status: "pending" });
-  });
-
-  it("excludes managed mail from historical parser discovery while retaining older mail", async () => {
-    const managed = emailFixture({ uid: "managed", gmailAccountId: "gmail-1" });
-    const legacy = emailFixture({ uid: "legacy", gmailMessageId: "legacy", gmailAccountId: "gmail-1" });
-    await capture(managed);
-    await capture(legacy, "2026-06-01T00:00:00Z");
-    const { store, service, createId, planItems } = setup();
-    const run = await service.startHistoricalScan("owner-1", {
-      gmailAccountIds: ["gmail-1"], sources: ["amazon"], startDate: "2026-01-01", endDate: "2026-08-01",
-    });
-    const worker = createTransactionImportWorker({
-      store, dbClient: db, createId, planItems,
-      searchPage: async () => ({ emails: [managed, legacy], nextPageToken: null, resultSizeEstimate: 2, failures: [] }),
-    });
-    expect(await worker.processNextHistoricalPage()).toBe(true);
-    const detail = await store.getRunDetail("owner-1", run.runId);
-    expect(detail?.status).toBe("completed");
-    expect(detail?.items.map((item) => item.emailUid)).toEqual(["legacy"]);
-    expect(await createFinancialEventStore(db).getDocumentForEmail("owner-1", managed.uid)).toMatchObject({ status: "pending" });
   });
 
   it("blocks generic legacy staging for managed mail and keeps older manual staging available", async () => {
@@ -110,6 +90,6 @@ describe("financial event source ownership", () => {
       .toEqual({ staged: false, runId: null });
     const old = await stageFinancialEmailPreflight("owner-1", { accountId: "gmail-1", emailId: "legacy" }, genericPlan(), store);
     expect(old.staged).toBe(true);
-    expect((await store.getRunDetail("owner-1", old.runId!))?.items).toMatchObject([{ emailUid: "legacy", status: "queued" }]);
+    expect((await readImportRun(db, store, "owner-1", old.runId!))?.items).toMatchObject([{ emailUid: "legacy", status: "queued" }]);
   });
 });

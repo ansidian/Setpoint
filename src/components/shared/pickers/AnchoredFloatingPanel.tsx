@@ -30,10 +30,12 @@ export type AnchoredFloatingPanelProps = {
   animatePosition?: boolean;
   animateSize?: boolean;
   animateDisclosure?: boolean;
+  /** Alternate triggers that retarget this same desktop panel. */
+  dismissIgnoreSelector?: string;
   /** Bounded desktop pickers opt out of scrolling and size to their content. */
   scrollable?: boolean;
   draggable?: boolean;
-  dragHandleLabel?: string;
+  dragHandleLabel?: ReactNode;
   placementKey?: string;
   children: ReactNode;
 };
@@ -132,6 +134,7 @@ function AnchoredPanelDesktop({
   animatePosition = false,
   animateSize = false,
   animateDisclosure = false,
+  dismissIgnoreSelector,
   scrollable = true,
   draggable = false,
   dragHandleLabel,
@@ -255,7 +258,7 @@ function AnchoredPanelDesktop({
     ref: undefined,
     active: dismissActive && present,
     refs: [resolvedPanelRef, anchorRef],
-    ignoreSelector: "[data-calendar-popover-panel='true']",
+    ignoreSelector: ["[data-calendar-popover-panel='true']", dismissIgnoreSelector].filter(Boolean).join(", "),
     onDismiss: onClose,
     onTabKey: undefined,
     onActivate: undefined,
@@ -388,23 +391,21 @@ function AnchoredPanelDesktop({
         alignItems: "center",
         justifyContent: "space-between",
         gap: 10,
-        minHeight: 36,
-        padding: "9px 10px 8px 12px",
+        minHeight: 43,
+        padding: "6px 12px 5px 14px",
         cursor: dragging ? "grabbing" : "grab",
-        borderBottom: "1px solid rgba(255,255,255,0.06)",
-        background: "rgba(255,255,255,0.018)",
         userSelect: "none",
         touchAction: "none",
       }}
     >
-      <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 10, fontWeight: 700, letterSpacing: 1.7, textTransform: "uppercase", color: "var(--color-text-faint)" }}>
+      <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 11, fontWeight: 500, color: "var(--sp-subtext)" }}>
         {dragHandleLabel || ariaLabel}
       </span>
       {onClose ? (
         <button
           type="button"
-          aria-label={`Close ${String(dragHandleLabel || ariaLabel || "panel").toLowerCase()}`}
-          className="anchored-floating-panel-close"
+          aria-label={`Close ${String(ariaLabel || "panel").toLowerCase()}`}
+          className="anchored-floating-panel-close detail-panel-close"
           onPointerDown={(event) => event.stopPropagation()}
           onClick={onClose}
         >

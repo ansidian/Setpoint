@@ -1,7 +1,6 @@
 import type {
   TransactionImportConfirmation,
   TransactionImportItem,
-  TransactionImportRunSummary,
   TransactionImportSource,
 } from "../../../shared/types/transaction-imports";
 
@@ -36,13 +35,4 @@ export function transactionImportSourceLabel(source: TransactionImportSource): s
   if (source === "amazon") return "Amazon";
   if (source === "paypal") return "PayPal";
   return "Financial email";
-}
-
-export function runPhase(run: TransactionImportRunSummary): string {
-  if (run.status === "queued") return "Waiting to scan";
-  if (run.status === "running") return "Scanning Gmail";
-  if (run.status === "retry") return "Retry scheduled";
-  if (run.status === "paused") return "Needs attention";
-  if (run.status === "failed") return "Scan failed";
-  return "Scan complete";
 }

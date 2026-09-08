@@ -1,3 +1,4 @@
+export { extractBillCandidate } from './bill-extraction-service.ts';
 import {
   sendBill as actualSendBill,
   markBillPaid as actualMarkBillPaid,

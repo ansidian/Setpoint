@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getDashboardFinance } from "../../../api";
+import { getDashboardFinance, listFinancialActivity } from "../../../api";
+import type { FinancialActivityPage } from "../../../../shared/types/financial-activity";
 import type { DashboardFinanceResponse } from "../../../../shared/types/dashboard-finance";
 
 /** Independent, read-only supporting data; failures never replace the main dashboard. */
@@ -7,6 +8,10 @@ export function useDashboardFinance(refreshing = false) {
   const [data, setData] = useState<DashboardFinanceResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [review,setReview] = useState<FinancialActivityPage|null>(null);
+  const [completed,setCompleted] = useState<FinancialActivityPage|null>(null);
+  const [reviewError,setReviewError] = useState(false);
+  const [completedError,setCompletedError] = useState(false);
   const reloadRef = useRef<() => void>(() => {});
   const retry = useCallback(() => reloadRef.current(), []);
   useEffect(() => {
@@ -19,8 +24,15 @@ export function useDashboardFinance(refreshing = false) {
       inFlight = true;
       setLoading(true);
       try {
-        const response = await getDashboardFinance();
-        if (!disposed) { setData(response); setError(false); }
+        const [summary,attention,history] = await Promise.allSettled([
+          getDashboardFinance(), listFinancialActivity({ view:'needs_attention' }), listFinancialActivity({ view:'completed' }),
+        ]);
+        if (!disposed) {
+          setError(summary.status === 'rejected'); setReviewError(attention.status === 'rejected'); setCompletedError(history.status === 'rejected');
+          if (summary.status === 'fulfilled') setData(summary.value);
+          if (attention.status === 'fulfilled') setReview(attention.value);
+          if (history.status === 'fulfilled') setCompleted(history.value);
+        }
       } catch {
         if (!disposed) setError(true);
       } finally {
@@ -36,6 +48,7 @@ export function useDashboardFinance(refreshing = false) {
     document.addEventListener("visibilitychange", visible);
     window.addEventListener("focus", visible);
     window.addEventListener("ea-financial-event-changed", visible);
+    window.addEventListener("ea-demo-financial-changed", visible);
     window.addEventListener("ea-actual-metadata-invalidated", visible);
     return () => {
       disposed = true;
@@ -43,8 +56,9 @@ export function useDashboardFinance(refreshing = false) {
       document.removeEventListener("visibilitychange", visible);
       window.removeEventListener("focus", visible);
       window.removeEventListener("ea-financial-event-changed", visible);
+      window.removeEventListener("ea-demo-financial-changed", visible);
       window.removeEventListener("ea-actual-metadata-invalidated", visible);
     };
   }, [refreshing]);
-  return { data, loading, error, retry };
+  return { data, review, completed, loading, error, reviewError, completedError, retry };
 }

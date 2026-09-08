@@ -1,3 +1,4 @@
+import { readImportRun } from './transaction-import.test-utils.ts';
 import { subscribeCurrentDashboardEvents, clearCurrentDashboardEventSubscribers } from "../dashboard/current-events.ts";
 import { createClient, type Client } from "@libsql/client";
 import { readFileSync } from "fs";
@@ -159,7 +160,7 @@ describe("transaction import worker", () => {
     const statuses: string[] = [];
     subscribeCurrentDashboardEvents('owner-1', event => { if (event.reason === 'financial_event_changed') statuses.push(event.reason); });
     const worker = createTransactionImportWorker({
-      store, dbClient: db, createId,
+      store, createId,
       importGroups: async (_userId, groups, dryRun) => {
         if (!dryRun) {
           for (const transaction of groups.flatMap((group) => group.transactions)) {
@@ -173,14 +174,14 @@ describe("transaction import worker", () => {
 
     await worker.processNextItemBatch();
     expect(ledger.size).toBe(0);
-    expect((await store.getRunDetail("owner-1", runId))!.items[0]).toMatchObject({
+    expect((await readImportRun(db, store, "owner-1", runId))!.items[0]).toMatchObject({
       status: "ready", automationMode: "automatic", automaticSafe: true, confirmedAt: null,
       financialPlan: { automation: { eligible: true, rollout: "enabled" } },
     });
     await worker.processNextItemBatch();
     expect([...ledger.entries()]).toEqual([["financial-email:v1:worker", -1234]]);
     expect(statuses).toEqual(["financial_event_changed", "financial_event_changed"]);
-    expect((await store.getRunDetail("owner-1", runId))!.items[0]).toMatchObject({ status: "added" });
+    expect((await readImportRun(db, store, "owner-1", runId))!.items[0]).toMatchObject({ status: "added" });
     expect(await stageFinancialEmailPreflight("owner-1", {
       accountId: "gmail-1", emailId: "generic-email",
     }, enabledGenericPlan(), store)).toEqual({ staged: false, runId });
@@ -192,7 +193,7 @@ describe("transaction import worker", () => {
     const runId = await stageGeneric(store, enabledIncomePlan());
     const ledger = new Map<string, number>();
     const worker = createTransactionImportWorker({
-      store, dbClient: db, createId,
+      store, createId,
       importGroups: async (_userId, groups, dryRun) => {
         if (!dryRun) for (const transaction of groups.flatMap((group) => group.transactions)) {
           ledger.set(transaction.importedId, transaction.amountCents);
@@ -202,7 +203,7 @@ describe("transaction import worker", () => {
       invalidateAfterCommit: async () => undefined,
     });
     await worker.processNextItemBatch();
-    expect((await store.getRunDetail("owner-1", runId))!.items[0]).toMatchObject({
+    expect((await readImportRun(db, store, "owner-1", runId))!.items[0]).toMatchObject({
       status: "ready", amountCents: 2225, automaticSafe: true,
       financialPlan: { automation: { operationClass: "income", eligible: true } },
     });
@@ -219,7 +220,7 @@ describe("transaction import worker", () => {
     const runId = await stageGeneric(store);
     const committed: string[] = [];
     const worker = createTransactionImportWorker({
-      store, dbClient: db, createId,
+      store, createId,
       importGroups: async (_userId, groups, dryRun) => {
         if (!dryRun) committed.push(...groups.flatMap((group) => group.transactions.map((transaction) => transaction.importedId)));
         const result = actualResult(groups, dryRun);
@@ -231,7 +232,7 @@ describe("transaction import worker", () => {
     await worker.processNextItemBatch();
     await expect(worker.processNextItemBatch()).resolves.toBe(false);
     expect(committed).toEqual([]);
-    expect((await store.getRunDetail("owner-1", runId))!.items[0]).toMatchObject({
+    expect((await readImportRun(db, store, "owner-1", runId))!.items[0]).toMatchObject({
       status, automaticSafe: false, financialPlan: { automation: { eligible: false } },
     });
   });
@@ -243,7 +244,7 @@ describe("transaction import worker", () => {
     const statuses: string[] = [];
     subscribeCurrentDashboardEvents('owner-1', event => { if (event.reason === 'financial_event_changed') statuses.push(event.reason); });
     const worker = createTransactionImportWorker({
-      store, dbClient: db, createId, now: () => 1_000, invalidateAfterCommit: async () => undefined,
+      store, createId, now: () => 1_000, invalidateAfterCommit: async () => undefined,
       importGroups: async (_userId, groups, dryRun) => {
         const transaction = groups[0]!.transactions[0]!;
         if (ledger.has(transaction.importedId)) return actualResult(groups, dryRun, "already_present");
@@ -254,9 +255,9 @@ describe("transaction import worker", () => {
     });
     await worker.processNextItemBatch();
     await worker.processNextItemBatch();
-    expect((await store.getRunDetail("owner-1", runId))!.items[0]).toMatchObject({ status: "queued" });
+    expect((await readImportRun(db, store, "owner-1", runId))!.items[0]).toMatchObject({ status: "queued" });
     await worker.processNextItemBatch();
-    expect((await store.getRunDetail("owner-1", runId))!.items[0]).toMatchObject({
+    expect((await readImportRun(db, store, "owner-1", runId))!.items[0]).toMatchObject({
       status: "already_present", importedId: "financial-email:v1:worker", automaticSafe: false,
       financialPlan: { operation: { kind: "no_write" }, automation: { eligible: false } },
     });
@@ -265,28 +266,12 @@ describe("transaction import worker", () => {
     await expect(worker.processNextItemBatch()).resolves.toBe(false);
   });
 
-
-  it("resumes a coalesced paused historical scan when the owner starts it again", async () => {
-    const { store, service } = setup();
-    const options = {
-      gmailAccountIds: ["gmail-1"],
-      sources: ["amazon"] as Array<"amazon">,
-      startDate: "2026-01-01",
-      endDate: "2026-02-01",
-    };
-    const first = await service.startHistoricalScan("owner-1", options);
-    await db.execute({ sql: `UPDATE ea_transaction_import_runs SET status = 'paused', last_error = 'reauth' WHERE id = ?`, args: [first.runId] });
-
-    await expect(service.startHistoricalScan("owner-1", options)).resolves.toEqual({ runId: first.runId, created: false });
-    expect(await store.getRun("owner-1", first.runId)).toMatchObject({ status: "retry", lastError: null });
-  });
-
   it("honors a historical observe snapshot by dry-running without committing", async () => {
     const { store } = setup();
     const arrival = await seedLegacyItems(store, [emailFixture()], "observe");
     const importGroups = vi.fn(async (_userId, groups, dryRun) => actualResult(groups, dryRun));
     const invalidateAfterCommit = vi.fn();
-    const worker = createTransactionImportWorker({ store, dbClient: db, importGroups, invalidateAfterCommit, createId });
+    const worker = createTransactionImportWorker({ store, importGroups, invalidateAfterCommit, createId });
 
     await expect(worker.processNextItemBatch()).resolves.toBe(true);
     await expect(worker.processNextItemBatch()).resolves.toBe(false);
@@ -296,7 +281,7 @@ describe("transaction import worker", () => {
     expect(importGroups).toHaveBeenCalledWith("owner-1", expect.any(Array), true);
     // test-architecture: allow-boundary-interaction -- Cache invalidation is a downstream process boundary; an observe-only preview must not fan out changed-finance refresh work.
     expect(invalidateAfterCommit).not.toHaveBeenCalled();
-    expect((await store.getRunDetail("owner-1", arrival.runId!))!.items[0]).toMatchObject({
+    expect((await readImportRun(db, store, "owner-1", arrival.runId!))!.items[0]).toMatchObject({
       status: "needs_review",
       reconciliationStatus: "would_add",
     });
@@ -337,7 +322,7 @@ describe("transaction import worker", () => {
     expect(item).not.toBeNull();
     await store.insertItem(item!);
     const importGroups = vi.fn(async (_userId, groups, dryRun) => actualResult(groups, dryRun));
-    const worker = createTransactionImportWorker({ store, dbClient: db, importGroups, createId });
+    const worker = createTransactionImportWorker({ store, importGroups, createId });
 
     await expect(worker.processNextItemBatch()).resolves.toBe(true);
     await expect(worker.processNextItemBatch()).resolves.toBe(false);
@@ -377,13 +362,13 @@ describe("transaction import worker", () => {
     ], "automatic", { amazon: "actual-checking", paypal: "actual-card" });
     const importGroups = vi.fn(async (_userId, groups, dryRun) => actualResult(groups, dryRun));
     const invalidateAfterCommit = vi.fn().mockResolvedValue(undefined);
-    const worker = createTransactionImportWorker({ store, dbClient: db, importGroups, invalidateAfterCommit, createId });
+    const worker = createTransactionImportWorker({ store, importGroups, invalidateAfterCommit, createId });
 
     await worker.processNextItemBatch();
-    let detail = await store.getRunDetail("owner-1", arrival.runId!);
+    let detail = await readImportRun(db, store, "owner-1", arrival.runId!);
     expect(detail!.items.map((item) => item.status)).toEqual(["ready", "ready"]);
     await worker.processNextItemBatch();
-    detail = await store.getRunDetail("owner-1", arrival.runId!);
+    detail = await readImportRun(db, store, "owner-1", arrival.runId!);
 
     // test-architecture: allow-boundary-interaction -- Actual import is the outbound financial boundary; the first request must preview both historical account snapshots together.
     expect(importGroups).toHaveBeenNthCalledWith(1, "owner-1", expect.arrayContaining([
@@ -402,7 +387,6 @@ describe("transaction import worker", () => {
     const arrival = await seedLegacyItems(store);
     const previewWorker = createTransactionImportWorker({
       store,
-      dbClient: db,
       importGroups: vi.fn(async (_userId, groups, dryRun) => actualResult(groups, dryRun)),
       invalidateAfterCommit: vi.fn(),
       createId,
@@ -412,7 +396,6 @@ describe("transaction import worker", () => {
     let uncertainImportedId: string | null = null;
     const uncertainWorker = createTransactionImportWorker({
       store,
-      dbClient: db,
       importGroups: vi.fn(async (_userId, groups) => {
         uncertainImportedId = groups[0]!.transactions[0]!.importedId;
         throw new Error("connection lost after Actual accepted the batch");
@@ -422,11 +405,10 @@ describe("transaction import worker", () => {
       now: () => 10_000,
     });
     await uncertainWorker.processNextItemBatch();
-    expect((await store.getRunDetail("owner-1", arrival.runId!))!.items[0]).toMatchObject({ status: "ready" });
+    expect((await readImportRun(db, store, "owner-1", arrival.runId!))!.items[0]).toMatchObject({ status: "ready" });
 
     const retryWorker = createTransactionImportWorker({
       store,
-      dbClient: db,
       importGroups: vi.fn(async (_userId: string, groups: ActualImportAccountGroup[], dryRun: boolean) => actualResult(groups, dryRun, "already_present")),
       invalidateAfterCommit: vi.fn(),
       createId,
@@ -434,7 +416,7 @@ describe("transaction import worker", () => {
     });
     await db.execute(`UPDATE ea_transaction_import_items SET next_attempt_at = 0 WHERE run_id = '${arrival.runId}'`);
     await retryWorker.processNextItemBatch();
-    const item = (await store.getRunDetail("owner-1", arrival.runId!))!.items[0]!;
+    const item = (await readImportRun(db, store, "owner-1", arrival.runId!))!.items[0]!;
     expect(item).toMatchObject({ status: "already_present", importedId: uncertainImportedId });
   });
 
@@ -446,7 +428,6 @@ describe("transaction import worker", () => {
     const arrival = await seedLegacyItems(store);
     const previewWorker = createTransactionImportWorker({
       store,
-      dbClient: db,
       importGroups: vi.fn(async (_userId, groups, dryRun) => actualResult(groups, dryRun)),
       invalidateAfterCommit: vi.fn(),
       createId,
@@ -459,7 +440,6 @@ describe("transaction import worker", () => {
 
     const uncertainWorker = createTransactionImportWorker({
       store,
-      dbClient: db,
       importGroups: vi.fn().mockRejectedValue(Object.assign(
         new Error("out-of-sync after import"),
         { code: errorCode },
@@ -470,7 +450,7 @@ describe("transaction import worker", () => {
     });
     await uncertainWorker.processNextItemBatch();
 
-    expect((await store.getRunDetail("owner-1", arrival.runId!))!.items[0]).toMatchObject({
+    expect((await readImportRun(db, store, "owner-1", arrival.runId!))!.items[0]).toMatchObject({
       status: "queued",
       lastError: expect.stringContaining(errorCode),
     });
@@ -485,7 +465,7 @@ describe("transaction import worker", () => {
     const { store } = setup();
     const arrival = await seedLegacyItems(store);
     const importGroups = vi.fn(async (_userId, groups, dryRun) => actualResult(groups, dryRun));
-    const previewWorker = createTransactionImportWorker({ store, dbClient: db, importGroups, invalidateAfterCommit: vi.fn(), createId });
+    const previewWorker = createTransactionImportWorker({ store, importGroups, invalidateAfterCommit: vi.fn(), createId });
     await previewWorker.processNextItemBatch();
 
     let failFinalization = true;
@@ -501,26 +481,24 @@ describe("transaction import worker", () => {
     };
     const commitWorker = createTransactionImportWorker({
       store: interruptedStore,
-      dbClient: db,
       importGroups,
       invalidateAfterCommit: vi.fn(),
       createId,
       now: () => 10_000,
     });
     await commitWorker.processNextItemBatch();
-    expect((await store.getRunDetail("owner-1", arrival.runId!))!.items[0]).toMatchObject({ status: "ready" });
+    expect((await readImportRun(db, store, "owner-1", arrival.runId!))!.items[0]).toMatchObject({ status: "ready" });
 
     await db.execute(`UPDATE ea_transaction_import_items SET next_attempt_at = 0 WHERE run_id = '${arrival.runId}'`);
     const retryWorker = createTransactionImportWorker({
       store,
-      dbClient: db,
       importGroups: vi.fn(async (_userId: string, groups: ActualImportAccountGroup[], dryRun: boolean) => actualResult(groups, dryRun, "already_present")),
       invalidateAfterCommit: vi.fn(),
       createId,
       now: () => 20_000,
     });
     await retryWorker.processNextItemBatch();
-    expect((await store.getRunDetail("owner-1", arrival.runId!))!.items[0]).toMatchObject({
+    expect((await readImportRun(db, store, "owner-1", arrival.runId!))!.items[0]).toMatchObject({
       status: "already_present",
       importedId: "amazon-111-2222222-3333333",
     });
@@ -536,10 +514,10 @@ describe("transaction import worker", () => {
       text: "Transaction ID: 1AB23456CD789012E",
     })]);
     const importGroups = vi.fn(async (_userId, groups, dryRun) => actualResult(groups, dryRun));
-    const worker = createTransactionImportWorker({ store, dbClient: db, importGroups, invalidateAfterCommit: vi.fn(), createId });
+    const worker = createTransactionImportWorker({ store, importGroups, invalidateAfterCommit: vi.fn(), createId });
 
     await worker.processNextItemBatch();
-    const item = (await store.getRunDetail("owner-1", arrival.runId!))!.items[0]!;
+    const item = (await readImportRun(db, store, "owner-1", arrival.runId!))!.items[0]!;
     expect(item).toMatchObject({ automaticSafe: false, status: "needs_review" });
     // test-architecture: allow-boundary-interaction -- Actual import is the outbound financial boundary; an automatically unsafe candidate must issue neither preview nor commit.
     expect(importGroups).toHaveBeenCalledTimes(0);
@@ -549,10 +527,10 @@ describe("transaction import worker", () => {
     const { store } = setup();
     const arrival = await seedLegacyItems(store);
     const importGroups = vi.fn().mockRejectedValue(Object.assign(new Error("unsupported import"), { code: "ACTUAL_IMPORT_INCOMPATIBLE" }));
-    const worker = createTransactionImportWorker({ store, dbClient: db, importGroups, createId });
+    const worker = createTransactionImportWorker({ store, importGroups, createId });
 
     await worker.processNextItemBatch();
-    expect((await store.getRunDetail("owner-1", arrival.runId!))!.items[0]).toMatchObject({
+    expect((await readImportRun(db, store, "owner-1", arrival.runId!))!.items[0]).toMatchObject({
       importedId: "amazon-111-2222222-3333333",
       status: "paused",
       lastError: expect.stringContaining("ACTUAL_IMPORT_INCOMPATIBLE"),
@@ -568,10 +546,10 @@ describe("transaction import worker", () => {
       text: "Order Total: $12.00",
     })], "observe");
     const importGroups = vi.fn(async (_userId, groups, dryRun) => actualResult(groups, dryRun));
-    const worker = createTransactionImportWorker({ store, dbClient: db, importGroups, invalidateAfterCommit: vi.fn(), createId });
+    const worker = createTransactionImportWorker({ store, importGroups, invalidateAfterCommit: vi.fn(), createId });
 
     await worker.processNextItemBatch();
-    let item = (await store.getRunDetail("owner-1", arrival.runId!))!.items[0]!;
+    let item = (await readImportRun(db, store, "owner-1", arrival.runId!))!.items[0]!;
     expect(item).toMatchObject({ status: "needs_review", importedId: null });
 
     await expect(service.commitItems("owner-1", arrival.runId!, [{
@@ -580,10 +558,10 @@ describe("transaction import worker", () => {
       actualAccountId: "actual-1",
     }])).resolves.toEqual({ accepted: 1 });
     await worker.processNextItemBatch();
-    item = (await store.getRunDetail("owner-1", arrival.runId!))!.items[0]!;
+    item = (await readImportRun(db, store, "owner-1", arrival.runId!))!.items[0]!;
     expect(item).toMatchObject({ status: "ready", importedId: "raw-gmail-message-id", payee: "Amazon manual review" });
     await worker.processNextItemBatch();
-    item = (await store.getRunDetail("owner-1", arrival.runId!))!.items[0]!;
+    item = (await readImportRun(db, store, "owner-1", arrival.runId!))!.items[0]!;
     expect(item.status).toBe("added");
     // test-architecture: allow-boundary-interaction -- Actual import is the outbound financial boundary; an owner-confirmed correction must still pass through preview first.
     expect(importGroups).toHaveBeenNthCalledWith(1, "owner-1", expect.any(Array), true);

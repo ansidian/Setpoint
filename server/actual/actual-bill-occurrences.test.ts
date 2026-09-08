@@ -55,7 +55,7 @@ describe("Actual bill occurrence projection module", () => {
     ]);
   });
 
-  it("marks schedules paid from matching schedule transactions or close payee amount matches", () => {
+  it("marks schedules paid only from exact schedule postings", () => {
     const schedule = {
       id: "s1",
       next_date: "2026-05-10",
@@ -63,7 +63,7 @@ describe("Actual bill occurrence projection module", () => {
     };
 
     expect(isSchedulePaid(schedule, [{ scheduleId: "s1", date: "2026-05-20" }])).toBe(true);
-    expect(isSchedulePaid(schedule, [{ payeeId: "p1", amount: 122.34, date: "2026-05-12" }])).toBe(true);
+    expect(isSchedulePaid(schedule, [{ payeeId: "p1", amount: 122.34, date: "2026-05-12" }])).toBe(false);
     expect(isSchedulePaid(schedule, [{ payeeId: "p1", amount: 122.34, date: "2026-05-20" }])).toBe(false);
   });
 
@@ -89,7 +89,7 @@ describe("Actual bill occurrence projection module", () => {
     expect(occurrence!.amount).toBe(50);
   });
 
-  it("detects a range schedule as paid for any transaction within the [num1, num2] band", () => {
+  it("does not treat amount-range similarity as payment evidence", () => {
     const schedule = {
       id: "s4",
       next_date: "2026-05-18",
@@ -100,9 +100,9 @@ describe("Actual bill occurrence projection module", () => {
     };
 
     // Low end, high end, and middle of the band all match (within +/- a day).
-    expect(isSchedulePaid(schedule, [{ payeeId: "p3", amount: 40, date: "2026-05-18" }])).toBe(true);
-    expect(isSchedulePaid(schedule, [{ payeeId: "p3", amount: 60, date: "2026-05-18" }])).toBe(true);
-    expect(isSchedulePaid(schedule, [{ payeeId: "p3", amount: 52.5, date: "2026-05-18" }])).toBe(true);
+    expect(isSchedulePaid(schedule, [{ payeeId: "p3", amount: 40, date: "2026-05-18" }])).toBe(false);
+    expect(isSchedulePaid(schedule, [{ payeeId: "p3", amount: 60, date: "2026-05-18" }])).toBe(false);
+    expect(isSchedulePaid(schedule, [{ payeeId: "p3", amount: 52.5, date: "2026-05-18" }])).toBe(false);
     // Outside the band stays unpaid.
     expect(isSchedulePaid(schedule, [{ payeeId: "p3", amount: 80, date: "2026-05-18" }])).toBe(false);
   });

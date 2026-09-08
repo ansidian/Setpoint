@@ -28,7 +28,7 @@ export function getDemoFinancialActivities(): FinancialActivity[] {
     ["demo-event-schedule", "completed", "Utility schedule updated; original before-image was not captured."],
     ["demo-event-disconnected", "completed", "Saved utility result. Its original budget is currently disconnected."],
     ["demo-event-transfer", "completed", "Transfer recorded from Demo Checking to Emergency Fund."],
-    ["demo-event-partial", "needs_attention", "The schedule amount changed, but its next date still needs attention."],
+    ["demo-event-partial", "needs_attention", "The bill amount and due date are saved. Its note still needs attention."],
     ["demo-event-pending", "processing", "Checking current Actual activity."],
     ["demo-event-uncertain", "needs_attention", "The previous write could not be verified. Review Actual before continuing."],
   ];

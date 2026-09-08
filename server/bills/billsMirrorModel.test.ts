@@ -110,6 +110,7 @@ describe("occurrenceFromRow", () => {
       type: "bill",
       open_action_disabled: 0,
     })).toEqual({
+      paymentTransactionIds: [],
       id: "s1:2026-05-20",
       scheduleId: "s1",
       name: "Power",

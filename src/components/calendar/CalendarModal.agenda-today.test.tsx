@@ -355,32 +355,6 @@ describe("CalendarModal navigation behavior", () => {
     });
   });
 
-  it("keeps the mobile workspace unchanged when its active Events toggle is tapped", async () => {
-    window.innerWidth = 390;
-    setMatchMedia(true);
-
-    render(wrapWithDashboard(
-      <CalendarModal
-        open
-        onClose={() => {}}
-        view="events"
-        onViewChange={() => {}}
-        focusDate="2026-09-10"
-        eventsData={{ getEvents: () => [] }}
-        billsData={{}}
-        billsRangeData={{ ensureRange: vi.fn().mockResolvedValue(null) }}
-        deadlinesData={{}}
-      />,
-    ));
-    expect(await screen.findByRole("heading", { name: "September 2026" }, { timeout: 5000 })).toBeTruthy();
-    const eventsToggle = screen.getByRole("button", { name: "Events", pressed: true });
-
-    fireEvent.click(eventsToggle);
-
-    expect(screen.getByRole("heading", { name: "September 2026" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Events", pressed: true })).toBeTruthy();
-  });
-
   it("navigates, selects, and opens detail when a rendered search result is activated", async () => {
     window.innerWidth = 1900;
     setMatchMedia(false);

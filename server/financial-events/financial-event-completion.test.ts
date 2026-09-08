@@ -362,6 +362,26 @@ describe("owner completion of managed financial events", () => {
     expect((await store.getEventForEmail('owner','receipt'))?.outcome).toEqual(original?.outcome);
   });
 
+  it.each([undefined, { kind: 'income', type: 'income', amount: 37, amountCents: 3700, date: DATE, accountId: 'checking', payee: 'Observed merchant' }])('keeps only observed managed entry facts after owner acceptance: %j', async (keptEntry) => {
+    await arrive("receipt", null);
+    const completed = await completion().complete("owner", await request("receipt", { ...entry, kind: 'bill' }));
+    await drainEvent();
+    const occurrence = await db.execute({ sql: "SELECT activity_id FROM ea_financial_activity_occurrences WHERE owner='event' AND record_id=?", args: [completed.workflow!.id] });
+    const activityId = String(occurrence.rows[0]!.activity_id);
+    await db.execute({ sql: "INSERT INTO ea_financial_correction_previews VALUES ('kept-preview','owner',?,'{}',1)", args: [activityId] });
+    await db.execute({ sql: "INSERT INTO ea_financial_corrections (id,user_id,activity_id,budget_id,preview_id,idempotency_key,state,effective_result_json,updated_at) VALUES ('kept','owner',?,'budget','kept-preview','kept','completed',?,2)", args: [activityId, JSON.stringify({ resolution: 'kept_actual', ...(keptEntry ? { entry: keptEntry } : {}) })] });
+    const plan = await resolveManagedFinancialPlan('owner', 'receipt', { dbClient: db });
+    expect(plan?.workflow).toMatchObject({ correction: { state: 'completed', resolution: 'kept_actual' }, completion: { canComplete: false } });
+    expect(plan?.reconciliation.reason).toContain('kept');
+    if (keptEntry) expect(plan).toMatchObject({ candidate: { type: 'income', amount: 37, due_date: DATE, payee: 'Observed merchant' }, targets: { account: { id: 'checking' } } });
+    else {
+      expect(plan?.candidate).toEqual({});
+      expect(plan?.operation).toMatchObject({ kind: 'no_write', intended: null });
+      expect(Object.values(plan!.targets).every(target => target.id === null)).toBe(true);
+      expect((await store.getDocumentForEmail('owner', 'receipt'))?.ownerConfirmedEntry).toBeNull();
+    }
+  });
+
   it.each([
     { kind: "income", expectedKind: "transaction", expectedCents: 1200 },
     { kind: "bill", expectedKind: "utility_schedule", expectedCents: -1200 },

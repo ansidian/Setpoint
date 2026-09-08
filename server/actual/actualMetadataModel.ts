@@ -116,6 +116,7 @@ export function projectActualMetadata({
     rule: rowString(schedule, "rule"),
     next_date: ymdFromActualDate(schedule.next_date),
     completed: !!schedule.completed,
+    posts_transaction: !!schedule.posts_transaction,
     conditions: normalizeRuleConditions(schedule._conditions),
   })), rawPayees.rows.map((payee) => ({
     id: rowString(payee, "id"),
@@ -123,6 +124,8 @@ export function projectActualMetadata({
     transfer_acct: payee.transfer_acct ? String(payee.transfer_acct) : null,
   })));
   const recentTransactions = rawTransactions.rows.map((transaction) => ({
+    id: rowString(transaction, "id"),
+    accountId: rowString(transaction, "account"),
     payee: payeeMap[rowString(transaction, "payee")] || "",
     payeeId: rowString(transaction, "payee"),
     amount: Math.abs(Number(transaction.amount || 0)) / 100,

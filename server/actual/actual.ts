@@ -1,3 +1,4 @@
+export { readActualMetadataProjection } from './actual-metadata-projection.ts';
 import { coordinateActualWrite, guardOrdinaryActualWrite, guardCorrectedOriginalIdentity } from './actual-write-coordination.ts';
 import type { CorrectionSnapshot, CorrectionStep, CorrectionTargets, CorrectionStepStatus } from '../../shared/types/financial-corrections.ts';
 import type { FinancialBindingInspection } from "../../shared/types/financial-activity.ts";
@@ -58,6 +59,7 @@ export interface ActualQuickTransactionResult {
 
 export { isSchedulePaid } from "./actual-bill-occurrences.ts";
 // Read-only transaction consumers use the same domain facade without starting the SDK.
+export { readJournalRange } from './actual-journal-read.ts';
 export { readTransactionsRange } from "./actual-transactions-read.ts";
 
 const METADATA_TTL_MS = 5 * 60 * 1000;

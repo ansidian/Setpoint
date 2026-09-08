@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  dashboardBillCalendarRequest,
   dashboardDeadlineCalendarRequest,
   dashboardEventCalendarRequest, resolveCalendarOpenState,
   resolveDashboardShellHotkey,
@@ -127,16 +126,6 @@ describe("dashboard shell model", () => {
       options: {
         openDetail: true,
         forceDeadlineOverlay: true,
-      },
-    });
-
-    expect(dashboardBillCalendarRequest("2026-04-20", "bill-rent")).toEqual({
-      viewKey: "bills",
-      focusDate: "2026-04-20",
-      focusItemId: "bill-rent",
-      options: {
-        source: "dashboard",
-        openDetail: true,
       },
     });
 

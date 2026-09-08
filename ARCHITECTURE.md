@@ -89,6 +89,7 @@ src/
 │   │   ├── rails/
 │   │   └── timeline/
 │   ├── email/
+│   ├── finances/
 │   ├── financial/
 │   ├── inbox/
 │   │   ├── mobile/
@@ -134,6 +135,7 @@ server/
 │   ├── search/
 │   │   └── evals/
 │   └── test-utils/
+├── finances/
 ├── financial-activity/
 ├── financial-corrections/
 ├── financial-events/
@@ -165,7 +167,7 @@ server/
 /settings ─ centered Settings modal over retained Dashboard (auth required)
 ```
 
-`App.tsx` applies the owner-claim/authentication route policy before mounting runtime views. `/`, `/settings`, and `/finance` share `WorkspaceRoute`, so Dashboard remains mounted across Settings and financial navigation. Financial activity, exact records, and historical backfill use `/finance`; old Settings workflow URLs redirect without losing record or batch identity. Settings retains its query/hash targets inside a centered modal with a fixed heading and scrolling section content. Closing an in-app visit returns to its originating history entry and focus; a fresh Settings entry closes to Dashboard.
+`App.tsx` applies the owner-claim/authentication route policy before mounting runtime views. `/`, `/settings`, and `/finance` share `WorkspaceRoute`, so Dashboard remains mounted across Settings and financial navigation. Financial activity and exact records use `/finance`; old Settings record URLs preserve their target. Financial history backfill is retired. Settings retains its query/hash targets inside a centered modal with a fixed heading and scrolling section content. Closing an in-app visit returns to its originating history entry and focus; a fresh Settings entry closes to Dashboard.
 
 ### Component Hierarchy
 
@@ -242,6 +244,8 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useMobileDashboardScrollRestoration` | `src/components/dashboard/useMobileDashboardScrollRestoration.ts` |
 | `useMobileInboxNavigation` | `src/components/dashboard/useMobileInboxNavigation.ts` |
 | `useSnapshotNavigation` | `src/components/dashboard/useSnapshotNavigation.ts` |
+| `useWorkspaceTabRoute` | `src/components/dashboard/useWorkspaceTabRoute.ts` |
+| `useFinancialAttentionCount` | `src/components/financial/useFinancialAttentionCount.ts` |
 | `useFinancialNavigationGuard` | `src/components/financial/useFinancialNavigationGuard.ts` |
 | `useBillPayResolver` | `src/components/inbox/reader/useBillPayResolver.ts` |
 | `useEmailBody` | `src/components/inbox/reader/useEmailBody.ts` |
@@ -299,7 +303,6 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useBrowserBackDismiss` | `src/hooks/useBrowserBackDismiss.ts` |
 | `useCurrentDashboard` | `src/hooks/useCurrentDashboard.ts` |
 | `useDismissablePortal` | `src/hooks/useDismissablePortal.ts` |
-| `useFinancialEventReview` | `src/hooks/useFinancialEventReview.ts` |
 | `useFinancialReviewNotifications` | `src/hooks/useFinancialReviewNotifications.ts` |
 | `useIsMobile` | `src/hooks/useIsMobile.ts` |
 | `useMediaQuery` | `src/hooks/useMediaQuery.ts` |
@@ -307,7 +310,6 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useNews` | `src/hooks/useNews.ts` |
 | `useNotifications` | `src/hooks/useNotifications.ts` |
 | `useRemoteContentTrust` | `src/hooks/useRemoteContentTrust.ts` |
-| `useTransactionImports` | `src/hooks/useTransactionImports.ts` |
 | `useTriageNotificationSounds` | `src/hooks/useTriageNotificationSounds.ts` |
 | `useUtilityPayLinks` | `src/hooks/useUtilityPayLinks.ts` |
 | `useWarmImport` | `src/hooks/useWarmImport.ts` |
@@ -724,10 +726,12 @@ erDiagram
 | `ea_email_search_embedding_state` | `006_email_search_embedding_state.sql` |
 | `ea_email_search_embeddings` | `005_email_search_embeddings.sql` |
 | `ea_email_triage` | `001_ea_tables.sql`, `015_triage_last_decision_reason.sql`, `052_financial_email_plans.sql` |
+| `ea_finance_utilities` | `065_finance_utilities.sql` |
 | `ea_financial_activity_aliases` | `063_financial_activity.sql` |
 | `ea_financial_activity_occurrences` | `063_financial_activity.sql` |
 | `ea_financial_actual_bindings` | `063_financial_activity.sql` |
 | `ea_financial_correction_guards` | `064_financial_corrections.sql` |
+| `ea_financial_correction_keep_previews` | `066_financial_correction_keep.sql` |
 | `ea_financial_correction_observations` | `064_financial_corrections.sql` |
 | `ea_financial_correction_previews` | `064_financial_corrections.sql` |
 | `ea_financial_correction_steps` | `064_financial_corrections.sql` |
@@ -894,15 +898,19 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | POST | `/api/briefing/email/remote-content-trust` | `server/routes/briefing/email.ts` |
 | DELETE | `/api/briefing/email/remote-content-trust/:id` | `server/routes/briefing/email.ts` |
 | GET | `/api/briefing/email/snoozed` | `server/routes/briefing/email.ts` |
+| GET | `/api/briefing/finances` | `server/routes/briefing/finances.ts` |
+| GET | `/api/briefing/finances/journal` | `server/routes/briefing/finances.ts` |
 | GET | `/api/briefing/financial-activity` | `server/routes/briefing/financial-activity.ts` |
 | GET | `/api/briefing/financial-activity/:owner/:id` | `server/routes/briefing/financial-activity.ts` |
 | POST | `/api/briefing/financial-activity/binding` | `server/routes/briefing/financial-activity.ts` |
 | GET | `/api/briefing/financial-corrections/:id` | `server/routes/briefing/financial-corrections.ts` |
 | POST | `/api/briefing/financial-corrections/confirm` | `server/routes/briefing/financial-corrections.ts` |
 | POST | `/api/briefing/financial-corrections/inspect` | `server/routes/briefing/financial-corrections.ts` |
+| POST | `/api/briefing/financial-corrections/keep-confirm` | `server/routes/briefing/financial-corrections.ts` |
+| POST | `/api/briefing/financial-corrections/keep-preview` | `server/routes/briefing/financial-corrections.ts` |
 | POST | `/api/briefing/financial-corrections/preview` | `server/routes/briefing/financial-corrections.ts` |
+| POST | `/api/briefing/financial-corrections/recheck` | `server/routes/briefing/financial-corrections.ts` |
 | POST | `/api/briefing/financial-events/complete` | `server/routes/briefing/transaction-imports.ts` |
-| GET | `/api/briefing/financial-events/review` | `server/routes/briefing/transaction-imports.ts` |
 | GET | `/api/briefing/financial-events/review-changes` | `server/routes/briefing/transaction-imports.ts` |
 | GET | `/api/briefing/snapshot/:id` | `server/routes/briefing/snapshot.ts` |
 | GET | `/api/briefing/snapshot/active` | `server/routes/briefing/snapshot.ts` |
@@ -918,9 +926,6 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | GET | `/api/briefing/transaction-imports/email-status` | `server/routes/briefing/transaction-imports.ts` |
 | POST | `/api/briefing/transaction-imports/items/:itemId/dismiss` | `server/routes/briefing/transaction-imports.ts` |
 | POST | `/api/briefing/transaction-imports/items/:itemId/retry` | `server/routes/briefing/transaction-imports.ts` |
-| GET | `/api/briefing/transaction-imports/runs` | `server/routes/briefing/transaction-imports.ts` |
-| POST | `/api/briefing/transaction-imports/runs` | `server/routes/briefing/transaction-imports.ts` |
-| GET | `/api/briefing/transaction-imports/runs/:runId` | `server/routes/briefing/transaction-imports.ts` |
 | POST | `/api/briefing/transaction-imports/runs/:runId/commit` | `server/routes/briefing/transaction-imports.ts` |
 | GET | `/api/calendar/bills/range` | `server/routes/calendar.ts` |
 | GET | `/api/calendar/calendars` | `server/routes/calendar.ts` |
@@ -945,7 +950,6 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | POST | `/api/dashboard/current/refresh` | `server/routes/dashboard.ts` |
 | POST | `/api/dashboard/current/sync` | `server/routes/dashboard.ts` |
 | GET | `/api/dashboard/finance` | `server/routes/dashboard.ts` |
-| GET | `/api/dashboard/finance/review-runs` | `server/routes/dashboard.ts` |
 | GET | `/api/dashboard/health` | `server/routes/dashboard.ts` |
 | GET | `/api/ea/accounts/todoist/auth` | `server/routes/todoist-oauth.ts` |
 | GET | `/api/ea/accounts/todoist/callback` | `server/routes/todoist-oauth.ts` |

@@ -140,6 +140,7 @@ export async function extractBillCandidate(
     );
 
     const candidate: BillCandidate = {
+      ...(fields.statement_facts ? { statement_facts: fields.statement_facts } : {}),
       ...(fields.document_role != null ? { document_role: fields.document_role } : {}),
       payee: fields.payee,
       amount: fields.amount,

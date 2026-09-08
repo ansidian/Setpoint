@@ -154,8 +154,6 @@ export async function stageFinancialEmailPreflight(
     optionsKey: `financial-email:${plan.identity.key}`,
     gmailAccountIds: [context.accountId],
     sources: ["generic"],
-    startDate: null,
-    endDate: null,
   });
   const inserted = await store.insertItem(item);
   if (inserted) {

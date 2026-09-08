@@ -267,15 +267,14 @@ export async function readLocalActualMetadata(userId: string, options: LocalActu
       client.execute("SELECT id, name, transfer_acct FROM payees WHERE COALESCE(tombstone, 0) = 0"),
       client.execute("SELECT id, name, sort_order FROM category_groups WHERE COALESCE(tombstone, 0) = 0 ORDER BY sort_order, name COLLATE NOCASE"),
       client.execute("SELECT id, name, cat_group, sort_order FROM categories WHERE COALESCE(tombstone, 0) = 0 ORDER BY sort_order, name COLLATE NOCASE"),
-      client.execute(`SELECT id, name, rule, next_date, completed, _conditions
+      client.execute(`SELECT id, name, rule, next_date, completed, posts_transaction, _conditions
                       FROM v_schedules
                       WHERE COALESCE(tombstone, 0) = 0
                       ORDER BY next_date, name COLLATE NOCASE`),
       client.execute({
-        // LIMIT bounds the view-backed 30-day scan (P3-7). The only consumer,
-        // isSchedulePaid, matches transactions within ~3-14 days of a schedule's
-        // next_date, so the most recent 1000 rows comfortably cover it.
-        sql: `SELECT id, date, amount, payee, schedule
+        // Bound the existing 30-day metadata scan. Exact schedule postings retain
+        // their IDs for paid-state projection; Journal owns wider dated reads.
+        sql: `SELECT id, date, amount, payee, account, schedule
               FROM v_transactions
               WHERE COALESCE(tombstone, 0) = 0
                 AND payee IS NOT NULL

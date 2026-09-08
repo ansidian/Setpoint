@@ -18,13 +18,6 @@ export interface FinancialEventReviewItem {
   attention: FinancialReviewAttention;
 }
 
-export interface FinancialEventReviewResponse {
-  items: FinancialEventReviewItem[];
-  total: number;
-  offset: number;
-  limit: 20;
-}
-
 export interface FinancialReviewChangeCursor {
   updatedAt: number;
   id: string;

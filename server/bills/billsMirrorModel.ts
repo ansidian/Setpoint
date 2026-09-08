@@ -98,7 +98,13 @@ export function isBillsMirrorMaintenanceDue(syncHealth: BillsMirrorHealth | null
 }
 
 export function occurrenceFromRow(row: Record<string, unknown>): ActualBillOccurrence {
+  let paymentTransactionIds: string[] = [];
+  try {
+    const raw = JSON.parse(String(row.raw_json || '{}'));
+    if (Array.isArray(raw.paymentTransactionIds)) paymentTransactionIds = raw.paymentTransactionIds.filter((id: unknown): id is string => typeof id === 'string');
+  } catch { /* Older mirrors may not retain payment identity. */ }
   return {
+    paymentTransactionIds,
     id: String(row.occurrence_id),
     scheduleId: String(row.schedule_id),
     name: String(row.name || row.payee || "Unknown"),
@@ -125,6 +131,7 @@ export function normalizeMirrorOccurrence(schedule: Partial<ActualBillOccurrence
     amount: Number(schedule.amount || 0),
     next_date: String(date),
     paid: !!schedule.paid,
+    paymentTransactionIds: schedule.paymentTransactionIds || [],
     type: schedule.type || "bill",
     openActionDisabled: !!schedule.openActionDisabled,
   };

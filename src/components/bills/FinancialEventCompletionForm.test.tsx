@@ -57,14 +57,16 @@ async function fillMissingFields() {
 describe("owner completion of a managed financial record", () => {
   it("confirms missing context without an inferred category and distinguishes queuing from a recorded entry", async () => {
     render(<BillBadge bill={{}} plan={waitingPlan()} />);
-    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Send to Actual" }).disabled).toBe(true);
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Review before sending" }).disabled).toBe(true);
     await fillMissingFields();
     expect(screen.getByRole("button", { name:"Category (optional)" }).textContent).toBe("No category");
-    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Send to Actual" }).disabled).toBe(false);
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Review before sending" }).disabled).toBe(false);
     fireEvent.submit(screen.getByRole("form", { name: "Complete financial record" }));
+    expect(confirmed).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Record in Actual' }));
     expect(await screen.findByText("Your confirmed record is queued for Actual.")).toBeTruthy();
     expect(screen.queryByText("Recorded in Actual")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Send to Actual" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Review before sending" })).toBeNull();
     expect(confirmed).toEqual({ emailUid: "receipt-one", documentRevision: 1, eventRevision: 1,
       entry: { kind: "expense", amount: 30, date: "2026-09-06", payee: "Example Merchant", accountId: "checking", categoryId: null, notes: "" } });
   });
@@ -75,11 +77,13 @@ describe("owner completion of a managed financial record", () => {
     fireEvent.change(screen.getByLabelText("Outflow amount (USD)"), { target: { value: "45" } });
     currentRevision = 2;
     view.rerender(<BillBadge bill={{}} plan={waitingPlan(2)} />);
-    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Send to Actual" }).disabled).toBe(false);
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Review before sending" }).disabled).toBe(false);
     fireEvent.submit(screen.getByRole("form", { name: "Complete financial record" }));
+    expect(confirmed).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Record in Actual' }));
     expect(await screen.findByRole("alert")).toBeTruthy();
     expect(screen.getByLabelText<HTMLInputElement>("Outflow amount (USD)").value).toBe("45");
-    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Send to Actual" }).disabled).toBe(true);
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Review before sending" }).disabled).toBe(true);
     expect(confirmed).toBeNull();
   });
 });

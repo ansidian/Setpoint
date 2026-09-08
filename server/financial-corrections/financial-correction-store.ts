@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { Client, Transaction, Row } from '@libsql/client';
-import type { FinancialCorrection, FinancialCorrectionPreview, CorrectionStepStatus } from '../../shared/types/financial-corrections.ts';
+import type { FinancialCorrection, FinancialCorrectionPreview, FinancialCorrectionKeepPreview, CorrectionStepStatus } from '../../shared/types/financial-corrections.ts';
 import db from '../db/connection.ts';
 import { correctionJson } from '../actual/actual.ts';
 import { correctionConstraint } from './financial-correction-model.ts';
@@ -39,6 +39,30 @@ export function createFinancialCorrectionStore(client: Client = db) {
   }
   return {
     sourceRevision, read,
+    async saveKeepPreview(userId: string, preview: FinancialCorrectionKeepPreview) {
+      await client.execute({ sql:'INSERT INTO ea_financial_correction_keep_previews VALUES(?,?,?,?,?)', args:[preview.id,userId,preview.correctionId,JSON.stringify(preview),preview.reviewedAt] });
+    },
+    async keepPreview(userId: string, id: string): Promise<FinancialCorrectionKeepPreview> {
+      const row = (await client.execute({ sql:'SELECT preview_json FROM ea_financial_correction_keep_previews WHERE id=? AND user_id=?', args:[id,userId] })).rows[0];
+      if (!row) correctionConstraint('The result review was not found. Read Actual again.');
+      return JSON.parse(String(row.preview_json));
+    },
+    async keep(userId: string, preview: FinancialCorrectionKeepPreview, effective: unknown) {
+      const tx = await client.transaction('write');
+      try {
+        const row = (await tx.execute({ sql:'SELECT * FROM ea_financial_corrections WHERE id=? AND user_id=?', args:[preview.correctionId,userId] })).rows[0];
+        if (!row || row.state !== 'attention' || !row.execution_stopped || Number(row.revision) !== preview.correctionRevision) correctionConstraint('The correction changed. Review the current result again.');
+        const latest = (await tx.execute({ sql:'SELECT id FROM ea_financial_corrections WHERE user_id=? AND activity_id=? ORDER BY updated_at DESC,rowid DESC LIMIT 1', args:[userId,String(row.activity_id)] })).rows[0];
+        if (latest?.id !== preview.correctionId || await sourceRevision(userId,String(row.activity_id),tx) !== preview.sourceRevision) correctionConstraint('The source or correction changed. Review the current result again.');
+        await tx.execute({ sql:"INSERT INTO ea_financial_correction_observations(correction_id,position,state,observed_json,error,observed_at) VALUES(?,-1,'kept_actual',?,NULL,?)", args:[preview.correctionId,JSON.stringify(preview.snapshot),Date.now()] });
+        await tx.execute({ sql:"UPDATE ea_financial_corrections SET state='completed',effective_result_json=?,invalidation_pending=1,revision=revision+1,updated_at=? WHERE id=?", args:[JSON.stringify(effective),Date.now(),preview.correctionId] });
+        await tx.execute({ sql: `UPDATE ea_financial_events SET status='settled', claim_token=NULL, claimed_at=NULL,
+          reason='You kept the current Actual result. No further correction was applied.'
+          WHERE user_id=? AND id IN(SELECT record_id FROM ea_financial_corrected_sources WHERE user_id=? AND activity_id=? AND owner='event')`, args: [userId, userId, String(row.activity_id)] });
+        await tx.commit();
+      } finally { tx.close(); }
+      return (await read(userId,preview.correctionId))!;
+    },
     async latest(userId: string, activityId: string) {
       return hydrate((await client.execute({ sql: 'SELECT * FROM ea_financial_corrections WHERE user_id=? AND activity_id=? ORDER BY updated_at DESC, rowid DESC LIMIT 1', args: [userId, activityId] })).rows[0]);
     },

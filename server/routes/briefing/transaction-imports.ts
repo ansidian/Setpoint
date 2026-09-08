@@ -3,19 +3,12 @@ import { transactionImportService } from "../../transaction-imports/transaction-
 import { requestTransactionImportDrain } from "../../transaction-imports/transaction-import-runtime.ts";
 import { resolveManagedFinancialPlan } from "../../financial-events/financial-event-status.ts";
 import { financialEventCompletion } from "../../financial-events/financial-event-completion.ts";
-import { listFinancialEventReview, readFinancialReviewChanges } from "../../financial-events/financial-event-review.ts";
-import type { TransactionImportParserSource } from "../../../shared/types/transaction-imports.ts";
+import { readFinancialReviewChanges } from "../../financial-events/financial-event-review.ts";
 
 type HttpError = Error & { status?: number };
 type Service = typeof transactionImportService;
 
 const ownerUserId = (): string => process.env.EA_USER_ID!;
-const SOURCES = new Set<TransactionImportParserSource>(["amazon", "paypal"]);
-
-function sourceParam(value: unknown): TransactionImportParserSource | null {
-  return typeof value === "string" && SOURCES.has(value as TransactionImportParserSource) ? value as TransactionImportParserSource : null;
-}
-
 function nonnegativeInteger(value: unknown): number | null {
   if (typeof value !== "string" || !/^\d+$/.test(value)) return null;
   const number = Number(value);
@@ -32,27 +25,15 @@ export function createTransactionImportRouter({
   wake = requestTransactionImportDrain,
   financialStatus = resolveManagedFinancialPlan,
   financialCompletion = financialEventCompletion,
-  financialReview = listFinancialEventReview,
   financialReviewChanges = readFinancialReviewChanges,
 }: {
   service?: Service;
   wake?: () => void;
   financialStatus?: typeof resolveManagedFinancialPlan;
   financialCompletion?: typeof financialEventCompletion;
-  financialReview?: typeof listFinancialEventReview;
   financialReviewChanges?: typeof readFinancialReviewChanges;
 } = {}): Router {
   const router = Router();
-
-  router.get("/financial-events/review", async (req, res) => {
-    const offset = req.query.offset === undefined ? 0 : nonnegativeInteger(req.query.offset);
-    if (offset === null) return res.status(400).json({ message: "Financial review offset must be a nonnegative integer" });
-    try {
-      res.json(await financialReview(ownerUserId(), { offset }));
-    } catch (error) {
-      errorResponse(res, error);
-    }
-  });
 
   router.get("/financial-events/review-changes", async (req, res) => {
     const hasCursor = req.query.afterAt !== undefined || req.query.afterId !== undefined;
@@ -80,34 +61,6 @@ export function createTransactionImportRouter({
     }
   });
 
-  router.post("/transaction-imports/runs", async (req, res) => {
-    const { gmailAccountIds, sources, startDate, endDate } = req.body || {};
-    if (!Array.isArray(gmailAccountIds) || !Array.isArray(sources)
-      || !gmailAccountIds.every((value) => typeof value === "string")
-      || !sources.every((value) => sourceParam(value))) {
-      return res.status(400).json({ message: "Invalid historical transaction import options" });
-    }
-    try {
-      const result = await service.startHistoricalScan(ownerUserId(), { gmailAccountIds, sources, startDate, endDate });
-      wake();
-      res.status(202).json(result);
-    } catch (error) {
-      errorResponse(res, error);
-    }
-  });
-
-  router.get("/transaction-imports/runs", async (req, res) => {
-    const rawLimit = Number(req.query.limit ?? 12);
-    if (!Number.isInteger(rawLimit) || rawLimit < 1 || rawLimit > 50) {
-      return res.status(400).json({ message: "Transaction import run limit must be between 1 and 50" });
-    }
-    try {
-      res.json({ runs: await service.listRuns(ownerUserId(), rawLimit) });
-    } catch (error) {
-      errorResponse(res, error);
-    }
-  });
-
   router.get("/transaction-imports/email-status", async (req, res) => {
     const emailUid = typeof req.query.emailUid === "string" ? req.query.emailUid.trim() : "";
     if (!emailUid || emailUid.length > 500) {
@@ -119,16 +72,6 @@ export function createTransactionImportRouter({
       ]);
       const financialEvent = plan?.workflow?.state === "settled" && !plan.workflow.correction && !plan.candidate.event_kind ? null : plan;
       res.json({ emailUid, items, financialEvent });
-    } catch (error) {
-      errorResponse(res, error);
-    }
-  });
-
-  router.get("/transaction-imports/runs/:runId", async (req, res) => {
-    try {
-      const run = await service.getRun(ownerUserId(), req.params.runId);
-      if (!run) return res.status(404).json({ message: "Transaction import run not found" });
-      res.json(run);
     } catch (error) {
       errorResponse(res, error);
     }

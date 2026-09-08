@@ -1,7 +1,7 @@
 import type { FinancialActivity } from '../../../shared/types/financial-activity';
 import type { CorrectionRow, CorrectionSnapshot, CorrectionStep, FinancialCorrection, FinancialCorrectionDraft, FinancialCorrectionInspection } from '../../../shared/types/financial-corrections';
 
-export const typeLabels = { payment: 'One-time payment', income: 'Income', transfer: 'Transfer', bill: 'Schedule / bill' };
+export const typeLabels = { payment: 'One-time payment', income: 'Income', transfer: 'Transfer', transfer_schedule: 'Scheduled transfer', bill: 'Schedule / bill' };
 export const record = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 export function rows(value: unknown): Array<Record<string, unknown>> {
   if (typeof value === 'string') { try { return rows(JSON.parse(value)); } catch { return []; } }
@@ -47,13 +47,16 @@ export function initialDraft(inspection: FinancialCorrectionInspection, activity
   const negative = counterpart ? Number(primary?.amount) < 0 ? primary : counterpart : undefined;
   const positive = counterpart ? Number(primary?.amount) >= 0 ? primary : counterpart : undefined;
   const dateCondition = conditionValue(snapshot,'date',schedule?.id);
+  const scheduleAccount = String(conditionValue(snapshot,'account',schedule?.id) || '');
+  const schedulePayee = snapshot.payees.find(row => row.id === conditionValue(snapshot,'payee',schedule?.id));
+  const scheduledTransfer = !primary && !!schedule && !!schedulePayee?.transfer_acct;
   const amount = Number(primary?.amount ?? conditionValue(snapshot,'amount',schedule?.id) ?? activity.amountCents ?? 0);
-  return { type: primary ? counterpart ? 'transfer' : Number(primary.amount) > 0 ? 'income' : 'payment' : 'bill',
+  return { type: primary ? counterpart ? 'transfer' : Number(primary.amount) > 0 ? 'income' : 'payment' : scheduledTransfer ? 'transfer_schedule' : 'bill',
     amountCents: Number.isSafeInteger(amount) ? Math.abs(amount) : 0,
     date: dateLabel(primary?.date ?? (schedule ? nextOccurrence(snapshot,schedule.id) : undefined) ?? (typeof dateCondition === 'object' ? record(dateCondition).start : dateCondition)),
     accountId: String(primary?.acct ?? conditionValue(snapshot,'account',schedule?.id) ?? ''),
-    fromAccountId: String(negative?.acct || ''), toAccountId: String(positive?.acct || ''),
-    payeeId: counterpart ? null : String(primary?.description ?? conditionValue(snapshot,'payee',schedule?.id) ?? '') || null,
+    fromAccountId: scheduledTransfer ? amount > 0 ? String(schedulePayee!.transfer_acct) : scheduleAccount : String(negative?.acct || ''), toAccountId: scheduledTransfer ? amount > 0 ? scheduleAccount : String(schedulePayee!.transfer_acct) : String(positive?.acct || ''),
+    payeeId: counterpart || scheduledTransfer ? null : String(primary?.description ?? conditionValue(snapshot,'payee',schedule?.id) ?? '') || null,
     categoryId: primary ? primary.category == null ? null : String(primary.category) : categoryAction ? String(categoryAction.value || '') || null : undefined,
     notes: primary ? String(primary.notes || '') : notesAction ? String(notesAction.value || '') : undefined,
     name: String(schedule?.name || activity.payee || ''),
@@ -62,10 +65,10 @@ export function initialDraft(inspection: FinancialCorrectionInspection, activity
 }
 /** Omission preserves existing values; null is an explicit clearing instruction. */
 export function intendedDraft(draft: FinancialCorrectionDraft): FinancialCorrectionDraft {
-  const common = { type:draft.type, amountCents:draft.amountCents, date:draft.date, notes:draft.notes, categoryId:draft.categoryId,
-    ...(draft.scheduleTreatment && draft.type !== 'bill' ? { scheduleTreatment:draft.scheduleTreatment } : {}),
-    ...(draft.retainTransactionId && draft.type !== 'transfer' && draft.type !== 'bill' ? { retainTransactionId:draft.retainTransactionId } : {}) };
-  return draft.type === 'transfer' ? { ...common, fromAccountId:draft.fromAccountId, toAccountId:draft.toAccountId }
+  const common = { type:draft.type, amountCents:draft.amountCents, date:draft.date, notes:draft.notes, ...(draft.type !== 'transfer_schedule' ? { categoryId:draft.categoryId } : {}),
+    ...(draft.scheduleTreatment && draft.type !== 'bill' && draft.type !== 'transfer_schedule' ? { scheduleTreatment:draft.scheduleTreatment } : {}),
+    ...(draft.retainTransactionId && draft.type !== 'transfer' && draft.type !== 'bill' && draft.type !== 'transfer_schedule' ? { retainTransactionId:draft.retainTransactionId } : {}) };
+  return draft.type === 'transfer' || draft.type === 'transfer_schedule' ? { ...common, fromAccountId:draft.fromAccountId, toAccountId:draft.toAccountId, ...(draft.type === 'transfer_schedule' ? {name:draft.name,targetScheduleId:draft.targetScheduleId} : {}) }
     : { ...common, accountId:draft.accountId, payeeId:draft.payeeId,
       ...(draft.type === 'bill' ? { name:draft.name, ...(draft.targetScheduleId ? { targetScheduleId:draft.targetScheduleId } : {}) } : {}) };
 }

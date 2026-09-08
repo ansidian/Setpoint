@@ -1,3 +1,4 @@
+import type { FinanceDestination } from "../finances/financesNavigation";
 import InboxDesktopPane from "./InboxDesktopPane";
 import MobileInboxView from "./mobile/MobileInboxView";
 import useInboxController from "./useInboxController";
@@ -39,7 +40,7 @@ export interface InboxViewProps {
   onLiveReadOverrideChange?: (uid: string, read: boolean) => void;
   snoozedEntries?: SnoozedEntry[];
   resurfacedEntries?: Array<ResurfacedEntry & { uid: string }>;
-  onOpenRecordedBill?: (target: { date: string; itemId: string }) => void;
+  onOpenRecordedBill?: (target: FinanceDestination) => void;
   onRefresh?: () => unknown | Promise<unknown>;
   seedSelectedId?: InboxSelectionId;
   sessionState?: Partial<InboxSessionState>;

@@ -24,6 +24,7 @@ function FinancialEventStatusPanel({ plan: currentPlan, style, allowCompletion =
   const workflow = plan.workflow;
   if (!workflow) return null;
   const correction = workflow.correction;
+  const kept = correction?.state === 'completed' && correction.resolution === 'kept_actual';
   const correcting = correction && !['completed','superseded'].includes(correction.state);
   const pending = correcting ? correction.state !== 'attention' : workflow.state === "pending";
   const settled = !correcting && workflow.state === "settled";
@@ -33,11 +34,11 @@ function FinancialEventStatusPanel({ plan: currentPlan, style, allowCompletion =
   const color = settled ? "var(--sp-green)" : pending ? "var(--sp-blue)" : "var(--sp-cream)";
   const Icon = settled ? CheckCircle2 : pending ? Loader2 : Clock3;
   const title = correcting ? correction.state === 'attention' ? 'Correction needs attention' : 'Checking correction progress'
-    : correction?.state === 'completed' ? 'Corrected in Actual' : recorded ? "Recorded in Actual" : scheduled ? "Scheduled in Actual"
+    : kept ? 'Current Actual result kept' : correction?.state === 'completed' ? 'Corrected in Actual' : recorded ? "Recorded in Actual" : scheduled ? "Scheduled in Actual"
     : settled ? "No entry needed" : needsReview ? "Actual entry needs attention"
       : pending ? "Checking financial details" : "Waiting for payment details";
   const details = [
-    correcting ? 'The correction is retained. Inspect its outcome before making another change.' : workflow.reason,
+    correcting ? 'The correction is retained. Inspect its outcome before making another change.' : kept ? plan.reconciliation.reason : workflow.reason,
     workflow.relatedEmails > 1 ? `${workflow.relatedEmails} related emails describe this event.` : null,
     !settled && workflow.nextAttemptAt ? "Checks again automatically." : null,
   ].filter(Boolean).join(" ");

@@ -21,7 +21,8 @@ function rawPatchToSdk(row: CorrectionRow): CorrectionRow {
     ? `${String(value).slice(0, 4)}-${String(value).slice(4, 6)}-${String(value).slice(6, 8)}` : value])) as CorrectionRow;
 }
 export function planFinancialCorrection(snapshot: CorrectionSnapshot, evidence: FinancialWriteEvidence, draft: FinancialCorrectionDraft, context: { allowMissingPrimary?: boolean; scheduleId?: string } = {}): { steps: CorrectionStep[]; targets: CorrectionTargets } {
-  if (!draft || !['payment', 'income', 'transfer', 'bill'].includes(draft.type)) correctionConstraint('Choose a supported record type.');
+  if (!draft || !['payment', 'income', 'transfer', 'bill', 'transfer_schedule'].includes(draft.type)) correctionConstraint('Choose a supported record type.');
+  const scheduleEdit = draft.type === 'bill' || draft.type === 'transfer_schedule';
   if (!Number.isSafeInteger(draft.amountCents) || draft.amountCents <= 0) correctionConstraint('Amount must be positive integer cents.');
   const parsedDate = new Date(`${draft.date}T00:00:00Z`);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(draft.date) || !Number.isFinite(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== draft.date) correctionConstraint('Choose a valid calendar date.');
@@ -37,8 +38,9 @@ export function planFinancialCorrection(snapshot: CorrectionSnapshot, evidence: 
   if (primaryEvidence.length !== 1) correctionConstraint('Resolve one exact original primary target before correcting.');
   const original = primaryEvidence[0]!;
   let primary = snapshot.transactions.find(row => row.id === original.id && active(row));
-  const schedule = snapshot.schedules.find(row => row.id === (context.scheduleId || (draft.type === 'bill' && draft.targetScheduleId ? draft.targetScheduleId : original.id)) && active(row));
-  if (draft.targetScheduleId && (!schedule || draft.type !== 'bill')) correctionConstraint('The explicitly selected target schedule is unavailable or incompatible with this record type.');
+  const schedule = snapshot.schedules.find(row => row.id === (context.scheduleId || (scheduleEdit && draft.targetScheduleId ? draft.targetScheduleId : original.id)) && active(row));
+  if (draft.targetScheduleId && (!schedule || !scheduleEdit)) correctionConstraint('The explicitly selected target schedule is unavailable or incompatible with this record type.');
+  if (draft.type === 'transfer_schedule' && (primary || !schedule || original.kind !== 'schedule' || schedule.id !== original.id)) correctionConstraint('Choose the exact existing transfer schedule; this edit cannot convert a transaction or create another schedule.');
   if (primary && draft.type === 'bill') disposable(primary, evidence);
   if (schedule && snapshot.schedules.some(row => row.id !== schedule.id && !row.tombstone && row.rule === schedule.rule)) correctionConstraint('This rule is shared by another schedule and cannot be changed safely.');
   const scheduleEvidence = schedule ? evidence.objects.find(object => object.kind === 'schedule' && object.id === schedule.id) || original : original;
@@ -50,7 +52,7 @@ export function planFinancialCorrection(snapshot: CorrectionSnapshot, evidence: 
   };
   const date = Number(draft.date.replaceAll('-', ''));
   let paymentSchedule: string | null = null;
-  if (schedule && draft.type !== 'bill') {
+  if (schedule && !scheduleEdit) {
     if (!draft.scheduleTreatment) correctionConstraint('Choose explicitly whether to keep, retire, or restore the current schedule; the historical before-image may be unavailable.');
     if (draft.scheduleTreatment === 'keep') paymentSchedule = schedule.id;
     else if (draft.scheduleTreatment === 'restore') {
@@ -81,8 +83,7 @@ export function planFinancialCorrection(snapshot: CorrectionSnapshot, evidence: 
       addStep('schedule/delete', { id: schedule.id }, { removedScheduleId: schedule.id });
     } else correctionConstraint('Invalid schedule treatment.');
   }
-  if (draft.type === 'bill') {
-    const chosenAccount = account(draft.accountId);
+  if (scheduleEdit) {
     const rule = schedule ? snapshot.rules.find(row => row.id === schedule.rule && active(row)) : undefined;
     if (schedule && !rule) correctionConstraint('The schedule graph has no intact rule.');
     const nextDates = schedule ? snapshot.dates.filter(row => row.schedule_id === schedule.id && !row.tombstone) : [];
@@ -92,13 +93,34 @@ export function planFinancialCorrection(snapshot: CorrectionSnapshot, evidence: 
     const chosenName = draft.name?.trim() || null;
     if (chosenName && snapshot.scheduleNames.some(row => row.name === chosenName && row.id !== schedule?.id)) correctionConstraint('Another schedule already has this name. Choose the exact existing target or a different name.');
     const old = rule ? correctionConditions(rule.conditions) : [];
+    let chosenAccount: CorrectionRow;
+    let amount = -draft.amountCents;
+    let payeeId = draft.payeeId;
+    if (draft.type === 'transfer_schedule') {
+      if (draft.categoryId !== undefined || draft.payeeId !== undefined || draft.accountId !== undefined || draft.scheduleTreatment !== undefined) correctionConstraint('Edit a transfer schedule using its funding and destination accounts.');
+      if (!['amount', 'account', 'payee', 'date'].every(field => old.filter(condition => condition.field === field).length === 1)) correctionConstraint('The transfer schedule must have one exact amount, account, payee, and date condition.');
+      const oldAmount = old.find(condition => condition.field === 'amount');
+      const oldAccount = old.find(condition => condition.field === 'account');
+      const oldPayee = old.find(condition => condition.field === 'payee');
+      const linked = snapshot.payees.find(row => row.id === oldPayee?.value && active(row));
+      if (oldAmount?.op !== 'is' || typeof oldAmount.value !== 'number' || !Number.isSafeInteger(oldAmount.value) || oldAmount.value === 0 || oldAccount?.op !== 'is' || oldPayee?.op !== 'is' || !linked?.transfer_acct || linked.transfer_acct === oldAccount.value) correctionConstraint('The bound schedule does not identify an exact transfer.');
+      if (draft.date <= new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' })) correctionConstraint('Choose a future transfer date. Editing a schedule does not record a completed transfer.');
+      const from = account(draft.fromAccountId), to = account(draft.toAccountId);
+      if (from.id === to.id) correctionConstraint('Transfer accounts must be distinct.');
+      chosenAccount = oldAmount.value > 0 ? to : from;
+      amount = oldAmount.value > 0 ? draft.amountCents : -draft.amountCents;
+      const opposite = oldAmount.value > 0 ? from : to;
+      const transferPayees = snapshot.payees.filter(row => row.transfer_acct === opposite.id && active(row));
+      if (transferPayees.length !== 1) correctionConstraint('The opposite account must have one available Actual transfer payee.');
+      payeeId = transferPayees[0]!.id;
+    } else chosenAccount = account(draft.accountId);
     const dateCondition = buildCorrectionDateCondition(old, draft.date);
     const requested = typeof dateCondition.value === 'object' ? dateCondition.value?.start : dateCondition.value;
     if (typeof dateCondition.value === 'object' && dateCondition.value?.skipWeekend && [0, 6].includes(new Date(`${draft.date}T00:00:00Z`).getUTCDay())) correctionConstraint('This schedule moves weekend occurrences; choose its effective weekday date.');
     if (requested !== draft.date && currentNextDate !== date) correctionConstraint('This recurrence interval does not support moving the occurrence date.');
     if (schedule?.posts_transaction && draft.date <= new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' })) correctionConstraint('This schedule already posts automatically; a due or past date may create an unpreviewed payment during synchronization.');
-    const replacements: ActualScheduleCondition[] = [dateCondition, { field: 'amount', op: 'is', value: -draft.amountCents }, { field: 'account', op: 'is', value: chosenAccount.id }];
-    if (draft.payeeId !== undefined) replacements.push({ field: 'payee', op: 'is', value: draft.payeeId });
+    const replacements: ActualScheduleCondition[] = [dateCondition, { field: 'amount', op: 'is', value: amount }, { field: 'account', op: 'is', value: chosenAccount.id }];
+    if (payeeId !== undefined) replacements.push({ field: 'payee', op: 'is', value: payeeId });
     const conditions = [...replacements, ...old.filter(condition => !replacements.some(replacement => replacement.field === condition.field))];
     let targetScheduleId: string;
     if (schedule) {
@@ -107,7 +129,7 @@ export function planFinancialCorrection(snapshot: CorrectionSnapshot, evidence: 
       const actions = decodeCorrectionJson(rule!.actions).map(value => {
         const action = value as Record<string, unknown>;
         const options = action.options as Record<string, unknown> | undefined;
-        return action.op === 'set' && action.field === 'amount' && !options?.template && !options?.formula ? { ...action, value: -draft.amountCents } : action;
+        return action.op === 'set' && action.field === 'amount' && !options?.template && !options?.formula ? { ...action, value: amount } : action;
       });
       addStep('schedule/update', { schedule: patch, conditions }, { schedule: { ...schedule, ...patch }, conditions, scheduleActions: actions, nextDate: date });
     } else {
@@ -125,7 +147,7 @@ export function planFinancialCorrection(snapshot: CorrectionSnapshot, evidence: 
       const initial = rule ? decodeCorrectionJson(rule.actions) : [{ op: 'link-schedule', value: targetScheduleId }];
       const actions = initial.map(action => {
         const row = action as Record<string, unknown>;
-        return row.op === 'set' && row.field === 'amount' && !(row.options as Record<string, unknown> | undefined)?.template && !(row.options as Record<string, unknown> | undefined)?.formula ? { ...row, value: -draft.amountCents } : row;
+        return row.op === 'set' && row.field === 'amount' && !(row.options as Record<string, unknown> | undefined)?.template && !(row.options as Record<string, unknown> | undefined)?.formula ? { ...row, value: amount } : row;
       }).filter(action => !(action.op === 'set' && ((action.field === 'category' && draft.categoryId !== undefined) || (action.field === 'notes' && draft.notes !== undefined))));
       if (draft.categoryId !== undefined && draft.categoryId && !chosenAccount.offbudget) actions.push({ op: 'set', field: 'category', value: draft.categoryId });
       if (draft.notes !== undefined) actions.push({ op: 'set', field: 'notes', value: draft.notes });

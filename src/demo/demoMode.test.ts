@@ -90,7 +90,7 @@ describe("demo mode API network guard", () => {
     expect(requests).toEqual([]);
   });
 
-  it("exposes fictional raw schedule state and distinguishes settled partial from uncertain recovery", async () => {
+  it("exposes fictional raw schedule state and distinguishes a stopped note failure from uncertain recovery", async () => {
     const requests = installRecordingFetch({});
     const api = await importApiWithDemoMode("1");
     const schedule = await api.inspectFinancialCorrection({ owner: "event", id: "demo-event-schedule" });
@@ -100,22 +100,52 @@ describe("demo mode API network guard", () => {
     expect(transfer.snapshot.transactions.map(row => row.acct)).toEqual(["demo-checking", "demo-savings"]);
     await expect(api.previewFinancialCorrection(schedule.reference, { type: "payment", amountCents: 8200, date: "2026-09-06", accountId: "demo-checking", scheduleTreatment: "retire" })).rejects.toThrow("creation is not proven");
     const partial = await api.inspectFinancialCorrection({ owner: "event", id: "demo-event-partial" });
-    expect(partial.correction).toMatchObject({ state: "attention", executionStopped: true, steps: [{ state: "partial" }] });
+    expect(partial.correction).toMatchObject({ state: "attention", executionStopped: true, steps: [{ state: "applied" }, { state: "no_write" }] });
     const successor = await api.previewFinancialCorrection(partial.reference, partial.correction!.preview.draft);
     expect(successor.predecessorId).toBe(partial.correction?.id);
     expect(successor.snapshot.rules[0]).toMatchObject({ conditions: expect.arrayContaining([{ field: "amount", op: "is", value: -9000 }]) });
     const recovering = await api.inspectFinancialCorrection({ owner: "event", id: "demo-event-uncertain" });
     expect(recovering.correction).toMatchObject({ state: "recovering", executionStopped: false });
+    const attention = await api.listFinancialActivity({ view: "needs_attention" });
+    expect(attention.items.some(item => item.reference.id === "demo-event-uncertain")).toBe(false);
+    expect(attention.items.some(item => item.reference.id === "demo-event-partial")).toBe(true);
+    expect(attention.total).toBe(attention.items.length);
+    expect(await api.getFinancialActivity(recovering.reference)).toMatchObject({ status: "processing", actions: { complete: false, retry: false, correct: false } });
     await expect(api.previewFinancialCorrection(recovering.reference, recovering.correction!.preview.draft)).rejects.toThrow("remains uncertain");
     expect(requests).toEqual([]);
   });
 
+  it("keeps utility sources immutable and links only recorded recurring payments", async () => {
+    installRecordingFetch({});
+    const api = await importApiWithDemoMode("1");
+    const before = await api.getFinances();
+    const original = before.utilities.find(row => row.identity.id === 'electricity')!.statements[0]!;
+    const body = await api.getEmailBody(original.emailUid);
+    const activity = await api.getFinancialActivity(original.activity!);
+    expect(activity.emailUids).toContain(original.emailUid);
+    expect(Date.parse(original.receivedAt)).toBeLessThanOrEqual(Date.now());
+    const preview = await api.previewFinancialCorrection({owner:'event',id:'demo-event-schedule'}, {type:'bill',amountCents:12345,date:before.end,accountId:'demo-checking'});
+    await api.confirmFinancialCorrection(preview.id,'different-record');
+    expect((await api.getFinances()).utilities.find(row=>row.identity.id==='electricity')!.statements[0]).toEqual(original);
+    expect(await api.getEmailBody(original.emailUid)).toEqual(body);
+    const internet = before.utilities.find(row=>row.identity.id==='internet')!;
+    const paymentId=internet.occurrences[0]!.paymentTransactionIds![0]!;
+    const journal=await api.getFinanceJournal(before.start,before.end,paymentId);
+    expect(journal.transactions.find(row=>row.id===paymentId)).toMatchObject({amountCents:-7999});
+    expect(before.recurring.filter(row=>row.paid).every(row=>row.paymentTransactionIds?.length)).toBe(true);
+    const day=await api.getFinanceJournal(before.end,before.end);
+    expect(day.relatives).toEqual([]);
+    const payment = await api.previewFinancialCorrection({owner:'event',id:'demo-event-schedule'}, {type:'payment',amountCents:12345,date:before.end,accountId:'demo-checking',scheduleTreatment:'keep'});
+    await api.confirmFinancialCorrection(payment.id,'keep-schedule');
+    const linked = await api.getFinanceJournal(before.end,before.end);
+    expect(linked.transactions.some(row=>row.scheduleId==='demo-shared-schedule'&&row.amountCents===-12345)).toBe(true);
+  });
   it("links Dashboard managed review to shared records and keeps disconnected receipts readable", async () => {
     const requests = installRecordingFetch({});
     const api = await importApiWithDemoMode("1");
-    const { getFinancialEventReview } = await import("../lib/financialReviewApi");
-    const review = await getFinancialEventReview();
-    expect(review.items.map(item => item.id)).toEqual(expect.arrayContaining(["event:demo-event-review", "event:demo-event-partial", "event:demo-event-uncertain"]));
+    const review = await api.listFinancialActivity({ source: "managed", view: "needs_attention" });
+    expect(review.items.map(item => item.reference.id)).toEqual(expect.arrayContaining(["demo-event-review", "demo-event-partial"]));
+    expect(review.items.some(item => item.reference.id === "demo-event-uncertain")).toBe(false);
     const reference = { owner: "event" as const, id: "demo-event-disconnected" };
     const saved = await api.getFinancialActivity(reference);
     expect(saved.status).toBe("completed");

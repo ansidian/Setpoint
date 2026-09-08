@@ -1,3 +1,4 @@
+import { WorkspaceLocationContext } from '../context/WorkspaceLocationContext';
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Outlet, useNavigate } from 'react-router';
@@ -59,10 +60,10 @@ export default function WorkspaceRoute({ children }: { children:ReactNode }) {
   },[allow,navigate]);
   const returnRecord = () => { setRepair(false); allow(() => navigate(`/finance${retainedSearch}`, { replace:true })); };
   return <>
-    {children}
+    <WorkspaceLocationContext value={location}>{children}</WorkspaceLocationContext>
     <Dialog open={open} onOpenChange={value => { if (!value) { if (guard.pending) guard.keep(); else if (repair) returnRecord(); else if (!backStep.current?.()) close(); } }}>
       <DialogContent aria-labelledby={financial || repair ? 'financial-heading' : 'settings-heading'}
-        data-suspend-calendar-hotkeys="blocking" data-workspace-foreground={financial ? new URLSearchParams(search).get('financial') === 'record' ? 'record' : new URLSearchParams(search).get('financial') === 'backfill' ? 'backfill' : 'finance' : 'settings'}
+        data-suspend-calendar-hotkeys="blocking" data-workspace-foreground={financial ? new URLSearchParams(search).get('financial') === 'record' ? 'record' : 'finance' : 'settings'}
         finalFocus={() => trigger.current?.isConnected ? trigger.current : false}
         overlayClassName="bg-[var(--sp-deep)]/70" overlayStyle={{ backdropFilter:'none' }}
         showCloseButton={!financial && !repair}

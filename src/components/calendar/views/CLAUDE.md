@@ -1,13 +1,11 @@
 # Calendar Views Map
 
-Per-domain view layers for the calendar modal: events, bills, and deadlines each supply cell content, agenda rails, detail rails, and footers; `agenda/` holds the shared rail shell and mini calendar. Entry points are the view objects `eventsView.tsx` and `billsView.tsx`, which bundle a domain's compute/detail/footer/header exports.
 
 ## Files
 
 ### Top-level
 - `eventsView.tsx` — events view object: weather integration, deadline overlay merging
 - `calendarViewTypes.ts` — shared typed view, item, computed-data, and weather contracts
-- `billsView.tsx` — bills view object: compute/detail/footer/header bundle
 - `EventsHeaderExtras.tsx` — events/deadlines overlay visibility toggles
 
 ### agenda (shared rail infrastructure)
@@ -31,17 +29,6 @@ Per-domain view layers for the calendar modal: events, bills, and deadlines each
 - `events/eventsAgendaColor.ts` — hex → rgba and contrast text selection
 - `events/eventDetailModel.ts` — pure event-detail transforms (title sanitize, time range, meta, accent, Google-calendar action url); shared by the card, detail rail, and dashboard glance sheet
 
-### bills
-- `bills/BillsAgendaRail.tsx` — bill timeline grouped by date with utility status
-- `bills/BillsCellContent.tsx` — compact bill chips for grid cells
-- `bills/BillsDetailRail.tsx` — bill detail panel with schedule link and actions
-- `bills/BillSelectedCard.tsx` — selected-bill hero card (name/payee/amount/due/status); shared by the detail rail and the dashboard glance sheet
-- `bills/TransactionSelectedCard.tsx` — read-only transaction hero card (direction/amount/date/category/account/notes)
-- `bills/UtilityStatusButton.tsx` — tracked utility status pill
-- `bills/billsAgendaModel.ts` — bill → agenda conversion, due labels, urgency coloring
-- `bills/billsModel.ts` — day state computation, payment tracking, urgency colors
-- `bills/utilityStatusModel.ts` — tracked-utility status: best-match selection, paid/stale/honored flags, date labels
-- `bills/financeSourceColors.ts` — canonical income/outflow/transfer source colors for every Bills-view surface
 
 ### deadlines
 - `deadlines/DeadlinesCellContent.tsx` — deadline ghost descriptors reused by Events cells

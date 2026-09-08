@@ -8,10 +8,10 @@ import type { DashboardTab } from "../dashboard/dashboardShellModel";
 // don't exist there).
 // eslint-disable-next-line react-refresh/only-export-components
 export const TAB_LABELS: Record<DashboardTab, string> = {
-  dashboard: "Dashboard", inbox: "Inbox", calendar: "Calendar", notes: "Notes", news: "News",
+  dashboard: "Dashboard", inbox: "Inbox", calendar: "Calendar", notes: "Notes", news: "News", finances: "Finances",
 };
-const TAB_KEYS = { dashboard: "1", inbox: "2", calendar: "3", notes: "4", news: "5" };
-const TABS = ["dashboard", "inbox", "calendar", "notes", "news"] as const satisfies readonly DashboardTab[];
+const TAB_KEYS = { dashboard: "1", inbox: "2", calendar: "3", notes: "4", news: "5", finances: "6" };
+const TABS = ["dashboard", "inbox", "calendar", "notes", "news", "finances"] as const satisfies readonly DashboardTab[];
 
 // WAI-ARIA tabs pattern (https://www.w3.org/WAI/ARIA/apg/patterns/tabs/):
 // activation-follows-focus roving tabindex. There are only 5 cheap, always-

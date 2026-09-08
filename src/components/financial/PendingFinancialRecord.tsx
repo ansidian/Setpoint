@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { ArrowLeft, Landmark, Trash2, Wallet } from 'lucide-react';
+import PaymentConfirmation from './PaymentConfirmation';
 import Dropdown from '../shared/Dropdown';
 import DateField from '../shared/pickers/DateField';
 import SearchableDropdown from '../shared/SearchableDropdown';
@@ -9,13 +10,14 @@ import type { TransactionImportConfirmation } from '../../../shared/types/transa
 import { commitTransactionImportItems, dismissTransactionImportItem, retryTransactionImportItem } from '../../api';
 import { ensureMetadataLoaded, invalidateActualMetadata, type ActualMetadata } from '../../lib/actualMetadata';
 import FinancialEventCompletionForm from '../bills/FinancialEventCompletionForm';
-import { formatImportAmount, isIndividuallyReviewable, itemToConfirmation } from './transactionImportReviewModel';
+import { isIndividuallyReviewable, itemToConfirmation } from './transactionImportReviewModel';
 
 interface Props {
   activity: FinancialActivity;
   onChanged: () => void;
   onDirty: (dirty: boolean) => void;
   onRepair: () => void;
+  onConfirming: (confirming:boolean) => void;
   requestDiscard: (action:()=>void) => void;
 }
 
@@ -25,15 +27,15 @@ export default function PendingFinancialRecord(props: Props) {
   const [editing, setEditing] = useState(true);
   const [queued, setQueued] = useState(false);
   if (queued || activity.status === 'processing') return <p role="status" className="financial-note">This record is processing. Its result will appear here when Actual finishes.</p>;
-  if (activity.reference.owner === 'import') return <HistoricalCompletion {...props} />;
+  if (activity.reference.owner === 'import') return <ImportCompletion {...props} />;
   const plan = activity.completionPlan;
   if (!activity.actions.complete || !plan?.workflow?.completion) return <p className="financial-note">{activity.reason}</p>;
-  return editing ? <FinancialEventCompletionForm plan={plan} onDirty={onDirty} onRepair={onRepair}
+  return editing ? <FinancialEventCompletionForm plan={plan} onDirty={onDirty} onRepair={onRepair} onConfirming={props.onConfirming}
     onCancel={() => requestDiscard(() => { setEditing(false); onDirty(false); })} onQueued={() => { setQueued(true); onDirty(false); onChanged(); }} />
     : <button type="button" className="financial-button" onClick={() => setEditing(true)}>Complete record</button>;
 }
 
-function HistoricalCompletion({ activity, onChanged, onDirty, onRepair }: Props) {
+function ImportCompletion({ activity, onChanged, onDirty, onRepair, onConfirming }: Props) {
   const item = activity.importItem!;
   const [draft, setDraft] = useState(() => itemToConfirmation(item));
   const [amount, setAmount] = useState(item.amountCents == null ? '' : String(Math.abs(item.amountCents) / 100));
@@ -45,6 +47,12 @@ function HistoricalCompletion({ activity, onChanged, onDirty, onRepair }: Props)
   const [reload, setReload] = useState(0);
   const [confirming, setConfirming] = useState(false);
   const [dismissing, setDismissing] = useState(false);
+  const reviewTrigger = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    onConfirming(confirming);
+    return () => onConfirming(false);
+  },[confirming,onConfirming]);
+  const backToDetails = () => { setConfirming(false); requestAnimationFrame(() => reviewTrigger.current?.focus()); };
   const dismissTrigger = useRef<HTMLButtonElement>(null);
   const keepCandidate = () => { setDismissing(false); requestAnimationFrame(() => dismissTrigger.current?.focus()); };
   const [busy, setBusy] = useState(false);
@@ -84,7 +92,11 @@ function HistoricalCompletion({ activity, onChanged, onDirty, onRepair }: Props)
       <div><dt>From account</dt><dd>{item.financialPlan?.targets.fromAccount.label || 'Unresolved'}</dd></div>
       <div><dt>To account</dt><dd>{item.financialPlan?.targets.toAccount.label || 'Unresolved'}</dd></div>
     </dl></div>}
-    {reviewable && <form onSubmit={preview} inert={dismissing} className="space-y-4" aria-label="Complete historical financial record">
+    {reviewable && (confirming ? <>
+      <PaymentConfirmation amountCents={signedAmount} account={accounts.find(account => account.id === draft.actualAccountId)?.name || 'Account unavailable'} payee={draft.payee || ''} date={draft.date || ''} category={draft.actualCategoryId ? metadata?.categories.find(category => category.id === draft.actualCategoryId)?.name || 'Unavailable category' : undefined} notes={draft.notes || undefined} />
+      <div className="financial-actions"><button type="button" className="financial-button financial-back" disabled={busy} onClick={backToDetails}><ArrowLeft size={14} />Back to details</button>
+        <button type="button" className="financial-button financial-primary" disabled={busy || !valid} onClick={() => void perform('commit')}>{busy ? 'Confirming…' : 'Record in Actual'}</button></div>
+    </> : <form onSubmit={preview} inert={dismissing} className="space-y-4" aria-label="Complete financial record">
       <p className="financial-note">Review the transaction details. Category is optional.</p>
       <div className="financial-field"><span>Direction</span><Dropdown ariaLabel="Direction" disabled={busy} value={direction} onChange={value => { setDirection(value); setConfirming(false); }} options={[{ id:"outflow",name:"Outflow — money out" },{ id:"inflow",name:"Inflow — money in" }]} /></div>
       <div className="financial-fields">
@@ -96,12 +108,8 @@ function HistoricalCompletion({ activity, onChanged, onDirty, onRepair }: Props)
         <label className="financial-field">Notes (optional)<textarea maxLength={2000} value={draft.notes || ''} disabled={busy} onChange={event => patch({ notes: event.target.value })} /></label>
       </div>
       <p className="financial-note">Enter a positive amount; no minus sign needed. Direction determines whether money enters or leaves the account.</p>
-      {confirming ? <section className="financial-section" aria-label="Confirm transaction">
-        <h3>Confirm transaction</h3><p className="financial-note">Send an {direction} of {formatImportAmount(Math.abs(signedAmount))} for {draft.payee} on {draft.date} to {accounts.find(account => account.id === draft.actualAccountId)?.name}?</p>
-        <div className="mt-3 flex flex-wrap gap-2"><button type="button" className="financial-button financial-back" disabled={busy} onClick={() => setConfirming(false)}><ArrowLeft size={14} />Back to details</button>
-          <button type="button" className="financial-button financial-primary" disabled={busy} onClick={() => void perform('commit')}>{busy ? 'Confirming…' : 'Confirm and send to Actual'}</button></div>
-      </section> : <button type="submit" className="financial-button financial-primary" disabled={!valid || busy}>Review before sending</button>}
-    </form>}
+      <button ref={reviewTrigger} type="submit" className="financial-button financial-primary" disabled={!valid || busy}>Review before sending</button>
+    </form>)}
     {!metadata && reviewable && <p role="status" className="financial-note">Loading Actual accounts…</p>}
     {metadata && !accounts.length && reviewable && <div className="space-y-2"><p className="financial-note">Actual accounts are unavailable. Your draft stays here while you repair the connection.</p>
       <div className="flex flex-wrap gap-2"><button type="button" className="financial-button" onClick={onRepair}>Repair Actual connection</button>
@@ -109,7 +117,7 @@ function HistoricalCompletion({ activity, onChanged, onDirty, onRepair }: Props)
     {error && <div role="alert" className="financial-error"><p>{error}</p><button type="button" className="financial-button" onClick={onRepair}>Check Actual connection</button></div>}
     <div className="flex flex-wrap gap-2">
       {activity.actions.retry && <button type="button" className="financial-button" disabled={busy || dismissing} onClick={() => void perform('retry')}>{busy ? 'Resuming…' : 'Resume processing'}</button>}
-      {activity.actions.complete && isIndividuallyReviewable(item) && !dismissing && <button ref={dismissTrigger} type="button" className="financial-button financial-danger" disabled={busy} onClick={() => { setConfirming(false); setDismissing(true); }}><Trash2 size={14} />Dismiss candidate</button>}
+      {activity.actions.complete && isIndividuallyReviewable(item) && !dismissing && !confirming && <button ref={dismissTrigger} type="button" className="financial-button financial-danger" disabled={busy} onClick={() => { setConfirming(false); setDismissing(true); }}><Trash2 size={14} />Dismiss candidate</button>}
     </div>
     <AnimatedCollapse open={dismissing}><section className="financial-dismiss" aria-label="Dismiss candidate confirmation" onKeyDown={event => { if (event.key === 'Escape' && !busy) { event.preventDefault(); event.stopPropagation(); keepCandidate(); } }}>
       <h3><Trash2 size={15} />Dismiss this candidate?</h3><p className="financial-note">Remove it from review without sending it to Actual. Any unsaved edits will be discarded.</p>

@@ -1,9 +1,10 @@
+import { buildKeptFinancialResult } from '../../shared/financial-kept-result.ts';
 import { correctionSuccessorSteps, correctionSuccessorContext } from './financial-correction-successor.ts';
 import { correctionResult } from './financial-correction-result.ts';
 import { publishCurrentDashboardEvent } from '../dashboard/current-events.ts';
 import { randomUUID } from 'node:crypto';
 import type { FinancialActivityReference, FinancialWriteEvidence } from '../../shared/types/financial-activity.ts';
-import type { FinancialCorrectionDraft, FinancialCorrectionPreview, FinancialCorrectionInspection, CorrectionSnapshot } from '../../shared/types/financial-corrections.ts';
+import type { FinancialCorrectionDraft, FinancialCorrectionPreview, FinancialCorrectionInspection, FinancialCorrectionKeepPreview, CorrectionSnapshot } from '../../shared/types/financial-corrections.ts';
 import { financialActivityReader } from '../financial-activity/financial-activity.ts';
 import { inspectCorrection, dispatchCorrection } from '../actual/actual.ts';
 import { coordinateActualWrite } from '../actual/actual.ts';
@@ -46,11 +47,67 @@ export function createFinancialCorrections({ store = createFinancialCorrectionSt
         originalReceipts: activity.originalReceipts, evidence, snapshot, correction: previous };
     });
   }
+  /** An explicit synchronized read can verify a stopped effect, but never dispatch it again. */
+  async function recheck(userId: string, reference: FinancialActivityReference, correctionId: string): Promise<FinancialCorrectionInspection> {
+    return coordinateActualWrite(async () => {
+      const { activity, previous, evidence, targets } = await resolve(userId, reference);
+      if (!previous || previous.id !== correctionId) correctionConstraint('The correction changed. Refresh this record before rechecking.');
+      if (previous.state !== 'completed' && (previous.state !== 'attention' || !previous.executionStopped)) correctionConstraint('The earlier attempt has not stopped. Wait for recovery before resolving it.');
+      const snapshot = await inspect(userId, evidence.budgetId, targets);
+      if (snapshot.budgetId !== evidence.budgetId) correctionConstraint('The selected Actual budget changed.');
+      if (previous.state === 'attention') {
+        const index = previous.steps.map(entry => entry.attemptedAt !== null).lastIndexOf(true);
+        if (index >= 0) {
+          const entry = previous.steps[index]!;
+          const before = index === 0 ? previous.preview.snapshot : previous.steps[index - 1]!.observed;
+          if (!before || previous.steps.slice(0,index).some(step => step.state !== 'applied')) correctionConstraint('Earlier effects must be verified before this change can be resolved.');
+          const observedState = observeCorrectionStep(entry.step, snapshot, before);
+          // An unchanged remote read cannot prove that a lost command never wrote.
+          const state = observedState === 'applied' || observedState === 'partial' ? observedState : entry.state === 'no_write' ? 'no_write' : 'conflict';
+          await store.settle(previous.id, index, { state, observed:snapshot, error:state === 'applied' ? null : 'The current Actual result still does not match the intended change.' });
+          if (state === 'applied' && index === previous.steps.length - 1) {
+            await store.state(previous.id, 'completed', correctionResult(previous.preview, snapshot));
+            await invalidate(userId, previous.id);
+          } else await changed(userId);
+        }
+      }
+      return { reference, activityId:activity.id, budgetId:evidence.budgetId,
+        originalReceipts:activity.originalReceipts, evidence, snapshot, correction:await store.read(userId, previous.id) };
+    });
+  }
+  async function previewKeep(userId: string, reference: FinancialActivityReference, correctionId: string): Promise<FinancialCorrectionKeepPreview> {
+    return coordinateActualWrite(async () => {
+      const { activity,previous,evidence,targets } = await resolve(userId,reference);
+      if (!previous || previous.id !== correctionId || previous.state !== 'attention' || !previous.executionStopped) correctionConstraint('Only a stopped correction needing attention can keep a reviewed result.');
+      const sourceRevision = await store.sourceRevision(userId,activity.id);
+      const snapshot = await inspect(userId,evidence.budgetId,targets);
+      if (snapshot.budgetId !== evidence.budgetId) correctionConstraint('The selected Actual budget changed.');
+      if (sourceRevision !== await store.sourceRevision(userId,activity.id)) correctionConstraint('The source changed. Read Actual again.');
+      const preview: FinancialCorrectionKeepPreview = { id:randomUUID(),correctionId,correctionRevision:previous.revision,reference,sourceRevision,snapshot,targets,reviewedAt:Date.now() };
+      await store.saveKeepPreview(userId,preview);
+      return preview;
+    });
+  }
+  async function confirmKeep(userId: string, previewId: string) {
+    return coordinateActualWrite(async () => {
+      const preview = await store.keepPreview(userId,previewId);
+      const correction = await store.read(userId,preview.correctionId);
+      if (!correction) correctionConstraint('Correction not found.');
+      if (correction.state === 'completed' && (correction.effectiveResult as {keepPreviewId?:string})?.keepPreviewId === preview.id) return correction;
+      if (correction.state !== 'attention' || !correction.executionStopped || correction.revision !== preview.correctionRevision) correctionConstraint('The correction changed. Review the current result again.');
+      const current = await inspect(userId,preview.snapshot.budgetId,preview.targets);
+      if (correctionJson(current) !== correctionJson(preview.snapshot)) correctionConstraint('Actual changed after your review. Read the current result again before keeping it.');
+      const result = { ...buildKeptFinancialResult(correction.preview,current),keepPreviewId:preview.id,keptAt:Date.now() };
+      const kept = await store.keep(userId,preview,result);
+      await invalidate(userId,correction.id);
+      return kept;
+    });
+  }
   async function preview(userId: string, reference: FinancialActivityReference, draft: FinancialCorrectionDraft): Promise<FinancialCorrectionPreview> {
     return coordinateActualWrite(async () => {
       const { activity, previous, evidence, targets } = await resolve(userId, reference, draft?.targetScheduleId);
       const sourceRevision = await store.sourceRevision(userId, activity.id);
-      if (previous && (!previous.executionStopped || previous.steps.some(step => step.attemptedAt !== null && !['applied', 'no_write', 'partial'].includes(step.state)))) correctionConstraint('The earlier correction has an uncertain attempted step; it cannot be bypassed.');
+      if (previous && previous.state !== 'completed' && (!previous.executionStopped || previous.steps.some(step => step.attemptedAt !== null && !['applied', 'no_write', 'partial'].includes(step.state)))) correctionConstraint('The earlier correction has an uncertain attempted step; it cannot be bypassed.');
       const snapshot = await inspect(userId, evidence.budgetId, targets);
       if (snapshot.budgetId !== evidence.budgetId) correctionConstraint('The selected Actual budget changed.');
       const successorSteps = correctionSuccessorSteps(previous, snapshot);
@@ -151,7 +208,7 @@ export function createFinancialCorrections({ store = createFinancialCorrectionSt
       }
     });
   }
-  return { inspect: inspectActivity, preview, confirm, read: store.read, apply,
+  return { inspect: inspectActivity, recheck, previewKeep, confirmKeep, preview, confirm, read: store.read, apply,
     async recoverPending() { for (const item of await store.pending()) await apply(item.userId, item.id); } };
 }
 export const financialCorrections = createFinancialCorrections();

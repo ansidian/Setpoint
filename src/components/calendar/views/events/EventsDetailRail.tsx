@@ -162,10 +162,10 @@ function EventSelectedActions({ ev, onEditEvent, compact = false, accent = "#89b
   );
 }
 
-function hasEventActions(ev: CalendarItemLike | null | undefined): boolean {
+function hasEventActions(ev: CalendarItemLike | null | undefined, hideEdit = false): boolean {
   if (!ev) return false;
   if (isGoogleSpecialDateEvent(ev)) return false;
-  return Boolean(isEditableEvent(ev) || extractZoomMeetingUrl(ev) || extractNonZoomEventUrl(ev) || calendarActionUrl(ev));
+  return Boolean((isEditableEvent(ev) && !hideEdit) || extractZoomMeetingUrl(ev) || extractNonZoomEventUrl(ev) || calendarActionUrl(ev));
 }
 
 function toRailItem(ev: CalendarItemLike, onSelectItem?: (itemId: string | null) => void, selectedItemId?: unknown): TimelineRailItem {
@@ -301,7 +301,7 @@ export function renderEventsFloatingDetail({ items, selectedItemId, onEditEvent,
     <EventSelectedCard
       ev={selectedEvent}
       accent={accent}
-      actions={hasEventActions(selectedEvent) ? (
+      actions={hasEventActions(selectedEvent, hideEdit) ? (
         <EventSelectedActions
           ev={selectedEvent}
           onEditEvent={onEditEvent}

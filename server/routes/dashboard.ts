@@ -13,30 +13,10 @@ import {
   syncCurrentDashboard,
 } from "../dashboard/current-service.ts";
 import { timeRoute } from "../timing.ts";
-import { transactionImportStore } from "../transaction-imports/transaction-import-store.ts";
 
 const router = Router();
 
 router.use(requireCookieSession);
-
-router.get("/finance/review-runs", timeRoute("/api/dashboard/finance/review-runs"), async (req, res) => {
-  const rawOffset = req.query.offset;
-  if (rawOffset !== undefined && (typeof rawOffset !== "string" || !/^\d+$/.test(rawOffset))) {
-    res.status(400).json({ message: "Offset must be a non-negative integer" });
-    return;
-  }
-  const offset = rawOffset === undefined ? 0 : Number(rawOffset);
-  if (!Number.isSafeInteger(offset)) {
-    res.status(400).json({ message: "Offset must be a non-negative integer" });
-    return;
-  }
-  try {
-    res.json(await transactionImportStore.listReviewRuns(process.env.EA_USER_ID!, 12, offset));
-  } catch (err) {
-    console.error("[Dashboard] finance review runs fetch failed:", err);
-    res.status(500).json({ message: "Failed to fetch financial review runs" });
-  }
-});
 
 router.get("/finance", timeRoute("/api/dashboard/finance"), async (_req, res) => {
   try {

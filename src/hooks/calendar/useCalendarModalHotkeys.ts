@@ -50,7 +50,6 @@ export interface CalendarModalHotkeysOptions {
   floatingDetailRef: MutableRefObject<CalendarFloatingDetail | null>;
   setFloatingDetail: Dispatch<SetStateAction<CalendarFloatingDetail | null>>;
   handleViewChange?: (view: string) => void;
-  cycleView?: () => void;
   usesFloatingEditor: boolean;
   cancelFloatingEditor: () => void;
   flipFloatingDetailSide?: () => void;
@@ -157,7 +156,6 @@ export default function useCalendarModalHotkeys({
   floatingDetailRef,
   setFloatingDetail,
   handleViewChange,
-  cycleView,
   usesFloatingEditor,
   cancelFloatingEditor,
   flipFloatingDetailSide,
@@ -435,15 +433,9 @@ export default function useCalendarModalHotkeys({
           }
           consumeCalendarKey();
           break;
-        case "3":
-          // Re-pressing the calendar's own tab key toggles the events/bills
-          // view; 1/2/4/5 still bubble to the shell tab switcher below.
-          cycleView?.();
-          consumeCalendarKey();
-          break;
         default:
           if (event.key === "Enter"
-            || (event.key.length === 1 && !["1", "2", "4", "5", " ", "r", "R"].includes(event.key))) {
+            || (event.key.length === 1 && !["1", "2", "3", "4", "5", "6", " ", "r", "R"].includes(event.key))) {
             consumeCalendarKey();
           }
           break;
@@ -454,5 +446,5 @@ export default function useCalendarModalHotkeys({
     return () => document.removeEventListener("keydown", handleKey, true);
     // The editor routing helpers intentionally read the latest modal refs inside this document listener.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, canGoPrev, currentMonth, currentYear, todayDate, view, viewYear, viewMonth, closeEventEditor, eventEditor, deadlineEditor, selectedItemId, selectedDay, selectedDateKey, activeView, itemsByDay, itemsByDate, setDeadlineEditor, floatingDetail?.open, floatingDetail?.mode, handleViewChange, cycleView, usesFloatingEditor, onCopySelectedEvent, onPasteCopiedEvent, onDeleteSelectedEvents, onBeginEventSelectionSetFromSelected, openCalendarSearch, cancelCalendarSearch]);
+  }, [open, canGoPrev, currentMonth, currentYear, todayDate, view, viewYear, viewMonth, closeEventEditor, eventEditor, deadlineEditor, selectedItemId, selectedDay, selectedDateKey, activeView, itemsByDay, itemsByDate, setDeadlineEditor, floatingDetail?.open, floatingDetail?.mode, handleViewChange, usesFloatingEditor, onCopySelectedEvent, onPasteCopiedEvent, onDeleteSelectedEvents, onBeginEventSelectionSetFromSelected, openCalendarSearch, cancelCalendarSearch]);
 }

@@ -49,7 +49,7 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 - `timeline/timeline-helpers.ts` — day grouping, layout constants, now-marker progress math (percentElapsed / formatNowMarkerLabel / formatNowMarkerClock), and the focus-window marker slot (resolveTodayNowMarkerIndex)
 
 ### Tier 3 — Context column
-- `context/ContextColumn.tsx` — the right column: weather, Ahead, and Inbox Peek; occurrence-qualified deadline actions
+- `context/ContextColumn.tsx` — desktop right column: weather, Ahead, and Inbox Peek; mobile: Ahead then weather, with Inbox Peek omitted; occurrence-qualified deadline actions
 - `context/WeatherCard.tsx` — weather card that expands on hover/focus/tap to reveal the rest-of-today hourly strip and a next-3-days forecast
 - `context/weatherCardModel.ts` — pure transforms shaping the live feed into the hover card's hour/day view-models (now-accent, rain chip, condition labels)
 - `context/ComingUpCard.tsx` — Ahead: future deadlines grouped by day, bounded preview with day/week disclosures
@@ -62,12 +62,11 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 - `rails/railPrimitives.tsx` — shared `SectionHeader`/`EmptyRow` used by the inbox peek and Coming-up card
 
 ### Financial context and schedule notices
-- `finance/DashboardFinance.tsx` — Money Ahead / Spending Snapshot pair and Finance Review / Recent Automation activity with exact shared financial foreground and Calendar handoffs
-- `finance/useDashboardFinance.ts` — local financial read, coalesced financial/Actual invalidations, refresh/focus handling, and last-success retention
+- `finance/DashboardFinance.tsx` — unified Finance review before Money Ahead / Spending Snapshot, with exact shared financial foreground handoffs
+- `finance/useDashboardFinance.ts` — spending and canonical all-source review/completed reads, shared refresh/invalidation, and independent last-success/error retention
 - `finance/MoneyAheadCard.tsx` — future unpaid scheduled bills, seven-day total and bounded expandable rows
 - `finance/SpendingSnapshotCard.tsx` — month-to-date comparison, matching prior dates, top categories and sync freshness
-- `finance/FinancialActivityCard.tsx` — pending review count and latest automatic outcomes with exact financial record entry points; source evidence lives inside the record
-- `finance/FinancialEventReviewPreview.tsx` — independently refreshed managed financial exception count and three exact event/document shared financial record links
+- `finance/FinancialActivityCard.tsx` — one canonical review count and three direct records, with all-source completed activity in a quiet disclosure; source evidence lives inside the record
 - `finance/finance-cards.css` — financial grid, typography, controls and responsive/motion states
 - `timeline/DashboardScheduleNotices.tsx` / `.css` — conditional stored departure estimate and overlap notices, reusing calendar reminders
 - `timeline/dashboardScheduleModel.ts` — exact occurrence reminder matching and remaining-today overlap policy
@@ -77,7 +76,8 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 - `calendarBillsData.ts` — transforms live data into calendar-compatible bill shape
 - `dashboardCalendarModalModel.ts` — pure deadline projection for seeding the calendar workspace from current dashboard data
 - `inboxBadgeModel.ts` — unread signal count with read-state overrides
-- `DashboardItemDetailSheet.tsx` — unified glance sheet for a dashboard item tap (deadline/bill/event): full detail via the reused calendar cards (`DeadlineDetailCard`/`BillSelectedCard`/`EventSelectedCard`) + per-type action + "Open in calendar" deep-link; anchored panel on desktop, bottom sheet on mobile (via `AnchoredFloatingPanel`). Carries the deadline inline edit (`AddTaskPanel`) + mark-complete. Replaces the old DeadlineDetailPopover + CalendarItemDetailSheet
+- `DashboardItemDetailSheet.tsx` — unified glance sheet for a dashboard item tap (deadline/bill/event): shared detail cards (`DeadlineDetailCard`/`RecurringPaymentCard`/`EventSelectedCard`) + per-type action and workspace deep-link; opaque anchored panel on desktop, titled bottom sheet on mobile (via `AnchoredFloatingPanel`). The panel owns the single type heading; the inner card owns facts and actions. Carries the deadline inline edit (`AddTaskPanel`) + mark-complete.
+- Desktop detail triggers use `data-dashboard-detail-trigger="true"` so the open panel survives pointerdown and moves to the next anchor; selecting another item resets its content state and cancels the old completion close timer.
 - `glanceActionsModel.ts` — pure per-type action descriptors for the glance sheet (deadline: complete/edit/todoist; bill: actual/pay; event: zoom/url/gcal; all: open-in-calendar)
 - `MarkDoneAction.tsx` — quiet text-only "Mark done" control shared by the Needs-you band's upcoming cards and the Coming-up rows; reveals on parent hover or its own focus
 
@@ -85,7 +85,7 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 
 ## Local patterns
 
-- One fixed layout, branched on `isMobile` inside `ThreeTierLayout` (`layout/DashboardScenePrimitives.tsx`): desktop is a no-page-scroll column (band on top, scrolling Today/finance stack + 344px scrolling context column below); mobile stacks the same three tiers. There are no per-user layout modes.
+- One fixed layout, branched on `isMobile` inside `ThreeTierLayout` (`layout/DashboardScenePrimitives.tsx`): desktop is a no-page-scroll column (band on top, scrolling Today/finance stack + 344px scrolling context column below); mobile stacks Needs You, Today, Ahead, weather, then finance, without Inbox Peek. There are no per-user layout modes.
 - Overdue/due-today deadlines and due-today bills live only in the Needs-you band (the single home for "open this now"); Ahead shows future deadlines and Money Ahead shows future bills. Today retains deadline context but future deadlines do not repeat in its later groups. `DashboardBody` passes the band `{ upcoming: deadlines }` because the band model reads the object form.
 - Motion uses scene tokens for staggered entry; respect reduced motion.
 
@@ -95,3 +95,5 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 - `src/components/calendar/` — calendar tab mounted via `DashboardCalendarModalMount.tsx`
 - `src/components/alfred/` — desktop-only Alfred Panel mounted by `DashboardShell.tsx` (⌘\ toggle, ⌘⇧\ new chat); mobile neither mounts nor exposes it
 - `server/routes/dashboard.ts` — state fetch + SSE stream backing this view
+
+- `useWorkspaceTabRoute.ts` — accepted shell URL/Back state and retained Finances mounting

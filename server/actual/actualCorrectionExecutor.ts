@@ -50,7 +50,7 @@ export function observeCorrectionStep(step: CorrectionStep, observed: Correction
     const rule = linkedRules.length === 1 && linkedRules[0]?.id === parent?.rule && !linkedRules[0]?.tombstone ? linkedRules[0] : undefined;
     const dates = observed.dates.filter(row => row.schedule_id === expected.schedule!.id);
     const scheduleFields = { ...expected.schedule }; delete scheduleFields.rule;
-    if (parent && matches(parent, scheduleFields) && rule && dates.length === 1 && !dates[0]!.tombstone
+    if (parent && matches(parent, scheduleFields) && rule && (expected.schedule.rule === undefined || parent.rule === expected.schedule.rule) && dates.length === 1 && !dates[0]!.tombstone
       && (!expected.scheduleActions || correctionJson(normalizedActions(decodeCorrectionJson(rule.actions))) === correctionJson(normalizedActions(expected.scheduleActions)))
       && (expected.nextDate === undefined || (dates[0]!.local_next_date_ts === dates[0]!.base_next_date_ts ? dates[0]!.local_next_date : dates[0]!.base_next_date) === expected.nextDate)
       && correctionJson(normalizedConditions(decodeCorrectionJson(rule.conditions))) === correctionJson(normalizedConditions(expected.conditions || []))) return 'applied';
