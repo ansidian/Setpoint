@@ -1,6 +1,6 @@
 # Server Root Map
 
-Composition root and cross-cutting server concerns that don't belong to a single domain. `server/<domain>/` subdirectories with their own `CLAUDE.md` (email, bills, calendar, snapshots, tasks, reminders, triage, actual, platform, routes, alfred, news, middleware, transactions) carry their own maps — see those for domain logic. This map covers everything else directly under `server/`, including the smaller subdirectories below that don't yet warrant their own map.
+Composition root and cross-cutting server concerns that don't belong to a single domain. `server/<domain>/` subdirectories with their own `CLAUDE.md` (auth, email, bills, calendar, snapshots, tasks, reminders, triage, actual, platform, routes, alfred, news, middleware, transactions) carry their own maps — see those for domain logic. This map covers everything else directly under `server/`, including the smaller subdirectories below that don't yet warrant their own map.
 
 ## Files
 
@@ -25,25 +25,6 @@ Composition root and cross-cutting server concerns that don't belong to a single
 - `onboarding-progress-store.ts` — versioned, owner-keyed onboarding presentation progress; independent from live capability health
 - `google-oauth-credentials.ts` — Google application credential-pair staging, active/pending selection, callback version binding, and atomic promotion
 - `hash-password.ts` — one-shot CLI to bcrypt-hash a password for `EA_PASSWORD_HASH`
-
-### `auth/` — passkey/WebAuthn and session support
-- `auth/passkey-store.ts` — CRUD for stored passkey credentials
-- `auth/auth-mode.ts` — explicit password-or-passkey vs. strict password-plus-passkey resolution
-- `auth/recovery-code-store.ts` — high-entropy recovery-code generation, hashing, replacement, status, and atomic consumption
-- `auth/pending-auth-store.ts` — generation-bound short-lived pending-auth issuance plus atomic consumption (WebAuthn ceremony handoff)
-- `auth/session-cookie.ts` — centralized secure session-cookie issue/clear behavior around generation-conditional session creation
-- `auth/security-transition.ts` — transactional owner-generation compare-and-swap for credential mutations plus session/pending/challenge revocation
-- `auth/password-policy.ts` — existing-password verification bounds and the minimum policy for every newly chosen password
-- `auth/password-login-throttle.ts` — atomic durable singleton-owner password attempt budget shared across IPs and processes
-- `auth/setup-token.ts` — constant-time validation of the out-of-band first-claim deployment secret
-- `auth/owner-store.ts` — singleton owner persistence and atomic claim invariant
-- `auth/owner-bootstrap.ts` — startup resolution and fail-closed legacy env import
-- `auth/owner-claim-service.ts` — first-visitor password hashing and owner claim orchestration
-- `auth/owner-context.ts` — process-local claimed-owner context and runtime activation notifications
-- `auth/owner-runtime.ts` — one-shot gate that admits background work only after owner claim
-- `auth/webauthn-challenge-store.ts` — generation-bound short-lived WebAuthn challenge issuance and atomic consumption
-- `auth/webauthn-config.ts` — relying-party (RP) id/name/origin resolution for dev vs. production
-- `auth/webauthn-service.ts` — registration/authentication option + verification flows (via `@simplewebauthn/server`)
 
 ### `db/` — connection and migrations
 - `db/config.ts` — resolves the libsql client config (local file vs. remote URL/token) from env
@@ -83,5 +64,6 @@ Composition root and cross-cutting server concerns that don't belong to a single
 
 ## Related
 
+- [Authentication map](auth/CLAUDE.md) — owner setup, credentials, passkeys and session support
 - Domain background-worker modules such as `server/email/email-backfill-worker.ts` and `server/reminders/reminder-scheduler.ts` — the individual stop functions `index.ts` passes into `shutdown.ts`'s `stopFns`
 - `server/db/migrations/` — SQL files run by `db/migrate.ts`
