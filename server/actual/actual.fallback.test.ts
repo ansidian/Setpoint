@@ -1,4 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+// test-architecture: allow-boundary-mock -- Replace the application database connection with real ephemeral SQLite; keep the financial write guard and its migrated schema active without reading the development database.
+vi.mock("../db/connection.ts", async () => {
+  const { createClient } = await import("@libsql/client");
+  return { default: createClient({ url: "file::memory:" }) };
+});
 
 // Actual Budget lightweight wire and worker process are provider/process
 // boundaries here: the tests inject compatibility outcomes and assert the
@@ -14,6 +21,7 @@ vi.mock("./actual-worker.ts", () => ({
 
 const { sendBillLightweight } = await import("./actual-lightweight-writes.ts");
 const { runActualWorkerOperation } = await import("./actual-worker.ts");
+const { default: db } = await import("../db/connection.ts");
 const { sendBill } = await import("./actual.ts");
 const mockSendBillLightweight = vi.mocked(sendBillLightweight);
 const mockRunActualWorkerOperation = vi.mocked(runActualWorkerOperation);
@@ -30,6 +38,22 @@ function unsupportedError() {
 }
 
 describe("actual.ts sendBill compatibility outcomes", () => {
+  beforeAll(async () => {
+    const migrations = [
+      "001_ea_tables.sql", "013_email_index_normalized_date.sql", "025_email_thread_identity.sql",
+      "030_owner_bootstrap.sql", "041_email_transaction_imports.sql", "042_transaction_import_item_subject.sql",
+      "053_transaction_import_financial_plans.sql", "054_email_sender_authentication.sql",
+      "055_generic_financial_email_imports.sql", "056_generic_financial_email_automation.sql",
+      "058_generic_financial_email_income_automation.sql", "059_generic_financial_email_transfer_automation.sql",
+      "062_financial_events.sql", "063_financial_activity.sql", "064_financial_corrections.sql",
+    ];
+    for (const migration of migrations) {
+      await db.executeMultiple(readFileSync(new URL(`../db/migrations/${migration}`, import.meta.url), "utf8"));
+    }
+  });
+
+  afterAll(() => db.close());
+
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.NODE_ENV = "production";
