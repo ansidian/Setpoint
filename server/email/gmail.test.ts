@@ -206,6 +206,22 @@ describe("fetchEmailsInRange", () => {
     expect(result.emails[0]!.body_text).toBe("Remaining statement balance\n\n$472.32");
   });
 
+  it("retains statement facts from HTML when the plain alternative is a web-message link with a long footer", async () => {
+    const plain = `Example Bank\nPlease visit the following link to view your message:\nhttps://bank.example/message\n${"Privacy and security information. ".repeat(50)}`;
+    const html = "<p>Your payment due date is approaching.</p><table><tr><td>Statement Balance</td><td>$258.69</td></tr><tr><td>Minimum Payment Due</td><td>$41.00</td></tr><tr><td>Payment Due Date</td><td>09/10/2026</td></tr></table>";
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ messages: [{ id: "msg-1" }] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({
+        id: "msg-1", payload: { mimeType: "multipart/alternative", parts: [
+          { mimeType: "text/plain", body: { data: Buffer.from(plain).toString("base64url") } },
+          { mimeType: "text/html", body: { data: Buffer.from(html).toString("base64url") } },
+        ] },
+      }) });
+    const result = await fetchEmailsInRange(fakeAccount, { start: "2026-09-01", end: "2026-09-06" });
+    expect(result.emails[0]!.body_text).toMatch(/Statement Balance\s+\$258\.69/);
+    expect(result.emails[0]!.body_text).toMatch(/Minimum Payment Due\s+\$41\.00/);
+    expect(result.emails[0]!.body_text).toMatch(/Payment Due Date\s+09\/10\/2026/);
+  });
+
   it("fetches a bounded INBOX date window and returns normalized indexable emails", async () => {
     fetchMock
       .mockResolvedValueOnce({

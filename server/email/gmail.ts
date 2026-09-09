@@ -78,8 +78,11 @@ function extractBodyText(payload: GmailMessagePart | null | undefined): string {
     let placeholder = "";
     for (const part of parts) {
       const text = extractBodyText(part);
-      if (part.mimeType === "text/plain" && text.length < 300
-        && /(?:html[- ](?:capable|enabled|compatible)|(?:view|read|display)[\s\S]{0,60}\bhtml\b|requires?\s+(?:an?\s+)?html)/i.test(text)) {
+      // Some senders put only a web-message link in the plain alternative,
+      // followed by a long legal footer. Its length does not make it evidence.
+      const webMessagePlaceholder = /\b(?:visit|follow|click)\b[^\n]{0,60}\blink\b[^\n]{0,40}\b(?:view|read)\s+(?:this|your|the)\s+(?:message|email)\b/i.test(text);
+      if (part.mimeType === "text/plain" && (webMessagePlaceholder || (text.length < 300
+        && /(?:html[- ](?:capable|enabled|compatible)|(?:view|read|display)[\s\S]{0,60}\bhtml\b|requires?\s+(?:an?\s+)?html)/i.test(text)))) {
         placeholder = text;
         continue;
       }
