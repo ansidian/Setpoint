@@ -151,6 +151,10 @@ export interface ActualImportAccountGroup {
 }
 
 export interface ActualTransferScheduleInput {
+  /** Managed events may update a uniquely matched, durably previewed schedule. */
+  allowUpdate?: boolean;
+  scheduleId?: string;
+  expectedScheduleFingerprint?: string;
   preparedEvidence?: FinancialWriteEvidence;
   identityKey: string;
   fromAccountId: string;
@@ -164,8 +168,9 @@ export interface ActualTransferScheduleInput {
 export type ActualTransferScheduleMode = "preview" | "create_once" | "recover";
 
 export interface ActualTransferScheduleResult {
+  scheduleFingerprint?: string;
   evidence?: FinancialWriteEvidence;
-  outcome: "would_create" | "created" | "already_scheduled" | "already_recorded" | "needs_review";
+  outcome: "would_create" | "would_update" | "created" | "updated" | "already_scheduled" | "already_recorded" | "needs_review";
   reason: string;
   budgetId: string;
   scheduleId?: string;

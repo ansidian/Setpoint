@@ -53,7 +53,7 @@ export default function FinancialEventCompletionForm({ plan, onCancel, onQueued,
   const [fromAccountId, setFromAccount] = useState(plan.targets.fromAccount.id || "");
   const [toAccountId, setToAccount] = useState(plan.targets.toAccount.id || "");
   const [categoryId, setCategory] = useState("");
-  const [scheduleName, setScheduleName] = useState(plan.targets.schedule.label || "");
+  const [scheduleName, setScheduleName] = useState<string | null>(null);
   const [notes, setNotes] = useState(plan.candidate.notes || "");
   const [metadata, setMetadata] = useState<ActualMetadata | null>(null);
   const [reload, setReload] = useState(0);
@@ -79,6 +79,10 @@ export default function FinancialEventCompletionForm({ plan, onCancel, onQueued,
   const transfer = kind === "transfer" || kind === "transfer_schedule";
   const scheduled = kind === "bill" || kind === "transfer_schedule";
   const ordinaryPayment = !transfer && !scheduled;
+  const defaultScheduleName = transfer
+    ? (accounts.find(account => account.id === toAccountId)?.name || plan.targets.toAccount.label || "")
+    : plan.targets.schedule.label || payee.trim();
+  const effectiveScheduleName = scheduleName ?? (transfer && defaultScheduleName ? `${defaultScheduleName} Payment` : defaultScheduleName);
   const hasAccount = (value: string) => accounts.some((account) => account.id === value);
   const canSend = !sending && !stale && Number(amount) > 0 && !!date && (transfer
     ? hasAccount(fromAccountId) && hasAccount(toAccountId) && fromAccountId !== toAccountId
@@ -86,7 +90,7 @@ export default function FinancialEventCompletionForm({ plan, onCancel, onQueued,
 
   const values = JSON.stringify([kind,amount === "" ? "" : Number(amount),date,notes,
     ...(transfer ? [fromAccountId,toAccountId] : [accountId,payee.trim(),categoryId]),
-    ...(scheduled ? [scheduleName.trim()] : [])]);
+    ...(scheduled ? [scheduleName?.trim() ?? null] : [])]);
   const [baseline] = useState(values);
   useEffect(() => { onDirty?.(values !== baseline); },[values,baseline,onDirty]);
 
@@ -103,7 +107,7 @@ export default function FinancialEventCompletionForm({ plan, onCancel, onQueued,
         emailUid: revision.emailUid, documentRevision: revision.documentRevision, eventRevision: revision.eventRevision,
         entry: { kind, amount: Number(amount), date, notes,
           ...(transfer ? { fromAccountId, toAccountId } : { accountId, payee: payee.trim(), categoryId: categoryId || null }),
-          ...(scheduled ? { scheduleName: scheduleName.trim() || (transfer
+          ...(scheduled ? { scheduleName: effectiveScheduleName.trim() || (transfer
             ? `${accounts.find((account) => account.id === toAccountId)!.name} Payment` : payee.trim()) } : {}),
         },
       });
@@ -146,7 +150,7 @@ export default function FinancialEventCompletionForm({ plan, onCancel, onQueued,
         <Field name="Account" icon={<Landmark size={13} aria-hidden="true" className="text-muted-foreground" />}><SearchableDropdown ariaLabel="Account" options={accounts} value={accountId} onChange={setAccount} disabled={sending} placeholder="Choose an account" /></Field>
         <Field name="Category (optional)"><SearchableDropdown ariaLabel="Category (optional)" options={[{ id:"",name:"No category" },...(metadata?.categories || []).map(item => ({ id:item.id,name:item.group ? `${item.group} / ${item.name}` : item.name }))]} value={categoryId} onChange={setCategory} disabled={sending} placeholder="No category" /></Field>
       </>}
-      {scheduled && <Field name="Schedule name (optional)"><Input className={inputClass} value={scheduleName} maxLength={200} onChange={(event) => setScheduleName(event.target.value)} disabled={sending} placeholder={payee || "Payment"} /></Field>}
+      {scheduled && <Field name="Schedule name (optional)"><Input className={inputClass} value={effectiveScheduleName} maxLength={200} onChange={(event) => setScheduleName(event.target.value)} disabled={sending} placeholder={transfer ? "Account name + Payment" : payee || "Bill name"} /></Field>}
       <Field name="Notes (optional)"><Input className={inputClass} value={notes} maxLength={1000} onChange={(event) => setNotes(event.target.value)} disabled={sending} /></Field>
       </>}
       {!metadata && <p role="status" className="text-xs text-foreground/80">Loading Actual accounts…</p>}

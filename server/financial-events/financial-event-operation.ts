@@ -19,7 +19,7 @@ export function buildFinancialEventOperation(eventId: string, plan: FinancialEma
   if (plan.operation.intended === "create_transfer_schedule") {
     return fromAccountId && toAccountId && fromAccountId !== toAccountId
       ? { executor: "transfer_schedule", input: { identityKey, fromAccountId, toAccountId, amountCents: cents, date,
-          name: plan.targets.schedule.label || `${plan.targets.toAccount.label} Payment` } } : null;
+          allowUpdate: true, name: plan.targets.toAccount.label ? `${plan.targets.toAccount.label} Payment` : "" } } : null;
   }
   if (plan.operation.intended === "create_transfer") {
     return fromAccountId && toAccountId && fromAccountId !== toAccountId
@@ -42,10 +42,10 @@ export function buildFinancialEventOperation(eventId: string, plan: FinancialEma
 }
 
 export function bindFinancialEventOperation(operation: FinancialEventOperation, preview: ActualFinancialOperationResult): FinancialEventOperation {
-  if (operation.executor === "financial" && operation.input.kind === "utility_schedule") {
+  if (operation.executor === "transfer_schedule" || operation.input.kind === "utility_schedule") {
     return { ...operation, input: { ...operation.input, budgetId: preview.budgetId, preparedEvidence: preview.evidence,
       ...(preview.scheduleId ? { scheduleId: preview.scheduleId } : {}),
-      ...(preview.scheduleFingerprint ? { expectedScheduleFingerprint: preview.scheduleFingerprint } : {}) } };
+      ...(preview.scheduleFingerprint ? { expectedScheduleFingerprint: preview.scheduleFingerprint } : {}) } } as FinancialEventOperation;
   }
   return { ...operation, input: { ...operation.input, budgetId: preview.budgetId, preparedEvidence: preview.evidence } } as FinancialEventOperation;
 }
@@ -64,6 +64,7 @@ export function createFinancialEventExecutor({
     const result = await transfer(userId, operation.input, mode === "write_once" ? "create_once" : mode);
     return { ...result, outcome: result.outcome === "would_create" ? "would_add"
       : result.outcome === "created" ? "added"
+        : result.outcome === "would_update" || result.outcome === "updated" ? result.outcome
         : ["already_scheduled", "already_recorded"].includes(result.outcome) ? "already_present" : "needs_review" };
   };
 }

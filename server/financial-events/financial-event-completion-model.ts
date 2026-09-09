@@ -162,7 +162,7 @@ export function ownerCompletionOperation(eventId: string, entry: FinancialEventC
   const amountCents = Math.round(entry.amount * 100);
   const date = entry.date;
   if (entry.kind === "transfer_schedule") return { executor: "transfer_schedule", input: { identityKey,
-    fromAccountId: entry.fromAccountId!, toAccountId: entry.toAccountId!, amountCents, date, name: entry.scheduleName || "Payment" } };
+    fromAccountId: entry.fromAccountId!, toAccountId: entry.toAccountId!, amountCents, date, allowUpdate: true, name: entry.scheduleName || "" } };
   if (entry.kind === "transfer") return { executor: "financial", input: { kind: "completed_transfer", identityKey,
     fromAccountId: entry.fromAccountId!, toAccountId: entry.toAccountId!, amountCents, date, notes: entry.notes || "" } };
   const base = { identityKey, accountId: entry.accountId!, payee: entry.payee!, categoryId: entry.categoryId || null, date };

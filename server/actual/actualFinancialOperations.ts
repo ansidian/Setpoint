@@ -292,20 +292,27 @@ async function utilitySchedule(
   const rules = new Map(state.rules.map((rule) => [rule.id, rule]));
   const exactTargets = state.schedules.filter((schedule) => {
     const rule = rules.get(schedule.rule);
-    return !schedule.tombstone && !schedule.completed && rule && payeeId
+    return !schedule.tombstone && rule && payeeId
+      && (!schedule.completed || (schedule.next_date && schedule.next_date < input.date
+        && normalizeName(schedule.name || "") === normalizeName(input.name)))
       && condition(rule, "account")?.value === input.accountId && condition(rule, "payee")?.value === payeeId;
   });
+  const activeTargets = exactTargets.filter(schedule => !schedule.completed);
+  const latestDate = exactTargets.map(schedule => schedule.next_date || "").sort().at(-1);
+  const compatibleTargets = activeTargets.length ? activeTargets : exactTargets.filter(schedule => schedule.next_date === latestDate);
   const requested = input.scheduleId ? state.schedules.find((schedule) => schedule.id === input.scheduleId) : undefined;
   if (input.scheduleId && !requested && input.scheduleId !== deterministicId) return review("The selected utility schedule is unavailable.");
-  if (!requested && !owned && exactTargets.length > 1) return review("Multiple utility schedules match the account and payee.");
-  const selected = requested || owned || (exactTargets.length === 1 ? exactTargets[0] : undefined);
-  if (selected?.tombstone || selected?.completed) return review("The selected utility schedule is deleted or completed.");
+  if (!requested && !owned && compatibleTargets.length > 1) return review("Multiple utility schedules match the account and payee.");
+  const selected = requested || owned || (compatibleTargets.length === 1 ? compatibleTargets[0] : undefined);
+  if (selected?.tombstone || (selected?.completed && (!selected.next_date || selected.next_date >= input.date))) {
+    return review("The selected utility schedule is deleted or completed for this statement date.");
+  }
   const rule = selected ? rules.get(selected.rule) : undefined;
   if (selected && (!payeeId || !supportedBillRule(selected, rule, input.accountId, payeeId))) {
     return review("The selected utility schedule has conflicting or unsupported rules.");
   }
   const scheduleFingerprint = selected && rule ? fingerprint(selected, rule) : undefined;
-  if (selected && rule && condition(rule, "amount")?.value === input.amountCents && selected.next_date === input.date
+  if (selected && !selected.completed && rule && condition(rule, "amount")?.value === input.amountCents && selected.next_date === input.date
     && categoryMatches(rule, categoryId)) {
     return result("already_present", "An exact utility schedule already exists.", { scheduleId: selected.id, scheduleFingerprint });
   }
@@ -333,7 +340,7 @@ async function utilitySchedule(
         { field: "account", op: "is", value: input.accountId }, { field: "payee", op: "is", value: payeeId }];
   const scheduleId = selected?.id || deterministicId;
   if (selected) {
-    await sdk.internal.send("schedule/update", { schedule: { id: scheduleId }, conditions });
+    await sdk.internal.send("schedule/update", { schedule: { id: scheduleId, completed: false }, conditions });
   } else {
     const usedNames = new Set(state.schedules.filter((schedule) => !schedule.tombstone).map((schedule) => schedule.name));
     const name = usedNames.has(input.name.trim()) ? `${input.name.trim()} (${input.date}, ${deterministicId.slice(0, 8)})` : input.name.trim();

@@ -1,3 +1,4 @@
+import { buildDateCondition } from "./actualCoreModel.ts";
 import { createHash } from "node:crypto";
 import { readOriginalResult, settleOriginalEvidence, type ActualEvidencePort } from "./actualOriginalEvidence.ts";
 import type { ActualAccount, ActualPayee, ActualScheduleCondition } from "../../shared/types/actual.ts";
@@ -40,7 +41,7 @@ function validInput(input: ActualTransferScheduleInput): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(input.date) && Number.isFinite(parsed.getTime())
     && parsed.toISOString().slice(0, 10) === input.date
     && Number.isSafeInteger(input.amountCents) && input.amountCents > 0
-    && !!input.identityKey?.trim() && !!input.name?.trim()
+    && !!input.identityKey?.trim() && (input.allowUpdate === true || !!input.name?.trim())
     && !!input.fromAccountId && !!input.toAccountId && input.fromAccountId !== input.toAccountId;
 }
 
@@ -106,7 +107,11 @@ async function reconcileTransferScheduleOperation(
     return review("Recorded transfers on this date have conflicting amounts, direction, or links.");
   }
 
+  // The destination account is authoritative for a managed payment's default name.
+  if (!input.name?.trim()) input = { ...input, name: `${accounts.find(a => a.id === input.toAccountId)!.name} Payment` };
+  const normalizeName = (name: string | null) => name?.normalize("NFKC").trim().toLowerCase().replace(/\s+/g, " ");
   const exact: ScheduleRow[] = [];
+  const updates: Array<{ schedule: ScheduleRow; conditions: ActualScheduleCondition[]; rule: unknown }> = [];
   let conflict = false;
   for (const schedule of schedules) {
     const rule = ruleMap.get(schedule.rule);
@@ -121,7 +126,9 @@ async function reconcileTransferScheduleOperation(
     const involvesCard = account === input.toAccountId || other === input.toAccountId;
     if (schedule.id !== scheduleId) {
       if (!samePair && !(involvesCard && onDate)) continue;
-      if ((schedule.tombstone || schedule.completed) && !onDate) continue;
+      const reusableCompleted = input.allowUpdate && schedule.completed && !schedule.tombstone
+        && schedule.next_date && schedule.next_date < input.date && normalizeName(schedule.name) === normalizeName(input.name);
+      if ((schedule.tombstone || schedule.completed) && !onDate && !reusableCompleted) continue;
     }
     const amount = conditions.find((c) => c.field === "amount");
     const expected = account === input.fromAccountId ? -input.amountCents : input.amountCents;
@@ -133,30 +140,69 @@ async function reconcileTransferScheduleOperation(
     const dateMatches = schedule.next_date === input.date
       && (typeof date === "string" ? date === input.date : date != null && typeof date === "object" && !!date.frequency);
     if (samePair && supported && amount?.value === expected && dateMatches && !schedule.completed && !schedule.tombstone) exact.push(schedule);
-    else conflict = true;
+    else if (input.allowUpdate && samePair && supported && !schedule.tombstone
+      && typeof amount?.value === "number" && Math.sign(amount.value) === Math.sign(expected)
+      && (!schedule.completed || (schedule.next_date && schedule.next_date < input.date
+        && normalizeName(schedule.name) === normalizeName(input.name)))) {
+      updates.push({ schedule, conditions, rule });
+    } else conflict = true;
   }
-  if (conflict || exact.length > 1) return review("An existing transfer schedule conflicts with this payment. Review it in Actual.");
+  const activeUpdates = updates.filter(item => !item.schedule.completed);
+  // Completed prior cycles are eligible only by the same name and endpoints.
+  // Prefer the latest dated cycle, but never break ties arbitrarily.
+  const latestDate = updates.map(item => item.schedule.next_date || "").sort().at(-1);
+  const candidates = activeUpdates.length ? activeUpdates : updates.filter(item => item.schedule.next_date === latestDate);
+  if (conflict || exact.length > 1 || (exact.length && activeUpdates.length) || (!exact.length && candidates.length > 1)) {
+    return review("An existing transfer schedule conflicts with this payment. Review it in Actual.");
+  }
+  const selected = exact[0] || candidates[0]?.schedule;
+  if (input.scheduleId && input.scheduleId !== (selected?.id || scheduleId)) return review("The previewed transfer schedule is no longer the unique matching payment.");
   if (exact.length === 1) return result("already_scheduled", "An exact transfer schedule already exists.", { scheduleId: exact[0]!.id });
   if (mode === "recover") return review("A previous write was attempted, but its complete result could not be verified. Review Actual before adding anything.");
   const today = now.toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
   if (input.date <= today) return review("The payment date has arrived or passed. This notice does not confirm a completed transfer.");
   const transferPayees = payees.filter((p) => p.transfer_acct === input.fromAccountId);
   if (transferPayees.length !== 1) return review("The funding account does not have a unique Actual transfer payee.");
-  if (mode === "preview") return result("would_create", "No existing payment matches; a future transfer schedule can be created.", { scheduleId });
-
-  await sdk.internal.send("schedule/create", {
-    schedule: { id: scheduleId, name: availableScheduleName(input, schedules), completed: false, posts_transaction: false, tombstone: false },
-    conditions: [
-      { field: "account", op: "is", value: input.toAccountId },
-      { field: "payee", op: "is", value: transferPayees[0]!.id },
-      { field: "amount", op: "is", value: input.amountCents },
-      { field: "date", op: "is", value: input.date },
-    ],
-  });
+  const update = candidates[0];
+  const scheduleFingerprint = update ? createHash("sha256").update(JSON.stringify([update.schedule, update.rule])).digest("hex") : undefined;
+  const desiredDate = update ? buildDateCondition(update.conditions, input.date) : { field: "date", op: "is", value: input.date };
+  if (update && typeof desiredDate.value === "object" && desiredDate.value?.frequency
+    && (desiredDate.value.interval ?? 0) > 1 && update.schedule.next_date !== input.date) {
+    return review("The transfer schedule has a recurrence that cannot be moved to this payment date.");
+  }
+  const targetId = update?.schedule.id || scheduleId;
+  if (mode === "preview") return result(update ? "would_update" : "would_create",
+    update ? "The existing transfer schedule can be updated." : "No existing payment matches; a future transfer schedule can be created.",
+    { scheduleId: targetId, scheduleFingerprint });
+  if (update && (input.scheduleId !== targetId || input.expectedScheduleFingerprint !== scheduleFingerprint || !input.preparedEvidence)) {
+    return review("The transfer schedule changed after preview or has no verified preview.");
+  }
+  if (input.preparedEvidence) {
+    const current = await readOriginalResult(sdk, budgetId, { scheduleId: targetId });
+    if (JSON.stringify(current) !== JSON.stringify(input.preparedEvidence)) return review("The exact transfer schedule graph changed after its durable preparation.");
+  }
+  if (update) {
+    const account = update.conditions.find(c => c.field === "account")?.value;
+    const amount = account === input.fromAccountId ? -input.amountCents : input.amountCents;
+    await sdk.internal.send("schedule/update", {
+      schedule: { id: targetId, completed: false },
+      conditions: update.conditions.map(c => c.field === "amount" ? { ...c, value: amount } : c.field === "date" ? desiredDate : c),
+    });
+  } else {
+    await sdk.internal.send("schedule/create", {
+      schedule: { id: scheduleId, name: availableScheduleName(input, schedules), completed: false, posts_transaction: false, tombstone: false },
+      conditions: [
+        { field: "account", op: "is", value: input.toAccountId },
+        { field: "payee", op: "is", value: transferPayees[0]!.id },
+        { field: "amount", op: "is", value: input.amountCents },
+        desiredDate,
+      ],
+    });
+  }
   // Verify the full synced object. A successful dispatch alone is not completion.
   const confirmed = await reconcileTransferScheduleOperation(sdk, budgetId, input, "recover", now);
-  return confirmed.outcome === "already_scheduled" && confirmed.scheduleId === scheduleId
-    ? { ...confirmed, outcome: "created", reason: "A future transfer schedule was created and synced." }
+  return confirmed.outcome === "already_scheduled" && confirmed.scheduleId === targetId
+    ? { ...confirmed, outcome: update ? "updated" : "created", reason: update ? "The transfer schedule was updated and synced." : "A future transfer schedule was created and synced." }
     : confirmed;
 }
 
@@ -166,5 +212,5 @@ export async function reconcileActualTransferSchedule(sdk: TransferSdk, budgetId
   if (result.outcome === "needs_review") return result;
   const evidence = await readOriginalResult(sdk, budgetId, result);
   return { ...result, ...(evidence ? { evidence: mode === "preview" ? evidence
-    : settleOriginalEvidence(evidence, input.preparedEvidence, result.outcome === "created" ? "created" : mode === "recover" ? "unknown" : "matched") } : {}) };
+    : settleOriginalEvidence(evidence, input.preparedEvidence, result.outcome === "created" ? "created" : result.outcome === "updated" ? "updated" : mode === "recover" ? "unknown" : "matched") } : {}) };
 }
