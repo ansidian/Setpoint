@@ -1,4 +1,5 @@
 import type { FinanceDestination } from "../finances/financesNavigation";
+import WorkspaceLoading from "../shared/WorkspaceLoading";
 import InboxDesktopPane from "./InboxDesktopPane";
 import MobileInboxView from "./mobile/MobileInboxView";
 import useInboxController from "./useInboxController";
@@ -204,6 +205,7 @@ export default function InboxView({
     ...controller,
   };
 
+  if (!activeSnapshot.error && !activeSnapshot.snapshot && !displayedAccounts.length && !liveEmails.length && (activeSnapshot.loading || liveEmailsLoading)) return <WorkspaceLoading surface="inbox" />;
   if (isMobile) return <MobileInboxView {...sharedProps} />;
   return <InboxDesktopPane {...sharedProps} />;
 }

@@ -4,6 +4,7 @@
 // import — the const-arrow export trips Fast Refresh, hence the file-level
 // disable (matching the convention in src/components/calendar/views/*).
 import { lazy, Suspense, useMemo } from "react";
+import WorkspaceLoading from "../shared/WorkspaceLoading";
 import { makeCalendarBillsData } from "./calendarBillsData";
 import { dashboardCalendarDeadlineData } from "./dashboardCalendarModalModel";
 import { useUtilityPayLinks } from "@/hooks/useUtilityPayLinks";
@@ -79,7 +80,7 @@ export default function DashboardCalendarModalMount({
   const seededDeadlines = calendarDeadlines ?? liveData?.liveDeadlines ?? {};
 
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<WorkspaceLoading surface="calendar" />}>
       <CalendarModal
         mobileShellActions={mobileShellActions}
         open={true}

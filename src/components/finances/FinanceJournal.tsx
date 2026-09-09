@@ -6,6 +6,7 @@ import type { FinanceDestination } from './financesNavigation';
 import { financeDate, financeMoney } from './financeWorkspaceModel';
 import { financeActivityDays, financeMonthRange } from '../../hooks/calendar/financeActivityModel';
 import FinanceActivityCalendar from '../calendar/FinanceActivityCalendar';
+import WorkspaceLoading from '../shared/WorkspaceLoading';
 import AnimatedCollapse from '../shared/AnimatedCollapse';
 import AnchoredFloatingPanel from '../shared/pickers/AnchoredFloatingPanel';
 import CalendarDateTimeView from '../shared/pickers/CalendarDateTimeView';
@@ -50,6 +51,7 @@ export default function FinanceJournal({ date,transactionId,data,revision,onNavi
   const changeMonth=(value:string)=>{setMonth(value);setSelectedDate(null);setPreviewDate(null);pendingScroll.current=null;};
   const selectedExists=entries.some(entry=>entry.ids.includes(transactionId || ''));
   const selectedElsewhere=visibleRange?.relatives.find(row=>row.id===transactionId && (row.date<start||row.date>end));
+  if (!range && !error) return <WorkspaceLoading surface="finances" />;
   return <section className="fin-journal"><div className="fin-journal-layout">
     <FinanceActivityCalendar month={month} today={data.end} days={days} selectedDate={selectedDate} previewDate={previewDate} loading={loading||(!visibleRange&&!error)} unavailable={!!error} onSelect={selectDay} onMonth={changeMonth}/>
     <div className="fin-journal-ledger"><div className="fin-between fin-journal-title"><h2>Recent activity</h2><span className="fin-muted">Recorded transactions</span></div>

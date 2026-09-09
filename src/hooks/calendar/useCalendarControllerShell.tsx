@@ -1,4 +1,5 @@
 import { Suspense, type ReactElement, type ReactNode } from "react";
+import WorkspaceLoading from "../../components/shared/WorkspaceLoading";
 import buildCalendarModalShellProps, { type BuildCalendarModalShellPropsInput } from "../../components/calendar/modal/buildCalendarModalShellProps";
 import { CalendarMobileAgenda, CalendarModalShell } from "./calendarShellLoaders";
 
@@ -67,7 +68,7 @@ export default function useCalendarControllerShell({
   } as unknown as BuildCalendarModalShellPropsInput);
 
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<WorkspaceLoading surface="calendar" />}>
       {isMobile ? <CalendarMobileAgenda {...shellProps} mobileShellActions={mobileShellActions} /> : <CalendarModalShell {...shellProps} />}
     </Suspense>
   );

@@ -1,6 +1,7 @@
 import useWorkspaceTabRoute from './useWorkspaceTabRoute';
 import type { FinanceDestination } from '../finances/financesNavigation';
 import { financesHref } from '../finances/financesNavigation';
+import WorkspaceLoading from '../shared/WorkspaceLoading';
 import MobileShellActions from "../shell/MobileShellActions";
 import { useState, useEffect, useLayoutEffect, useMemo, lazy, Suspense, useCallback, startTransition } from "react";
 import type { ComponentType, Dispatch, RefObject, SetStateAction } from "react";
@@ -13,7 +14,6 @@ import { MOBILE_MEDIA_QUERY } from "../../lib/breakpoints";
 import { DashboardBody } from "./DashboardBody";
 import DashboardShellOverlays from "./DashboardShellOverlays";
 import DashboardCalendarModalMount, { importCalendar } from "./DashboardCalendarModalMount";
-import InboxMountFallback from "./InboxMountFallback";
 import DashboardTabPanel from "./DashboardTabPanel";
 import useWarmImport from "../../hooks/useWarmImport";
 import { useUtilityPayLinks } from "../../hooks/useUtilityPayLinks";
@@ -467,7 +467,7 @@ export function DashboardShell({
           />
         </DashboardTabPanel>
         <DashboardTabPanel tab="inbox" active={tab === "inbox"} isMobile={isMobile}>
-          <Suspense fallback={<InboxMountFallback />}>
+          <Suspense fallback={<WorkspaceLoading surface="inbox" />}>
             <InboxView
               accent={accent}
               customize={SHELL_PREFS}
@@ -504,7 +504,7 @@ export function DashboardShell({
         </DashboardTabPanel>
         <DashboardTabPanel tab="calendar" active={tab === "calendar"} isMobile={isMobile}>
           {calendarMounted ? (
-            <Suspense fallback={null}>
+            <Suspense fallback={<WorkspaceLoading surface="calendar" />}>
               <DashboardCalendarModalMount {...calendarMountProps}
                 mobileShellActions={isMobile ? <MobileShellActions onRetrySource={onRetrySource} sourceRetry={sourceRetry} refreshing={bd.refreshing} onQuickRefresh={onQuickRefresh} systemStatus={liveData.systemStatus} onOpenHistory={handleHeaderToggleHistory} onOpenAnalytics={openAnalytics} /> : undefined}
               />
@@ -512,7 +512,7 @@ export function DashboardShell({
           ) : null}
         </DashboardTabPanel>
         <DashboardTabPanel tab="finances" active={tab === "finances"} isMobile={isMobile}>
-          {financesRoute.mounted && <Suspense fallback={<p>Loading Finances…</p>}><FinancesWorkspace search={financesRoute.search} active={tab === 'finances'} /></Suspense>}
+          {financesRoute.mounted && <Suspense fallback={<WorkspaceLoading surface="finances" />}><FinancesWorkspace search={financesRoute.search} active={tab === 'finances'} /></Suspense>}
         </DashboardTabPanel>
         <DashboardTabPanel tab="notes" active={tab === "notes"} isMobile={isMobile}>
           {notesMounted && !isMobile && !demoMode ? (
@@ -523,7 +523,7 @@ export function DashboardShell({
         </DashboardTabPanel>
         <DashboardTabPanel tab="news" active={tab === "news"} isMobile={isMobile}>
           {newsMounted ? (
-            <Suspense fallback={null}>
+            <Suspense fallback={<WorkspaceLoading surface="news" />}>
               <NewsTab active={tab === "news"} />
             </Suspense>
           ) : null}

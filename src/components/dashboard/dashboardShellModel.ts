@@ -5,6 +5,11 @@ import type { RefObject } from "react";
 import type { CalendarEventCreateRequest } from "../../hooks/calendar/calendarEventCreateBridge";
 
 export type DashboardTab = "dashboard" | "inbox" | "calendar" | "notes" | "news" | "finances";
+export function initialWorkspaceTab(pathname: string, saved: string | null, isMobile: boolean, demoMode: boolean): DashboardTab {
+  if (pathname === '/finances') return 'finances';
+  if (pathname === '/settings') return 'dashboard';
+  return saved === 'inbox' ? 'inbox' : saved === 'notes' && !isMobile && !demoMode ? 'notes' : 'dashboard';
+}
 export type DashboardGlanceSheet = {
   kind: "deadline" | "bill" | "event" | "email";
   item?: DashboardDeadline | Record<string, unknown>;

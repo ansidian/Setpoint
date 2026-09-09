@@ -14,7 +14,7 @@ calendar since it triggers a real fetch on mount). Desktop-only in v1.
   the seen-marker bump-on-leave/pagehide lifecycle; also owns the persisted
   All/New mode (localStorage `news.hideSeen`), the mark-caught-up action
   (fire-and-forget `markNewsSeen(now)` + immediate local re-split), and the
-  source-manager target topic. The manager closes when the tab becomes inactive.
+  source-manager target topic. Initial reads register the shared WorkspaceLoading hero; the manager closes when the tab becomes inactive.
 - `NewsView.tsx` — sticky toolbar (new-count summary, truthful last-check time,
   All/New segmented control, Mark caught up, refresh, Sources) + a sticky topic
   index beside stable full-width topic bands; loading skeleton (static bars, no

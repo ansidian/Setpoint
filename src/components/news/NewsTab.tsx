@@ -3,6 +3,7 @@ import useNews from "../../hooks/useNews";
 import { markNewsSeen } from "../../api";
 import { resolveDividerMarker } from "./newsPageModel";
 import NewsView from "./NewsView";
+import WorkspaceLoading from "../shared/WorkspaceLoading";
 import NewsManagePanel from "./NewsManagePanel";
 import type { NewsPageEnvelope } from "../../../shared/types/news.ts";
 
@@ -82,6 +83,8 @@ export default function NewsTab({ active }: NewsTabProps) {
       setDividerMarker(null); // next visit gets a fresh divider
     };
   }, [active]);
+
+  if (!news && !error) return <WorkspaceLoading surface="news" />;
 
   return (
     <>

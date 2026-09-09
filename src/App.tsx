@@ -15,6 +15,10 @@ import {
   type AppRoutePath,
 } from "./appRouteModel";
 import SettingsChrome from "./components/settings/SettingsChrome";
+import WorkspaceLoading, { WorkspaceLoadingProvider } from "./components/shared/WorkspaceLoading";
+import { initialWorkspaceTab } from "./components/dashboard/dashboardShellModel";
+import { readDemoSafeLocalStorage } from "./demo/demoSafeLocalStorage";
+import { MOBILE_MEDIA_QUERY } from "./lib/breakpoints";
 import WorkspaceRoute from "./pages/WorkspaceRoute";
 import MouseSpotlightCanvas from "./components/layout/MouseSpotlightCanvas";
 import useKeyboardFocusIndicators from "./hooks/useKeyboardFocusIndicators";
@@ -30,7 +34,12 @@ const OwnerSetup = lazy(() => import("./pages/OwnerSetup"));
 const SettingsRoute = lazy(() => import("./pages/SettingsRoute"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 
-function AuthSpinner(): ReactElement {
+function AppLoading(): ReactElement {
+  const pathname = window.location.pathname.slice((resolveRouterBasename() ?? "").length).replace(/\/$/, "") || '/';
+  if (pathname === '/' || pathname === '/finances') {
+    const tab = initialWorkspaceTab(pathname, readDemoSafeLocalStorage('ea:tab'), window.matchMedia(MOBILE_MEDIA_QUERY).matches, isDemoMode());
+    if (tab !== 'notes') return <WorkspaceLoading surface={tab} />;
+  }
   return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="w-5 h-5 border-2 border-white/10 border-t-accent-light rounded-full animate-spin" />
@@ -71,6 +80,10 @@ function FinancialReviewNotifications({ enabled }: { enabled: boolean }): null {
 }
 
 export default function App(): ReactElement {
+  return <WorkspaceLoadingProvider><AppContent /></WorkspaceLoadingProvider>;
+}
+
+function AppContent(): ReactElement {
   useKeyboardFocusIndicators();
   const demoMode = isDemoMode();
   const [bootstrap, setBootstrap] = useState<AppBootstrapState | null>(() => initialAppBootstrap(demoMode));
@@ -105,7 +118,7 @@ export default function App(): ReactElement {
   }, []);
 
   if (bootstrap === null) {
-    return <AuthSpinner />;
+    return <AppLoading />;
   }
 
   const { authenticated } = bootstrap;
@@ -120,7 +133,7 @@ export default function App(): ReactElement {
           <Route path="/setup" element={
             redirectElement("/setup", bootstrap, (
               <RecoverableErrorBoundary>
-                <Suspense fallback={<AuthSpinner />}>
+                <Suspense fallback={<AppLoading />}>
                   <OwnerSetup onClaimed={() => setBootstrap({ claimed: true, authenticated: true, onboardingFinished: false })} />
                 </Suspense>
               </RecoverableErrorBoundary>
@@ -129,7 +142,7 @@ export default function App(): ReactElement {
           <Route path="/login" element={
             redirectElement("/login", bootstrap, (
               <RecoverableErrorBoundary>
-                <Suspense fallback={<AuthSpinner />}>
+                <Suspense fallback={<AppLoading />}>
                   <Login onLogin={() => {
                     void getOnboardingProgress()
                       .then((progress) => setBootstrap({ claimed: true, authenticated: true, onboardingFinished: progress.status === "complete" }))
@@ -143,7 +156,7 @@ export default function App(): ReactElement {
             redirectElement("/", bootstrap, (
               <WorkspaceRoute>
                 <RecoverableErrorBoundary>
-                  <Suspense fallback={<AuthSpinner />}>
+                  <Suspense fallback={<AppLoading />}>
                     <Dashboard />
                   </Suspense>
                 </RecoverableErrorBoundary>
@@ -164,7 +177,7 @@ export default function App(): ReactElement {
           <Route path="/onboarding" element={
             redirectElement("/onboarding", bootstrap, (
               <RecoverableErrorBoundary>
-                <Suspense fallback={<AuthSpinner />}>
+                <Suspense fallback={<AppLoading />}>
                   <Onboarding />
                 </Suspense>
               </RecoverableErrorBoundary>

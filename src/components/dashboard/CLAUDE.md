@@ -12,7 +12,7 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 - `DashboardBody.tsx` — renders NeedsYouBand / TodayTimeline with financial context / ContextColumn through `ThreeTierLayout`; resolves live deadlines/bills/events and wires their click-to-open handlers
 - `dashboard-interactions.css` — shared lift/press feedback for primary dashboard item triggers; Inbox Peek intentionally does not opt in
 - `DashboardShellOverlays.tsx` — mounts modal overlays: add task, analytics, customize, command palette, briefing history (no longer the calendar — it is a tab now)
-- `InboxMountFallback.tsx` — skeleton fallback shown while the lazy inbox chunk loads on a tab switch
+- `src/components/shared/WorkspaceLoading.tsx` — persistent app-level hero shared by startup, workspace lazy boundaries and initial reads; stage registration preserves the animation, inactive tabs release it, and Notes keeps its own fallback
 - `KeepAliveTab.tsx` — keep-alive tab wrapper (Activity + freeze-when-hidden) so tab switches don't unmount/remount and a data refresh skips the hidden tab
 - `DashboardCalendarModalMount.tsx` — lazy calendar mount (rendered inside the calendar `KeepAliveTab`) with deadline/bill data plus the optional one-shot event create request
 - `dashboardShellModel.ts` — calendar open-state logic, typed event-create request routing, request builders, hotkey resolution, and the pure glance-sheet tap toggle (`nextItemSheet`: re-tap closes, keyed per kind)

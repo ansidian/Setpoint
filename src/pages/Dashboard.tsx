@@ -1,6 +1,12 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { getCalendarBillsRange, getCalendarDeadlines, getCalendarDeadlinesRange } from "../api";
 import LoadingSkeleton from "../components/layout/LoadingSkeleton";
+import WorkspaceLoading from "../components/shared/WorkspaceLoading";
+import { initialWorkspaceTab } from "../components/dashboard/dashboardShellModel";
+import { readDemoSafeLocalStorage } from "../demo/demoSafeLocalStorage";
+import { isDemoMode } from "../demo/config";
+import useIsMobile from "../hooks/useIsMobile";
+import { useWorkspaceLocation } from "../context/WorkspaceLocationContext";
 import ErrorState from "../components/layout/ErrorState";
 import { Sun } from "lucide-react";
 import { Link } from "react-router";
@@ -63,6 +69,8 @@ function withSyncWatchdog<T>(promise: Promise<T>) {
 }
 
 export default function Dashboard() {
+  const workspaceLocation = useWorkspaceLocation();
+  const isMobile = useIsMobile();
   const triageNotificationSounds = useTriageNotificationSounds();
   const dashboardEventHandlerRef = useRef<((event: CurrentDashboardEventInput | null) => void) | null>(null);
   const currentDashboard = useCurrentDashboard({
@@ -258,7 +266,10 @@ export default function Dashboard() {
     [bd, currentSyncing, effectiveBriefing],
   );
 
-  if (briefingState.view === "loading") return <LoadingSkeleton />;
+  if (briefingState.view === "loading") {
+    const tab = initialWorkspaceTab(workspaceLocation.pathname, readDemoSafeLocalStorage('ea:tab'), isMobile, isDemoMode());
+    return tab === 'notes' ? <LoadingSkeleton /> : <WorkspaceLoading surface={tab} />;
+  }
   if (briefingState.view === "error") {
     return <ErrorState message={briefingState.error} onRetry={() => window.location.reload()} />;
   }

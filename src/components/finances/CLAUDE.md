@@ -3,6 +3,7 @@
 Utilities-first `/finances` surface; `/finance` remains the retained record/review foreground.
 
 - `FinancesWorkspace.tsx` — view composition, refresh and foreground entrances
+- `src/components/shared/WorkspaceLoading.tsx` — app-level loading owner; Finances registers its wallet hero through startup, lazy code and initial Utilities/Journal reads without remounting the animation
 - `financesNavigation.ts` — discriminated Utilities, schedule and Journal URL targets
 - `financeWorkspaceModel.ts` — sparse due-month selection, comparable statement facts and exact Journal topology
 - `UtilityDetail.tsx` — selected statement hero, chart and protected source history
