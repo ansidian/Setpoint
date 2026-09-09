@@ -1,10 +1,10 @@
-import { ArrowDownLeft, ArrowLeft, ArrowUpRight, Landmark, Wallet } from "lucide-react";
+import { ArrowDownLeft, ArrowLeft, ArrowUpRight, Landmark, Trash2, Wallet } from "lucide-react";
 import PaymentConfirmation from '../financial/PaymentConfirmation';
 import Dropdown from "../shared/Dropdown";
 import DateField from "../shared/pickers/DateField";
 import SearchableDropdown from "../shared/SearchableDropdown";
 import { cloneElement, useEffect, useId, useRef, useState, type FormEvent, type ReactElement, type ReactNode } from "react";
-import { completeFinancialEvent } from "../../api";
+import { completeFinancialEvent, dismissFinancialEvent } from "../../api";
 import { ensureMetadataLoaded, invalidateActualMetadata, type ActualMetadata } from "../../lib/actualMetadata";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -34,13 +34,14 @@ function Field({ name, icon, children }: { name: string; icon?:ReactNode; childr
   return <div className="flex min-w-0 flex-col gap-1 text-[11px] font-medium text-foreground/85">{searchable ? <span className="flex items-center gap-1.5">{label}</span> : <label className="flex items-center gap-1.5" htmlFor={id}>{label}</label>}{searchable ? children : cloneElement(children, { id })}</div>;
 }
 
-export default function FinancialEventCompletionForm({ plan, onCancel, onQueued, onDirty, onRepair, onConfirming }: {
+export default function FinancialEventCompletionForm({ plan, onCancel, onQueued, onDirty, onRepair, onConfirming, onDismissed }: {
   plan: FinancialEmailPlan;
   onCancel: () => void;
   onQueued: (plan: FinancialEmailPlan) => void;
   onDirty?: (dirty: boolean) => void;
   onRepair?: () => void;
   onConfirming?: (confirming:boolean) => void;
+  onDismissed?: () => void;
 }) {
   // Capture the displayed revision once. A poll must not silently authorize an
   // entry against source changes the owner has not reviewed.
@@ -60,6 +61,9 @@ export default function FinancialEventCompletionForm({ plan, onCancel, onQueued,
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [stale, setStale] = useState(false);
+  const [dismissing, setDismissing] = useState(false);
+  const dismissTrigger = useRef<HTMLButtonElement>(null);
+  const [dismissed, setDismissed] = useState(false);
   const [confirming,setConfirming] = useState(false);
   const reviewTrigger = useRef<HTMLButtonElement>(null);
   useEffect(() => { onConfirming?.(confirming); return () => onConfirming?.(false); },[confirming,onConfirming]);
@@ -84,7 +88,7 @@ export default function FinancialEventCompletionForm({ plan, onCancel, onQueued,
     : plan.targets.schedule.label || payee.trim();
   const effectiveScheduleName = scheduleName ?? (transfer && defaultScheduleName ? `${defaultScheduleName} Payment` : defaultScheduleName);
   const hasAccount = (value: string) => accounts.some((account) => account.id === value);
-  const canSend = !sending && !stale && Number(amount) > 0 && !!date && (transfer
+  const canSend = !sending && !stale && !dismissing && !dismissed && Number(amount) > 0 && !!date && (transfer
     ? hasAccount(fromAccountId) && hasAccount(toAccountId) && fromAccountId !== toAccountId
     : hasAccount(accountId) && !!payee.trim() && payee.trim().length <= 200);
 
@@ -92,7 +96,7 @@ export default function FinancialEventCompletionForm({ plan, onCancel, onQueued,
     ...(transfer ? [fromAccountId,toAccountId] : [accountId,payee.trim(),categoryId]),
     ...(scheduled ? [scheduleName?.trim() ?? null] : [])]);
   const [baseline] = useState(values);
-  useEffect(() => { onDirty?.(values !== baseline); },[values,baseline,onDirty]);
+  useEffect(() => { onDirty?.(!dismissed && values !== baseline); },[values,baseline,dismissed,onDirty]);
 
   async function send(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -125,33 +129,49 @@ export default function FinancialEventCompletionForm({ plan, onCancel, onQueued,
     }
   }
 
+  const keepCandidate = () => { setDismissing(false); requestAnimationFrame(() => dismissTrigger.current?.focus()); };
+  async function dismiss() {
+    if (!dismissing || sending || submitted.current) return;
+    submitted.current = true; setSending(true); setError("");
+    try {
+      await dismissFinancialEvent({ emailUid: revision.emailUid, documentRevision: revision.documentRevision, eventRevision: revision.eventRevision });
+      if (alive.current) { setDismissed(true); onDirty?.(false); onDismissed?.(); }
+    } catch (cause) {
+      if (alive.current) {
+        setStale(Boolean(cause && typeof cause === "object" && "status" in cause && cause.status === 409));
+        setError(cause instanceof Error ? cause.message : "Could not dismiss this candidate. Try again.");
+      }
+    } finally { submitted.current = false; if (alive.current) setSending(false); }
+  }
+  if (dismissed) return <p role="status" className="text-xs text-foreground/85">Candidate dismissed. Nothing was sent to Actual.</p>;
+
   return (
     <form onSubmit={send} className="space-y-3 text-foreground"
-      aria-label="Complete financial record" onClick={(event) => event.stopPropagation()}>
+      aria-label="Complete financial record" onKeyDown={event => { if (event.key === "Escape" && dismissing && !sending) { event.preventDefault(); event.stopPropagation(); keepCandidate(); } }} onClick={(event) => event.stopPropagation()}>
       {confirming ? <PaymentConfirmation amountCents={Math.round(Number(amount) * 100) * (kind === 'income' ? 1 : -1)} account={accounts.find(account => account.id === accountId)?.name || 'Account unavailable'} payee={payee.trim()} date={date} category={metadata?.categories.find(category => category.id === categoryId)?.name} notes={notes} /> : <>
       <p className="text-xs leading-relaxed text-foreground/85">Confirm the details you know. Category is optional; Actual can categorize the entry later.</p>
       <Field name="Record as">
-        <Dropdown ariaLabel="Record as" value={kind} onChange={value => setKind(value as EntryKind)} disabled={sending} options={kinds.map(([id,name]) => ({ id,name }))} />
+        <Dropdown ariaLabel="Record as" value={kind} onChange={value => setKind(value as EntryKind)} disabled={sending || dismissing} options={kinds.map(([id,name]) => ({ id,name }))} />
       </Field>
       <div className="grid min-w-0 grid-cols-2 gap-3">
-        <Field name={`${transfer ? "Transfer" : kind === "income" ? "Inflow" : "Outflow"} amount (USD)`} icon={<Wallet size={13} aria-hidden="true" className="text-muted-foreground" />}><Input className={inputClass} type="number" min="0.01" step="0.01" required value={amount} onChange={(event) => setAmount(event.target.value)} disabled={sending} /></Field>
+        <Field name={`${transfer ? "Transfer" : kind === "income" ? "Inflow" : "Outflow"} amount (USD)`} icon={<Wallet size={13} aria-hidden="true" className="text-muted-foreground" />}><Input className={inputClass} type="number" min="0.01" step="0.01" required value={amount} onChange={(event) => setAmount(event.target.value)} disabled={sending || dismissing} /></Field>
         <Field name={kind === "bill" ? "Due date" : kind === "transfer_schedule" ? "Payment date" : "Transaction date"}>
-          <DateField ariaLabel={kind === "bill" ? "Due date" : kind === "transfer_schedule" ? "Payment date" : "Transaction date"} value={date} onChange={setDate} disabled={sending} />
+          <DateField ariaLabel={kind === "bill" ? "Due date" : kind === "transfer_schedule" ? "Payment date" : "Transaction date"} value={date} onChange={setDate} disabled={sending || dismissing} />
         </Field>
       </div>
       <p className="text-[11px] text-foreground/75">Enter a positive amount. {transfer ? "Money moves from the From account to the To account." : kind === "income" ? "This adds money to the selected account." : "This takes money out of the selected account; no minus sign needed."}</p>
       {transfer ? <>
-        <Field name="From account" icon={<ArrowUpRight size={13} aria-hidden="true" className="text-[var(--sp-transfer)]" />}><SearchableDropdown ariaLabel="From account" options={accounts} value={fromAccountId} onChange={setFromAccount} disabled={sending} placeholder="Choose an account" /></Field>
-        <Field name="To account" icon={<ArrowDownLeft size={13} aria-hidden="true" className="text-[var(--sp-transfer)]" />}><SearchableDropdown ariaLabel="To account" options={accounts} value={toAccountId} onChange={setToAccount} disabled={sending} placeholder="Choose an account" /></Field>
+        <Field name="From account" icon={<ArrowUpRight size={13} aria-hidden="true" className="text-[var(--sp-transfer)]" />}><SearchableDropdown ariaLabel="From account" options={accounts} value={fromAccountId} onChange={setFromAccount} disabled={sending || dismissing} placeholder="Choose an account" /></Field>
+        <Field name="To account" icon={<ArrowDownLeft size={13} aria-hidden="true" className="text-[var(--sp-transfer)]" />}><SearchableDropdown ariaLabel="To account" options={accounts} value={toAccountId} onChange={setToAccount} disabled={sending || dismissing} placeholder="Choose an account" /></Field>
         {fromAccountId && fromAccountId === toAccountId && <p role="status" className="text-xs text-[var(--sp-rose)]">Choose different source and destination accounts.</p>}
       </> : <>
-        <Field name="Payee"><SearchableDropdown ariaLabel="Payee" options={payeeOptions} value={payee} onChange={setPayee} allowCreate disabled={sending} placeholder="Choose or add a payee" /></Field>
+        <Field name="Payee"><SearchableDropdown ariaLabel="Payee" options={payeeOptions} value={payee} onChange={setPayee} allowCreate disabled={sending || dismissing} placeholder="Choose or add a payee" /></Field>
         {payee.trim().length > 200 && <p role="status" className="text-xs text-[var(--sp-rose)]">Payee must be 200 characters or fewer.</p>}
-        <Field name="Account" icon={<Landmark size={13} aria-hidden="true" className="text-muted-foreground" />}><SearchableDropdown ariaLabel="Account" options={accounts} value={accountId} onChange={setAccount} disabled={sending} placeholder="Choose an account" /></Field>
-        <Field name="Category (optional)"><SearchableDropdown ariaLabel="Category (optional)" options={[{ id:"",name:"No category" },...(metadata?.categories || []).map(item => ({ id:item.id,name:item.group ? `${item.group} / ${item.name}` : item.name }))]} value={categoryId} onChange={setCategory} disabled={sending} placeholder="No category" /></Field>
+        <Field name="Account" icon={<Landmark size={13} aria-hidden="true" className="text-muted-foreground" />}><SearchableDropdown ariaLabel="Account" options={accounts} value={accountId} onChange={setAccount} disabled={sending || dismissing} placeholder="Choose an account" /></Field>
+        <Field name="Category (optional)"><SearchableDropdown ariaLabel="Category (optional)" options={[{ id:"",name:"No category" },...(metadata?.categories || []).map(item => ({ id:item.id,name:item.group ? `${item.group} / ${item.name}` : item.name }))]} value={categoryId} onChange={setCategory} disabled={sending || dismissing} placeholder="No category" /></Field>
       </>}
-      {scheduled && <Field name="Schedule name (optional)"><Input className={inputClass} value={effectiveScheduleName} maxLength={200} onChange={(event) => setScheduleName(event.target.value)} disabled={sending} placeholder={transfer ? "Account name + Payment" : payee || "Bill name"} /></Field>}
-      <Field name="Notes (optional)"><Input className={inputClass} value={notes} maxLength={1000} onChange={(event) => setNotes(event.target.value)} disabled={sending} /></Field>
+      {scheduled && <Field name="Schedule name (optional)"><Input className={inputClass} value={effectiveScheduleName} maxLength={200} onChange={(event) => setScheduleName(event.target.value)} disabled={sending || dismissing} placeholder={transfer ? "Account name + Payment" : payee || "Bill name"} /></Field>}
+      <Field name="Notes (optional)"><Input className={inputClass} value={notes} maxLength={1000} onChange={(event) => setNotes(event.target.value)} disabled={sending || dismissing} /></Field>
       </>}
       {!metadata && <p role="status" className="text-xs text-foreground/80">Loading Actual accounts…</p>}
       {metadata && !accounts.length && <div className="flex flex-wrap items-center gap-2 text-xs text-foreground/85">
@@ -161,9 +181,18 @@ export default function FinancialEventCompletionForm({ plan, onCancel, onQueued,
         {onRepair && <Button type="button" variant="ghost" className={actionClass} onClick={onRepair}>Repair Actual connection</Button>}
       </div>}
       {error && <p role="alert" className="break-words text-xs leading-relaxed text-[var(--sp-rose)]">{error}</p>}
-      <div className={`flex flex-wrap items-center gap-2 ${confirming ? '' : 'justify-end'}`}>
-        <Button type="button" variant="outline" className={actionClass} disabled={sending} onClick={confirming ? () => { setConfirming(false); requestAnimationFrame(() => reviewTrigger.current?.focus()); } : onCancel}>{confirming ? <><ArrowLeft size={14} />Back to details</> : stale ? "Close and check status" : "Cancel"}</Button>
-        <Button ref={reviewTrigger} type="submit" className={actionClass} disabled={!canSend}>{sending ? "Confirming…" : ordinaryPayment ? confirming ? "Record in Actual" : "Review before sending" : "Send to Actual"}</Button>
+      {dismissing && <p role="status" id={`${revision.emailUid}-dismiss-explanation`} className="text-xs text-foreground/85">Dismiss this candidate without sending it to Actual? Unsaved edits will be discarded.</p>}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        {revision.canDismiss && onDismissed && !confirming && <div className="flex flex-wrap items-center gap-2">
+          <Button ref={dismissTrigger} type="button" variant="destructive" className={actionClass} disabled={sending || stale}
+            aria-describedby={dismissing ? `${revision.emailUid}-dismiss-explanation` : undefined}
+            onClick={() => { if (dismissing) void dismiss(); else setDismissing(true); }}><Trash2 size={14} />{sending && dismissing ? "Dismissing…" : dismissing ? "Confirm dismissal" : "Dismiss candidate"}</Button>
+          {dismissing && <Button type="button" variant="outline" className={actionClass} disabled={sending} onClick={keepCandidate}>Keep candidate</Button>}
+        </div>}
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <Button type="button" variant="outline" className={actionClass} disabled={sending || dismissing} onClick={confirming ? () => { setConfirming(false); requestAnimationFrame(() => reviewTrigger.current?.focus()); } : onCancel}>{confirming ? <><ArrowLeft size={14} />Back to details</> : stale ? "Close and check status" : "Cancel"}</Button>
+          <Button ref={reviewTrigger} type="submit" className={actionClass} disabled={!canSend}>{sending && !dismissing ? "Confirming…" : ordinaryPayment ? confirming ? "Record in Actual" : "Review before sending" : "Send to Actual"}</Button>
+        </div>
       </div>
       <p className="text-[11px] leading-relaxed text-foreground/75">Actual is checked before this record is added. Its status updates here when processing finishes.</p>
     </form>

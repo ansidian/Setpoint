@@ -1,6 +1,6 @@
 import { financialEventStore, createFinancialEventStore, readManagedFinancialEmailUids,
   type FinancialStatusDb, type FinancialDocument, type FinancialEvent } from "./financial-event-store.ts";
-import { completionBlocker } from "./financial-event-completion-model.ts";
+import { completionBlocker, dismissalBlocker } from "./financial-event-completion-model.ts";
 import type { FinancialEmailPlan, FinancialPlanTarget, FinancialTargetKind } from "../../shared/types/bills.ts";
 import type { Row } from "@libsql/client";
 import { documentFromRow, eventFromRow } from "./financial-event-store.ts";
@@ -37,9 +37,10 @@ export async function resolveManagedFinancialPlan(userId: string, emailUid: stri
 }
 
 export function projectManagedFinancialPlan(document: FinancialDocument, event: FinancialEvent | null): FinancialEmailPlan {
-  const state = event?.status === "processing" ? "pending" : event?.status
+  const dismissed = document.dismissedAt != null || event?.dismissedAt != null;
+  const state = dismissed ? "settled" : event?.status === "processing" ? "pending" : event?.status
     || (document.status === "ignored" ? "settled" : document.status === "retry" ? "waiting" : "pending");
-  const reason = event?.reason || document.error || (state === "settled" ? "No financial entry is needed."
+  const reason = dismissed ? "Candidate dismissed by owner." : event?.reason || document.error || (state === "settled" ? "No financial entry is needed."
     : document.status === "associated" ? "Collecting related payment details." : "Checking this email for financial activity.");
   const plan: FinancialEmailPlan = event?.plan ? structuredClone(event.plan) : {
     version: 1, identity: { version: 1, status: "resolved", key: event?.id || `financial-document:${document.id}` },
@@ -74,10 +75,14 @@ export function projectManagedFinancialPlan(document: FinancialDocument, event: 
     plan.reconciliation = { status: 'not_checked', disposition: 'no_write', reason: 'You kept the inspected Actual result. No single financial entry could be derived from it.', checkedAt: null, evidence: null };
     plan.automation = { ...plan.automation, eligible: false };
   }
-  const blockedReason = document.correction || document.correctedEntry ? 'This source has an explicit correction and cannot be resubmitted.' : completionBlocker(event);
-  return { ...plan, workflow: { ...(document.correction ? { correction:document.correction } : {}), id: event?.id || `financial-document:${document.id}`, state,
-    ...(event?.progress ? { progress: event.progress } : {}),
+  if (dismissed) {
+    plan.operation = { ...plan.operation, kind: 'no_write' };
+    plan.automation = { ...plan.automation, eligible: false };
+  }
+  const blockedReason = dismissed ? 'This candidate was dismissed.' : document.correction || document.correctedEntry ? 'This source has an explicit correction and cannot be resubmitted.' : completionBlocker(event);
+  return { ...plan, workflow: { ...(document.correction ? { correction:document.correction } : {}), id: event?.id || `financial-document:${document.id}`, state, ...(dismissed ? { dismissed: true } : {}),
+    ...(!dismissed && event?.progress ? { progress: event.progress } : {}),
     relatedEmails: event?.documents.length || 1, reason, nextAttemptAt: event?.nextAttemptAt || document.nextAttemptAt,
     completion: { emailUid: document.emailUid, documentRevision: document.revision, eventRevision: event?.revision ?? null,
-      canComplete: !blockedReason, ...(blockedReason ? { blockedReason } : {}) } } };
+      canComplete: !blockedReason, canDismiss: !dismissalBlocker(document, event), ...(blockedReason ? { blockedReason } : {}) } } };
 }

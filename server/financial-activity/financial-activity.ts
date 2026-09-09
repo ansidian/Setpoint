@@ -78,6 +78,7 @@ export function createFinancialActivityReader(dbClient: Pick<Client, "batch"> = 
       groupedDocuments.set(id, [...(groupedDocuments.get(id) || []), row]);
     }
     const managed = (row: Row, sourceRows: Row[], isDocument: boolean): FinancialActivity | null => {
+      if (!includeInactive && row.dismissed_at != null) return null;
       if (!includeInactive && isDocument && (!row.candidate_json || row.status === "ignored")) return null;
       const { documents: docs, event } = hydrateManagedFinancialActivity(isDocument ? null : row, sourceRows);
       const reference: FinancialActivityReference = { owner: isDocument ? "document" : "event", id: String(row.id) };
@@ -86,7 +87,7 @@ export function createFinancialActivityReader(dbClient: Pick<Client, "batch"> = 
       const outcome = parse<{ outcome?: string }>(row.outcome_json);
       const successful = completed.has(outcome?.outcome || "") || originalReceipts.length > 0;
       if (!includeInactive && !isDocument && row.status === "settled" && !successful) return null;
-      const inactive = row.status === "ignored" || (row.status === "settled" && !successful);
+      const inactive = row.dismissed_at != null || row.status === "ignored" || (row.status === "settled" && !successful);
       const source = sourceRows[0];
       const review = projectReviewItem({ ...row, ...(source ? { email_uid: source.email_uid, subject: source.subject,
         from_name: source.from_name, candidate_json: source.candidate_json, received_at: source.email_date_utc } : {}),
@@ -103,7 +104,7 @@ export function createFinancialActivityReader(dbClient: Pick<Client, "batch"> = 
         createdAt: Number(row.created_at), updatedAt: Number(row.updated_at),
         status: inactive ? "dismissed" : attention ? "needs_attention" : successful ? "completed" : "processing",
         reason: inactive ? "No financial entry is needed." : review.reason,
-        actions: { complete: attention && review.canComplete && docs.length > 0, retry: false, inspect: true, correct: false },
+        actions: { complete: !inactive && attention && review.canComplete && docs.length > 0, retry: false, inspect: true, correct: false },
         originalReceipts, sourceEvidence: (successful ? capturedActivitySources(originalReceipts[0]) || [] : null) || sourceRows.map((source) => ({ emailUid: source.email_uid, revision: source.revision, candidate: parse(source.candidate_json) })), targetBindings: targets(id), liveState: "not_checked", effectiveResult: originalReceipts[0]?.result || outcome,
         completionPlan: plan, importItem: null, runs: [] };
     };

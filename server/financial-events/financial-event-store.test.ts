@@ -21,6 +21,7 @@ async function database(includeWorkflow = true): Promise<Client> {
   }
   if (includeWorkflow) {
     await client.executeMultiple(migration("062_financial_events.sql"));
+    await client.executeMultiple(migration("068_financial_candidate_dismissal.sql"));
     await client.executeMultiple(migration("067_financial_event_ai_requests.sql"));
     await addFinancialCorrectionSchema(client);
     await client.execute({ sql: "UPDATE ea_financial_workflow_state SET cutover_at = ?", args: [CUTOVER] });
@@ -137,6 +138,7 @@ describe("financial event persistence", () => {
     db = await database(false);
     await insertEmail("already-indexed", { emailDate: "2099-01-01T00:00:00Z", indexedAt: "2099-01-01T00:00:00Z" });
     await db.executeMultiple(migration("062_financial_events.sql"));
+    await db.executeMultiple(migration("068_financial_candidate_dismissal.sql"));
     await db.executeMultiple(migration("067_financial_event_ai_requests.sql"));
     await addFinancialCorrectionSchema(db);
     await db.execute({ sql: "UPDATE ea_financial_workflow_state SET cutover_at = ?", args: [CUTOVER] });

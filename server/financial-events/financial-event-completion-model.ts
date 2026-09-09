@@ -55,12 +55,20 @@ export function parseFinancialEventCompletion(value: unknown): FinancialEventCom
   return { emailUid, documentRevision: Number(request.documentRevision), eventRevision: request.eventRevision as number | null, entry };
 }
 
-export function completionBlocker(event: Pick<FinancialEvent, "attemptedAt" | "operation" | "outcome" | "plan" | "ownerCompletion" | "status"> | null): string | null {
+export function completionBlocker(event: Pick<FinancialEvent, "attemptedAt" | "operation" | "outcome" | "plan" | "ownerCompletion" | "status" | "dismissedAt"> | null): string | null {
+  if (event?.dismissedAt != null) return "This candidate was dismissed.";
   if (event?.attemptedAt != null || event?.operation) return "This entry has already been submitted to Actual and cannot be submitted again.";
   if (["added", "updated", "already_present"].includes(String((event?.outcome as { outcome?: unknown } | null)?.outcome))
     || ["already_recorded", "already_scheduled"].includes(String(event?.plan?.reconciliation.status))) return "This event is already recorded in Actual.";
   if (event?.ownerCompletion && ["pending", "processing"].includes(event.status)) return "Your confirmed entry is already queued for Actual.";
   return null;
+}
+
+export function dismissalBlocker(document: FinancialDocument, event: FinancialEvent | null): string | null {
+  if (document.dismissedAt != null || event?.dismissedAt != null) return "This candidate was dismissed.";
+  if (document.correction || document.correctedEntry || event?.ownerCompletion) return "This entry has already been submitted and cannot be dismissed.";
+  if (!document.candidate && !event?.plan) return "This email has no financial candidate to dismiss.";
+  return completionBlocker(event);
 }
 
 export function ownerCompletionSnapshot(entry: FinancialEventCompletionEntry, documents: FinancialDocument[], now: number, id: string): FinancialOwnerCompletion {

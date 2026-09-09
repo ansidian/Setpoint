@@ -38,6 +38,7 @@ export interface FinancialDocument {
   revision: number;
   processedRevision: number;
   status: DocumentStatus;
+  dismissedAt?: number | null;
   attempts: number;
   claimToken: string | null;
   claimedAt: number | null;
@@ -68,6 +69,7 @@ export interface FinancialEvent {
   userId: string;
   revision: number;
   status: EventStatus;
+  dismissedAt?: number | null;
   attempts: number;
   claimToken: string | null;
   claimedAt: number | null;
@@ -104,15 +106,15 @@ const INTAKE_COMPLETE = `(attempted_at IS NOT NULL OR NOT EXISTS (SELECT 1 FROM 
       OR julianday(intake.completed_through) < julianday(COALESCE(ea_financial_events.collection_deadline, ea_financial_events.created_at) / 1000.0, 'unixepoch'))))`;
 const DOCUMENTS_READY = `NOT EXISTS (SELECT 1 FROM ea_financial_documents d
     WHERE d.user_id = ea_financial_events.user_id AND d.event_id = ea_financial_events.id
-      AND d.processed_revision < d.revision)
+      AND d.dismissed_at IS NULL AND d.processed_revision < d.revision)
   AND (attempted_at IS NOT NULL OR NOT EXISTS (SELECT 1 FROM ea_financial_documents arrival
-    WHERE arrival.user_id = ea_financial_events.user_id AND arrival.status IN ('pending', 'processing')))`;
-const READY_EVENT = `status IN ('pending', 'waiting') AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
+    WHERE arrival.user_id = ea_financial_events.user_id AND arrival.dismissed_at IS NULL AND arrival.status IN ('pending', 'processing')))`;
+const READY_EVENT = `dismissed_at IS NULL AND status IN ('pending', 'waiting') AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
   AND ${INTAKE_COMPLETE} AND ${DOCUMENTS_READY}`;
 
 /** Read-only progress uses the same capture gates as admission, never a provider call. */
 export const FINANCIAL_EVENT_STATUS_SELECT = `SELECT ea_financial_events.*, CASE
-  WHEN status NOT IN ('pending', 'waiting', 'processing') THEN NULL
+  WHEN dismissed_at IS NOT NULL OR status NOT IN ('pending', 'waiting', 'processing') THEN NULL
   WHEN attempted_at IS NOT NULL THEN 'recovering'
   WHEN status = 'processing' THEN 'saving'
   WHEN NOT (${INTAKE_COMPLETE} AND ${DOCUMENTS_READY}) THEN 'checking_emails'
@@ -145,7 +147,7 @@ export function documentFromRow(row: Row): FinancialDocument {
   return {
     id: Number(row.id), userId: String(row.user_id), accountId: String(row.account_id),
     emailUid: String(row.email_uid), revision: Number(row.revision),
-    processedRevision: Number(row.processed_revision), status: String(row.status) as DocumentStatus,
+    dismissedAt: nullableNumber(row.dismissed_at), processedRevision: Number(row.processed_revision), status: String(row.status) as DocumentStatus,
     attempts: Number(row.attempts), claimToken: nullableString(row.claim_token),
     claimedAt: nullableNumber(row.claimed_at), eventId: nullableString(row.event_id),
     contentHash: nullableString(row.content_hash), candidate: readJson<BillCandidate>(row.candidate_json),
@@ -167,7 +169,7 @@ export function documentFromRow(row: Row): FinancialDocument {
 export function eventFromRow(row: Row, documents: FinancialDocument[]): FinancialEvent {
   return {
     id: String(row.id), userId: String(row.user_id), revision: Number(row.revision),
-    status: String(row.status) as EventStatus, attempts: Number(row.attempts),
+    dismissedAt: nullableNumber(row.dismissed_at), status: String(row.status) as EventStatus, attempts: Number(row.attempts),
     claimToken: nullableString(row.claim_token), claimedAt: nullableNumber(row.claimed_at),
     plan: readJson<FinancialEmailPlan>(row.plan_json), ownerCompletion: readJson<FinancialOwnerCompletion>(row.owner_completion_json),
     operation: readJson(row.operation_json),
@@ -200,7 +202,7 @@ export function createFinancialEventStore(dbClient: StoreDb = db, now = Date.now
       sql: `UPDATE ea_financial_documents SET status = 'processing', claim_token = ?, claimed_at = ?,
               attempts = attempts + 1, updated_at = ?
             WHERE id = (SELECT next.id FROM ea_financial_documents next
-              WHERE next.status IN ('pending', 'retry') AND (next.next_attempt_at IS NULL OR next.next_attempt_at <= ?)
+              WHERE next.dismissed_at IS NULL AND next.status IN ('pending', 'retry') AND (next.next_attempt_at IS NULL OR next.next_attempt_at <= ?)
                 AND NOT EXISTS (SELECT 1 FROM ea_financial_documents busy
                   WHERE busy.user_id = next.user_id AND busy.status = 'processing')
               ORDER BY next.created_at, next.id LIMIT 1)
@@ -290,6 +292,7 @@ export function createFinancialEventStore(dbClient: StoreDb = db, now = Date.now
       },
       {
         sql: `UPDATE ea_financial_documents SET status = 'associated', candidate_json = ?, content_hash = ?,
+                dismissed_at = (SELECT dismissed_at FROM ea_financial_events WHERE user_id = ea_financial_documents.user_id AND id = ?),
                 event_id = ?, processed_revision = revision, next_attempt_at = NULL, last_error = NULL,
                 claim_token = NULL, claimed_at = NULL, updated_at = ?
               WHERE user_id = ? AND id = ? AND claim_token = ? AND revision = ? AND status = 'processing'
@@ -297,7 +300,7 @@ export function createFinancialEventStore(dbClient: StoreDb = db, now = Date.now
                 AND EXISTS (SELECT 1 FROM ea_financial_events e WHERE e.user_id = ? AND e.id = ?)
                 AND (? IS NULL OR EXISTS (SELECT 1 FROM ea_financial_event_references
                   WHERE user_id = ? AND reference_key = ? AND event_id = ?))`,
-        args: [writeJson(input.candidate), input.contentHash, input.eventId, timestamp,
+        args: [writeJson(input.candidate), input.contentHash, input.eventId, input.eventId, timestamp,
           claim.userId, claim.id, claim.claimToken, claim.revision, input.eventId, claim.userId, input.eventId,
           input.referenceKey ?? null, claim.userId, input.referenceKey ?? null, input.eventId],
       },
@@ -341,7 +344,7 @@ export function createFinancialEventStore(dbClient: StoreDb = db, now = Date.now
     const results = await dbClient.batch([
       { sql: `INSERT INTO ea_financial_events (id, user_id, created_at, updated_at)
               SELECT ?, ?, ?, ? WHERE ? IS NULL AND EXISTS (
-                SELECT 1 FROM ea_financial_documents WHERE user_id = ? AND id = ? AND revision = ? AND event_id IS NULL)
+                SELECT 1 FROM ea_financial_documents WHERE user_id = ? AND id = ? AND revision = ? AND dismissed_at IS NULL AND event_id IS NULL)
               AND NOT EXISTS (SELECT 1 FROM ea_financial_event_references WHERE user_id = ? AND reference_key = ? AND event_id <> ?)
               ON CONFLICT(id) DO NOTHING`,
         args: [input.eventId, document.userId, timestamp, timestamp, event?.id ?? null,
@@ -350,11 +353,11 @@ export function createFinancialEventStore(dbClient: StoreDb = db, now = Date.now
                 owner_completion_json = ?, outcome_json = NULL, reason = 'Owner-confirmed entry queued for Actual.',
                 collection_deadline = ?, next_attempt_at = ?, attempts = 0,
                 claim_token = NULL, claimed_at = NULL, updated_at = ?
-              WHERE user_id = ? AND id = ? AND revision = ? AND attempted_at IS NULL AND operation_json IS NULL AND ${ORIGINAL_UNGUARDED}
+              WHERE user_id = ? AND id = ? AND revision = ? AND dismissed_at IS NULL AND attempted_at IS NULL AND operation_json IS NULL AND ${ORIGINAL_UNGUARDED}
                 AND (owner_completion_json IS NULL OR status IN ('waiting', 'needs_review'))
                 AND COALESCE(json_extract(outcome_json, '$.outcome'), '') NOT IN ('added', 'updated', 'already_present')
                 AND COALESCE(json_extract(plan_json, '$.reconciliation.status'), '') NOT IN ('already_recorded', 'already_scheduled')
-                AND EXISTS (SELECT 1 FROM ea_financial_documents WHERE user_id = ? AND id = ? AND revision = ? AND event_id IS ?)
+                AND EXISTS (SELECT 1 FROM ea_financial_documents WHERE user_id = ? AND id = ? AND revision = ? AND dismissed_at IS NULL AND event_id IS ?)
                 AND NOT EXISTS (SELECT 1 FROM ea_financial_event_references WHERE user_id = ? AND reference_key = ? AND event_id <> ?)`,
         args: [writeJson(input.plan), completion, deadline, deadline, timestamp,
           document.userId, input.eventId, event?.revision ?? 1, document.userId, document.id, document.revision,
@@ -373,6 +376,45 @@ export function createFinancialEventStore(dbClient: StoreDb = db, now = Date.now
                 SELECT 1 FROM ea_financial_events WHERE user_id = ? AND id = ? AND owner_completion_json = ?)`,
         args: [input.eventId, completion, timestamp, document.userId, input.eventId, document.id,
           document.userId, input.eventId, completion] },
+    ], "write");
+    return results[1]!.rowsAffected === 1;
+  }
+
+  async function dismissCandidate(document: FinancialDocument, event: FinancialEvent | null, input: {
+    eventId: string; referenceKey: string | null;
+  }): Promise<boolean> {
+    const timestamp = now();
+    const revision = event?.revision ?? 1;
+    const results = await dbClient.batch([
+      // Give a dismissed standalone source a durable identity too. The same
+      // source/reference guards precede creation, so a stale request leaves no orphan.
+      { sql: `INSERT INTO ea_financial_events (id, user_id, created_at, updated_at)
+              SELECT ?, ?, ?, ? WHERE ? IS NULL AND EXISTS (
+                SELECT 1 FROM ea_financial_documents WHERE user_id = ? AND id = ? AND revision = ?
+                  AND dismissed_at IS NULL AND event_id IS NULL AND candidate_json IS NOT NULL)
+                AND NOT EXISTS (SELECT 1 FROM ea_financial_event_references WHERE user_id = ? AND reference_key = ?)`,
+        args: [input.eventId, document.userId, timestamp, timestamp, event?.id ?? null,
+          document.userId, document.id, document.revision, document.userId, input.referenceKey] },
+      { sql: `UPDATE ea_financial_events SET dismissed_at = ?, revision = revision + 1, status = 'settled',
+                reason = 'Candidate dismissed by owner.', next_attempt_at = NULL, claim_token = NULL, claimed_at = NULL, updated_at = ?
+              WHERE user_id = ? AND id = ? AND revision = ? AND dismissed_at IS NULL
+                AND attempted_at IS NULL AND operation_json IS NULL AND owner_completion_json IS NULL AND ${ORIGINAL_UNGUARDED}
+                AND COALESCE(json_extract(outcome_json, '$.outcome'), '') NOT IN ('added', 'updated', 'already_present')
+                AND COALESCE(json_extract(plan_json, '$.reconciliation.status'), '') NOT IN ('already_recorded', 'already_scheduled')
+                AND EXISTS (SELECT 1 FROM ea_financial_documents WHERE user_id = ? AND id = ? AND revision = ? AND event_id IS ?)`,
+        args: [timestamp, timestamp, document.userId, input.eventId, revision,
+          document.userId, document.id, document.revision, event?.id ?? null] },
+      { sql: `UPDATE ea_financial_documents SET dismissed_at = ?, event_id = ?, revision = revision + 1, processed_revision = revision + 1,
+                status = 'ignored', next_attempt_at = NULL, last_error = 'Candidate dismissed by owner.',
+                claim_token = NULL, claimed_at = NULL, updated_at = ?
+              WHERE user_id = ? AND dismissed_at IS NULL AND (event_id = ? OR (id = ? AND revision = ? AND event_id IS NULL))
+                AND EXISTS (SELECT 1 FROM ea_financial_events WHERE user_id = ? AND id = ? AND dismissed_at = ? AND revision = ?)`,
+        args: [timestamp, input.eventId, timestamp, document.userId, input.eventId, document.id, document.revision,
+          document.userId, input.eventId, timestamp, revision + 1] },
+      { sql: `INSERT INTO ea_financial_event_references (user_id, reference_key, event_id)
+              SELECT user_id, ?, id FROM ea_financial_events WHERE user_id = ? AND id = ? AND dismissed_at = ? AND revision = ?
+                AND ? IS NULL AND ? IS NOT NULL`,
+        args: [input.referenceKey, document.userId, input.eventId, timestamp, revision + 1, event?.id ?? null, input.referenceKey] },
     ], "write");
     return results[1]!.rowsAffected === 1;
   }
@@ -460,13 +502,13 @@ export function createFinancialEventStore(dbClient: StoreDb = db, now = Date.now
       sql: `UPDATE ea_financial_events SET operation_json = ?, attempted_at = ?, updated_at = ?,
               plan_json = COALESCE(?, plan_json)
             WHERE user_id = ? AND id = ? AND claim_token = ? AND revision = ? AND status = 'processing'
-              AND attempted_at IS NULL AND operation_json IS NULL AND ${ORIGINAL_UNGUARDED}
+              AND dismissed_at IS NULL AND attempted_at IS NULL AND operation_json IS NULL AND ${ORIGINAL_UNGUARDED}
               AND ${INTAKE_COMPLETE}
               AND NOT EXISTS (SELECT 1 FROM ea_financial_documents d
                 WHERE d.user_id = ea_financial_events.user_id AND d.event_id = ea_financial_events.id
-                  AND d.processed_revision < d.revision)
+                  AND d.dismissed_at IS NULL AND d.processed_revision < d.revision)
               AND NOT EXISTS (SELECT 1 FROM ea_financial_documents arrival
-                WHERE arrival.user_id = ea_financial_events.user_id AND arrival.status IN ('pending', 'processing'))`,
+                WHERE arrival.user_id = ea_financial_events.user_id AND arrival.dismissed_at IS NULL AND arrival.status IN ('pending', 'processing'))`,
       args: [writeJson(operation), timestamp, timestamp, plan ? writeJson(plan) : null,
         claim.userId, claim.id, claim.claimToken, claim.revision],
     });
@@ -491,10 +533,10 @@ export function createFinancialEventStore(dbClient: StoreDb = db, now = Date.now
     const result = await dbClient.execute({
       sql: `SELECT MIN(wake_at) AS wake_at FROM (
               SELECT MIN(COALESCE(next.next_attempt_at, ?)) AS wake_at FROM ea_financial_documents next
-                WHERE next.status IN ('pending', 'retry') AND NOT EXISTS (
+                WHERE next.dismissed_at IS NULL AND next.status IN ('pending', 'retry') AND NOT EXISTS (
                   SELECT 1 FROM ea_financial_documents busy WHERE busy.user_id = next.user_id AND busy.status = 'processing')
               UNION ALL SELECT MIN(COALESCE(next_attempt_at, ?)) FROM ea_financial_events
-                WHERE status IN ('pending', 'waiting') AND ${INTAKE_COMPLETE} AND ${DOCUMENTS_READY})`,
+                WHERE dismissed_at IS NULL AND status IN ('pending', 'waiting') AND ${INTAKE_COMPLETE} AND ${DOCUMENTS_READY})`,
       args: [timestamp, timestamp],
     });
     return nullableNumber(result.rows[0]?.wake_at);
@@ -521,7 +563,7 @@ export function createFinancialEventStore(dbClient: StoreDb = db, now = Date.now
 
   return { ...createFinancialEventAiStore(dbClient, now), async isCorrected(userId: string, id: string) {
     return (await dbClient.execute({ sql: "SELECT 1 FROM ea_financial_corrected_sources WHERE user_id=? AND owner='event' AND record_id=? LIMIT 1", args: [userId, id] })).rows.length > 0;
-  }, claimDocument, settleDocument, associateDocument, listDocuments, findEventsByReference, completeEvent,
+  }, claimDocument, settleDocument, associateDocument, listDocuments, findEventsByReference, completeEvent, dismissCandidate,
     acknowledgeOwnerCompletedDocument, claimEvent, saveEvent,
     admitOperation, recoverStaleClaims, getNextWakeAt, isManagedEmail, getDocumentForEmail, getEventForEmail };
 }

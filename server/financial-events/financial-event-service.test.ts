@@ -143,7 +143,7 @@ describe("autonomous financial event processing", () => {
     db = createClient({ url: "file::memory:" });
     await db.execute("PRAGMA foreign_keys = ON");
     for (const file of ["001_ea_tables.sql", "013_email_index_normalized_date.sql", "025_email_thread_identity.sql",
-      "054_email_sender_authentication.sql", "062_financial_events.sql", "067_financial_event_ai_requests.sql"]) {
+      "054_email_sender_authentication.sql", "062_financial_events.sql", "068_financial_candidate_dismissal.sql", "067_financial_event_ai_requests.sql"]) {
       await db.executeMultiple(readFileSync(new URL("../db/migrations/" + file, import.meta.url), "utf8"));
     }
     await addFinancialCorrectionSchema(db);

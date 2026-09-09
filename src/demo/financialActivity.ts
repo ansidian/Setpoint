@@ -58,7 +58,7 @@ export function handleDemoFinancialActivity(url: URL, method: string, body: Demo
   const all = getDemoFinancialActivities();
   if (url.pathname === "/api/briefing/financial-activity") {
     const query = url.searchParams;
-    const scoped = all.filter((item) => (!query.get("source") || item.source === query.get("source"))
+    const scoped = all.filter((item) => !(item.source === "managed" && item.status === "dismissed") && (!query.get("source") || item.source === query.get("source"))
       && (!query.get("context") || item.contexts.includes(query.get("context") as "arrival" | "historical_scan"))
       && (!query.get("runId") || item.runs.some((run) => run.id === query.get("runId"))));
     const items = scoped.filter(item => !query.get("view") || query.get("view") === "all" || item.status === query.get("view")

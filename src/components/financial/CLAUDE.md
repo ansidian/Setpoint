@@ -29,4 +29,4 @@ Financial activity and records live at `/finance` inside WorkspaceRoute's retain
 
 - `KeepActualResult.tsx` — frozen current-result review and explicit keep confirmation; shared snapshot display for accepted results.
 
-The Needs attention list groups processing records under Pending and keeps the badge actionable-only.
+The Needs attention list groups processing records under Pending and keeps the badge actionable-only. Managed completion places Dismiss candidate opposite submit, with Confirm dismissal replacing the same button and Keep candidate restoring the draft. Revision-checked dismissal never sends to Actual; its source owner enforces admission protection.

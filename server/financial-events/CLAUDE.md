@@ -14,7 +14,7 @@ Durable autonomous accounting for new email arrivals. Documents supply authentic
 - `financial-event-operation.ts` — maps a plan to existing SDK facades, binds the previewed budget and schedule fingerprint, and projects verified operation outcomes
 - `financial-event-status.ts` — public read-only ownership and live status facade with latest correction progress and verified outcome/type projection; managed-email reads never trigger the historical planner or another write path
 - `financial-event-review.ts` — managed attention projection shared by financial activity and owner-scoped notification changes; groups related receipts and keeps automatic retries silent without reading source bodies
-- `financial-event-completion.ts` — public owner-confirmation use case; validates current managed-source revisions and queues the same event without writing to Actual
+- `financial-event-completion.ts` — public owner-confirmation use case; validates current managed-source revisions, queues confirmed entries or dismisses unsubmitted candidates without writing to Actual
 - `financial-event-completion-model.ts` — confirmed-entry validation, immutable source snapshots, compatible later-evidence checks and exact operation construction
 
 ## Contracts
@@ -32,3 +32,5 @@ Durable autonomous accounting for new email arrivals. Documents supply authentic
 Tests follow the stable-owner policy in `AGENTS.md`; full worker replays keep the store, evidence, planner and operation adapter together while replacing external AI/Actual boundaries.
 
 Explicit confirmation wakes the existing bounded runtime. Its persisted timestamp expedites idle Gmail capture, including capture finishing an older in-flight page, without bypassing provider backoff or active claims. Later receipts do not restart the automatic 90-second collection window. Read-only progress reuses admission gates to distinguish queueing, email checks, saving and verification.
+
+Migration 068 retains owner dismissal timestamps on events and documents. Dismissal preserves identity aliases, suppresses reads/claims/wakes/admission across source changes, clears concurrent leases, and refuses owner-submitted or attempted entries. Standalone candidates receive an event identity on dismissal so matching later receipts remain suppressed.

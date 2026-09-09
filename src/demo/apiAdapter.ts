@@ -1,6 +1,6 @@
 import { demoTaskFields } from "./taskFields";
 import { handleDemoFinances } from './financesWorkspace';
-import { completeDemoFinancialEvent, demoCompletionPlan } from "./financialCompletion";
+import { completeDemoFinancialEvent, dismissDemoFinancialEvent, demoCompletionPlan } from "./financialCompletion";
 import type { FinancialEventCompletionRequest } from "../../shared/types/financial-operations";
 import { createDemoApiError } from "./config.ts";
 import {
@@ -295,6 +295,7 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
   const seed = method === "GET" || readOnlyPost ? getDemoSeed() : forkDemoSeedForMutation();
   if (pathname.startsWith("/api/briefing/financial-corrections/") || pathname === "/api/briefing/financial-activity" || pathname.startsWith("/api/briefing/financial-activity/")) return handleDemoFinancialActivity(url, method, body);
   if (pathname === "/api/briefing/bills/resolve" && method === "POST" && body.emailId === "demo-email-budget") return demoCompletionPlan();
+  if (pathname === "/api/briefing/financial-events/dismiss" && method === "POST") return dismissDemoFinancialEvent(body as unknown as FinancialEventCompletionRequest);
   if (pathname === "/api/briefing/financial-events/complete" && method === "POST") return completeDemoFinancialEvent(body as unknown as FinancialEventCompletionRequest);
   const referenceResponse = getDemoReferenceResponse({ pathname, method, seed });
   if (referenceResponse !== NO_DEMO_REFERENCE_RESPONSE) return referenceResponse;

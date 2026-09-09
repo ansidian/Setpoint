@@ -27,7 +27,7 @@ Build-time fictional walkthrough (`VITE_EA_DEMO=1`). `src/api.ts` routes demo re
 - `financialActivity.ts` — shared fictional imported history plus managed completed, processing and uncertain examples; old-target binding stays inert.
 - `financeProjection.ts` — exact-ID fictional Actual objects and settled in-memory ledger/bill projections shared by correction, Calendar and spending consumers; emits the demo-only financial-change event after owner settlement.
 - `financialCorrections.ts` — in-memory fictional inspection, exact previews, confirmation and effective result projection; no SDK or network.
-- `financialCompletion.ts` — fictional managed review plan and owner-completion mutation.
+- `financialCompletion.ts` — fictional managed review plan, owner-completion and candidate-dismissal mutations.
 - `financeData.ts` — shared fictional transactions, confirmed-import mutation, and calendar Bills range projection.
 - `dashboardFinance.ts` — spending comparisons and category totals derived from the shared seed plus import activity.
 - `transactionImports.ts` — fictional import runs/items, shared pending-review predicate, paginated pending runs, safe receipt bodies, and in-memory confirmation/retry/dismiss actions.

@@ -29,7 +29,7 @@ export default function PendingFinancialRecord(props: Props) {
   if (activity.reference.owner === 'import') return <ImportCompletion {...props} />;
   const plan = activity.completionPlan;
   if (!activity.actions.complete || !plan?.workflow?.completion) return <p className="financial-note">{activity.reason}</p>;
-  return editing ? <FinancialEventCompletionForm plan={plan} onDirty={onDirty} onRepair={onRepair} onConfirming={props.onConfirming}
+  return editing ? <FinancialEventCompletionForm plan={plan} onDirty={onDirty} onRepair={onRepair} onConfirming={props.onConfirming} onDismissed={() => { onDirty(false); props.onChanged(); }}
     onCancel={() => requestDiscard(() => { setEditing(false); onDirty(false); })} onQueued={() => { props.onAccepted(); onDirty(false); }} />
     : <button type="button" className="financial-button" onClick={() => setEditing(true)}>Complete record</button>;
 }

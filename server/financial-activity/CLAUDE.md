@@ -8,4 +8,4 @@ Shared history over the existing managed-event and transaction-import owners. Re
 
 Migration 063 owns permanent source occurrence aliases and append-only original receipts. An Actual target is evidence for one activity, never ownership of every later activity using the same schedule. The existing source owners retain completion and execution policy.
 
-Needs attention includes processing rows for the Pending section until verified settlement. `attentionTotal` counts actionable rows separately across the current source/context/run scope, before pagination; dashboard and badges use it.
+Needs attention includes processing rows for the Pending section until verified settlement. `attentionTotal` counts actionable rows separately across the current source/context/run scope, before pagination; dashboard and badges use it. Explicitly dismissed managed candidates are omitted from lists while exact detail remains inspectable.

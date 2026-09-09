@@ -23,7 +23,7 @@ const REVIEW_ROWS = `WITH review AS (
   FROM ea_financial_events event
   JOIN ea_financial_documents source ON source.user_id = event.user_id AND source.event_id = event.id
   JOIN ea_email_index email ON email.user_id = source.user_id AND email.uid = source.email_uid
-  WHERE event.user_id = ? AND event.status IN ('waiting', 'needs_review')
+  WHERE event.user_id = ? AND event.dismissed_at IS NULL AND event.status IN ('waiting', 'needs_review')
     AND source.id = (SELECT MIN(choice.id) FROM ea_financial_documents choice
       JOIN ea_email_index current_email ON current_email.user_id = choice.user_id AND current_email.uid = choice.email_uid
       WHERE choice.user_id = event.user_id AND choice.event_id = event.id)
@@ -35,7 +35,7 @@ const REVIEW_ROWS = `WITH review AS (
     NULL, NULL, NULL, NULL, source.candidate_json
   FROM ea_financial_documents source
   JOIN ea_email_index email ON email.user_id = source.user_id AND email.uid = source.email_uid
-  WHERE source.user_id = ? AND source.event_id IS NULL AND source.status = 'retry' AND source.candidate_json IS NOT NULL
+  WHERE source.user_id = ? AND source.dismissed_at IS NULL AND source.event_id IS NULL AND source.status = 'retry' AND source.candidate_json IS NOT NULL
 )`;
 
 const DETAILS_REASONS = new Set([

@@ -26,11 +26,13 @@ export function createTransactionImportRouter({
   financialStatus = resolveManagedFinancialPlan,
   financialCompletion = financialEventCompletion,
   financialReviewChanges = readFinancialReviewChanges,
+  financialDismissal = financialEventCompletion.dismiss,
 }: {
   service?: Service;
   wake?: () => void;
   financialStatus?: typeof resolveManagedFinancialPlan;
-  financialCompletion?: typeof financialEventCompletion;
+  financialCompletion?: Pick<typeof financialEventCompletion, "complete">;
+  financialDismissal?: typeof financialEventCompletion.dismiss;
   financialReviewChanges?: typeof readFinancialReviewChanges;
 } = {}): Router {
   const router = Router();
@@ -49,6 +51,12 @@ export function createTransactionImportRouter({
     } catch (error) {
       errorResponse(res, error);
     }
+  });
+
+  router.post("/financial-events/dismiss", async (req, res) => {
+    try {
+      res.json(await financialDismissal(ownerUserId(), req.body));
+    } catch (error) { errorResponse(res, error); }
   });
 
   router.post("/financial-events/complete", async (req, res) => {

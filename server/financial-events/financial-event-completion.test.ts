@@ -29,7 +29,7 @@ describe("owner completion of managed financial events", () => {
   beforeEach(async () => {
     db = createClient({ url: "file::memory:" });
     await db.execute("PRAGMA foreign_keys = ON");
-    for (const file of ["001_ea_tables.sql", "013_email_index_normalized_date.sql", "025_email_thread_identity.sql", "054_email_sender_authentication.sql", "062_financial_events.sql", "067_financial_event_ai_requests.sql"]) {
+    for (const file of ["001_ea_tables.sql", "013_email_index_normalized_date.sql", "025_email_thread_identity.sql", "054_email_sender_authentication.sql", "062_financial_events.sql", "068_financial_candidate_dismissal.sql", "067_financial_event_ai_requests.sql"]) {
       await db.executeMultiple(readFileSync(new URL(`../db/migrations/${file}`, import.meta.url), "utf8"));
     }
     await addFinancialCorrectionSchema(db);
@@ -95,6 +95,88 @@ describe("owner completion of managed financial events", () => {
     });
   }
   async function drainEvent() { await worker().processNextEvent(); }
+
+  it("dismisses an unassociated candidate durably without deleting its source or permitting resubmission", async () => {
+    await arrive();
+    const original = await request();
+    const result = await completion().dismiss("owner", original);
+    expect(result.workflow).toMatchObject({ dismissed: true, completion: { canComplete: false, canDismiss: false } });
+    await expect(completion().dismiss("owner", original)).resolves.toMatchObject({ workflow: { dismissed: true } });
+    await expect(completion().complete("owner", await request())).rejects.toMatchObject({ status: 409 });
+    await db.execute("UPDATE ea_email_index SET body_text = 'Updated source after dismissal' WHERE uid = 'receipt'");
+    await worker().recoverStaleClaims();
+    expect(await worker().processNextDocument()).toBe(false);
+    expect(await worker().processNextEvent()).toBe(false);
+    expect((await store.getDocumentForEmail("owner", "receipt"))?.body).toBe("Updated source after dismissal");
+    expect(ledger.size).toBe(0);
+  });
+
+  it("dismisses every linked source and invalidates a concurrent automatic preview", async () => {
+    await arrive(); await arrive("related");
+    for (const token of ["one", "two"]) {
+      const document = await store.claimDocument(token);
+      await store.associateDocument(document!, { candidate: partial, contentHash: "source", eventId: "existing", nextAttemptAt: now });
+    }
+    const claim = await store.claimEvent("automatic");
+    await completion().dismiss("owner", await request());
+    expect(await store.admitOperation(claim!, { test: true })).toBe(false);
+    const event = await store.getEventForEmail("owner", "receipt");
+    expect(event?.dismissedAt).toBe(now);
+    expect(event?.documents.map(doc => doc.dismissedAt)).toEqual([now, now]);
+    await db.execute("UPDATE ea_email_index SET body_text = 'Changed' WHERE uid = 'related'");
+    expect(await worker().processNextDocument()).toBe(false);
+    expect(await worker().processNextEvent()).toBe(false);
+    expect(await store.getNextWakeAt()).toBeNull();
+  });
+
+  it("suppresses fresh same-reference receipts after dismissing an unassociated source, even after source changes", async () => {
+    const candidate = { ...partial, due_date: DATE, provider_reference: "ORDER-104", provider_reference_confidence: 0.99,
+      provider_reference_evidence: "Order ORDER-104" };
+    const body = `Order ORDER-104. Paid $12.00 on ${DATE}.`;
+    await arrive("receipt", candidate, { body, authenticated: true });
+    await completion().dismiss("owner", await request());
+    const original = await store.getEventForEmail("owner", "receipt");
+    expect(original).toMatchObject({ dismissedAt: now, ownerCompletion: null, operation: null });
+    await db.execute("UPDATE ea_email_index SET body_text = 'Changed source without the original reference' WHERE uid = 'receipt'");
+    now += 86400_000;
+    await arrive("fresh", candidate, { body, authenticated: true, date: now });
+    expect(await worker().processNextDocument()).toBe(true);
+    const related = await store.getEventForEmail("owner", "fresh");
+    expect(related?.id).toBe(original?.id);
+    expect(projectManagedFinancialPlan((await store.getDocumentForEmail("owner", "fresh"))!, related).workflow)
+      .toMatchObject({ dismissed: true, completion: { canComplete: false, canDismiss: false } });
+    expect(await worker().processNextDocument()).toBe(false);
+    expect(await worker().processNextEvent()).toBe(false);
+    expect(await store.getNextWakeAt()).toBeNull();
+    expect(ledger.size).toBe(0);
+  });
+
+  it("rejects an existing reference and a changed standalone source without creating dismissal orphans", async () => {
+    const candidate = { ...partial, provider_reference: "ORDER-104", provider_reference_confidence: 0.99,
+      provider_reference_evidence: "Order ORDER-104" };
+    await arrive("receipt", candidate, { body: "Order ORDER-104", authenticated: true });
+    await completion().dismiss("owner", await request());
+    await arrive("conflicting", candidate, { body: "Order ORDER-104", authenticated: true });
+    await expect(completion().dismiss("owner", await request("conflicting"))).rejects.toMatchObject({ status: 409 });
+    expect(await store.getEventForEmail("owner", "conflicting")).toBeNull();
+    const stale = (await store.getDocumentForEmail("owner", "conflicting"))!;
+    await db.execute("UPDATE ea_email_index SET body_text = 'Changed' WHERE uid = 'conflicting'");
+    expect(await store.dismissCandidate(stale, null, { eventId: "stale-dismissal", referenceKey: null })).toBe(false);
+    expect((await db.execute("SELECT COUNT(*) AS total FROM ea_financial_events")).rows[0]?.total).toBe(1);
+  });
+
+  it("rejects stale, malformed, other-owner and already-submitted dismissals", async () => {
+    await arrive();
+    const original = await request();
+    await expect(completion().dismiss("other", original)).rejects.toMatchObject({ status: 404 });
+    await expect(completion().dismiss("owner", { ...original, documentRevision: 0 })).rejects.toMatchObject({ status: 400 });
+    await expect(completion().dismiss("owner", { ...original, documentRevision: 20 })).rejects.toMatchObject({ status: 409 });
+    await completion().complete("owner", original);
+    await expect(completion().dismiss("owner", await request())).rejects.toMatchObject({ status: 409 });
+    await drainEvent();
+    await expect(completion().dismiss("owner", await request())).rejects.toMatchObject({ status: 409 });
+    expect(ledger.size).toBe(1);
+  });
 
   it("records owner-supplied date and account without category, sender authentication, candidate, or enabled AI", async () => {
     assessmentPaused = true;

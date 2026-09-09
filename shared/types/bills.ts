@@ -456,11 +456,13 @@ export interface FinancialEmailPlan {
     relatedEmails: number;
     reason: string | null;
     nextAttemptAt: number | null;
+    dismissed?: boolean;
     completion?: {
       emailUid: string;
       documentRevision: number;
       eventRevision: number | null;
       canComplete: boolean;
+      canDismiss?: boolean;
       blockedReason?: string;
     };
   };

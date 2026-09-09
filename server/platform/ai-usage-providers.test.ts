@@ -233,6 +233,7 @@ describe("provider attempts to durable AI accounting", () => {
     await migrate("052_financial_email_plans.sql");
     await migrate("054_email_sender_authentication.sql");
     await migrate("062_financial_events.sql");
+    await migrate("068_financial_candidate_dismissal.sql");
     for (const file of ["030_owner_bootstrap.sql", "041_email_transaction_imports.sql", "042_transaction_import_item_subject.sql", "053_transaction_import_financial_plans.sql", "055_generic_financial_email_imports.sql", "056_generic_financial_email_automation.sql", "058_generic_financial_email_income_automation.sql", "059_generic_financial_email_transfer_automation.sql", "063_financial_activity.sql", "064_financial_corrections.sql"]) await migrate(file);
     const candidate = {
       amount: 20, type: "expense", type_confidence: 0.99, type_evidence: "purchase",

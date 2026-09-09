@@ -22,6 +22,17 @@ describe("demo mode API network guard", () => {
     vi.resetModules();
   });
 
+  it("dismisses a managed candidate in memory without changing fictional Actual transactions", async () => {
+    const api = await importApiWithDemoMode("1");
+    const before = await api.listFinancialActivity({ view: 'completed' });
+    const request = { emailUid: 'demo-email-budget', documentRevision: 1, eventRevision: 1 };
+    expect(await api.dismissFinancialEvent(request)).toMatchObject({ workflow: { dismissed: true, completion: { canComplete: false, canDismiss: false } } });
+    expect((await api.listFinancialActivity({ view: 'all' })).items.some(item => item.reference.id === 'demo-event-review')).toBe(false);
+    expect((await api.listFinancialActivity({ view: 'completed' })).items).toEqual(before.items);
+    expect(await api.dismissFinancialEvent(request)).toMatchObject({ workflow: { dismissed: true } });
+    await expect(api.completeFinancialEvent({ ...request, entry: { kind: 'expense', amount: 20, date: '2026-09-08', accountId: 'demo-checking', payee: 'Fictional Market' } })).rejects.toMatchObject({ status: 409 });
+  });
+
   it("keeps auth local and blocks API fetches before network in demo mode", async () => {
     let networkAttempted = false;
     let beaconAttempted = false;

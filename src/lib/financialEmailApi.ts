@@ -2,7 +2,7 @@ import { isDemoMode } from "../demo/config";
 import { apiFetch } from "./apiFetch";
 import type { BillCandidate, BillExtractionInput, BillMutationResponse, BillPaySeedRequest,
   FinancialEmailExtractionResponse, FinancialEmailPlan } from "../../shared/types/bills";
-import type { FinancialEventCompletionRequest } from "../../shared/types/financial-operations";
+import type { FinancialEventCompletionRequest, FinancialEventDismissalRequest } from "../../shared/types/financial-operations";
 
 export const sendToActualBudget = (bill: BillCandidate): Promise<BillMutationResponse> =>
   apiFetch("/api/briefing/actual/send", { method: "POST", body: JSON.stringify(bill) });
@@ -29,3 +29,11 @@ export const completeFinancialEvent = async (payload: FinancialEventCompletionRe
     throw error;
   }
 };
+
+export async function dismissFinancialEvent(payload: FinancialEventDismissalRequest): Promise<FinancialEmailPlan> {
+  try {
+    return await apiFetch<FinancialEmailPlan>("/api/briefing/financial-events/dismiss", { method: "POST", body: JSON.stringify(payload) });
+  } finally {
+    if (typeof window !== "undefined" && !isDemoMode()) window.dispatchEvent(new Event("ea-financial-event-changed"));
+  }
+}

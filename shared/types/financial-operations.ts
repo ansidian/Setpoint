@@ -27,6 +27,8 @@ export interface FinancialEventCompletionRequest {
   entry: FinancialEventCompletionEntry;
 }
 
+export type FinancialEventDismissalRequest = Pick<FinancialEventCompletionRequest, "emailUid" | "documentRevision" | "eventRevision">;
+
 export interface ActualCompletedTransferInput extends ActualFinancialOperationBase {
   kind: "completed_transfer";
   fromAccountId: string;

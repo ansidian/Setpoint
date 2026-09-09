@@ -41,6 +41,7 @@ function makeApp(service = serviceMock(), financialCompletion?: ReturnType<typeo
     service: service as never,
     financialStatus: async () => null,
     financialCompletion,
+    financialDismissal: financialCompletion?.dismiss,
     financialReviewChanges: financialDb ? (userId, options) => readFinancialReviewChanges(userId, { ...options, dbClient: financialDb }) : undefined,
     wake: () => { wakeCount += 1; },
   }));
@@ -53,7 +54,7 @@ function authenticated(requestBuilder: Test): Test {
 
 async function managedDb(): Promise<Client> {
   const db = createClient({ url: "file::memory:" });
-  for (const file of ["001_ea_tables.sql", "013_email_index_normalized_date.sql", "025_email_thread_identity.sql", "054_email_sender_authentication.sql", "062_financial_events.sql", "030_owner_bootstrap.sql", "041_email_transaction_imports.sql", "042_transaction_import_item_subject.sql", "053_transaction_import_financial_plans.sql", "055_generic_financial_email_imports.sql", "056_generic_financial_email_automation.sql", "058_generic_financial_email_income_automation.sql", "059_generic_financial_email_transfer_automation.sql", "063_financial_activity.sql", "064_financial_corrections.sql"]) {
+  for (const file of ["001_ea_tables.sql", "013_email_index_normalized_date.sql", "025_email_thread_identity.sql", "054_email_sender_authentication.sql", "062_financial_events.sql", "068_financial_candidate_dismissal.sql", "030_owner_bootstrap.sql", "041_email_transaction_imports.sql", "042_transaction_import_item_subject.sql", "053_transaction_import_financial_plans.sql", "055_generic_financial_email_imports.sql", "056_generic_financial_email_automation.sql", "058_generic_financial_email_income_automation.sql", "059_generic_financial_email_transfer_automation.sql", "063_financial_activity.sql", "064_financial_corrections.sql"]) {
     await db.executeMultiple(readFileSync(new URL(`../../db/migrations/${file}`, import.meta.url), "utf8"));
   }
   await db.execute("UPDATE ea_financial_workflow_state SET cutover_at = '2026-01-01T00:00:00Z'");
@@ -77,6 +78,24 @@ beforeEach(() => {
 });
 
 describe("transaction import routes", () => {
+  it("dismisses only the authenticated owner's current candidate", async () => {
+    const db = await managedDb();
+    try {
+      await db.execute(`UPDATE ea_financial_documents SET candidate_json = '{"type":"expense","amount":12}'`);
+      const store = createFinancialEventStore(db);
+      const { app } = makeApp(serviceMock(), createFinancialEventCompletion({ store }));
+      const path = "/api/briefing/financial-events/dismiss";
+      const input = { emailUid: "managed", documentRevision: 1, eventRevision: null, userId: "other" };
+      expect((await request(app).post(path).send(input)).status).toBe(401);
+      expect((await authenticated(request(app).post(path)).send({ ...input, emailUid: "another-owner" })).status).toBe(404);
+      expect((await authenticated(request(app).post(path)).send({ ...input, documentRevision: 20 })).status).toBe(409);
+      const response = await authenticated(request(app).post(path)).send(input);
+      expect(response.status).toBe(200);
+      expect(response.body.workflow).toMatchObject({ dismissed: true, completion: { canComplete: false } });
+      expect((await store.getDocumentForEmail("other", "another-owner"))?.dismissedAt).toBeNull();
+    } finally { db.close(); }
+  });
+
   it("queues owner completion in the existing managed workflow and rejects unauthenticated, stale and cross-owner requests", async () => {
     const db = await managedDb();
     try {
