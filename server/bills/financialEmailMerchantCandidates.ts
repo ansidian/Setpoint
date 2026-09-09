@@ -1,3 +1,6 @@
+import type { FinancialTargetBundleRanker } from "./financialEmailTargetInference.ts";
+import type { TargetEvidence } from "./financialEmailImportedHistory.ts";
+import { hasVerbatimFinancialEvidence } from "./financialEmailClassificationPolicy.ts";
 import type { ActualPayee } from "../../shared/types/actual.ts";
 import type { BillCandidate } from "../../shared/types/bills.ts";
 import type { TransactionRecord } from "../../shared/types/transactions.ts";
@@ -141,3 +144,32 @@ export function discoverCorroboratedMerchantHistory({
   return eligibleRows.filter((row) => selectedKeys.has(`${row.accountId}:${row.payeeId}`));
 }
 
+
+/** Resolve merchant aliases independently of payment-account history. Similarity
+ * only retrieves choices; a grounded provider choice must identify the payee. */
+export async function rankMerchantPayeeEvidence({ candidate, payees, rankBundles, evidenceText }: {
+  candidate: BillCandidate; payees: ActualPayee[]; rankBundles?: FinancialTargetBundleRanker; evidenceText: string;
+}): Promise<TargetEvidence[]> {
+  const eligible = payees.filter(payee => !payee.transfer_acct);
+  const byId = new Map(eligible.map(payee => [payee.id, payee]));
+  const matches = candidatePayees(candidate, eligible)
+    .sort((left, right) => right.score - left.score || left.payeeId.localeCompare(right.payeeId));
+  const candidates: TargetEvidence[] = matches.map(match => ({
+    id: match.payeeId, label: byId.get(match.payeeId)!.name, tier: 5, decisive: false, selectable: false,
+    provenance: { source: "actual_metadata", confidence: "medium", reason: "similar_existing_payee" },
+  }));
+  if (!rankBundles || !matches.length || matches.length > MAX_CANDIDATE_BUNDLES) return candidates;
+  const options = candidates.map((entry, index) => ({ key: `payee_${index + 1}`, description: `Payee: ${entry.label}` }));
+  try {
+    const result = await rankBundles({ candidate, options });
+    const index = options.findIndex(option => option.key === result.key);
+    const selected = candidates[index];
+    if (result.status !== "selected" || !selected || result.confidence == null || !Number.isFinite(result.confidence) || result.confidence < 0.8
+      || !hasVerbatimFinancialEvidence(evidenceText, result.evidence)
+      || candidates.filter(entry => normalizeIdentity(entry.label) === normalizeIdentity(selected.label)).length !== 1) return candidates;
+    return [...candidates, { ...selected, selectable: true,
+      provenance: { source: "model_ranking", confidence: "high", reason: "constrained_existing_payee_ranking", evidence: result.evidence } }];
+  } catch {
+    return candidates;
+  }
+}

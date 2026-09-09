@@ -27,9 +27,9 @@ Bill domain logic: AI extraction from emails, zero-configuration financial-email
 - `financialEmailHistoryEvidence.ts` — bounded account/payee history bundles, repeated compatible target evidence and constrained history ranking; categories never split identity bundles
 - `financialEmailPlanningEvidence.ts` — pure required semantic, canonical amount and operation-date reasons for the planner
 - `financialEmailImportedHistory.ts` — exact imported-ID target evidence projected from Actual transaction history
-- `financialEmailMerchantCandidates.ts` — bounded generic merchant similarity retrieval over real Actual payees plus repeated direction/account-compatible history; discovery never selects a target
+- `financialEmailMerchantCandidates.ts` — bounded generic merchant similarity retrieval over real Actual payees plus repeated direction/account-compatible history; unresolved merchants also rank existing non-transfer payees without requiring history, and unresolved plausible matches block new-payee creation
 - `financialEmailRewardEvidence.ts` — owner-approved Cashback interpretation plus evidence-gated payee/category and settlement-account discovery; ambiguous Actual evidence remains unresolved
-- `financialEmailTargetRanker.ts` — constrained external-provider adapter that can select only supplied opaque history-bundle keys with high-confidence verbatim evidence
+- `financialEmailTargetRanker.ts` — constrained external-provider adapter that can select only supplied opaque account, payee, or history-bundle keys with high-confidence verbatim evidence
 - `billSemanticAmountPolicy.ts` — canonical semantic amount selection for the planner; minimum due is never operational
 - `statementActualStatusModel.ts` — strict pure matcher for statement candidates against Actual schedules, occurrences, and exact transactions
 - `bills-mirror-sync.ts` — syncs bill occurrences into `ea_bills_mirror_*`, schedules maintenance; thin IO + scheduler + refresh-orchestration over billsMirrorModel.ts

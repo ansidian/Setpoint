@@ -77,7 +77,7 @@ describe("financial email income automation", () => {
     const plan = await planner()("u1", input());
     expect(plan).toMatchObject({
       candidateSemanticsVersion: 3,
-      targetInferenceVersion: 6,
+      targetInferenceVersion: 7,
       candidate: {
         type: "income",
         payee: "Cashback",

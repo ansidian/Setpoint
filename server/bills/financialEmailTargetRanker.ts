@@ -39,7 +39,8 @@ export async function rankFinancialTargetBundles({
 
 Return a full extraction using the required schema, but only target_policy_key, target_confidence, and target_evidence will be used.
 - target_policy_key must be exactly one supplied opaque key, or null when evidence is insufficient.
-- Choose only from the supplied existing Actual accounts or owner-history bundles. Never invent another account, payee, category, schedule, or ID. A single choice is not evidence by itself.
+- Choose only from the supplied existing Actual accounts, payees, or owner-history bundles. Never invent another account, payee, category, schedule, or ID. A single choice is not evidence by itself.
+- A payee-only choice identifies the merchant or service, including supported variations of its name. It supplies no account or category evidence. Distinct services from the same company are not interchangeable.
 - For a credit-card payment destination, identify the named card product, not the bank that funds the payment. A shared issuer alone is insufficient when more than one card is plausible.
 - target_evidence must be a short verbatim excerpt from the email supporting the choice.
 - Do not choose from habit, a default checking account, or general plausibility.

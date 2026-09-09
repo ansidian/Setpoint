@@ -30,7 +30,7 @@ import {
   trustedAccountSuffix, scheduleAccountId, transferScheduleTopology,
   financialScheduleEvidence as scheduleEvidence,
 } from "./financialEmailAccountEvidence.ts";
-import { discoverCorroboratedMerchantHistory } from "./financialEmailMerchantCandidates.ts";
+import { discoverCorroboratedMerchantHistory, rankMerchantPayeeEvidence } from "./financialEmailMerchantCandidates.ts";
 import { cashbackSettlementAccountEvidence, isCashbackIncome, semanticRewardCategoryEvidence, semanticRewardPayeeEvidence } from "./financialEmailRewardEvidence.ts";
 import { historyBundles, stableHistoryEvidence, rankHistoryBundles, modelEvidence } from "./financialEmailHistoryEvidence.ts";
 import { hasVerbatimFinancialEvidence } from "./financialEmailClassificationPolicy.ts";
@@ -39,7 +39,7 @@ export type FinancialTargetBundleRanker = (input: {
   options: FinancialTargetRankingOption[];
 }) => Promise<FinancialTargetRankingResult>;
 
-export const FINANCIAL_TARGET_INFERENCE_VERSION = 6;
+export const FINANCIAL_TARGET_INFERENCE_VERSION = 7;
 
 export interface FinancialTargetInferenceResult {
   candidate: BillCandidate;
@@ -465,6 +465,13 @@ export async function inferFinancialEmailTargets({
   ]);
   targets.payee = payeeSelection.target;
   if (payeeSelection.conflict) reasons.add("target_evidence_conflict");
+  if (targets.payee.status === "unresolved" && !payeeSelection.conflict) {
+    const merchantEvidence = await rankMerchantPayeeEvidence({ candidate, payees: metadata.payees, rankBundles, evidenceText });
+    if (merchantEvidence.length) {
+      targets.payee = selectEvidence("payee", [...payeeHistoryEvidence, ...merchantEvidence]).target;
+      if (targets.payee.status === "unresolved") reasons.add("target_ranking_unresolved");
+    }
+  }
   const newPayee = String(candidate.payee_hint || candidate.payee || "").trim();
   if (allowNewPayee && targets.payee.status === "unresolved" && !payeeSelection.conflict
     && !targets.payee.competingCandidates?.length && newPayee.length > 1 && newPayee.length <= 200
