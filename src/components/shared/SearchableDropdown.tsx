@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -43,6 +43,16 @@ export default function SearchableDropdown(props: SearchableDropdownProps) {
   const allowCreate = !props.multiple && props.allowCreate;
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const listRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // cmdk only reveals the active result when its value changes. A new query
+    // can keep that result while leaving the list at its previous scroll offset.
+    const frame = requestAnimationFrame(() => {
+      if (listRef.current) listRef.current.scrollTop = 0;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [search]);
 
   const selected = props.multiple ? undefined : options.find(o => o.id === props.value);
   const displayName = props.multiple
@@ -118,7 +128,7 @@ export default function SearchableDropdown(props: SearchableDropdownProps) {
                 onValueChange={setSearch}
                 placeholder={allowCreate ? "Search or type new..." : "Search..."}
               />
-              <CommandList aria-multiselectable={props.multiple || undefined} className="max-h-[180px] overscroll-contain">
+              <CommandList ref={listRef} aria-multiselectable={props.multiple || undefined} className="max-h-[180px] overscroll-contain">
                 <CommandEmpty className="py-2 text-xs text-muted-foreground/75">No matches</CommandEmpty>
                 <CommandGroup>
                   {options.map(o => (
