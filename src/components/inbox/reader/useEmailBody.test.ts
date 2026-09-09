@@ -71,7 +71,7 @@ describe("useEmailBody", () => {
     expect(result.current.error).toBe("Network request failed");
   });
 
-  it("preserves attachment descriptors from fresh and cached body responses", async () => {
+  it("preserves attachments and paired sender identity from fresh and cached body responses", async () => {
     const attachment = {
       id: "2",
       filename: "report.pdf",
@@ -79,23 +79,32 @@ describe("useEmailBody", () => {
       size: 2048,
       inline: false,
     };
-    vi.mocked(getEmailBody).mockResolvedValueOnce({ body: "Loaded body", attachments: [attachment] });
+    const identity = { account_id: "gmail-work", from_address: "sender@example.com" };
+    vi.mocked(getEmailBody).mockResolvedValueOnce({ body: "Loaded body", attachments: [attachment], ...identity });
 
     const fresh = renderHook(() => useEmailBody({ uid: "gmail-fresh" }));
     await waitFor(() => expect(fresh.result.current.loading).toBe(false));
     expect(fresh.result.current.attachments).toEqual([attachment]);
+    expect(fresh.result.current.remoteContentIdentity).toEqual({
+      messageKey: "gmail-fresh", accountId: "gmail-work", senderAddress: "sender@example.com",
+    });
     fresh.unmount();
 
-    vi.mocked(peekEmailBody).mockReturnValue({ body: "Cached body", attachments: [attachment] });
+    vi.mocked(peekEmailBody).mockReturnValue({ body: "Cached body", attachments: [attachment], ...identity });
     const cached = renderHook(() => useEmailBody({ uid: "gmail-cached" }));
     expect(cached.result.current.loading).toBe(false);
     expect(cached.result.current.attachments).toEqual([attachment]);
+    expect(cached.result.current.remoteContentIdentity).toEqual({
+      messageKey: "gmail-cached", accountId: "gmail-work", senderAddress: "sender@example.com",
+    });
   });
 
-  it("clears prior attachment metadata when the selected message changes", async () => {
+  it("clears prior attachments and sender identity when the selected message changes", async () => {
     vi.mocked(getEmailBody)
       .mockResolvedValueOnce({
         body: "First",
+        account_id: "gmail-work",
+        from_address: "sender@example.com",
         attachments: [{ id: "2", filename: "first.pdf", contentType: "application/pdf", inline: false }],
       })
       .mockResolvedValueOnce({ body: "Second", attachments: [] });
@@ -105,10 +114,23 @@ describe("useEmailBody", () => {
       { initialProps: { uid: "gmail-first" } },
     );
     await waitFor(() => expect(result.current.attachments?.length).toBe(1));
+    expect(result.current.remoteContentIdentity?.senderAddress).toBe("sender@example.com");
 
     rerender({ uid: "gmail-second" });
     expect(result.current.attachments).toEqual([]);
+    expect(result.current.remoteContentIdentity).toBeUndefined();
     await waitFor(() => expect(result.current.body).toBe("Second"));
     expect(result.current.attachments).toEqual([]);
+    expect(result.current.remoteContentIdentity).toBeUndefined();
+  });
+
+  it.each([
+    { account_id: "gmail-work" },
+    { from_address: "sender@example.com" },
+    { from: "Sender <sender@example.com>" },
+  ])("does not infer trusted identity from incomplete body metadata: %j", (metadata) => {
+    vi.mocked(peekEmailBody).mockReturnValue({ body: "Cached body", ...metadata });
+    const { result } = renderHook(() => useEmailBody({ uid: "gmail-cached" }));
+    expect(result.current.remoteContentIdentity).toBeUndefined();
   });
 });

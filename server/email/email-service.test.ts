@@ -87,7 +87,7 @@ afterEach(async () => {
   testState.db.current = null;
 });
 
-describe("findAccountByUid", () => {
+describe("email account routing", () => {
   it("returns icloud account for icloud- prefix", async () => {
     mockDb.execute
       .mockResolvedValueOnce({ rows: [] })
@@ -107,14 +107,14 @@ describe("findAccountByUid", () => {
     await expect(findAccountByUid("u1", "icloud-abc")).rejects.toMatchObject({ status: 404 });
   });
 
-  it("prefers the indexed iCloud account when the uid is ambiguous", async () => {
-    mockDb.execute.mockResolvedValueOnce({
-      rows: [{ id: "icloud-work", email: "work@icloud.com", type: "icloud" }],
-    });
-    const out = await findAccountByUid("u1", "icloud-abc");
-    expect(out).toEqual({
-      type: "icloud",
-      account: { id: "icloud-work", email: "work@icloud.com", type: "icloud" },
+  it("returns the indexed receiving account with the body when an iCloud UID is ambiguous", async () => {
+    testState.db.current = await createEmailIndexTestDb();
+    await seedEmailAccount(currentDb(), { id: "icloud-personal", type: "icloud", email: "personal@icloud.com" });
+    await seedEmailAccount(currentDb(), { id: "icloud-work", type: "icloud", email: "work@icloud.com" });
+    await seedIndexedEmail(currentDb(), { uid: "icloud-42", account_id: "icloud-work", account_email: "work@icloud.com" });
+    icloud.fetchEmailBody.mockResolvedValueOnce({ body: "Statement", from_address: "sender@example.com" });
+    expect(await emailService.getEmailBody("user-1", "icloud-42")).toEqual({
+      body: "Statement", account_id: "icloud-work", from_address: "sender@example.com",
     });
   });
 
@@ -130,18 +130,17 @@ describe("findAccountByUid", () => {
   });
 
   it("routes duplicate Gmail prefixes through the canonical account credentials", async () => {
-    mockDb.execute.mockResolvedValueOnce({
-      rows: [
-        { id: "gmail-old", email: "dup@example.com", updated_at: "2026-04-18T10:00:00Z" },
-        { id: "gmail-fresh", email: "dup@example.com", updated_at: "2026-04-20T10:00:00Z" },
-      ],
-    });
-
-    const out = await findAccountByUid("u1", "gmail-gmail-old-msg123");
-
+    testState.db.current = await createEmailIndexTestDb();
+    await seedEmailAccount(currentDb(), { id: "gmail-old", updated_at: "2026-04-18T10:00:00Z" });
+    await seedEmailAccount(currentDb(), { id: "gmail-fresh", updated_at: "2026-04-20T10:00:00Z" });
+    const out = await findAccountByUid("user-1", "gmail-gmail-old-msg123");
     expect(out!.account.id).toBe("gmail-fresh");
     expect(out!.account.uid_account_id).toBe("gmail-old");
     expect(out!.account.canonical_id).toBe("gmail-fresh");
+    gmail.fetchEmailBody.mockResolvedValueOnce({ body: "Statement", from_address: "sender@example.com" });
+    expect(await emailService.getEmailBody("user-1", "gmail-gmail-old-msg123")).toEqual({
+      body: "Statement", account_id: "gmail-fresh", from_address: "sender@example.com",
+    });
   });
 
   it("falls back through indexed account_email when no Gmail prefix row matches", async () => {

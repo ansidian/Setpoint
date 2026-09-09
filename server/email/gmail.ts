@@ -289,6 +289,7 @@ export async function fetchEmailBody(account: ConfiguredEmailAccount, uid: strin
     html_body: parsed.html || parsed.textAsHtml || parsed.text || "",
     subject: parsed.subject || "",
     from: parsed.from?.text || "",
+    from_address: parsed.from?.value?.[0]?.address || "",
     date: parsed.date ? parsed.date.toISOString() : "",
     attachments: describeMimeAttachments(parsed.attachments),
   };

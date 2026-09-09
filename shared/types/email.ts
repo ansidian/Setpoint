@@ -60,6 +60,8 @@ export interface EmailHtmlBody {
   html_body: string;
   subject: string;
   from: string;
+  account_id?: string;
+  from_address?: string;
   date: string;
   attachments?: EmailBodyAttachment[];
 }
@@ -69,6 +71,8 @@ export interface EmailPlainBody {
   uid?: string;
   subject?: string;
   from?: string;
+  account_id?: string;
+  from_address?: string;
   date?: string;
   attachments?: EmailBodyAttachment[];
 }

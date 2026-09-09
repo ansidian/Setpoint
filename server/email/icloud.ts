@@ -284,6 +284,7 @@ export async function fetchEmailBody(email: string, password: string, uid: strin
       html_body: parsed.html || parsed.textAsHtml || parsed.text || "",
       subject: parsed.subject || msg.envelope?.subject || "",
       from: parsed.from?.text || msg.envelope?.from?.[0]?.name || "",
+      from_address: parsed.from?.value?.[0]?.address || msg.envelope?.from?.[0]?.address || "",
       date: parsed.date ? parsed.date.toISOString() : "",
       attachments: describeMimeAttachments(parsed.attachments),
     };

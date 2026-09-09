@@ -224,7 +224,7 @@ vi.mock("imapflow", () => ({
   },
 }));
 
-const { fetchEmailsInRange, fetchEmailAttachment, getPooledClient } = await import("./icloud.ts");
+const { fetchEmailsInRange, fetchEmailBody, fetchEmailAttachment, getPooledClient } = await import("./icloud.ts");
 
 describe("iCloud fetchEmailsInRange", () => {
   const fakeAccount = {
@@ -362,6 +362,14 @@ describe("iCloud reader attachments", () => {
   beforeEach(() => {
     activeClient = null;
     imapFlowHolder.current = FakeImapFlowAttachment;
+  });
+
+  it("returns the parsed sender address with the source body and attachments", async () => {
+    const body = await fetchEmailBody("body@icloud.com", "app-password", "icloud-42");
+    expect(body).toMatchObject({
+      from_address: "sender@example.com",
+      attachments: [expect.objectContaining({ filename: "ledger.csv", inline: false })],
+    });
   });
 
   it("retrieves the selected MIME part and always releases the mailbox lock", async () => {

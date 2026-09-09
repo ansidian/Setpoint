@@ -1,6 +1,7 @@
 declare module "mailparser" {
   export interface ParsedMailAddress {
     text?: string;
+    value?: Array<{ name?: string; address?: string }>;
   }
 
   export interface ParsedMailAttachment {

@@ -123,6 +123,7 @@ describe("Gmail reader attachments", () => {
   it("returns file descriptors while marking related CID parts inline", async () => {
     const body = await fetchEmailBody(fakeAccount, "gmail-gmail-work-message-1");
 
+    expect(body.from_address).toBe("sender@example.com");
     expect(body.attachments).toEqual([
       expect.objectContaining({
         id: "2",

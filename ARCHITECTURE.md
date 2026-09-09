@@ -738,10 +738,10 @@ erDiagram
 | `ea_financial_correction_steps` | `064_financial_corrections.sql` |
 | `ea_financial_corrections` | `064_financial_corrections.sql` |
 | `ea_financial_document_ai_attempts` | `067_financial_event_ai_requests.sql` |
-| `ea_financial_documents` | `062_financial_events.sql` |
+| `ea_financial_documents` | `062_financial_events.sql`, `068_financial_candidate_dismissal.sql` |
 | `ea_financial_event_ai_requests` | `067_financial_event_ai_requests.sql` |
 | `ea_financial_event_references` | `062_financial_events.sql` |
-| `ea_financial_events` | `062_financial_events.sql` |
+| `ea_financial_events` | `062_financial_events.sql`, `068_financial_candidate_dismissal.sql` |
 | `ea_financial_identity_backfill` | `063_financial_activity.sql` |
 | `ea_financial_identity_conflicts` | `063_financial_activity.sql` |
 | `ea_financial_intake_state` | `062_financial_events.sql` |
@@ -914,6 +914,7 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | POST | `/api/briefing/financial-corrections/preview` | `server/routes/briefing/financial-corrections.ts` |
 | POST | `/api/briefing/financial-corrections/recheck` | `server/routes/briefing/financial-corrections.ts` |
 | POST | `/api/briefing/financial-events/complete` | `server/routes/briefing/transaction-imports.ts` |
+| POST | `/api/briefing/financial-events/dismiss` | `server/routes/briefing/transaction-imports.ts` |
 | GET | `/api/briefing/financial-events/review-changes` | `server/routes/briefing/transaction-imports.ts` |
 | GET | `/api/briefing/snapshot/:id` | `server/routes/briefing/snapshot.ts` |
 | GET | `/api/briefing/snapshot/active` | `server/routes/briefing/snapshot.ts` |

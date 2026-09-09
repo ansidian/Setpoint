@@ -12,7 +12,12 @@ export default function EmailBodyPane({ state, fallback, isMobile = false, email
   const accountId = email?.account_id || email?.accountId || email?._account?.account_id || email?._account?.id;
   const senderAddress = email?.from_address || email?.fromEmail || email?.from_email;
   const messageKey = email?.uid || email?.email_id || email?.id;
-  const remoteContentTrust = useRemoteContentTrust(accountId, senderAddress);
+  // UID-only source previews get their paired identity from the fetched body.
+  // Never carry a previous message's trust forward while the next body loads.
+  const bodyIdentity = state.remoteContentIdentity?.messageKey === String(messageKey)
+    ? state.remoteContentIdentity : undefined;
+  const identity = accountId && senderAddress ? { accountId, senderAddress } : bodyIdentity;
+  const remoteContentTrust = useRemoteContentTrust(identity?.accountId, identity?.senderAddress);
   const { loading, body, error } = state;
   if (loading) {
     return (

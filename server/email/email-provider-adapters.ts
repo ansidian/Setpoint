@@ -164,7 +164,7 @@ async function resolveProviderAdapter(
 
 export async function fetchEmailBodyForUid(userId: string, uid: string): Promise<EmailBody> {
   const adapter = await resolveProviderAdapter(userId, uid, { notFoundError: unknownUidError });
-  return adapter.fetchBody();
+  return { ...await adapter.fetchBody(), account_id: adapter.account.id };
 }
 
 export async function fetchEmailAttachmentForUid(userId: string, uid: string, attachmentId: string) {

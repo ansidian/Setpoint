@@ -14,7 +14,10 @@ export type EmailBodyState = (
   | { loading: false; body: string; error: null; source: "loaded" | "fallback" }
   | { loading: false; body: null; error: string; source: "error" }
   | { loading: false; body: null; error: null; source: null }
-) & { attachments?: EmailBodyAttachment[] };
+) & {
+  attachments?: EmailBodyAttachment[];
+  remoteContentIdentity?: { messageKey: string; accountId: string; senderAddress: string };
+};
 
 export interface EmailBodyStateInput {
   loading: boolean;
