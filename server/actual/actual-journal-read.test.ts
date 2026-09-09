@@ -11,15 +11,16 @@ it('hydrates exact split and cross-date transfer relatives without adding them t
     const dir=path.join(root,'Budget');await mkdir(dir);
     await writeFile(path.join(dir,'metadata.json'),JSON.stringify({id:'Budget',cloudFileId:'file',groupId:'sync'}));
     const db=createClient({url:`file:${path.join(dir,'db.sqlite')}`});
-    await db.executeMultiple(`CREATE TABLE accounts(id TEXT,name TEXT);CREATE TABLE payees(id TEXT,name TEXT);CREATE TABLE categories(id TEXT,name TEXT);
+    await db.executeMultiple(`CREATE TABLE accounts(id TEXT,name TEXT);CREATE TABLE payees(id TEXT,name TEXT,transfer_acct TEXT);CREATE TABLE categories(id TEXT,name TEXT);
       CREATE TABLE v_transactions(id TEXT,date INTEGER,amount INTEGER,payee TEXT,account TEXT,category TEXT,notes TEXT,schedule TEXT,transfer_id TEXT,parent_id TEXT,is_parent INTEGER,is_child INTEGER,cleared INTEGER,reconciled INTEGER,tombstone INTEGER);
-      INSERT INTO accounts VALUES('a','Checking'),('b','Savings');INSERT INTO payees VALUES('p','Market');INSERT INTO categories VALUES('c','Groceries');
+      INSERT INTO accounts VALUES('a','Checking'),('b','Savings');INSERT INTO payees VALUES('p','Market',NULL),('transfer-payee','','b');INSERT INTO categories VALUES('c','Groceries');
       INSERT INTO v_transactions VALUES
       ('parent',20260723,-3589,'p','a','c','','s',NULL,NULL,1,0,0,0,0),
       ('child1',20260723,-2762,'p','a','c','',NULL,NULL,'parent',0,1,0,0,0),
       ('child2',20260723,-827,'p','a','c','',NULL,NULL,'parent',0,1,0,0,0),
       ('sent',20260731,-10000,'p','a',NULL,'',NULL,'received',NULL,0,0,0,0,0),
-      ('received',20260803,10000,'p','b',NULL,'',NULL,'sent',NULL,0,0,0,0,0);`);
+      ('received',20260803,10000,'p','b',NULL,'',NULL,'sent',NULL,0,0,0,0,0),
+      ('card-payment',20260905,122903,'transfer-payee','a',NULL,'','card-schedule',NULL,NULL,0,0,0,0,0);`);
     await db.close();
     const options={dataDir:root,localOnly:true,dbClient:{execute:async()=>({rows:[{actual_budget_url:'https://actual.example',actual_budget_sync_id:'sync'}]})}};
     const transfer=await readJournalRange('owner',{start:'2026-07-31',end:'2026-07-31'},options);
@@ -29,5 +30,7 @@ it('hydrates exact split and cross-date transfer relatives without adding them t
     expect(split.truncated).toBe(true);
     expect([...split.transactions,...split.relatives].map(row=>row.id).sort()).toEqual(['child1','child2','parent']);
     expect([...split.transactions,...split.relatives].find(row=>row.id==='parent')).toMatchObject({amountCents:-3589,isParent:true,scheduleId:'s',cleared:false});
+    const payment=await readJournalRange('owner',{start:'2026-09-05',end:'2026-09-05'},options);
+    expect(payment.transactions).toEqual([expect.objectContaining({id:'card-payment',amountCents:122903,transferId:null,transferAccountId:'b',transferAccount:'Savings'})]);
   } finally {await removeTempDir(root);}
 });

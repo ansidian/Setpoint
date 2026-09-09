@@ -53,8 +53,8 @@ export function financeActivityDays(range: JournalRange, transactionId?: string)
     day.entries.push(entry);
     // Mixed transfer splits cannot use the parent's whole amount as cash flow.
     // Keep the source rows, but withhold a total until that topology is supported.
-    if (entry.incomplete || entry.children.some(child => child.transferId)) day.complete = false;
-    if (entry.transaction.transferId || ['transfer', 'sent', 'received'].includes(entry.kind)) {
+    if (entry.incomplete || entry.children.some(child => child.transferId || child.transferAccountId)) day.complete = false;
+    if (entry.transaction.transferId || entry.transaction.transferAccountId || ['transfer', 'sent', 'received'].includes(entry.kind)) {
       day.transfers += 1;
     } else if (entry.transaction.amountCents > 0) {
       day.incomeCents += entry.transaction.amountCents;

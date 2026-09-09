@@ -46,10 +46,11 @@ export function journalEntries(range:JournalRange):JournalEntry[] {
     const pair = row.transferId ? all.get(row.transferId) : null;
     const reciprocal = pair?.transferId === row.id && pair.amountCents === -row.amountCents && pair.accountId !== row.accountId;
     const counterpart = reciprocal ? pair! : null;
+    const transfer = !!(row.transferId || row.transferAccountId);
     const sameDate = counterpart?.date === row.date;
     if (sameDate) consumed.add(counterpart!.id);
     output.push({ id:row.id, transaction:row, children, counterpart,
-      kind:row.isParent ? 'split' : counterpart ? sameDate ? 'transfer' : row.amountCents < 0 ? 'sent' : 'received' : 'transaction',
+      kind:row.isParent ? 'split' : sameDate ? 'transfer' : transfer ? row.amountCents < 0 ? 'sent' : 'received' : 'transaction',
       incomplete:!!(row.isChild || (row.isParent && (!children.length || children.reduce((sum, child) => sum+child.amountCents,0) !== row.amountCents)) || (row.transferId && !counterpart)),
       ids:[row.id,...children.map(child => child.id),...(sameDate ? [counterpart!.id] : [])] });
   }

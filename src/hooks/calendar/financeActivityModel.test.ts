@@ -45,6 +45,17 @@ it('marks truncated and incomplete evidence without converting unresolved transf
   expect(split[0]!.complete).toBe(false);
 });
 
+it('recognizes transfer payees without paired rows and keeps ordinary credits as income', () => {
+  const days = financeActivityDays(range([
+    row('card-payment', { amountCents:122903,transferAccountId:'savings',transferAccount:'Savings' }),
+    row('withdrawal', { amountCents:-2500,transferAccountId:'card',transferAccount:'Credit card' }),
+    row('cashback', { amountCents:1250 }),
+  ]));
+  expect(days[0]).toMatchObject({incomeCents:1250,outflowCents:0,transfers:2,complete:true});
+  expect(days[0]?.entries.find(entry=>entry.id==='card-payment')).toMatchObject({kind:'received',counterpart:null,incomplete:false});
+  expect(days[0]?.entries.find(entry=>entry.id==='withdrawal')).toMatchObject({kind:'sent',counterpart:null,incomplete:false});
+});
+
 it('uses stable six-week grids and correct leap/year boundaries, ending current reads at today', () => {
   expect(financeMonthRange('2024-02', '2026-09-08')).toEqual({ start: '2024-02-01', end: '2024-02-29' });
   expect(financeMonthRange('2026-09', '2026-09-08')).toEqual({ start: '2026-09-01', end: '2026-09-08' });

@@ -18,19 +18,22 @@ export async function readJournalRange(userId: string, range: { start: string; e
   const client = await openLocalBudgetClient(userId, options);
   try {
     const [accounts, payees, categories, selected] = await Promise.all([
-      client.execute('SELECT id, name FROM accounts'), client.execute('SELECT id, name FROM payees'),
+      client.execute('SELECT id, name FROM accounts'), client.execute('SELECT id, name, transfer_acct FROM payees'),
       client.execute('SELECT id, name FROM categories'),
       client.execute({ sql: `SELECT ${columns} FROM v_transactions t WHERE COALESCE(t.tombstone,0)=0
         AND t.date >= ? AND t.date <= ? ORDER BY t.date DESC, t.id LIMIT ?`, args: [actualDateInt(start), actualDateInt(end), limit + 1] }),
     ]);
     const names = (rows: Row[]) => new Map(rows.map(row => [String(row.id), String(row.name || '')]));
     const accountNames = names(accounts.rows), payeeNames = names(payees.rows), categoryNames = names(categories.rows);
+    const transferAccounts = new Map(payees.rows.map(row => [String(row.id),nullable(row.transfer_acct)]));
     const project = (row: Row): JournalTransaction => ({
       id: String(row.id), date: ymdFromActualDate(row.date) || '', amountCents: Number(row.amount),
       payee: payeeNames.get(String(row.payee)) || 'Unknown payee', payeeId: nullable(row.payee),
       account: accountNames.get(String(row.account)) || 'Unavailable account', accountId: String(row.account || ''),
       category: categoryNames.get(String(row.category)) || 'Uncategorized', notes: String(row.notes || ''),
       scheduleId: nullable(row.schedule), transferId: nullable(row.transfer_id), parentId: nullable(row.parent_id),
+      transferAccountId: transferAccounts.get(String(row.payee)) || null,
+      transferAccount: accountNames.get(transferAccounts.get(String(row.payee)) || '') || null,
       isParent: Number(row.is_parent) === 1, isChild: Number(row.is_child) === 1,
       cleared: Number(row.cleared) === 1, reconciled: Number(row.reconciled) === 1,
     });

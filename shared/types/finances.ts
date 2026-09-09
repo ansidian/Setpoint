@@ -13,6 +13,9 @@ export interface JournalTransaction {
   notes: string;
   scheduleId: string | null;
   transferId: string | null;
+  /** Other account identified by the transfer payee, even without a paired transaction. */
+  transferAccountId?: string | null;
+  transferAccount?: string | null;
   parentId: string | null;
   isParent: boolean;
   isChild: boolean;
