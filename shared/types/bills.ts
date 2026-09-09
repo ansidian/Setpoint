@@ -123,6 +123,20 @@ export interface StatementSourceFacts {
 }
 
 export interface BillCandidate {
+  purchase_date_context?: {
+    kind: "initial_confirmation_without_date" | "other";
+    confidence: number;
+    evidence: string;
+  } | null;
+  /** Server-derived, source-bound date provenance; never supplied by extraction models. */
+  operation_date_source?: {
+    kind: "email_date";
+    emailUid: string;
+    emailDate: string;
+    timeZone: "America/Los_Angeles";
+    date: string;
+    evidence: string;
+  };
   statement_facts?: StatementSourceFacts | null;
   document_role?: "merchant_receipt" | "processor_receipt" | "bank_notification" | "statement" | "payment_notice" | "other" | null;
   currency?: string | null;

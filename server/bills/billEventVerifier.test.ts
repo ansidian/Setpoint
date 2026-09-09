@@ -145,6 +145,71 @@ describe("bill event verifier", () => {
       document_role: "merchant_receipt", due_date: "2026-09-06", event_verification: { status: "corrected" } });
   });
 
+  it.each([
+    { name: "verified initial confirmation", context: { kind: "initial_confirmation_without_date", confidence: 0.99, evidence: "Your order was placed" }, accepted: "initial_confirmation_without_date" },
+    { name: "negative reassessment", context: { kind: "other", confidence: 0.99, evidence: "Receipt reissued" }, accepted: "other" },
+    { name: "omitted context", context: undefined, accepted: null },
+    { name: "ungrounded context", context: { kind: "initial_confirmation_without_date", confidence: 0.99, evidence: "Purchase made today" }, accepted: null },
+    { name: "uncertain context", context: { kind: "initial_confirmation_without_date", confidence: 0.89, evidence: "Your order was placed" }, accepted: null },
+  ] as const)("requires fresh grounded purchase date context during audit: $name", async ({ context, accepted }) => {
+    const candidate: BillCandidate = {
+      event_kind: "purchase", event_confidence: 0.99, event_evidence: "Your order was placed",
+      type: "expense", type_confidence: 0.99, type_evidence: "Your order was placed", due_date: null,
+      purchase_date_context: { kind: "initial_confirmation_without_date", confidence: 0.99, evidence: "Your order was placed" },
+    };
+    const result = await verifyBillEvent({
+      content: "Your order was placed. Receipt reissued.", candidate,
+      provider: { extract: async () => ({ fields: { ...candidate, purchase_date_context: context }, usage: {} }) },
+      providerId: "openai", model: "test-model",
+    });
+    expect(result.candidate.purchase_date_context?.kind ?? null).toBe(accepted);
+    expect(result.candidate.due_date).toBeNull();
+    expect(result.candidate.event_verification?.status).toBe("corrected");
+  });
+
+  it("removes initial purchase date context when an audit repairs a different event", async () => {
+    const context = { kind: "initial_confirmation_without_date" as const, confidence: 0.99, evidence: "Your order was placed" };
+    const result = await verifyBillEvent({
+      content: "Your order was placed. Your refund was issued.",
+      candidate: { event_kind: "purchase", event_confidence: 0.99, type: "expense", due_date: null, purchase_date_context: context },
+      provider: { extract: async () => ({ fields: {
+        event_kind: "refund", event_confidence: 0.99, event_evidence: "Your refund was issued",
+        type: "income", type_confidence: 0.99, type_evidence: "Your refund was issued",
+        due_date: null, purchase_date_context: context,
+      }, usage: {} }) },
+      providerId: "openai", model: "test-model",
+    });
+    expect(result.candidate).toMatchObject({ event_kind: "refund", type: "income", due_date: null, purchase_date_context: null });
+  });
+
+  it.each(["context cleared", "different event", "explicit date", "failed audit", "same confirmation"] as const)(
+    "keeps operation date and provenance consistent after an audit: %s", async (scenario) => {
+      const context = { kind: "initial_confirmation_without_date" as const, confidence: 0.99, evidence: "Your order was placed" };
+      const source: BillCandidate["operation_date_source"] = { kind: "email_date", emailUid: "receipt",
+        emailDate: "2026-09-09T02:00:00Z", timeZone: "America/Los_Angeles", date: "2026-09-08", evidence: context.evidence };
+      const candidate: BillCandidate = { event_kind: "purchase", event_confidence: 0.6, event_evidence: context.evidence,
+        type: "expense", type_confidence: 0.99, type_evidence: context.evidence,
+        due_date: source.date, purchase_date_context: context, operation_date_source: source };
+      const result = await verifyBillEvent({
+        content: "Your order was placed."
+          + (scenario === "different event" ? " Your refund was issued." : "")
+          + (scenario === "explicit date" ? " Purchase date September 7, 2026." : ""), candidate,
+        provider: { extract: async () => {
+          if (scenario === "failed audit") throw new Error("Unavailable");
+          return { fields: { ...candidate, event_confidence: 0.99, due_date: null,
+            ...(scenario === "context cleared" ? { purchase_date_context: null } : {}),
+            ...(scenario === "different event" ? { event_kind: "refund", type: "income",
+              event_evidence: "Your refund was issued", type_evidence: "Your refund was issued" } : {}),
+            ...(scenario === "explicit date" ? { due_date: "2026-09-07", purchase_date_context: null } : {}),
+          }, usage: {} };
+        } }, providerId: "openai", model: "test-model",
+      });
+      expect(result.candidate.due_date).toBe(scenario === "same confirmation" ? source.date
+        : scenario === "explicit date" ? "2026-09-07" : null);
+      expect(result.candidate.operation_date_source).toEqual(scenario === "same confirmation" ? source : undefined);
+    },
+  );
+
   it("does not invent an operation year from a copyright footer", async () => {
     const result = await verifyBillEvent({
       content: "Your credit card statement is ready. Payment is due on 09/05. Copyright 2024 Example Bank.",

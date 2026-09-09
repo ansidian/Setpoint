@@ -44,7 +44,7 @@ import type { TransactionQueryResult, TransactionRecord } from "../../shared/typ
 export { financialEmailSourceIdentity } from "./financialEmailSourceIdentity.ts";
 export { selectSemanticBillAmount } from "./billSemanticAmountPolicy.ts";
 export { financialEmailAutomationEnabled } from "./financialEmailAutomationPolicy.ts";
-export { hasFinancialSemanticConflict, hasVerbatimFinancialEvidence } from "./financialEmailClassificationPolicy.ts";
+export { hasFinancialSemanticConflict, hasStrongFinancialType, hasVerbatimFinancialEvidence } from "./financialEmailClassificationPolicy.ts";
 export { namedAccountEvidence, trustedAccountSuffix, accountSuffix } from "./financialEmailAccountEvidence.ts";
 export { hasExplicitDateForYmd } from "./billEventVerifier.ts";
 

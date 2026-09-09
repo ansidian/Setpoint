@@ -41,6 +41,7 @@ const REVIEW_ROWS = `WITH review AS (
 const DETAILS_REASONS = new Set([
   "Related emails contain conflicting payment details.",
   "Waiting for an explicit transaction or payment date.",
+  "Waiting for a supported transaction or payment date.",
   "Waiting for complete payment amount, currency and account details.",
   "Waiting for complete, consistent payment details.",
   "Waiting for a clear payment purpose.",

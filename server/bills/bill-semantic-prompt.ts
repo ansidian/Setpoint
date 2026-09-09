@@ -3,6 +3,15 @@
 import { FINANCIAL_SETTLEMENT_KINDS } from "../../shared/types/bills.ts";
 
 export const BILL_SEMANTIC_IDENTITY_PROPERTIES = {
+  purchase_date_context: {
+    type: ["object", "null"], additionalProperties: false,
+    properties: {
+      kind: { type: "string", enum: ["initial_confirmation_without_date", "other"] },
+      confidence: { type: "number", minimum: 0, maximum: 1 },
+      evidence: { type: "string" },
+    },
+    required: ["kind", "confidence", "evidence"],
+  },
   statement_facts: {
     type: ['object', 'null'], additionalProperties: false,
     properties: {
@@ -33,7 +42,7 @@ export const BILL_SEMANTIC_IDENTITY_PROPERTIES = {
   provider_reference_evidence: { type: ["string", "null"] },
 };
 export const BILL_SEMANTIC_IDENTITY_REQUIRED = Object.keys(BILL_SEMANTIC_IDENTITY_PROPERTIES);
-export const FINANCIAL_CANDIDATE_SEMANTICS_VERSION = 3;
+export const FINANCIAL_CANDIDATE_SEMANTICS_VERSION = 4;
 
 export const BILL_SEMANTIC_EXTRACTION_INSTRUCTIONS: string = `For each bill candidate:
 - Preserve statement_facts separately from the operation: the explicitly labeled statement date (YYYY-MM-DD), whether the provider explicitly requires no payment or states a zero amount due, account credit as a positive magnitude, new charges and carried balance when separately labeled. Each fact requires its own short contiguous verbatim supporting evidence. Missing facts and their evidence are null. Never infer a date from receipt time, infer a carried balance from arithmetic, or subtract an account credit from a later bill. A no-payment-required credit statement remains statement_issued + bill, not a refund or completed payment. Its due_date is null unless a due date is explicit. Return null statement_facts for non-statements.
@@ -49,6 +58,7 @@ export const BILL_SEMANTIC_EXTRACTION_INSTRUCTIONS: string = `For each bill cand
 - Return currency as the ISO currency code evidenced by the canonical amount (USD for a dollar amount identified as US dollars, including an unqualified $ in a US account/merchant context). Return null when currency is unknown or ambiguous; never convert a non-USD amount to USD.
 - due_date is the operation date in YYYY-MM-DD, not always a future bill deadline. For purchase, payment_completed, card_payment_completed, account_transfer_completed, refund, reward, or other completed income, use the explicit transaction, purchase, order, redemption, paid, posted, credited, or completion date for that event. For statements, due reminders, and recurring bills use the explicit payment due date; for payment_scheduled use the explicit scheduled payment date; for account_transfer_pending use the explicit request or initiation date when present.
 - Include the supporting verbatim date text in event_evidence when it belongs to the same contiguous source excerpt. If the date appears in a separate row, keep event_evidence contiguous and read due_date from that explicit date row; never join separate excerpts. If the operation date is absent, ambiguous, or lacks an unambiguous year, return null due_date. Never substitute the email received date, today's date, a statement period boundary, shipping/delivery date, or a different event's date. A completed transaction date does not create an Inbox deadline_at; that field remains reserved for an actual deadline requiring action.
+- Independently classify purchase_date_context. Use initial_confirmation_without_date only for an initial purchase or order confirmation issued with that event, when the source contains no explicit, partial, or ambiguous operation date. This requires purchase + expense and evidence that the message confirms the newly placed order or purchase. Do not rely on a merchant name or a fixed subject pattern. Exclude reminders, reissued or forwarded messages, delayed receipts, shipping or fulfillment updates, future scheduled purchases, bills, income, and transfers. Use other with supporting evidence when the source establishes an excluded context, and null when uncertain. Return confidence from 0 to 1 and one short contiguous verbatim evidence excerpt. This context never supplies due_date: leave due_date null when no explicit operation date exists; only the server may derive an email-date fallback.
 - When an explicit account/card suffix is present, return account_last4 as exactly four digits, short verbatim account_last4_evidence, and account_last4_confidence from 0 to 1. Otherwise return all three as null.
 - Set target_policy_key, target_confidence, and target_evidence to null. Target policy selection is a separate constrained audit; never invent an Actual ID, mapping, or target policy.
 - Preserve every distinct labeled monetary value in amount_candidates with its semantic kind, confidence, and one short contiguous verbatim evidence excerpt (at most 320 characters) containing that currency value and its supporting label. Copy directly without ellipses, paraphrases, or joining separate excerpts. Distinguish statement_balance, minimum_due, total_due, payment_amount, transaction_amount, refund_amount, order_total, subtotal, and other.

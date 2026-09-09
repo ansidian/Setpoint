@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { resolveFinancialDocumentDate } from "./financial-event-date.ts";
 import { combineFinancialEventEvidence, correlateFinancialDocument, type FinancialEvidenceDocument } from "./financial-event-evidence.ts";
 
 function receipt(uid: string, role: "merchant_receipt" | "processor_receipt", overrides: Partial<FinancialEvidenceDocument> = {}): FinancialEvidenceDocument {
@@ -41,6 +42,22 @@ describe("financial event evidence identity", () => {
     expect(correlateFinancialDocument(repeated, [first])).toEqual({ eventId: "first", ambiguous: false });
     const refund = { ...repeated, candidate: { ...repeated.candidate!, type: "income", event_kind: "refund" as const } };
     expect(correlateFinancialDocument(refund, [first])).toEqual({ eventId: null, ambiguous: false });
+  });
+
+  it("carries a borrowed confirmation date with its provenance and flags conflicting explicit dates", () => {
+    const merchant = receipt("m1", "merchant_receipt", { body: "Your purchase is confirmed. Paid $30.00." });
+    merchant.candidate = resolveFinancialDocumentDate({ ...merchant, candidate: { ...merchant.candidate!, due_date: null,
+      type_evidence: "Your purchase is confirmed.", event_evidence: "Your purchase is confirmed.",
+      purchase_date_context: { kind: "initial_confirmation_without_date", confidence: 0.99, evidence: "Your purchase is confirmed." },
+    } }, new Date("2026-09-09T12:00:00Z"));
+    const processor = receipt("p1", "processor_receipt");
+    processor.candidate!.due_date = null;
+    const combined = combineFinancialEventEvidence([merchant, processor]);
+    expect(combined).toMatchObject({ conflict: false, candidate: { account_hint: "Example Rewards Card", due_date: "2026-09-07",
+      operation_date_source: { emailUid: "m1", date: "2026-09-07" }, purchase_date_context: { kind: "initial_confirmation_without_date" },
+    } });
+    processor.candidate!.due_date = "2026-09-06";
+    expect(combineFinancialEventEvidence([merchant, processor]).conflict).toBe(true);
   });
 
   it("cannot borrow account evidence from unauthenticated or contradictory documents", () => {

@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { assessFinancialDocument, canAssessFinancialDocuments } from "../triage/financial-document-classifier.ts";
-import { planFinancialEmail, financialEmailSourceIdentity, hasFinancialSemanticConflict, hasExplicitDateForYmd } from "../bills/financial-email-planner.ts";
+import { planFinancialEmail, financialEmailSourceIdentity, hasFinancialSemanticConflict } from "../bills/financial-email-planner.ts";
 import { invalidateActualAfterTransactionImport } from "../bills/bills-service.ts";
 import { publishCurrentDashboardEvent } from "../dashboard/current-events.ts";
 import { withAiUsageContext } from "../platform/ai-usage.ts";
 import { requireCompleteEmailEvidence } from "../email/email-evidence.ts";
 import { getMetadata as actualGetMetadata } from "../actual/actual.ts";
+import { resolveFinancialDocumentDate, financialDocumentSupportsDate } from "./financial-event-date.ts";
 import { financialEventStore, type FinancialEventStore, type FinancialEvent } from "./financial-event-store.ts";
 import { combineFinancialEventEvidence, correlateFinancialDocument, financialDocumentContentHash, financialDocumentReferenceKey, financialEvidenceChangedAfterAttempt } from "./financial-event-evidence.ts";
 import { bindFinancialEventOperation, buildFinancialEventOperation, createFinancialEventExecutor,
@@ -77,7 +78,7 @@ export function createFinancialEventWorker({
         assessmentAttempt = await store.reserveDocumentAssessment(document, contentHash) || 0;
         if (!assessmentAttempt) throw new Error("Assessment retry limit reached for this source, or source claim changed.");
       }
-      const candidate = reusable
+      const assessedCandidate = reusable
         ? document.candidate
         : await withAiUsageContext({ userId: document.userId, origin: "transaction_import", accountId: document.accountId, emailId: document.emailUid },
           () => assessDocument(document.userId, {
@@ -86,6 +87,7 @@ export function createFinancialEventWorker({
             body_text: document.body, email_date: document.emailDate, email_date_utc: document.emailDate,
             thread_id: document.threadId,
           }));
+      const candidate = resolveFinancialDocumentDate({ ...document, candidate: assessedCandidate }, new Date(now()));
       if (!candidate) {
         await store.settleDocument(document, { candidate: null, contentHash, status: "ignored" });
         publish(document.userId);
@@ -94,7 +96,7 @@ export function createFinancialEventWorker({
       const failedVerification = [candidate.amount_verification, candidate.event_verification, candidate.type_verification]
         .some((verification) => verification?.status === "failed");
       const missingSourceDate = candidate.event_kind && !["payment_cancelled", "payment_failed", "other"].includes(candidate.event_kind)
-        && !hasExplicitDateForYmd(`${document.subject}\n${document.body}`, candidate.due_date);
+        && !financialDocumentSupportsDate({ ...document, candidate }, candidate, new Date(now()));
       // Reassess failed or incomplete extraction against the whole source before
       // caching it or assigning an event identity. Retries remain bounded when
       // the source itself cannot supply the missing facts.
@@ -223,8 +225,8 @@ export function createFinancialEventWorker({
           return true;
         }
         if (!plan.candidate.due_date || !event.documents.some((document) => document.senderAuthentication?.status === "pass"
-          && hasExplicitDateForYmd(`${document.subject}\n${document.body}`, plan!.candidate.due_date!))) {
-          await settle(event, plan, "waiting", "Waiting for an explicit transaction or payment date.");
+          && financialDocumentSupportsDate(document, plan!.candidate, new Date(now())))) {
+          await settle(event, plan, "waiting", "Waiting for a supported transaction or payment date.");
           return true;
         }
         operation = buildFinancialEventOperation(event.id, plan);

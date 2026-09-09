@@ -89,6 +89,25 @@ describe("loadBillExtractChoice", () => {
 });
 
 describe("extractBillCandidate", () => {
+  it("preserves verified initial confirmation context without inventing an operation date", async () => {
+    mockSettings("openai", "gpt-5.4-mini");
+    const purchaseDateContext = { kind: "initial_confirmation_without_date" as const, confidence: 0.99, evidence: "Your order was placed" };
+    const result = await extractBillCandidate("u1", {
+      from: "orders@example.test", subject: "Your order was placed", body: "Your order was placed. Order total $30.00",
+    }, { ...dependencies(), providers: { ...providers, openai: {
+      extract: async () => ({ fields: {
+        payee: "Example Store", amount: 30, amount_kind: "order_total",
+        amount_candidates: [{ kind: "order_total", value: 30, confidence: 0.99, evidence: "Order total $30.00" }],
+        event_kind: "purchase", event_confidence: 0.99, event_evidence: "Your order was placed",
+        type: "expense", type_confidence: 0.99, type_evidence: "Your order was placed",
+        due_date: null, purchase_date_context: purchaseDateContext,
+      }, usage: {} }),
+    } } as never });
+    expect(result.candidate).toMatchObject({ purchase_date_context: purchaseDateContext, due_date: null,
+      event_verification: { status: "corrected" } });
+    expect(result.candidate.operation_date_source).toBeUndefined();
+  });
+
   it("performs one first-pass extraction and returns semantic candidate context without resolving mappings", async () => {
     mockSettings("openai", "gpt-5.4-mini", { metadata: {
       accounts: [{ id: "account-1", name: "Checking" }],

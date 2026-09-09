@@ -170,7 +170,7 @@ export function combineFinancialEventEvidence(documents: FinancialEvidenceDocume
     ["account_last4", ["account_last4_evidence", "account_last4_confidence"]],
     ["from_account_hint", ["from_account_hint_confidence"]],
     ["to_account_hint", ["to_account_hint_confidence"]],
-    ["due_date", []], ["currency", []], ["payee_hint", []],
+    ["due_date", ["operation_date_source", "purchase_date_context"]], ["currency", []], ["payee_hint", []],
     ["settlement_kind", ["settlement_evidence", "settlement_confidence"]],
   ];
   for (const [key, evidenceKeys] of factPairs) {

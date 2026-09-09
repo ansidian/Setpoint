@@ -42,6 +42,7 @@ Bill domain logic: AI extraction from emails, zero-configuration financial-email
 
 - Bills write through `server/actual/actual.ts`; this domain decides *what* to write, the actual domain decides *how*.
 - Categories are optional for all planning sources. Only deterministic evidence may prefill a category; missing or conflicting category evidence never blocks a resolved account/payee, and old category-only blockers refresh once on read.
+- Extraction leaves unstated operation dates null. The shared timing context distinguishes initial undated purchase confirmations from follow-ups without merchant/subject rules; independent audits can revoke that context. The managed event worker alone derives an original-email date with server-owned provenance.
 - Extraction providers are registered in `bill-extractors/catalog.ts`; add new providers there, not inline.
 - Provider adapters record actual extraction/verification/matching attempts. Scoped AI usage context preserves the triggering origin and evaluation status through planning; deterministic repairs and cached plan reuse create no usage events.
 

@@ -1,5 +1,5 @@
 import { BILL_SEMANTIC_EXTRACTION_INSTRUCTIONS } from "./bill-semantic-prompt.ts";
-import { hasFinancialSemanticConflict, hasStrongFinancialType, hasVerbatimFinancialEvidence, shouldAttemptFinancialEmailTypeVerification } from "./financialEmailClassificationPolicy.ts";
+import { hasFinancialSemanticConflict, hasStrongFinancialType, hasVerbatimFinancialEvidence, shouldAttemptFinancialEmailTypeVerification, validateFinancialSemanticIdentity } from "./financialEmailClassificationPolicy.ts";
 import {
   BILL_EVENT_KINDS,
   type BillCandidate,
@@ -122,7 +122,7 @@ export async function verifyBillEvent({
 
   const prompt = `Audit the semantic event classification for this bill or financial email.
 
-Return a corrected extraction using the required schema. Focus on document_role, event_kind, event_confidence, event_evidence, due_date, type, type_confidence, type_evidence, account_hint, from_account_hint, to_account_hint, settlement_kind, and provider_reference with their evidence/confidences. Check event/type consistency independently of the first-pass confidence. Preserve the original monetary evidence; this audit does not select Actual IDs. Repair due_date when the email contains an explicit date for the classified event, including when correcting an event whose existing date belongs to a different event.
+Return a corrected extraction using the required schema. Focus on document_role, event_kind, event_confidence, event_evidence, due_date, purchase_date_context, type, type_confidence, type_evidence, account_hint, from_account_hint, to_account_hint, settlement_kind, and provider_reference with their evidence/confidences. Check event/type consistency independently of the first-pass confidence. Independently audit purchase_date_context, returning other or null when the initial confirmation interpretation is unsupported. Preserve the original monetary evidence; this audit does not select Actual IDs. Repair due_date when the email contains an explicit date for the classified event, including when correcting an event whose existing date belongs to a different event.
 Preserve a supported merchant_receipt role when the sender is the seller or merchant of record, even if it also offers checkout or payment services. Change it to processor_receipt only when the document records funding or payment to a separate seller. Repairing a date does not itself justify changing the document role.
 ${BILL_SEMANTIC_EXTRACTION_INSTRUCTIONS}
 
@@ -161,6 +161,7 @@ ${JSON.stringify({
     provider_reference: candidate.provider_reference ?? null,
     provider_reference_evidence: candidate.provider_reference_evidence ?? null,
     due_date: candidate.due_date ?? null,
+    purchase_date_context: candidate.purchase_date_context ?? null,
   })}`;
 
   try {
@@ -177,7 +178,15 @@ ${JSON.stringify({
     typeAccepted = typeAccepted && semanticsAccepted;
     const dateAccepted = eventAccepted
       && hasExplicitDateForYmd(content, verified.fields.due_date);
+    const auditedDateContext = validateFinancialSemanticIdentity(verified.fields, content).purchase_date_context;
+    const purchaseDateContext = auditedDateContext?.kind === "other"
+      || eventAccepted && typeAccepted && !verified.fields.due_date ? auditedDateContext ?? null : null;
     const eventChanged = eventAccepted && verified.fields.event_kind !== candidate.event_kind;
+    const emailDateSource = candidate.operation_date_source;
+    const clearEmailDate = Boolean(emailDateSource && (dateAccepted || eventChanged
+      || purchaseDateContext?.kind !== "initial_confirmation_without_date"
+      || emailDateSource.date !== candidate.due_date
+      || emailDateSource.evidence !== purchaseDateContext.evidence));
     const roleAccepted = semanticsAccepted && ["merchant_receipt", "processor_receipt", "bank_notification", "statement", "payment_notice", "other"].includes(String(verified.fields.document_role));
     const accountAccepted = semanticsAccepted && Number(verified.fields.account_hint_confidence) >= 0.8
       && Number(verified.fields.account_hint_confidence) <= 1
@@ -199,6 +208,9 @@ ${JSON.stringify({
     return {
       candidate: {
         ...candidate,
+        // An audit must establish this permission anew, including when it repairs
+        // a contradictory event or cannot confirm the initial interpretation.
+        purchase_date_context: purchaseDateContext,
         ...(roleAccepted ? { document_role: verified.fields.document_role } : {}),
         ...(verifyType ? { type_verification: typeAttempt(typeAccepted ? "corrected" : "kept_initial") } : {}),
         ...(typeAccepted
@@ -245,14 +257,17 @@ ${JSON.stringify({
           event_confidence: verified.fields.event_confidence,
           event_evidence: verified.fields.event_evidence,
         } : {}),
-        ...(repairDate || eventChanged ? { due_date: dateAccepted ? verified.fields.due_date : null } : {}),
+        ...(repairDate || eventChanged || clearEmailDate ? { due_date: dateAccepted ? verified.fields.due_date : null } : {}),
+        ...(clearEmailDate ? { operation_date_source: undefined } : {}),
         event_verification: metadata(eventAccepted ? "corrected" : "kept_initial", providerId, model),
       },
       usage: verified.usage || {},
     };
   } catch {
     return {
-      candidate: { ...candidate, event_verification: metadata("failed", providerId, model), ...(verifyType ? { type_verification: typeAttempt("failed") } : {}) },
+      candidate: { ...candidate,
+        ...(candidate.operation_date_source ? { due_date: null, operation_date_source: undefined, purchase_date_context: null } : {}),
+        event_verification: metadata("failed", providerId, model), ...(verifyType ? { type_verification: typeAttempt("failed") } : {}) },
       usage: {},
     };
   }

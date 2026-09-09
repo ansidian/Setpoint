@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createFinancialEmailPlanner } from "./financial-email-planner.ts";
+import { FINANCIAL_CANDIDATE_SEMANTICS_VERSION } from "./bill-semantic-prompt.ts";
 import type { BillCandidate } from "../../shared/types/bills.ts";
 import type { TransactionRecord } from "../../shared/types/transactions.ts";
 
@@ -76,7 +77,7 @@ describe("financial email income automation", () => {
   it("plans a grounded PayPal balance movement as automatic Cashback income", async () => {
     const plan = await planner()("u1", input());
     expect(plan).toMatchObject({
-      candidateSemanticsVersion: 3,
+      candidateSemanticsVersion: FINANCIAL_CANDIDATE_SEMANTICS_VERSION,
       targetInferenceVersion: 7,
       candidate: {
         type: "income",

@@ -26,6 +26,16 @@ export function hasVerbatimFinancialEvidence(content: string, evidence: unknown)
 
 export function validateFinancialSemanticIdentity(candidate: BillCandidate, content: string): BillCandidate {
   const normalized = { ...candidate };
+  const purchaseDateContext = candidate.purchase_date_context;
+  if (purchaseDateContext != null
+    && !(Number(purchaseDateContext.confidence) >= 0.9
+      && Number(purchaseDateContext.confidence) <= 1
+      && ["initial_confirmation_without_date", "other"].includes(purchaseDateContext.kind)
+      && hasVerbatimFinancialEvidence(content, purchaseDateContext.evidence)
+      && (purchaseDateContext.kind === "other"
+        || candidate.event_kind === "purchase" && candidate.type === "expense"))) {
+    normalized.purchase_date_context = null;
+  }
   if ((candidate.type_confidence != null || candidate.type_evidence != null)
     && (!hasStrongFinancialType(candidate) || !hasVerbatimFinancialEvidence(content, candidate.type_evidence))) {
     normalized.type = null;

@@ -292,6 +292,23 @@ describe("autonomous financial event processing", () => {
     expect(ledger.map((entry) => entry.amountCents)).toEqual(recovers ? [-3000] : []);
   });
 
+  it("records an initial undated purchase using the original email day and preserves its source across recovery", async () => {
+    const source = receipt("initial-order", { role: "merchant_receipt", receivedOffset: 6 * 3600_000 + 10 * 60_000 });
+    source.body = source.body.replace("Paid $30.00 on " + day, "Your order is confirmed for $30.00");
+    source.candidate = { ...source.candidate, due_date: null, type_confidence: 0.99, type_evidence: "Your order is confirmed",
+      event_evidence: "Your order is confirmed", amount_candidates: [{ kind: "transaction_amount", value: 30, confidence: 0.99, evidence: "$30.00" }],
+      purchase_date_context: { kind: "initial_confirmation_without_date", confidence: 0.99, evidence: "Your order is confirmed" } };
+    clock = arrival + 2 * 86400_000;
+    await arrive(source); await assessArrivals(); await processEvents();
+    expect(ledger.map(entry => [entry.date, entry.amountCents])).toEqual([[day, -3000]]);
+    const event = await store.getEventForEmail("owner", source.uid);
+    expect(event).toMatchObject({ status: "settled", plan: { candidate: { due_date: day, operation_date_source: {
+      kind: "email_date", emailUid: source.uid, emailDate: "2026-09-07T00:30:00.000Z", timeZone: "America/Los_Angeles", date: day,
+    } } } });
+    worker = newWorker(); await worker.recoverStaleClaims(); await processEvents();
+    expect(ledger).toHaveLength(1);
+  });
+
   it("combines complementary merchant and processor receipts into one signed entry and a new payee", async () => {
     await arrive(receipt("merchant", { role: "merchant_receipt", funding: false }));
     await arrive(receipt("processor", { receivedOffset: 13_000 }));
