@@ -187,13 +187,14 @@ export async function verifyBillAmounts({
 
 Return a corrected extraction using the required schema. Focus on amount, amount_kind, and amount_candidates:
 - Account for every distinct numeric currency value visible in the source, up to the schema limit.
+- Include informational, promotional, projected, and legal-footer currency values as amount_candidates with kind other and verbatim evidence of their non-operational role. They count toward coverage but must not replace or invalidate a separately evidenced payable or paid amount. For example, a receipt's payment and a statutory penalty cap are separate candidates: payment_amount for the payment and other for the cap.
 - Audit each semantic label as well as each numeric value. Complete numeric coverage does not establish correct label/value associations.
 - Preserve source rows and table relationships. When several labels precede several values, use explicit structural or repeated source evidence to resolve their association; do not guess from proximity.
 - For each amount_candidate, copy one short contiguous verbatim evidence excerpt (at most 320 characters) containing its currency value and supporting label. Do not paraphrase, add ellipses, or join separate source excerpts. An informational zero balance is not a statement balance unless the source explicitly labels it as such.
 - When several amounts share the same role, select one only if original labels, dates, or account relationships identify it as the relevant amount. Confidence does not distinguish two payments. If the source cannot resolve the conflict, preserve the candidates and return null amount and null amount_kind.
 - Keep minimum_due separate from statement_balance and total_due.
 - Select the canonical amount for the first-pass event. For scheduled or completed payments/transfers, an explicit payment_amount takes precedence over a statement_balance. Statement balance is canonical for statements and repayment obligations; a completed transaction must not borrow an informational statement balance as its paid amount. Preserve minimum_due only as an informational candidate and never select it. If no non-minimum canonical amount exists, return null amount and null amount_kind.
-- Use null amount and null amount_kind when values are informational, promotional, projected, or otherwise not payable.
+- Use null amount and null amount_kind only when no operational amount is evidenced for the event; an email containing both an explicit payment and unrelated informational values keeps the payment as canonical.
 - Do not invent values or infer a numeric amount from phrases such as "full statement balance."
 
 First-pass extraction:

@@ -341,6 +341,42 @@ describe("semantic bill amount verifier", () => {
     expect(selectSemanticBillAmount(result.candidate)).toBeNull();
   });
 
+  it.each(["missing", "grounded", "ungrounded"] as const)(
+    "requires grounded coverage of a legal-footer amount while preserving the payment: %s",
+    async (footerCoverage) => {
+      const paymentEvidence = "You sent $74.49 USD to Synchrony Bank.";
+      const footerEvidence = "you may be entitled to your money back plus a penalty of up to $1,000 and attorney's fees";
+      const candidate: BillCandidate = {
+        event_kind: "card_payment_completed", amount: 74.49, amount_kind: "payment_amount",
+        amount_candidates: [{ kind: "payment_amount", value: 74.49, evidence: paymentEvidence }],
+      };
+      const result = await verifyBillAmounts({
+        content: `${paymentEvidence}\n${footerEvidence}`,
+        candidate,
+        provider: providerWith({
+          ...candidate,
+          amount_candidates: [
+            ...candidate.amount_candidates!,
+            ...(footerCoverage === "missing" ? [] : [{
+              kind: "other", value: 1000,
+              evidence: footerCoverage === "grounded" ? footerEvidence : "A legal penalty of $1,000.",
+            }]),
+          ],
+        }),
+        providerId: "openai", model: "test-model",
+      });
+
+      expect(result.candidate.amount_verification).toMatchObject({
+        status: footerCoverage === "grounded" ? "corrected" : "failed",
+        source_value_count: 2, initial_covered_count: 1,
+        verified_covered_count: footerCoverage === "missing" ? 1 : 2,
+      });
+      expect(selectSemanticBillAmount(result.candidate)).toEqual(footerCoverage === "grounded"
+        ? { amount: 74.49, kind: "payment_amount", source: "semantic:payment_amount" }
+        : null);
+    },
+  );
+
   it.each([null, 999])("audits competing payments without inventing a deterministic selection from %s", async (initialAmount) => {
     const content = "Previous payment $40.00. Current payment $75.00.";
     const candidate: BillCandidate = {
