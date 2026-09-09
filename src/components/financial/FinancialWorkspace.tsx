@@ -51,8 +51,8 @@ export default function FinancialWorkspace({ search,onNavigate,onClose,onRepair,
   useEffect(() => {
     let active = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    if (!referenceKey) { setSelected(null); return; }
     const ref = JSON.parse(referenceKey);
-    if (!ref) { setSelected(null); return; }
     setSelected(current => JSON.stringify(current?.reference) === referenceKey ? current : null);
     // Publications are hints. Keep one selected pending original moving even if one is missed.
     // Corrections own their journal polling; history/list reads do not need an interval.
