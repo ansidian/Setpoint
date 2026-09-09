@@ -18,24 +18,35 @@ export function useDashboardFinance(refreshing = false) {
     let disposed = false;
     let inFlight = false;
     let pending = false;
+    let activeRead: AbortController | null = null;
+    const settle = async <T,>(request: Promise<T>, save: (value: T) => void, fail: (value: boolean) => void) => {
+      try {
+        const value = await request;
+        if (!disposed) { save(value); fail(false); }
+      } catch {
+        if (!disposed) fail(true);
+      }
+    };
     const refresh = async () => {
       if (disposed || document.visibilityState === "hidden") return;
       if (inFlight) { pending = true; return; }
       inFlight = true;
       setLoading(true);
+      const controller = new AbortController();
+      activeRead = controller;
+      // A stalled supporting read must release the refresh gate for later retries.
+      const deadline = window.setTimeout(() => controller.abort(), 30_000);
+      const options = { signal: controller.signal };
       try {
-        const [summary,attention,history] = await Promise.allSettled([
-          getDashboardFinance(), listFinancialActivity({ view:'needs_attention' }), listFinancialActivity({ view:'completed' }),
+        // Publish healthy sources immediately, even while another source is pending.
+        await Promise.all([
+          settle(getDashboardFinance(options), setData, setError),
+          settle(listFinancialActivity({ view:'needs_attention' }, options), setReview, setReviewError),
+          settle(listFinancialActivity({ view:'completed' }, options), setCompleted, setCompletedError),
         ]);
-        if (!disposed) {
-          setError(summary.status === 'rejected'); setReviewError(attention.status === 'rejected'); setCompletedError(history.status === 'rejected');
-          if (summary.status === 'fulfilled') setData(summary.value);
-          if (attention.status === 'fulfilled') setReview(attention.value);
-          if (history.status === 'fulfilled') setCompleted(history.value);
-        }
-      } catch {
-        if (!disposed) setError(true);
       } finally {
+        window.clearTimeout(deadline);
+        activeRead = null;
         inFlight = false;
         if (!disposed) setLoading(false);
         if (pending && !disposed) { pending = false; void refresh(); }
@@ -52,6 +63,7 @@ export function useDashboardFinance(refreshing = false) {
     window.addEventListener("ea-actual-metadata-invalidated", visible);
     return () => {
       disposed = true;
+      activeRead?.abort();
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", visible);
       window.removeEventListener("focus", visible);

@@ -272,7 +272,7 @@ export const getCurrentDashboard = (): Promise<CurrentDashboardResponse> => {
 };
 export const getDashboardHealth = (): Promise<CurrentDashboardHealthResponse> => apiFetch("/api/dashboard/health");
 // The demo adapter explicitly serves a fictional, refresh-reset financial projection.
-export const getDashboardFinance = (): Promise<DashboardFinanceResponse> => apiFetch("/api/dashboard/finance");
+export const getDashboardFinance = (options: SignalOptions = {}): Promise<DashboardFinanceResponse> => apiFetch("/api/dashboard/finance", options);
 // Demo serves the same bounded pending-run projection from its in-memory imports.
 export const requestCurrentDashboardRefresh = (source?: CurrentDashboardCacheKey): Promise<CurrentDashboardResponse> => apiFetch("/api/dashboard/current/refresh", {
   method: "POST",
