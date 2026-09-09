@@ -6,7 +6,8 @@ Personal executive-assistant dashboard for one owner: email triage, calendar, we
 
 Use this file as a map. Standing guidance belongs in tracked top-level docs; `docs/` is local working memory, gitignored for this personal single-user repo. Use it when present, but never make tracked code depend on it.
 
-- `README.md` — setup, environment variables, commands, and integrations.
+- `README.md` — portfolio overview, live demo, feature highlights, and stack.
+- `OPERATIONS.md` — setup, deployment, recovery, and maintenance commands.
 - `ARCHITECTURE.md` — system shape, routes, database, and data flow.
 - `FLOWS.md` — cross-layer pipelines; read before changes spanning server, SSE, caches, and UI.
 - `PRODUCT.md` — product intent, audience, voice, and non-goals.
@@ -57,7 +58,7 @@ Commands: `npm test -- <test-file> ...` for focused tests, `npx eslint <file> ..
 
 ## Provider Boundaries
 
-- Production uses Turso. Normal development uses `server/db/ea.db`; see `README.md` for opt-in Turso development.
+- Production uses Turso. Normal development uses `server/db/ea.db`; see `OPERATIONS.md` for opt-in Turso development.
 - `npm run actual -- <command>` is for ad-hoc inspection only. Runtime paths use the in-process `@actual-app/api` singleton in `server/actual/actual.ts`.
 
 ## Demo Mode Contract
