@@ -26,7 +26,7 @@ beforeEach(() => {
   vi.stubGlobal('fetch',async (path:string) => {
     if (path === '/api/briefing/actual/metadata') return Response.json({ accounts:[{ id:'checking',name:'Checking' }],payees:[],categories:[] });
     if (path.startsWith('/api/briefing/financial-activity/event/') || path.startsWith('/api/briefing/financial-activity/import/')) { if (failDetail-- > 0) return Response.json({ message:'Temporary status failure' },{status:503}); return Response.json(current); }
-    if (path.startsWith('/api/briefing/financial-activity?')) return Response.json({ items:current.status === 'needs_attention' ? [current] : [],total:current.status === 'needs_attention' ? 1 : 0,offset:0,limit:20 });
+    if (path.startsWith('/api/briefing/financial-activity?')) return Response.json({ items:current.status !== 'completed' ? [current] : [],total:current.status !== 'completed' ? 1 : 0,attentionTotal:current.status === 'needs_attention' ? 1 : 0,offset:0,limit:20 });
     if (path === '/api/briefing/financial-events/complete' || path.endsWith('/commit')) {
       if (path.endsWith('/commit') && rejectImport) return Response.json({accepted:0},{status:202});
       current = { ...current,status:'processing',updatedAt:2,reason:'Owner-confirmed entry queued for Actual.',actions:{ ...current.actions,complete:false } };
@@ -52,7 +52,7 @@ it.each(['managed','import'] as const)('keeps %s Needs attention submissions pen
     if (owner === 'import') fireEvent.click(screen.getByRole('button',{ name:'Record in Actual' }));
     else fireEvent.submit(screen.getByRole('form',{ name:'Complete financial record' }));
   });
-  expect(screen.getByText('No financial records need your attention.')).toBeTruthy();
+  expect(screen.getByRole('region',{ name:'Pending' })).toBeTruthy();
   expect(screen.getByRole('status').textContent).toContain('processing will continue');
   expect(screen.queryByRole('button',{ name:'Record in Actual' })).toBeNull();
   expect(screen.queryByText('Already recorded in Actual')).toBeNull();
@@ -75,7 +75,7 @@ it('restores review after accepted work returns to attention instead of retainin
   await waitFor(()=>expect((review as HTMLButtonElement).disabled).toBe(false));
   fireEvent.submit(screen.getByRole('form',{ name:'Complete financial record' }));
   fireEvent.submit(screen.getByRole('form',{ name:'Complete financial record' }));
-  await screen.findByText('No financial records need your attention.');
+  await screen.findByRole('region',{ name:'Pending' });
   expect(screen.getByRole('status').textContent).toContain('processing will continue');
   current = { ...current,status:'needs_attention',updatedAt:3,reason:'Choose a different account.',actions:{ ...current.actions,complete:true } };
   act(()=>window.dispatchEvent(new Event('ea-financial-event-changed')));

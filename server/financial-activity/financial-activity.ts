@@ -197,10 +197,12 @@ export function createFinancialActivityReader(dbClient: Pick<Client, "batch"> = 
       if (query.view && !["all", "completed", "needs_attention"].includes(query.view)) invalid("Invalid financial activity view");
       if (query.source && !["managed", "amazon", "paypal", "generic"].includes(query.source)) invalid("Invalid financial activity source");
       if (query.context && !["arrival", "historical_scan"].includes(query.context)) invalid("Invalid financial activity context");
-      const items = (await snapshot(userId)).filter((item) => (!query.view || query.view === "all" || item.status === query.view)
-        && (!query.source || item.source === query.source) && (!query.context || item.contexts.includes(query.context))
+      const scoped = (await snapshot(userId)).filter((item) => (!query.source || item.source === query.source) && (!query.context || item.contexts.includes(query.context))
         && (!query.runId || item.runs.some((run) => run.id === query.runId)));
-      return { items: items.slice(offset, offset + 20), total: items.length, offset, limit: 20 };
+      const items = scoped.filter(item => !query.view || query.view === "all" || item.status === query.view
+        || (query.view === "needs_attention" && item.status === "processing"));
+      return { items: items.slice(offset, offset + 20), total: items.length,
+        attentionTotal: scoped.filter(item => item.status === "needs_attention").length, offset, limit: 20 };
     },
     async detail(userId: string, reference: FinancialActivityReference): Promise<FinancialActivity | null> {
       if (!reference || !["event", "document", "import"].includes(reference.owner) || !reference.id) invalid("An exact financial activity reference is required");

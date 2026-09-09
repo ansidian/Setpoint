@@ -74,6 +74,14 @@ describe("shared financial activity history", () => {
     expect(detail).toMatchObject({ status: "processing", amountCents: kind === "income" ? 4200 : -4200,
       completionPlan: { candidate: { type: kind, amount: 42 } } });
     expect((await reader().list("owner")).items[0]?.amountCents).toBe(detail!.amountCents);
+    expect(await reader().list("owner", { view: "needs_attention" })).toMatchObject({
+      items: [{ reference: detail!.reference, status: "processing" }], total: 1, attentionTotal: 0,
+    });
+    expect((await reader().list("owner", { view: "completed" })).total).toBe(0);
+    await db.execute({ sql: `UPDATE ea_financial_events SET status = 'settled',
+      outcome_json = '{"outcome":"already_present"}' WHERE id = ?`, args: [confirmed!.id] });
+    expect((await reader().list("owner", { view: "needs_attention" })).total).toBe(0);
+    expect((await reader().list("owner", { view: "completed" })).items[0]?.reference).toEqual(detail!.reference);
   });
   it.each([
     ["transaction", -2500, -2500], ["transaction", 2500, 2500],
@@ -106,6 +114,8 @@ describe("shared financial activity history", () => {
     const second = await reader().list("owner", { view: "needs_attention", offset: 20 });
     const last = await reader().list("owner", { view: "needs_attention", offset: 40 });
     expect([first.total, second.total, last.total]).toEqual([50, 50, 50]);
+    expect([first.attentionTotal, second.attentionTotal, last.attentionTotal]).toEqual([50, 50, 50]);
+    expect((await reader().list("owner", { source: "amazon" })).attentionTotal).toBe(25);
     expect(first.items.slice(0, 2).map((entry) => entry.reference.id)).toEqual(["e24", "i24"]);
     expect(new Set([...first.items, ...second.items, ...last.items].map((entry) => entry.id)).size).toBe(50);
     expect((await reader().list("owner", { source: "amazon" })).total).toBe(25);
@@ -208,12 +218,14 @@ describe("shared financial activity history", () => {
     expect((await reader().list('owner', { view: 'needs_attention' })).total).toBe(0);
     expect((await reader().list('owner', { view: 'completed' })).items[0]?.amountCents).toBe(entry?.amountCents ?? null);
   });
-  it("keeps automatic retries and ordinary processing out of attention", async () => {
+  it("keeps automatic retries and processing visible without adding to the actionable count", async () => {
     await event("retry");
     await db.execute("UPDATE ea_financial_events SET reason = 'Financial processing is paused while email AI is disabled.'");
     await event("pending", 1000, "owner", "pending");
-    expect((await reader().list("owner", { view: "needs_attention" })).total).toBe(0);
-    expect((await reader().list("owner")).items.map((entry) => entry.status)).toEqual(["processing", "processing"]);
+    expect(await reader().list("owner", { view: "needs_attention" })).toMatchObject({
+      total: 2, attentionTotal: 0, items: [{ status: "processing" }, { status: "processing" }],
+    });
+    expect((await reader().list("owner", { view: "completed" })).total).toBe(0);
   });
   it("binds only the original owner-scoped identity and preserves unknown old provenance", async () => {
     await item("old", { importedId: "original-imported-id" });

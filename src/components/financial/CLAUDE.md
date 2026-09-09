@@ -28,3 +28,5 @@ Financial activity and records live at `/finance` inside WorkspaceRoute's retain
 - `FinancialEmailRecord.tsx` — compatible email-UID resolution through managed status, with protected source fallback.
 
 - `KeepActualResult.tsx` — frozen current-result review and explicit keep confirmation; shared snapshot display for accepted results.
+
+The Needs attention list groups processing records under Pending and keeps the badge actionable-only.

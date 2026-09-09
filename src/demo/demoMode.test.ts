@@ -130,7 +130,9 @@ describe("demo mode API network guard", () => {
     const recovering = await api.inspectFinancialCorrection({ owner: "event", id: "demo-event-uncertain" });
     expect(recovering.correction).toMatchObject({ state: "recovering", executionStopped: false });
     const attention = await api.listFinancialActivity({ view: "needs_attention" });
-    expect(attention.items.some(item => item.reference.id === "demo-event-uncertain")).toBe(false);
+    expect(attention.items.some(item => item.reference.id === "demo-event-uncertain")).toBe(true);
+    expect(attention.items.some(item => item.reference.id === "demo-event-pending")).toBe(true);
+    expect(attention.attentionTotal).toBe(attention.items.filter(item => item.status === "needs_attention").length);
     expect(attention.items.some(item => item.reference.id === "demo-event-partial")).toBe(true);
     expect(attention.total).toBe(attention.items.length);
     expect(await api.getFinancialActivity(recovering.reference)).toMatchObject({ status: "processing", actions: { complete: false, retry: false, correct: false } });
@@ -168,7 +170,7 @@ describe("demo mode API network guard", () => {
     const api = await importApiWithDemoMode("1");
     const review = await api.listFinancialActivity({ source: "managed", view: "needs_attention" });
     expect(review.items.map(item => item.reference.id)).toEqual(expect.arrayContaining(["demo-event-review", "demo-event-partial"]));
-    expect(review.items.some(item => item.reference.id === "demo-event-uncertain")).toBe(false);
+    expect(review.items.some(item => item.reference.id === "demo-event-uncertain")).toBe(true);
     const reference = { owner: "event" as const, id: "demo-event-disconnected" };
     const saved = await api.getFinancialActivity(reference);
     expect(saved.status).toBe("completed");

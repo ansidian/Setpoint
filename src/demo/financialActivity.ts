@@ -58,12 +58,14 @@ export function handleDemoFinancialActivity(url: URL, method: string, body: Demo
   const all = getDemoFinancialActivities();
   if (url.pathname === "/api/briefing/financial-activity") {
     const query = url.searchParams;
-    const items = all.filter((item) => (!query.get("view") || query.get("view") === "all" || item.status === query.get("view"))
-      && (!query.get("source") || item.source === query.get("source"))
+    const scoped = all.filter((item) => (!query.get("source") || item.source === query.get("source"))
       && (!query.get("context") || item.contexts.includes(query.get("context") as "arrival" | "historical_scan"))
       && (!query.get("runId") || item.runs.some((run) => run.id === query.get("runId"))));
+    const items = scoped.filter(item => !query.get("view") || query.get("view") === "all" || item.status === query.get("view")
+      || (query.get("view") === "needs_attention" && item.status === "processing"));
+    const attentionTotal = scoped.filter(item => item.status === "needs_attention").length;
     const offset = Number(query.get("offset") || 0);
-    return structuredClone({ items: items.slice(offset, offset + 20).map(({ history: _history, ...item }) => item), total: items.length, offset, limit: 20 });
+    return structuredClone({ items: items.slice(offset, offset + 20).map(({ history: _history, ...item }) => item), total: items.length, attentionTotal, offset, limit: 20 });
   }
   const [owner, id] = url.pathname.split("/").slice(-2).map(decodeURIComponent);
   const item = all.find((entry) => entry.occurrences.some((ref) => ref.owner === owner && ref.id === id

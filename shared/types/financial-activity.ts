@@ -91,6 +91,8 @@ export interface FinancialActivityQuery {
 export interface FinancialActivityPage {
   items: FinancialActivity[];
   total: number;
+  /** Actionable records in the requested source scope, independent of view and pagination. */
+  attentionTotal: number;
   offset: number;
   limit: 20;
 }

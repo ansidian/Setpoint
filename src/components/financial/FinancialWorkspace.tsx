@@ -87,6 +87,10 @@ export default function FinancialWorkspace({ search,onNavigate,onClose,onRepair,
   },[referenceKey,showDetail,selected?.id]);
   useEffect(() => { if (listRef.current) listRef.current.scrollTop = scrolls.current.get(queryKey) || 0; },[queryKey]);
   const changeQuery = (patch:Partial<FinancialActivityQuery>) => onNavigate(`${financialHref({ ...query,...patch,offset:patch.offset ?? 0 },reference,true)}${params.get('showList') === '1' ? '&showList=1' : ''}`);
+  const groups = view === 'needs_attention'
+    ? [{ label:'Needs attention',items:page?.items.filter(item => item.status === 'needs_attention') || [] },
+      { label:'Pending',items:page?.items.filter(item => item.status === 'processing') || [] }]
+    : [{ label:null,items:page?.items || [] }];
   if (emailUid) return <div className="financial-surface">
     <header className="financial-toolbar"><h2 id="financial-heading"><Wallet size={18} className="text-[var(--primary)]" aria-hidden="true" />Actual record</h2><button onClick={onClose} aria-label="Close financial activity" className="financial-button financial-icon-button"><X size={16} /></button></header>
     <div className="financial-toolbar"><button className="financial-button financial-back" onClick={() => onNavigate(financialHref(query))}><ArrowLeft size={14} />Back to activity</button></div>
@@ -105,13 +109,15 @@ export default function FinancialWorkspace({ search,onNavigate,onClose,onRepair,
     <div className="financial-body" data-selected={showDetail}>
       {list && <div className="financial-list" ref={listRef} onScroll={event => scrolls.current.set(queryKey,event.currentTarget.scrollTop)} aria-label="Financial activity list">
         {loading && !page && <p role="status" className="financial-note">Loading financial activity…</p>}
-        <AnimatedHeight><div className="space-y-1 p-1">{page?.items.map(item => <button key={item.id} className="financial-row" aria-current={selected?.id === item.id} onClick={() => onNavigate(financialHref(query,item.reference,true))}>
+        <AnimatedHeight><div className="space-y-4 p-1">{groups.filter(group => group.items.length).map(group => <section key={group.label || 'activity'} aria-label={group.label || 'Activity'}>
+          {group.label && <h3 className="financial-note px-3 pt-2 pb-1 text-xs font-semibold">{group.label}</h3>}
+          <div className="space-y-1">{group.items.map(item => <button key={item.id} className="financial-row" aria-current={selected?.id === item.id} onClick={() => onNavigate(financialHref(query,item.reference,true))}>
           <span className="financial-row-title"><strong>{item.payee || item.subject || 'Financial record'}</strong><ChevronRight size={14} aria-hidden="true" /></span>
-          <span className="financial-row-meta"><span className="financial-status" data-tone={item.status === 'completed' ? 'success' : item.status === 'needs_attention' ? 'attention' : 'muted'}>{item.status === 'completed' ? <CheckCircle2 size={13} /> : item.status === 'processing' ? <Clock3 size={13} /> : item.status === 'dismissed' ? <CircleMinus size={13} /> : <CircleAlert size={13} />}{item.status === 'completed' ? 'Completed' : item.status === 'processing' ? 'Processing' : item.status === 'dismissed' ? 'Dismissed' : 'Needs attention'}</span><span className="financial-row-amount">{activityAmount(item)}</span></span>
+          <span className="financial-row-meta"><span className="financial-status" data-tone={item.status === 'completed' ? 'success' : item.status === 'needs_attention' ? 'attention' : 'muted'}>{item.status === 'completed' ? <CheckCircle2 size={13} /> : item.status === 'processing' ? <Clock3 size={13} /> : item.status === 'dismissed' ? <CircleMinus size={13} /> : <CircleAlert size={13} />}{item.status === 'completed' ? 'Completed' : item.status === 'processing' ? 'Pending' : item.status === 'dismissed' ? 'Dismissed' : 'Needs attention'}</span><span className="financial-row-amount">{activityAmount(item)}</span></span>
           <span className="financial-note">{activityFacts(item).label}</span>
           {item.emailUids.length > 1 && <span className="financial-note">{item.emailUids.length} related emails · one record</span>}
           {item.status !== 'completed' && <span className="financial-note">{activityReviewReason(item)}</span>}
-        </button>)}</div></AnimatedHeight>
+        </button>)}</div></section>)}</div></AnimatedHeight>
         {list && view === 'needs_attention' && selected?.status === 'completed' && <div className="financial-note p-3 space-y-3"><p>This record has moved to Completed.</p><button className="financial-button" onClick={() => changeQuery({ view:'completed' })}>View completed activity</button></div>}
         {page?.total === 0 && !(view === 'needs_attention' && selected?.status === 'completed') && <p className="financial-note p-3">{query.source || query.runId ? 'No records match these filters.' : view === 'completed' ? 'No completed financial activity yet.' : view === 'all' ? 'No financial activity yet.' : 'No financial records need your attention.'}</p>}
         {page && page.total > 20 && <div className="flex flex-wrap gap-2 mt-4"><button className="financial-button" disabled={loading || !page.offset} onClick={() => changeQuery({ offset:Math.max(0,page.offset - 20) })}>Previous</button><button className="financial-button" disabled={loading || page.offset + 20 >= page.total} onClick={() => changeQuery({ offset:page.offset + 20 })}>Next</button><p>{page.offset + 1}–{Math.min(page.offset + 20,page.total)} of {page.total}</p></div>}

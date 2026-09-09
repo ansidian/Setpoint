@@ -26,7 +26,7 @@ export default function useFinancialAttentionCount(active = true, revision = 0, 
     if (!active) return;
     let live = true;
     void listFinancialActivity({ ...JSON.parse(scopeKey), view: 'needs_attention' })
-      .then(page => { if (live) setCount(page.total); })
+      .then(page => { if (live) setCount(page.attentionTotal); })
       .catch(() => { if (live) setCount(null); });
     return () => { live = false; };
   }, [active, revision, refreshKey, scopeKey]);
