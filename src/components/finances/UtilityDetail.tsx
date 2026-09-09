@@ -26,7 +26,7 @@ export default function UtilityDetail({ utility, month, statementId, end, onNavi
   const title = statement && !statement.dueDate ? 'Account notice' : `${new Date(`${month}-01T12:00:00`).toLocaleDateString('en-US',{month:'long',year:'numeric'})} bill`;
   const history = statement ? [statement] : sameMonth;
   const otherNotices = utility.statements.filter(row => !row.dueDate && row.id !== statement?.id);
-  return <article className="fin-utility-detail">
+  return <article className="fin-utility-detail" style={{'--fin-amount-color':paid?'var(--sp-income)':'var(--sp-outflow)'} as React.CSSProperties}>
     <header className="fin-detail-heading"><div><h2>{utility.identity.label}</h2><p>{utility.identity.provider}</p></div><button onClick={onClose} aria-label="Close utility details"><X size={16} /></button></header>
     <section className="fin-bill-hero" aria-label={title}>
       <div className="fin-between"><span>{title}</span><span className={paid ? 'fin-paid' : statement?.dueDate && !statement.nothingDue ? 'fin-due' : ''}>{statement?.nothingDue ? 'Nothing due' : paid ? statement?.paymentDate ? `Paid ${financeDate(statement.paymentDate)}` : 'Paid' : statement?.dueDate ? `Due ${financeDate(statement.dueDate)}` : 'Statement unavailable'}</span></div>

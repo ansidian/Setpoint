@@ -292,6 +292,7 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useDashboardFocusRetry` | `src/hooks/calendar/useDashboardFocusRetry.ts` |
 | `useDeadlineOverlayState` | `src/hooks/calendar/useDeadlineOverlayState.ts` |
 | `useEditorCancelOnScroll` | `src/hooks/calendar/useEditorCancelOnScroll.ts` |
+| `useFinancePaymentCalendar` | `src/hooks/calendar/useFinancePaymentCalendar.ts` |
 | `useFloatingEditorRouting` | `src/hooks/calendar/useFloatingEditorRouting.ts` |
 | `usePlanningReadinessState` | `src/hooks/calendar/usePlanningReadinessState.ts` |
 | `useStaleDomainCache` | `src/hooks/calendar/useStaleDomainCache.ts` |

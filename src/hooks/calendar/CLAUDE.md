@@ -5,6 +5,7 @@ Calendar domain and view state: range fetching/caching, modal interaction (selec
 ## Files
 
 ### Models (pure)
+- `financePaymentsModel.ts` — exact utility/recurring membership, statement/occurrence deduplication, and recorded versus scheduled date projection
 - `financeActivityModel.ts` — Journal month ranges, six-week cells, and exact split/transfer-aware daily summaries shared by the finance calendar and rows
 - `calendarRangeModel.ts` — month key arithmetic, range expansion, fetch grouping
 - `calendarScrollModel.ts` — month index/target-clamp math, navigable radius, settle window, week-row alignment, scroll direction, prefetch range
@@ -39,6 +40,7 @@ Calendar domain and view state: range fetching/caching, modal interaction (selec
 - `useCalendarMonthNavigation.ts` — grouped month commands and grid scroll coordination: clamp targets, editor-aware cleanup, direction/idle tracking, label crossing, and fetch settle
 
 ### Calendar behavior
+- `useFinancePaymentCalendar.ts` — Utilities month reads, selected/preview day state, and bounded schedule lookahead
 - `useCalendarEventSelectionSet.ts` — event multi-select + clipboard submachine (selection set, copy/paste, seeded-toggle rules) hosting the event quick-actions bundle so its batch-delete callback prunes the selection; extracted from `useCalendarModalController.tsx`
 - `useCalendarSearchActivation.ts` — calendar-search activation cluster (search UI hook + result/date-header activation, grid-navigability, anchor resolution) extracted from `useCalendarModalController.tsx`; must be called after the view model (reads `computed`)
 - `useCalendarModalSearch.ts` — search UI state, debounced API calls, highlighting

@@ -1,4 +1,3 @@
-import { useEffect, useRef } from 'react';
 import { ArrowRight, ArrowLeftRight, CalendarDays, CheckCircle2, Clock3, Repeat2, UserRound, X } from 'lucide-react';
 import type { ActualBillOccurrence } from '../../../shared/types/actual';
 import type { FinanceDestination } from './financesNavigation';
@@ -7,15 +6,13 @@ import { financeDate, financeMoney } from './financeWorkspaceModel';
 export default function RecurringPaymentDetail({schedule,onNavigate,onClose}:{
   schedule:ActualBillOccurrence;onNavigate:(target:FinanceDestination)=>void;onClose:()=>void;
 }) {
-  const detailRef=useRef<HTMLElement>(null);
-  useEffect(()=>{detailRef.current?.scrollIntoView({block:'nearest'});},[schedule.id]);
   const paymentId=schedule.paymentTransactionIds?.[0];
   const Icon=schedule.type==='transfer'?ArrowLeftRight:Repeat2;
   const StatusIcon=schedule.paid?CheckCircle2:Clock3;
-  return <article ref={detailRef} className="fin-recurring-detail">
+  return <article className="fin-recurring-detail" style={{'--fin-amount-color':schedule.paid?'var(--sp-income)':'var(--sp-outflow)'} as React.CSSProperties}>
     <header className="fin-detail-heading"><div className="fin-detail-identity"><span className={`fin-detail-icon ${schedule.type==='income'?'fin-income':schedule.type==='transfer'?'fin-transfer':'fin-outflow'}`}><Icon size={20} aria-hidden="true"/></span><div><h2>{schedule.name}</h2><p>Recurring {schedule.type==='income'?'income':schedule.type==='transfer'?'transfer':'payment'}</p></div></div><button aria-label="Close recurring payment details" onClick={onClose}><X size={16}/></button></header>
     <section className="fin-bill-hero" aria-label="Scheduled occurrence">
-      <div className="fin-between"><span>Scheduled amount</span><span className={`fin-record-status ${schedule.paid?'fin-paid':''}`}><StatusIcon size={13} aria-hidden="true"/>{schedule.paid?'Recorded':'Scheduled'}</span></div>
+      <div className="fin-between"><span>Scheduled amount</span><span className={`fin-record-status ${schedule.paid?'fin-paid':'fin-due'}`}><StatusIcon size={13} aria-hidden="true"/>{schedule.paid?'Recorded':'Scheduled'}</span></div>
       <div className="fin-bill-amount">{financeMoney(Math.round(schedule.amount*100))}</div>
       <p className="fin-fact-line"><CalendarDays size={14} aria-hidden="true"/>{financeDate(schedule.next_date)}</p>
     </section>

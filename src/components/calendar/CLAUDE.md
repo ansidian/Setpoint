@@ -14,7 +14,8 @@ Calendar UI root: `CalendarModal.tsx` is the entry point (named for history; the
 - `CalendarModal.tsx` — entry point delegating to the calendar controller hook
 - `CalendarMobileAgenda.tsx` — mobile-only (≤639px) agenda-only calendar root: compact icon/title/view header + persistent Today/month navigation + full-width agenda (MiniCalendar suppressed) + tap-to-open detail BottomSheet; rendered by `useCalendarModalController` instead of `CalendarModalShell`
 - `CalendarOverviewRail.tsx` — month navigator with stats and loading frame
-- `FinanceActivityCalendar.tsx` and `finance-activity-calendar.css` — supplementary Journal month calendar, daily flow signals, keyboard day navigation, and expandable mobile week strip
+- `FinanceActivityCalendar.tsx` and `finance-activity-calendar.css` — shared Journal/Utilities month calendar, recorded flow and scheduled payment signals, keyboard day navigation, and expandable mobile week strip
+- `FinancePaymentDayList.tsx` — named recorded/scheduled payments in the Utilities calendar day summary opening payment details in Utilities
 - `CalendarRailPrimitives.tsx` — reusable rail components and utilities
 - `CalendarRailStates.tsx` — rail state transitions: loading, expanded, collapsed
 - `CalendarSelectedDayEmptyRail.tsx` — empty state with nearby activity and primary action
