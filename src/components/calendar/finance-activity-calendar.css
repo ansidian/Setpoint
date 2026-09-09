@@ -1,0 +1,68 @@
+.fin-activity-calendar{min-width:0;align-self:start;position:sticky;top:20px;border:1px solid #39394e;border-radius:8px;padding:20px;background:#24243a66;container-type:inline-size}
+.fac-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.fin-workspace .fin-activity-calendar .fac-heading h2{font-size:16px}
+.fac-month-navigation,.fac-week-navigation{display:flex;gap:4px}
+.fin-workspace .fin-activity-calendar :is(.fac-month-navigation,.fac-week-navigation)>button{padding:6px;min-width:32px;min-height:32px;justify-content:center;border-color:#45455c;background:#24243a}
+.fin-workspace .fin-activity-calendar :is(.fac-month-navigation,.fac-week-navigation)>button:enabled:hover{background:#313244;border-color:#6c7086}
+.fin-workspace .fin-activity-calendar :is(.fac-month-navigation,.fac-week-navigation)>button:enabled:active{background:#45455c}
+.fac-legend{display:flex;align-items:center;gap:16px;margin:12px 0;font-size:10px}
+.fac-legend>span{display:flex;align-items:center;gap:4px}
+.fac-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;padding:3px}
+.fac-weekday{text-align:center;font-size:10px;color:#a6adc8;padding-bottom:8px}
+.fin-workspace .fin-activity-calendar .fac-day{display:flex;align-items:flex-start;justify-content:flex-start;flex-direction:column;gap:2px;padding:4px;min-width:0;height:56px;position:relative;border-radius:6px;font-size:11px;line-height:1.35;font-variant-numeric:tabular-nums;scroll-margin:12px}
+.fin-workspace .fin-activity-calendar .fac-day[data-has-activity=true]{background:#31324466}
+.fin-workspace .fin-activity-calendar .fac-day:enabled:hover{background:#313244;border-color:#6c7086}
+.fin-workspace .fin-activity-calendar .fac-day:enabled:active{background:#45455c}
+.fin-workspace .fin-activity-calendar .fac-day[aria-pressed=true]{background:color-mix(in srgb,var(--ea-accent) 16%,#24243a);border-color:var(--ea-accent)}
+.fac-day-number{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px}
+.fac-day[data-today=true] .fac-day-number{color:#89dceb;font-weight:700;text-decoration:underline;text-underline-offset:3px}
+.fin-workspace .fin-activity-calendar .fac-day:disabled{background:transparent;opacity:1;color:#6c7086;transform:none}
+.fin-workspace .fin-activity-calendar .fac-day[data-outside=true]{visibility:hidden}
+.fin-workspace .fin-activity-calendar .fac-day[data-preview=true]{background:#45455c;border-color:#cdd6f4}
+.fac-amounts{display:flex;flex-direction:column;gap:2px;font-size:10px;white-space:nowrap;max-width:100%}
+.fac-transfer-mark{position:absolute;top:8px;right:4px;display:flex;gap:3px;align-items:center;font-size:9px}
+.fac-exact{display:none}.fac-compact{display:inline}
+.fac-markers{display:none;gap:3px;align-items:center;color:#89b4fa;height:12px}
+.fac-markers i{width:4px;height:4px;border-radius:50%;display:none}
+.fac-markers i[data-visible=true]{display:block}
+.fac-markers i[data-flow=in]{background:#89dceb}.fac-markers i[data-flow=out]{background:#b4befe}
+.fac-incomplete{color:#f9e2af;font-size:11px}
+.fac-controls{display:flex;align-items:center;justify-content:flex-end;margin-top:12px}
+.fin-workspace .fin-activity-calendar .fac-controls>button{font-size:11px;min-height:32px;background:#24243a;border-color:#45455c}
+.fin-workspace .fin-activity-calendar .fac-controls>button:hover{background:#313244;border-color:#6c7086}
+.fin-workspace .fin-activity-calendar .fac-controls>button:active{background:#45455c}
+.fin-workspace .fin-activity-calendar .fac-expand,.fac-week-navigation{display:none}
+.fac-day-summary{margin-top:12px;padding-top:12px;border-top:1px solid #39394e;min-height:72px}
+.fac-day-summary>div{display:flex;justify-content:space-between;gap:8px;font-size:11px}
+.fac-day-summary strong{font-weight:500}.fac-day-summary>div>span{color:#a6adc8}
+.fac-day-summary dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:8px 0 0}
+.fin-workspace .fin-activity-calendar .fac-day-summary dd{font-size:16px;font-weight:500;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.fin-workspace .fin-activity-calendar .fac-day-summary p{font-size:10px;margin-top:8px}
+.fin-workspace .fin-activity-calendar .fac-hint{font-size:10px;color:#a6adc8;margin-top:12px}
+@container(min-width:530px){.fac-exact{display:inline}.fac-compact{display:none}.fac-amounts{font-size:11px}.fin-workspace .fin-activity-calendar .fac-day{height:64px;padding:4px}}
+@container(max-width:355px){.fac-amounts{display:none}.fac-markers{display:flex}.fin-workspace .fin-activity-calendar .fac-day{height:52px;align-items:center;padding:4px 2px;gap:2px}}
+@media(max-width:767px){
+  .fin-activity-calendar{position:static;padding:8px;border-radius:8px}
+  .fin-workspace .fin-activity-calendar .fac-heading h2{font-size:13px}
+  .fin-workspace .fin-activity-calendar :is(.fac-month-navigation,.fac-week-navigation)>button{min-height:44px;min-width:44px}
+  .fac-legend{display:none}
+  .fac-grid{gap:0;padding:0}.fac-weekday{padding-bottom:4px}
+  /* Phone cells keep one density at every width, including wider phones whose
+     calendar container is large enough to trigger desktop amount labels. */
+  .fac-amounts{display:none}.fac-markers{display:flex}
+  .fin-workspace .fin-activity-calendar .fac-day{height:44px;min-height:44px;align-items:center;padding:4px 2px;gap:2px}
+  .fac-day-summary{min-height:0;margin-top:4px;padding-top:8px}
+  .fac-day-summary>div{font-size:10px}
+  .fac-day-summary dl>div{display:flex;align-items:baseline;gap:6px}
+  .fin-workspace .fin-activity-calendar .fac-day-summary dd{margin:0;font-size:12px}
+  .fac-day-summary dl{margin:4px 0 0}
+  .fin-workspace .fin-activity-calendar .fac-controls>button{min-height:44px}
+  .fac-controls{justify-content:space-between;margin-top:8px}
+  .fin-workspace .fin-activity-calendar .fac-expand{display:inline-flex}
+  .fac-expand>svg{transition:transform 160ms}.fin-activity-calendar[data-expanded=true] .fac-expand>svg{transform:rotate(180deg)}
+  .fin-activity-calendar[data-expanded=false] .fac-day[data-week=false]{display:none}
+  .fin-activity-calendar[data-expanded=false] .fac-month-navigation{display:none}
+  .fin-activity-calendar[data-expanded=false] .fac-week-navigation{display:flex}
+  .fin-workspace .fin-activity-calendar .fac-hint{display:none}
+}
+@media(prefers-reduced-motion:reduce){.fac-expand>svg{transition:none}}

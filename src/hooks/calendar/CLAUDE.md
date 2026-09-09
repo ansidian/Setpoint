@@ -5,6 +5,7 @@ Calendar domain and view state: range fetching/caching, modal interaction (selec
 ## Files
 
 ### Models (pure)
+- `financeActivityModel.ts` — Journal month ranges, six-week cells, and exact split/transfer-aware daily summaries shared by the finance calendar and rows
 - `calendarRangeModel.ts` — month key arithmetic, range expansion, fetch grouping
 - `calendarScrollModel.ts` — month index/target-clamp math, navigable radius, settle window, week-row alignment, scroll direction, prefetch range
 - `calendarSettleModel.ts` — pure scroll-settle decision tree (defer-on-mismatch, settledAway, scroll-driven/align gating, display/label/fetch outputs) extracted from `CalendarScrollContainer`'s settle timer

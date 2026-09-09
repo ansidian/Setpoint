@@ -5,6 +5,12 @@
 @media(max-width:767px){.fin-workspace{padding:20px 16px 28px}.fin-grid{display:block}.fin-detail{padding:16px;margin-top:16px}.fin-grid[data-detail=true] .fin-overview{display:none}.fin-heading h1{font-size:22px}.fin-workspace button:not([data-slot="select-trigger"]),.fin-workspace summary{min-height:44px}.fin-workspace input{font-size:16px}.fin-view-nav>span{max-width:140px;text-align:right}.fin-foreground-links{flex-wrap:wrap;padding-bottom:12px}.fin-workspace .fin-chart button{padding:4px 0}.fin-statement-facts{gap:8px}.fin-statement{padding:12px 0}.fin-bill-amount{font-size:28px}}
 @media(prefers-reduced-motion:reduce){.fin-workspace button:not([data-slot="select-trigger"]),.fin-workspace summary{transition:none!important;transform:none!important}}
 
+.fin-workspace :is(.fin-view-nav,.fin-foreground-links)>button{background:#24243a;border-color:#45455c;font-weight:500;justify-content:center}
+.fin-workspace :is(.fin-view-nav,.fin-foreground-links)>button:hover{background:#313244;border-color:#6c7086}
+.fin-workspace :is(.fin-view-nav,.fin-foreground-links)>button[aria-current=page]{background:color-mix(in srgb,var(--ea-accent) 18%,#24243a);border-color:color-mix(in srgb,var(--ea-accent) 55%,#45455c)}
+.fin-workspace :is(.fin-view-nav,.fin-foreground-links)>button[aria-current=page]:hover{background:color-mix(in srgb,var(--ea-accent) 25%,#24243a);border-color:var(--ea-accent)}
+.fin-workspace :is(.fin-view-nav,.fin-foreground-links)>button:active{background:#45455c}
+
 .fin-workspace .fin-due{color:#f9e2af}
 
 .fin-search input::placeholder{color:#a6adc8;opacity:1}
@@ -89,3 +95,22 @@
 .fin-recurring[open] summary>svg { transform:rotate(90deg); }
 .fin-recurring-count { margin-left:auto; color:#a6adc8; font-size:11px; font-variant-numeric:tabular-nums; }
 @media(prefers-reduced-motion:reduce){.fin-recurring summary>svg{transition:none}}
+
+/* The calendar supplements a bounded ledger instead of stretching its rows. */
+.fin-workspace[data-view=journal]{max-width:1680px}
+.fin-journal{max-width:none}
+.fin-journal-layout{display:grid;grid-template-columns:minmax(0,860px) minmax(340px,1fr);align-items:start;gap:40px}
+.fin-journal-ledger{grid-column:1;grid-row:1;min-width:0}
+.fin-journal-layout>.fin-activity-calendar{grid-column:2;grid-row:1}
+.fin-journal-period{font-size:10px;color:#a6adc8}
+.fin-journal-day{scroll-margin-top:20px;border-radius:6px;transition:background 160ms}
+.fin-journal-day[data-selected=true]{background:color-mix(in srgb,var(--ea-accent) 5%,transparent)}
+.fin-journal-day .fin-datehead{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-inline:12px}
+.fin-datehead>span{font-size:10px;font-weight:400;color:var(--ea-accent)}
+.fin-journal-day>.fin-empty{padding:16px 12px}
+@media(min-width:2200px){.fin-workspace[data-view=journal]{max-width:1840px}.fin-journal-layout{grid-template-columns:minmax(0,860px) minmax(0,660px);justify-content:center;gap:64px}}
+@media(min-width:768px) and (max-width:1199px){.fin-journal-layout{grid-template-columns:minmax(0,1fr) 300px;gap:24px}.fin-journal-title{align-items:flex-start;flex-direction:column;gap:4px}.fin-activity-calendar{padding:12px}}
+@media(max-width:767px){.fin-journal-layout{display:flex;flex-direction:column;gap:24px}.fin-journal-layout>.fin-activity-calendar,.fin-journal-ledger{width:100%}.fin-journal-title{flex-wrap:wrap;gap:8px}.fin-journal-tools{margin:12px 0}.fin-journal-period{flex-basis:100%}.fin-journal-day{scroll-margin-top:12px}}
+@media(prefers-reduced-motion:reduce){.fin-journal-day{transition:none}}
+
+@media(max-width:375px){.fin-workspace[data-view=journal]{padding-inline:8px}}

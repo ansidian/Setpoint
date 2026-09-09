@@ -1,7 +1,7 @@
 import { getScheduleUrl } from './recurringPaymentModel';
 import { useEffect,useState,useCallback } from 'react';
 import { useNavigate } from 'react-router';
-import { ChevronRight,ReceiptText,RefreshCw } from 'lucide-react';
+import { ChevronRight,ReceiptText } from 'lucide-react';
 import { getFinances } from '../../api';
 import type { FinanceWorkspace as WorkspaceData } from '../../../shared/types/finances';
 import { financeDestination,financesHref } from './financesNavigation';
@@ -40,7 +40,7 @@ export default function FinancesWorkspace({search,active}:{search:string;active:
   const schedule=destination.view==='schedule'?data?.recurring.find(item=>item.scheduleId===destination.scheduleId&&(!destination.date||item.next_date===destination.date)):null;
   const actualUrl=getScheduleUrl({scheduleId:utility?.identity.scheduleIds[0] || schedule?.scheduleId},data?.actualBudgetUrl);
   const paymentScheduleIds=(utility?.identity.scheduleIds || (schedule?[schedule.scheduleId]:[])).filter(id=>payLinks[id]);
-  return <main className="fin-workspace"><header className="fin-heading"><h1>Finances</h1><button aria-label="Refresh Finances" onClick={refresh} disabled={loading}><RefreshCw size={15}/></button></header>
+  return <main className="fin-workspace" data-view={destination.view}><header className="fin-heading"><h1>Finances</h1></header>
     <nav className="fin-view-nav" aria-label="Finance view"><button aria-current={destination.view!=='journal'?'page':undefined} onClick={()=>go({view:'utilities'})}>Utilities</button><button aria-current={destination.view==='journal'?'page':undefined} onClick={()=>go({view:'journal'})}>Journal</button><span>{data?.updatedAt?`Actual synced ${financeDate(data.updatedAt)}`:'Sync time unavailable'}</span></nav>
     <div className="fin-foreground-links"><button className="relative" onClick={()=>navigate(financialHref({view:'all'}))}>Activity<FinancialAttentionBadge count={attentionCount} floating/></button></div>
     {loading&&!data&&<p role="status">Loading Finances…</p>}{error&&<p role="alert">{error}</p>}{data?.issues.map(issue=><p className="fin-notice" key={issue}>{issue}</p>)}{data?.truncated&&<p className="fin-notice">Available history is incomplete. Missing months are not zero spending.</p>}
