@@ -24,11 +24,16 @@ export default function FinancialWorkspace({ search,onNavigate,onClose,onRepair,
   const emailUid = params.get('financialEmail');
   const list = params.get('financial') === 'list' && !emailUid;
   const showDetail = Boolean(reference) && params.get('showList') !== '1';
-  const [page,setPage] = useState<FinancialActivityPage|null>(null);
-  const [selected,setSelected] = useState<FinancialActivity|null>(null);
-  const [error,setError] = useState('');
-  const [loading,setLoading] = useState(false);
+  const [pages,setPages] = useState<{ revision:number; entries:Record<string,{ page:FinancialActivityPage|null; error:string }> }>({ revision:0,entries:{} });
+  const [loadedSelected,setSelected] = useState<FinancialActivity|null>(null);
+  const selected = JSON.stringify(loadedSelected?.reference) === referenceKey ? loadedSelected : null;
+  const [detailError,setDetailError] = useState<{ referenceKey:string|undefined; revision:number; message:string }|null>(null);
   const [revision,setRevision] = useState(0);
+  // Results belong to the exact filter/page and are reusable only until the next refresh.
+  const entry = pages.revision === revision ? pages.entries[queryKey] : undefined;
+  const page = entry?.page ?? null;
+  const loading = !emailUid && !entry;
+  const displayError = entry?.error || (detailError?.referenceKey === referenceKey && detailError?.revision === revision ? detailError.message : '');
   const attentionCount = useFinancialAttentionCount(list,revision,query);
   const listRef = useRef<HTMLDivElement>(null);
   const scrolls = useRef(new Map<string,number>());
@@ -40,20 +45,23 @@ export default function FinancialWorkspace({ search,onNavigate,onClose,onRepair,
   },[referenceKey]);
   useEffect(() => {
     if (emailUid) return;
-    let active = true; setLoading(true); setError('');
-    const load = async () => {
-      try { const next = await listFinancialActivity(JSON.parse(queryKey)); if (active) setPage(next); }
-      catch (cause) { if (active) setError(cause instanceof Error ? cause.message : 'Could not refresh financial activity.'); }
-      finally { if (active) setLoading(false); }
+    if (entry) return;
+    let active = true;
+    const controller = new AbortController();
+    const save = (result:{ page:FinancialActivityPage|null; error:string }) => {
+      if (active) setPages(current => ({ revision,entries:{ ...(current.revision === revision ? current.entries : {}),[queryKey]:result } }));
     };
-    void load(); return () => { active = false; };
-  },[queryKey,revision,emailUid]);
+    const load = async () => {
+      try { save({ page:await listFinancialActivity(JSON.parse(queryKey),{ signal:controller.signal }),error:'' }); }
+      catch (cause) { save({ page:null,error:cause instanceof Error ? cause.message : 'Could not refresh financial activity.' }); }
+    };
+    void load(); return () => { active = false; controller.abort(); };
+  },[queryKey,revision,emailUid,entry]);
   useEffect(() => {
     let active = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    if (!referenceKey) { setSelected(null); return; }
+    if (!referenceKey) return;
     const ref = JSON.parse(referenceKey);
-    setSelected(current => JSON.stringify(current?.reference) === referenceKey ? current : null);
     // Publications are hints. Keep one selected pending original moving even if one is missed.
     // Corrections own their journal polling; history/list reads do not need an interval.
     let wasProcessing = processingReference.current === referenceKey;
@@ -62,6 +70,7 @@ export default function FinancialWorkspace({ search,onNavigate,onClose,onRepair,
         const value = await getFinancialActivity(ref);
         if (!active) return;
         setSelected(value);
+        setDetailError(null);
         const processing = value.status === 'processing' && !value.correction;
         processingReference.current = processing ? referenceKey : null;
         if (wasProcessing && !processing) refresh();
@@ -69,7 +78,7 @@ export default function FinancialWorkspace({ search,onNavigate,onClose,onRepair,
         if (processing) timer = setTimeout(() => void load(),5000);
       } catch (cause) {
         if (active) {
-          setError(cause instanceof Error ? cause.message : 'This record is unavailable.');
+          setDetailError({ referenceKey,revision,message:cause instanceof Error ? cause.message : 'This record is unavailable.' });
           if (wasProcessing) timer = setTimeout(() => void load(),5000);
         }
       }
@@ -105,9 +114,9 @@ export default function FinancialWorkspace({ search,onNavigate,onClose,onRepair,
       <div className="financial-field financial-filter-source"><span>Source</span><Dropdown ariaLabel="Source" value={query.source || ''} onChange={source => changeQuery({ source:source as FinancialActivityQuery['source'] || undefined })} options={[{ id:"",name:"All sources" },{ id:"managed",name:"Financial emails" },{ id:"amazon",name:"Amazon imports" },{ id:"paypal",name:"PayPal imports" },{ id:"generic",name:"Other receipts" }]} /></div>
       {query.runId && <button className="financial-button" onClick={() => changeQuery({ runId:undefined })}>Clear batch filter</button>}
     </div>}
-    {error && <div className="financial-toolbar financial-error" role="alert">{error} Saved details and entered drafts are retained.<button className="financial-button" disabled={loading} onClick={refresh}>Try again</button></div>}
+    {displayError && <div className="financial-toolbar financial-error" role="alert">{displayError} Saved details and entered drafts are retained.<button className="financial-button" disabled={loading} onClick={refresh}>Try again</button></div>}
     <div className="financial-body" data-selected={showDetail}>
-      {list && <div className="financial-list" ref={listRef} onScroll={event => scrolls.current.set(queryKey,event.currentTarget.scrollTop)} aria-label="Financial activity list">
+      {list && <div className="financial-list" ref={listRef} onScroll={event => scrolls.current.set(queryKey,event.currentTarget.scrollTop)} aria-label="Financial activity list" aria-busy={loading}>
         {loading && !page && <p role="status" className="financial-note">Loading financial activity…</p>}
         <AnimatedHeight><div className="space-y-4 p-1">{groups.filter(group => group.items.length).map(group => <section key={group.label || 'activity'} aria-label={group.label || 'Activity'}>
           {group.label && <h3 className="financial-note px-3 pt-2 pb-1 text-xs font-semibold">{group.label}</h3>}
