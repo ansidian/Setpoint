@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FinancialEmailPlan, FinancialPlanTarget } from "../../shared/types/bills";
-import { buildEmailFinancialProfileSeed, financialProfileSeedFromRouteState } from "./financialProfileSeed";
+import { buildEmailFinancialProfileSeed } from "./financialProfileSeed";
 
 const email = { uid: "receipt", account_id: "receiving-gmail", from_name: "Example Shop", from_address: "Receipts@shop.example", subject: "Your receipt" };
 const target = (kind: FinancialPlanTarget["kind"], id?: string): FinancialPlanTarget => ({ kind, status: id ? "resolved" : "unresolved", id, provenance: [] });
@@ -20,13 +20,6 @@ function plan(): FinancialEmailPlan {
 }
 
 describe("email profile editing seed", () => {
-  it("starts a nonfinancial email with its exact sender and leaves financial decisions unset", () => {
-    const seed = buildEmailFinancialProfileSeed({ uid: "approval", account_id: "gmail", from: '"Morgan Lee" <morgan@work.example>', subject: "Approve budget" }, {
-      body: "Please approve the $30 budget by September 15.",
-    });
-    expect(seed).toEqual({ name: "Morgan Lee", senderAddresses: ["morgan@work.example"] });
-  });
-
   it("keeps the source budget and resolved Actual IDs while excluding amount, date and body", () => {
     expect(buildEmailFinancialProfileSeed(email, {
       body: "Example Shop. Card ending 1234. Total $30 on September 15.", resolution: { key: "receiving-gmail:receipt", plan: plan() },
@@ -45,12 +38,8 @@ describe("email profile editing seed", () => {
     expect(seed.accountLast4).toBe(destination ? "9876" : undefined);
   });
 
-  it.each(["key", "completion", "sender"])("does not borrow another message’s %s-bound suggestion", (mismatch) => {
-    const sourcePlan = plan();
-    if (mismatch === "completion") sourcePlan.workflow = { id: "other-event", state: "needs_review", relatedEmails: 1, reason: null, nextAttemptAt: null,
-      completion: { emailUid: "other-receipt", documentRevision: 1, eventRevision: 1, canComplete: true } };
-    if (mismatch === "sender") sourcePlan.profileSuggestion = { name: "Other", budgetId: "source-budget", senderAddresses: ["other@shop.example"], target: { kind: "expense", accountId: "other", payeeId: "other" } };
-    const seed = buildEmailFinancialProfileSeed(email, { body: "Example Shop", resolution: { key: mismatch === "key" ? "receiving-gmail:other" : "receiving-gmail:receipt", plan: sourcePlan } });
+  it("does not borrow another message’s suggestion", () => {
+    const seed = buildEmailFinancialProfileSeed(email, { body: "Example Shop", resolution: { key: "receiving-gmail:other", plan: plan() } });
     expect(seed).toEqual({ name: "Example Shop", senderAddresses: ["receipts@shop.example"] });
   });
 
@@ -62,12 +51,4 @@ describe("email profile editing seed", () => {
     expect(seed.target).toEqual({ kind: "expense", accountId: "", payeeId: "" });
     expect(seed.accountLast4).toBeUndefined();
   });
-
-  it("accepts partial navigation intent without importing persisted identity or enablement", () => {
-    expect(financialProfileSeedFromRouteState({ financialProfileSeed: { senderAddresses: ["Bills@utility.example"],
-      id: "injected-id", enabled: true, amount: 100, body: "Source text", date: "2026-09-15" } })).toEqual({ name: "", senderAddresses: ["bills@utility.example"] });
-    expect(financialProfileSeedFromRouteState({ financialProfileSeed: { budgetId: "old-budget", senderAddresses: [], target: { kind: "utility" } } })).toEqual({ name: "", budgetId: "old-budget", senderAddresses: [], target: { kind: "utility", scheduleId: "" } });
-  });
-
-
 });

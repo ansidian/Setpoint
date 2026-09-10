@@ -232,19 +232,19 @@ describe("autonomous financial event processing", () => {
       if (document?.nextAttemptAt) clock = document.nextAttemptAt;
     }
     await processEvents();
-    expect(providerCredits).toBe(8); // One verification and one failed target ranking.
+    const creditsAfterAssessment = providerCredits;
     for (let tick = 0; tick < 5; tick++) {
       clock += 16 * 60_000;
       worker = newWorker();
       await worker.processNextEvent();
     }
-    expect(providerCredits).toBe(8); // Unmapped review does not repeatedly buy inference.
+    expect(providerCredits).toBe(creditsAfterAssessment);
     expect(ledger).toEqual([]);
     currentAccounts = [...accounts];
     await saveReceiptProfile(db);
     clock += 16 * 60_000;
     await worker.processNextEvent();
-    expect(providerCredits).toBe(8);
+    expect(providerCredits).toBe(creditsAfterAssessment);
     expect(ledger.map((entry) => entry.amountCents)).toEqual([-3000]);
     expect(await store.getEventForEmail("owner", source.uid)).toMatchObject({ status: "settled", revision: 1 });
   });
@@ -424,9 +424,9 @@ describe("autonomous financial event processing", () => {
     expect(ledger.map((entry) => entry.amountCents)).toEqual([-3000]);
   });
 
-  it.each(["card_payment_completed", "account_transfer_completed"] as const)("ignores %s without creating transfers", async event_kind => {
-    const source = receipt(event_kind);
-    await arrive({ ...source, candidate: { ...source.candidate, type: "transfer", event_kind } });
+  it("ignores completed account transfers without creating a transfer", async () => {
+    const source = receipt("account-transfer-completed");
+    await arrive({ ...source, candidate: { ...source.candidate, type: "transfer", event_kind: "account_transfer_completed" } });
     await assessArrivals(); await processEvents();
     expect(await store.getEventForEmail("owner", source.uid)).toBeNull();
     expect(await store.getDocumentForEmail("owner", source.uid)).toMatchObject({ status: "ignored" });

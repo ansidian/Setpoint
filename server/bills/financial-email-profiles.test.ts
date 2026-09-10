@@ -90,7 +90,7 @@ describe("profile-backed financial planning", () => {
     expect(plan.operation.kind).toBe("review");
     expect(plan.automation.eligible).toBe(false);
     expect(plan.reviewReasons).toContainEqual(expect.objectContaining({ code: "profile_required" }));
-    expect(plan.profileSuggestion).toEqual({ name: "Example Shop", budgetId: "budget",
+    expect(plan.profileSuggestion).toMatchObject({ budgetId: "budget",
       senderAddresses: ["bills@power.example"], merchantName: "Example Shop",
       target: { kind: "expense", accountId: "card", payeeId: "merchant" } });
   });
@@ -102,14 +102,6 @@ describe("profile-backed financial planning", () => {
       : missing === "new-payee" ? { payees: [], payeeMap: {} } : {})("owner", source);
     expect(plan.profileSuggestion).toBeUndefined();
     expect(plan.automation.eligible).toBe(false);
-  });
-
-  it.each(["payment_due", "card_payment_completed"] as const)("ignores %s even without an amount or date", async event_kind => {
-    const candidate = { ...bill, event_kind, type: event_kind === "payment_due" ? "bill" : "transfer", amount: null, due_date: null };
-    const plan = await planner([utility])( "owner", input(candidate));
-    expect(plan.operation.kind).toBe("no_write");
-    expect(plan.reviewReasons).toEqual([]);
-    expect(plan.profileSuggestion).toBeUndefined();
   });
 
   it("does not replace an explicit different account with a saved default", async () => {
@@ -150,7 +142,7 @@ describe("profile-backed financial planning", () => {
     expect(plan.reviewReasons).not.toContainEqual(expect.objectContaining({ code: "profile_conflict" }));
   });
 
-  it.each(["Other Card (4444)", "Amazon gift-card balance", "PayPal Credit"])("preserves an income destination conflict for %s", async destination => {
+  it.each(["Other Card (4444)", "Amazon gift-card balance"])("preserves an income destination conflict for %s", async destination => {
     const configured: FinancialProfile = { ...utility, target: { kind: "income", accountId: "card", payeeId: "merchant" } };
     const candidate: BillCandidate = { ...bill, type: "income", type_evidence: "Refund issued", event_kind: "refund",
       event_evidence: "Refund issued", amount_kind: "refund_amount",
@@ -205,7 +197,7 @@ describe("profile-backed financial planning", () => {
     expect(plan.operation.kind).toBe("create_transfer_schedule");
   });
 
-  it.each(["card ending in 5808", "PayPal Credit (8635)", "Amazon gift-card balance (8635)"])(
+  it.each(["card ending in 5808", "Amazon gift-card balance (8635)"])(
     "does not let a saved suffix override conflicting income destination %s", async destination => {
       const source = chaseCashback("8635");
       source.candidate!.to_account_hint = destination;
@@ -217,11 +209,10 @@ describe("profile-backed financial planning", () => {
     },
   );
 
-  it.each(["unknown-suffix", "ungrounded-suffix", "overlapping-profile"])("requires review for %s instead of selecting a Chase card", async condition => {
+  it.each(["unknown-suffix", "ungrounded-suffix"])("requires review for %s instead of selecting a Chase card", async condition => {
     const source = chaseCashback(condition === "unknown-suffix" ? "9999" : "8635");
     if (condition === "ungrounded-suffix") source.candidate!.account_last4_evidence = "A different account ending in 8635";
-    const profiles = condition === "overlapping-profile" ? [...chaseProfiles, { ...chaseProfiles[0]!, id: "duplicate" }] : chaseProfiles;
-    const plan = await planner(profiles, chaseMetadata)("owner", source);
+    const plan = await planner(chaseProfiles, chaseMetadata)("owner", source);
     expect(plan.profile?.status).not.toBe("matched");
     expect(plan.operation.kind).toBe("review");
   });

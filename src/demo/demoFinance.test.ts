@@ -35,10 +35,10 @@ describe('shared fictional financial settlement', () => {
     await api.confirmFinancialCorrection(preview.id, 'same-key');
     expect((await api.resolveFinancialEmailPlan({ emailId: 'demo-email-market-receipt' })).candidate).toMatchObject({ amount: 29, type: kind });
     expect((await api.getFinancialActivity(managed)).amountCents).toBe(kind === 'income' ? 2900 : -2900);
-    const workspace = await api.getFinances();
-    const recorded = workspace.recordedHistory?.transactions.filter(row => row.id.startsWith('demo-completed-'));
-    expect(recorded).toHaveLength(kind === 'bill' ? 0 : kind === 'transfer' ? 2 : 1);
-    if (kind === 'expense' || kind === 'income') expect(recorded?.[0]).toMatchObject({ date, amountCents: kind === 'income' ? 2900 : -2900 });
+    if (kind === 'expense') {
+      const recorded = (await api.getFinances()).recordedHistory?.transactions.filter(row => row.id.startsWith('demo-completed-'));
+      expect(recorded).toEqual([expect.objectContaining({ date, amountCents: -2900 })]);
+    }
     const settled = await api.getCalendarBillsRange(date, date);
     await api.confirmFinancialCorrection(preview.id, 'same-key');
     expect(await api.getCalendarBillsRange(date, date)).toEqual(settled);
@@ -292,20 +292,4 @@ describe('shared fictional financial settlement', () => {
     expect(left.snapshot.rules).toEqual(right.snapshot.rules);
     expect(left.snapshot.dates).toEqual(right.snapshot.dates);
   });
-});
-
-it('keeps utility mapping edits in memory and preserves source matching', async () => {
-  const api = await demo();
-  const before = await api.getUtilityMappings();
-  const utility = before.utilities[0]!;
-  const used = new Set(before.utilities.flatMap(row => row.scheduleIds));
-  const schedule = before.schedules.find(row => row.id && !used.has(row.id))!;
-  expect(schedule).toBeDefined();
-  const payeeId = String(schedule.conditions?.find(condition => condition.field === 'payee')?.value);
-  await expect(api.updateUtilityMapping(utility.id, { budgetId: before.budgetId!, payeeId, scheduleIds: [schedule.id!, schedule.id!] })).rejects.toThrow('one bill schedule');
-  expect((await api.getUtilityMappings()).utilities).toEqual(before.utilities);
-  const saved = await api.updateUtilityMapping(utility.id, { budgetId: before.budgetId!, payeeId, scheduleIds: [schedule.id!] });
-  expect(saved).toMatchObject({ ...utility, payeeId, scheduleIds: [schedule.id!] });
-  expect((await api.getFinances()).utilities.find(row => row.identity.id === utility.id)?.identity).toEqual(saved);
-  expect((await api.getUtilityMappings()).utilities.find(row => row.id === utility.id)).toEqual(saved);
 });

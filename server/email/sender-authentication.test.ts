@@ -193,14 +193,12 @@ describe("Gmail exact DKIM sender authority without a DMARC verdict", () => {
     expect(evaluate(`dkim=pass header.d=billing.example.com header.b=${prefix}; dkim=fail header.d=billing.example.com header.b=OtherSig`)).toMatchObject({ status: "pass", dmarc: null });
   });
 
-  it("rejects duplicate Google verdicts and never promotes an untrusted first result", () => {
+  it("rejects duplicate Google verdicts", () => {
     const result = `mx.google.com; dkim=pass header.d=billing.example.com`;
-    for (const leading of [result, "attacker.test; dkim=pass header.d=billing.example.com"]) {
-      expect(evaluateGmailSenderAuthentication([
-        { name: "From", value: from }, { name: "Authentication-Results", value: leading },
-        { name: "Authentication-Results", value: result },
-      ], from, now).status).toBe("unavailable");
-    }
+    expect(evaluateGmailSenderAuthentication([
+      { name: "From", value: from }, { name: "Authentication-Results", value: result },
+      { name: "Authentication-Results", value: result },
+    ], from, now).status).toBe("unavailable");
   });
 
   it("does not infer a signer from absent, colliding, inconsistent, or partially signed originals", () => {

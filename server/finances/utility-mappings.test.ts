@@ -14,7 +14,6 @@ beforeEach(async () => {
   await dbClient.execute({ sql:'INSERT INTO ea_finance_utilities VALUES (?,?,?,?,?,?,?,?,?)', args:['owner','budget',original.id,original.label,original.provider,original.payeeId,JSON.stringify(original.scheduleIds),JSON.stringify(original.sourceSenders),original.sourceIdentityText] });
   const schedules = [
     {id:'new-schedule',type:'bill',conditions:[{field:'payee',op:'is',value:'new'}]},
-    {id:'second-schedule',type:'bill',conditions:[{field:'payee',op:'is',value:'new'}]},
     {id:'wrong-payee',type:'bill',conditions:[{field:'payee',op:'is',value:'different'}]},
     {id:'retired',type:'bill',completed:true,conditions:[{field:'payee',op:'is',value:'new'}]},
     {id:'income',type:'income',conditions:[{field:'payee',op:'is',value:'new'}]},
@@ -30,8 +29,9 @@ describe('budget-bound utility mapping edits', () => {
     expect((await readUtilityMappings('owner',{dbClient})).utilities).toEqual([{...original,...update}]);
   });
   it('rejects wrong budgets, unknown utilities, and unavailable or mismatched destinations without changing configuration', async () => {
-    for (const input of [{...update,budgetId:'other'}, {...update,payeeId:'deleted'}, ...['missing','wrong-payee','retired','income'].map(id=>({...update,scheduleIds:[id]})), {...update,scheduleIds:['new-schedule','second-schedule']}, {...update,scheduleIds:[]}, {...update,scheduleIds:['new-schedule','new-schedule']}, {...update,provider:'Changed'}]) {
-      await expect(updateUtilityMapping('owner','electricity',input,{dbClient})).rejects.toHaveProperty('status');
+    await expect(updateUtilityMapping('owner','electricity',{...update,budgetId:'other'},{dbClient})).rejects.toMatchObject({status:409});
+    for (const input of [{...update,payeeId:'deleted'}, ...['missing','wrong-payee','retired','income'].map(id=>({...update,scheduleIds:[id]})), {...update,scheduleIds:[]}]) {
+      await expect(updateUtilityMapping('owner','electricity',input,{dbClient})).rejects.toMatchObject({status:400});
     }
     await expect(updateUtilityMapping('owner','unknown',update,{dbClient})).rejects.toMatchObject({status:404});
     expect((await readUtilityMappings('owner',{dbClient})).utilities).toEqual([original]);

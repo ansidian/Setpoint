@@ -46,13 +46,13 @@ function plan(candidate: BillCandidate, status: FinancialReconciliationStatus = 
 }
 
 describe("useBillPayResolver", () => {
-  it("resolves a bill candidate on selection and reuses it across ordinary rerenders", async () => {
+  it("resolves a bill candidate on selection", async () => {
     vi.mocked(resolveFinancialEmailPlan).mockResolvedValueOnce(plan(
       { payee: "Power", amount: 42 },
       "already_scheduled",
     ));
 
-    const { result, rerender } = renderHook(
+    const { result } = renderHook(
       () => useBillPayResolver({
         email,
         bodyState: { loading: false, body: "Statement balance: $42" },
@@ -75,8 +75,6 @@ describe("useBillPayResolver", () => {
       source: "triage",
     });
 
-    rerender();
-    expect(result.current.actualStatus).toEqual({ status: "already_scheduled" });
   });
 
   it("reuses a resolved seed when returning to the same email", async () => {

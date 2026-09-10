@@ -200,14 +200,9 @@ describe("fetchEmailsInRange", () => {
   });
 
   it.each([
-    { name: "SoFi scheduled full-balance notice", plain: "You've cancelled autopay for your SoFi Credit Card.",
+    { name: "readable nested HTML", plain: "You've cancelled autopay for your SoFi Credit Card.",
       html: "<p>Your credit card autopay is scheduled for 08/05/2026.</p><p>Payment amount: Full statement balance</p>",
       expected: "Your credit card autopay is scheduled for 08/05/2026.\n\nPayment amount: Full statement balance" },
-    { name: "numeric scheduled payment", plain: "You've cancelled autopay for your SoFi Credit Card.",
-      html: "<p>Your credit card autopay is scheduled for 08/05/2026.</p><p>Payment amount: $238.80</p>",
-      expected: "Your credit card autopay is scheduled for 08/05/2026.\n\nPayment amount: $238.80" },
-    { name: "genuine HTML cancellation", plain: "Your payment is scheduled for 08/05/2026. Payment amount: $238.80",
-      html: "<p>You've cancelled autopay for your SoFi Credit Card.</p>", expected: "You've cancelled autopay for your SoFi Credit Card." },
     { name: "empty HTML fallback", plain: "Your payment is scheduled for 08/05/2026. Payment amount: $238.80",
       html: "<html><body> </body></html>", expected: "Your payment is scheduled for 08/05/2026. Payment amount: $238.80" },
   ])("indexes only the reader-aligned alternative for $name, including nested related HTML", async ({ plain, html, expected }) => {

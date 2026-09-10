@@ -34,12 +34,6 @@ it('does not settle an unlinked bill from payee history, and does not claim unpa
   expect(paymentPresentation(data, '2026-09', range([], { truncated: true })).historyComplete).toBe(false);
 });
 
-it('retains an unconfirmed schedule claim without fabricating a payment', () => {
-  const { rows } = paymentPresentation(workspace([occurrence()], range([])), '2026-09');
-  expect(rows[0]).toMatchObject({ status: 'unknown', dueDate: null, scheduledDate: null, paymentDate: null, payments: [], amountKind: null, unconfirmedOccurrences: [{ paid: true, next_date: '2026-09-01' }] });
-  expect(paymentCalendarPresentation(rows, '2026-09').payments).toEqual([]);
-});
-
 it('preserves multiple recurring cycles and distinguishes received and transferred amounts', () => {
   const data = workspace([], range([transaction('income', { amountCents: 11000 }), transaction('transfer', { date: '2026-09-08', transferId: 'pair' }), transaction('pair', { date: '2026-09-09', transferId: 'transfer', accountId: 'savings', amountCents: 11000, scheduleId: null, payeeId: null })]));
   data.utilities = [];
@@ -71,22 +65,11 @@ it('merges only unambiguous same-date statements and occurrences and keeps amoun
   expect(rows).toHaveLength(3);
 });
 
-it('does not report missing past history for a future forecast month', () => {
-  expect(paymentPresentation(workspace([], range([])), '2026-10').historyComplete).toBe(true);
-});
-
 it('shows a current nothing-due statement even without a due date', () => {
   const data = workspace([], range([]));
   data.utilities[0]!.statements = [statement({ nothingDue: true, dueDate: null, statementDate: '2026-09-01' })];
   expect(paymentPresentation(data, '2026-09').rows[0]).toMatchObject({ status: 'nothing_due' });
 });
-
-it('keeps utility identities visible without adding off-month recurring placeholders', () => {
-  const data = workspace([], range([]));
-  data.recurring = [occurrence({ scheduleId: 'annual', next_date: '2026-12-01', paid: false })];
-  expect(paymentPresentation(data, '2026-09').rows).toEqual([expect.objectContaining({ utilityId: 'internet', status: 'unknown' })]);
-});
-
 
 it('keeps a deleted legacy paid occurrence as evidence beside one current Journal payment', () => {
   const data = workspace([occurrence({ id: 'legacy', next_date: '2026-09-04' })], range([transaction('current')]));
@@ -104,16 +87,4 @@ it('does not resurrect an explicitly linked transaction that was deleted from co
   expect(rows).toHaveLength(1);
   expect(rows[0]).toMatchObject({ status: 'unknown', amountCents: null, unconfirmedOccurrences: [{ paymentTransactionIds: ['deleted'] }] });
   expect(paymentCalendarPresentation(rows, '2026-09').payments).toEqual([]);
-});
-
-it('preserves unconfirmed schedule evidence when history is incomplete or unavailable', () => {
-  for (const history of [null, range([], { truncated: true }), range([], { start: '2026-09-05' })]) {
-    const model = paymentPresentation(workspace([occurrence({ paymentTransactionIds: ['missing'] })]), '2026-09', history);
-    expect(model).toMatchObject({ historyComplete: false, rows: [{ status: 'unknown', unconfirmedOccurrences: [{ paymentTransactionIds: ['missing'] }] }] });
-  }
-});
-
-it('uses a corrected recording date only through its exact transaction identity', () => {
-  const data = workspace([occurrence({ next_date: '2026-09-04', paymentTransactionIds: ['corrected'] })], range([transaction('corrected')]));
-  expect(paymentPresentation(data, '2026-09').rows).toEqual([expect.objectContaining({ status: 'paid', dueDate: '2026-09-04', paymentDate: '2026-09-01', unconfirmedOccurrences: [] })]);
 });

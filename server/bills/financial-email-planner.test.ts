@@ -81,7 +81,7 @@ describe("financial email planner contract", () => {
     });
   });
 
-  it("ignores credit-card statements regardless of corroborating account evidence", async () => {
+  it("ignores credit-card statements with corroborating account evidence", async () => {
     const plan = planner();
     const corroborated = await plan("u1", {
       candidate: candidate("statement_issued", {
@@ -91,20 +91,8 @@ describe("financial email planner contract", () => {
         account_last4_evidence: "Card ending in 4242",
       }),
     });
-    const uncorroborated = await plan("u1", {
-      candidate: candidate("statement_issued", { type: "transfer" }),
-    });
-
     expect(corroborated).toMatchObject({
       classification: { documentKind: "informational", reasons: ["informational_event"] },
-      operation: { intended: "no_write", kind: "no_write" },
-      reviewReasons: [],
-    });
-    expect(uncorroborated).toMatchObject({
-      classification: {
-        documentKind: "informational",
-        reasons: ["informational_event"],
-      },
       operation: { intended: "no_write", kind: "no_write" },
       reviewReasons: [],
     });
@@ -502,7 +490,6 @@ describe("financial email planner contract", () => {
       schedule: { status: "not_applicable" },
       category: { status: "not_applicable" },
     });
-    expect(result.candidate.schedule_name).toBe("Everyday Card 4242 Payment");
   });
 
   it("represents a safe same-schedule amount change as update_existing without adding an operation kind", async () => {

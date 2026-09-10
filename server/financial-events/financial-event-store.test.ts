@@ -270,6 +270,22 @@ describe("financial event persistence", () => {
     expect(await store().getEventForEmail("owner", "receipt")).toMatchObject({ operation, attemptedAt: now, plan: authorizedPlan });
   });
 
+  it("preserves provider backoff without a saved plan when profiles change", async () => {
+    await associate("provider-backoff");
+    const event = (await store().claimEvent("provider-failed"))!;
+    const retryAt = now + 15 * 60_000;
+    await store().saveEvent(event, { plan: null, status: "waiting", nextAttemptAt: retryAt });
+    await db.execute("UPDATE ea_settings SET financial_profiles_revision = financial_profiles_revision + 1 WHERE user_id = 'owner'");
+
+    expect(await store().getNextWakeAt()).toBe(retryAt);
+    expect(await store().claimEvent("too-early")).toBeNull();
+    expect(await store().getEventForEmail("owner", "provider-backoff")).toMatchObject({
+      status: "waiting", plan: null, nextAttemptAt: retryAt, operation: null, attemptedAt: null,
+    });
+    now = retryAt;
+    expect(await store().claimEvent("retry")).toMatchObject({ id: event.id, status: "processing", plan: null });
+  });
+
   it("preserves the admitted operation through interruptions, re-evaluation, and related evidence", async () => {
     await associate("receipt");
     const event = await store().claimEvent("first-event");

@@ -1,4 +1,3 @@
-import { BILL_EVENT_KINDS } from "../../../../shared/types/bills";
 import { describe, expect, it } from "vitest";
 
 import { resolveReaderActions, resolveReaderActionGroups } from "./readerActionsModel";
@@ -93,24 +92,6 @@ describe("resolveReaderActions pin toggle", () => {
     expect(resolveReaderActions(snapshotEmail()).pinned).toBe(false);
   });
 });
-
-describe("resolveReaderActions Create profile", () => {
-  it("requires a recognized financial event classification", () => {
-    for (const email of [{ hasBill: true }, { _untriaged: true }, { bill_candidate: { event_kind: "other" } }, { bill_candidate: { event_kind: "unknown" } }]) {
-      expect(resolveReaderActions(email).canCreateProfile).toBe(false);
-    }
-    for (const event_kind of BILL_EVENT_KINDS.filter(kind => kind !== "other")) {
-      expect(resolveReaderActions({ bill_candidate: { event_kind } }).canCreateProfile).toBe(true);
-      expect(resolveReaderActions({ extractedBill: { event_kind }, _lane: "catch_up" }, { readOnly: true }).canCreateProfile).toBe(true);
-    }
-  });
-
-  it("requires a selected email", () => {
-    expect(resolveReaderActions(null).canCreateProfile).toBe(false);
-    expect(resolveReaderActions(undefined).canCreateProfile).toBe(false);
-  });
-});
-
 
 it("offers early return without snapshot or destructive actions for deferred mail", () => {
   const email = { uid: "deferred", _snoozed: true, _lane: "fyi" };

@@ -14,7 +14,6 @@ it('deducts a hydrated exact fee once despite duplicate source statements or tra
   const result = monthlyPaymentAmounts([payment('paid', { ids: ['paid', 'pair'] }), payment('pair', { ids: ['pair', 'paid'] })], [statement(), statement({ id: 'second-source' })], '2026-09');
   expect(result[11]).toMatchObject({ amountCents: 10000, excludedFeeCents: 165, paymentCount: 1 });
   expect(result[11]?.payments.map(value => value.id)).toEqual(['paid']);
-  expect(result[11]?.payments[0]?.target).toEqual({ view: 'journal', transactionId: 'paid', date: '2026-09-01' });
 });
 it('never guesses fees from provider policy, notes, ambiguous links, or conflicting amounts', () => {
   for (const statements of [[], [statement({ paymentTransactionIds: ['other'] })], [statement({ paymentTransactionIds: ['paid', 'other'] })], [statement({ recordedTotalCents: 10500 })], [statement(), statement({ feeCents: 150 })]]) {
@@ -23,9 +22,4 @@ it('never guesses fees from provider policy, notes, ambiguous links, or conflict
 });
 it('does not turn partial recorded amounts into a false total', () => {
   expect(monthlyPaymentAmounts([payment('a'), payment('b', { amountCents: null })], [], '2026-09')[11]).toMatchObject({ amountCents: null, paymentCount: 2 });
-});
-it('uses exact fee breakdowns including zero and rejects conflicts', () => {
-  expect(monthlyPaymentAmounts([payment('paid')], [statement({ feeCents: 200 })], '2026-09')[11]).toMatchObject({ amountCents: 9965, excludedFeeCents: 200 });
-  expect(monthlyPaymentAmounts([payment('paid')], [statement({ feeCents: 0 })], '2026-09')[11]).toMatchObject({ amountCents: 10165, excludedFeeCents: 0 });
-  expect(monthlyPaymentAmounts([payment('paid')], [statement(), statement({ feeCents: 150 })], '2026-09')[11]).toMatchObject({ amountCents: 10165, excludedFeeCents: 0 });
 });

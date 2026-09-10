@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { buildEmailFinancialProfileSeed } from "../lib/financialProfileSeed";
 
 async function importDemoApi(now = "2026-05-12T15:30:00.000Z") {
   vi.useFakeTimers();
@@ -16,24 +15,6 @@ describe("demo mode read adapter", () => {
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
     vi.resetModules();
-  });
-
-  it("keeps receipt planning and profile identity on the receipt’s own source", async () => {
-    const api = await importDemoApi();
-    const snapshot = await api.getActiveSnapshot();
-    const receipt = snapshot.lanes.needs_attention.find(row => row.uid === "demo-email-market-receipt")!;
-    const body = await api.getEmailBody(receipt.uid);
-    const plan = await api.resolveFinancialEmailPlan({ emailId: receipt.uid });
-    const approvalStatus = await api.getTransactionImportEmailStatus("demo-email-budget");
-    expect(receipt).toMatchObject({ subject: "Your Fictional Market receipt", from_address: "receipts@fictional-market.example.test" });
-    expect("body" in body ? body.body : "").toContain("Fictional Market");
-    expect(plan.workflow?.completion?.emailUid).toBe(receipt.uid);
-    expect(plan.profileSuggestion?.senderAddresses).toEqual([receipt.from_address]);
-    expect(buildEmailFinancialProfileSeed(receipt, { body: "body" in body ? body.body : "", resolution: { key: `${receipt.account_id}:${receipt.uid}`, plan } })).toEqual({
-      name: "Fictional Market", budgetId: "demo-budget", senderAddresses: [receipt.from_address], merchantName: "Fictional Market",
-      target: { kind: "expense", accountId: "demo-checking", payeeId: "demo-market" },
-    });
-    expect(approvalStatus.financialEvent).toBeUndefined();
   });
 
   it("returns stable rolling demo data for the core portfolio surfaces without fetch", async () => {

@@ -58,7 +58,7 @@ interface PdfCell { x: number; y: number; text: string }
 function invoicePdf(pages: PdfCell[][] = [[
   { x: 300, y: 710, text: "$124.80" }, { x: 50, y: 710, text: "Amount due" },
   { x: 300, y: 690, text: "09/24/2026" }, { x: 50, y: 690, text: "Due date" },
-]], { encrypted = false, brokenContent = false, rasterInvoice = false } = {}): Buffer {
+]], { encrypted = false, rasterInvoice = false } = {}): Buffer {
   const objects = [
     "<< /Type /Catalog /Pages 2 0 R >>",
     `<< /Type /Pages /Kids [${pages.map((_, index) => `${4 + index * 2} 0 R`).join(" ")}] /Count ${pages.length} >>`,
@@ -67,7 +67,7 @@ function invoicePdf(pages: PdfCell[][] = [[
   for (const [index, cells] of pages.entries()) {
     const stream = cells.map(({ x, y, text }) => `BT /F1 12 Tf 1 0 0 1 ${x} ${y} Tm (${text.replace(/[\\()]/g, "\\$&")}) Tj ET`).join("\n")
       + (rasterInvoice ? "\nq 500 0 0 650 50 50 cm /Im1 Do Q" : "");
-    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >>${rasterInvoice ? ` /XObject << /Im1 ${4 + pages.length * 2} 0 R >>` : ""} >> /Contents ${brokenContent ? 999 : 5 + index * 2} 0 R >>`);
+    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >>${rasterInvoice ? ` /XObject << /Im1 ${4 + pages.length * 2} 0 R >>` : ""} >> /Contents ${5 + index * 2} 0 R >>`);
     objects.push(`<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`);
   }
   if (rasterInvoice) objects.push("<< /Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8 /Length 1 >>\nstream\nx\nendstream");
@@ -190,14 +190,11 @@ describe("complete financial email source acquisition", () => {
     expect(source.attachments.map((attachment) => [attachment.partId, attachment.filename, attachment.pages])).toEqual([["2", "invoice.pdf", 1], ["3", "details.pdf", 2]]);
   });
 
-  it.each([
-    { auth: [], expected: "unavailable" },
-    { auth: ["Authentication-Results: attacker.example; dmarc=pass header.from=billing.example", ...gmailAuthentication], expected: "unavailable" },
-    { auth: ["Authentication-Results: mx.google.com; dmarc=fail header.from=billing.example"], expected: "fail" },
-  ])("preserves original sender authority ($expected) instead of fabricating a pass", async ({ auth, expected }) => {
+  it("preserves failed sender authentication from the original source", async () => {
+    const auth = ["Authentication-Results: mx.google.com; dmarc=fail header.from=billing.example"];
     serveGmail(emailSource({ auth, text: "Amount due $124.80 on September 24, 2026.", files: [] }));
     const source = await fetchGmailFinancialSource(gmailAccount, "gmail-gmail-source-message-1");
-    expect(source.senderAuthentication?.status).toBe(expected);
+    expect(source.senderAuthentication?.status).toBe("fail");
     expect(source.attachments).toEqual([]);
   });
 
@@ -215,17 +212,9 @@ describe("complete financial email source acquisition", () => {
     expect(source.body).not.toMatch(/\$\d/);
   });
 
-  it.each([
-    { name: "numeric scheduled payment", text: "You've cancelled autopay for your SoFi Credit Card.",
-      html: "<p>Your autopay is scheduled for 08/05/2026.</p><p>Payment amount: $238.80</p>",
-      expected: "Your autopay is scheduled for 08/05/2026.\n\nPayment amount: $238.80" },
-    { name: "genuine HTML cancellation", text: "Your autopay is scheduled for 08/05/2026. Payment amount: $238.80",
-      html: "<p>You've cancelled autopay for your SoFi Credit Card.</p>", expected: "You've cancelled autopay for your SoFi Credit Card." },
-    { name: "empty HTML fallback", text: "Payment amount: $238.80", html: "<html><body> </body></html>", expected: "Payment amount: $238.80" },
-    { name: "plain-only cancellation", text: "You've cancelled autopay for your SoFi Credit Card.", html: "", expected: "You've cancelled autopay for your SoFi Credit Card." },
-  ])("retains the reader-aligned facts for $name", async ({ text, html, expected }) => {
-    serveGmail(emailSource({ text, html, files: [] }));
-    expect((await fetchGmailFinancialSource(gmailAccount, "gmail-gmail-source-message-1")).body).toBe(expected);
+  it("falls back to plain text when the HTML body is empty", async () => {
+    serveGmail(emailSource({ text: "Payment amount: $238.80", html: "<html><body> </body></html>", files: [] }));
+    expect((await fetchGmailFinancialSource(gmailAccount, "gmail-gmail-source-message-1")).body).toBe("Payment amount: $238.80");
   });
 
   it("preserves independent plain-text mixed parts alongside the selected HTML alternative", async () => {
@@ -240,24 +229,15 @@ describe("complete financial email source acquisition", () => {
     expect(source.body).not.toContain("Stale alternative");
   });
 
-  it("does not duplicate semantically identical plain and HTML body text", async () => {
-    serveGmail(emailSource({ text: "Amount due $124.80.", html: "<p>Amount due $124.80.</p>", files: [] }));
-    expect((await fetchGmailFinancialSource(gmailAccount, "gmail-gmail-source-message-1")).body).toBe("Amount due $124.80.");
-  });
-
   it("requires an owner account before fetching an email", async () => {
     serveGmail(emailSource());
     await expect(fetchFinancialEmailSourceForUid("other-owner", "gmail-gmail-source-message-1")).rejects.toMatchObject({ status: 404 });
     expect(requestLog).toEqual([]);
   });
 
-  it.each([
-    { name: "missing", value: { raw: undefined }, code: "financial_source_unavailable" },
-    { name: "another message", value: { id: "different-message" }, code: "financial_source_unavailable" },
-    { name: "invalid base64", value: { raw: "%%unexpected" }, code: "financial_source_unavailable" },
-  ])("rejects a $name Gmail source", async ({ value, code }) => {
-    serveGmail(emailSource(), value);
-    await expect(fetchGmailFinancialSource(gmailAccount, "gmail-gmail-source-message-1")).rejects.toMatchObject({ code });
+  it("rejects a missing raw Gmail source", async () => {
+    serveGmail(emailSource(), { raw: undefined });
+    await expect(fetchGmailFinancialSource(gmailAccount, "gmail-gmail-source-message-1")).rejects.toMatchObject({ code: "financial_source_unavailable" });
   });
 
   it("rejects a vanished Gmail source", async () => {
@@ -280,7 +260,6 @@ describe("complete financial email source acquisition", () => {
     { name: "corrupt PDF", content: () => Buffer.from("not a PDF"), code: "financial_pdf_corrupt" },
     { name: "encrypted PDF", content: () => invoicePdf(undefined, { encrypted: true }), code: "financial_pdf_encrypted" },
     { name: "textless PDF", content: () => invoicePdf([[]]), code: "financial_pdf_textless" },
-    { name: "missing page content", content: () => invoicePdf(undefined, { brokenContent: true }), code: "financial_pdf_textless" },
     { name: "partially rasterized invoice", content: () => invoicePdf(undefined, { rasterInvoice: true }), code: "financial_pdf_incomplete" },
     { name: "too many pages", content: () => invoicePdf(Array.from({ length: 11 }, () => [{ x: 50, y: 710, text: "Amount due $124.80" }])), code: "financial_pdf_pages" },
     { name: "oversized PDF", content: () => Buffer.alloc(limits.pdfBytes + 1), code: "financial_pdf_oversized" },

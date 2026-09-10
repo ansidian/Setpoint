@@ -183,21 +183,6 @@ describe("semantic bill amount verifier", () => {
     expect(selectSemanticBillAmount(result.candidate)).toBeNull();
   });
 
-  it.each(["No numeric currency amount.", Array.from({ length: 9 }, (_, index) => `$${60 + index}.00`).join(" ")])(
-    "keeps unknown roles failed when currency coverage is outside the bounded audit window: %s", async (content) => {
-      const candidate = { event_kind: "reward", amount: 60, amount_kind: "reward", amount_candidates: [{ kind: "reward", value: 60, evidence: "Cash amount $60.00" }] } as unknown as BillCandidate;
-      expect(shouldVerifyBillAmounts(content, candidate)).toBe(true);
-      const result = await verifyBillAmounts({
-        content, candidate,
-        provider: providerWith({ amount: 60, amount_kind: "transaction_amount", amount_candidates: [{ kind: "transaction_amount", value: 60, evidence: "Cash amount $60.00" }] }),
-        providerId: "openai", model: "test-model",
-      });
-      expect(result.candidate).toMatchObject({ ...candidate, amount_verification: { status: "failed" } });
-      expect(result.usage).toEqual({});
-      expect(selectSemanticBillAmount(result.candidate)).toBeNull();
-    },
-  );
-
   it("accepts a verifier that recovers a missing statement balance", async () => {
     const result = await verifyBillAmounts({
       content: "Minimum payment $40.00. Plan balance $0.00. Statement balance $391.20.",

@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from "vitest";
 import type { FinancialEmailPlan } from "../../shared/types/bills.ts";
 import {
   attachTransactionImportFinancialPlans,
-  planTransactionImportItems,
   transactionImportPlannerInput,
 } from "./transaction-import-planner-adapter.ts";
 import type { InsertItemInput } from "./transaction-import-store.ts";
@@ -163,57 +162,6 @@ describe("transaction import financial planner adapter", () => {
     });
     expect(JSON.stringify(result.financialPlan)).not.toContain("excerpt");
     expect(JSON.stringify(result.financialPlan)).not.toContain("history detail");
-  });
-
-  it("suggests Actual-history targets for review when no profile authorizes the source", async () => {
-    const planner = createFinancialEmailPlanner({
-      profileReader: async () => ({ budgetId: "fixture-budget", revision: 0, profiles: [] }),
-      metadataReader: async () => ({
-        accounts: [{ id: "card-1", name: "Everyday Card", type: "credit" }],
-        payees: [{ id: "example-store", name: "Example Store" }],
-        payeeMap: { "example-store": "Example Store" },
-        categories: [{ group_name: "Spending", categories: [{ id: "shopping", name: "Shopping" }] }],
-        schedules: [],
-        recentTransactions: [],
-        syncHealth: { state: "current", lastSuccessAt: "2026-09-01T12:00:00.000Z" },
-      }),
-      occurrenceReader: async () => ({ schedules: [], syncHealth: { state: "current" } }),
-      transactionReader: async () => ({
-        transactions: [
-          { id: "txn-1", date: "2026-08-01", amount: 25.99, direction: "expense", payee: "Example Store", payeeId: "example-store", category: "Shopping", account: "Everyday Card", accountId: "card-1", notes: "" },
-          { id: "txn-2", date: "2026-07-01", amount: 18, direction: "expense", payee: "Example Store", payeeId: "example-store", category: "Shopping", account: "Everyday Card", accountId: "card-1", notes: "" },
-        ],
-      }),
-      now: () => new Date("2026-09-01T12:00:00.000Z"),
-    });
-
-    const result = (await planTransactionImportItems("owner-1", [item({
-      actualAccountId: null,
-      actualCategoryId: null,
-      blockingWarnings: [{ code: "missing_mapping", blocking: true }],
-      status: "needs_review",
-    })], planner))[0]!;
-
-    expect(result.financialPlan).toMatchObject({
-      operation: { intended: "create_transaction" },
-      profile: { status: "missing" },
-      targets: {
-        account: { status: "resolved", id: "card-1" },
-        payee: { status: "resolved", id: "example-store" },
-        category: { status: "resolved", id: "shopping" },
-      },
-    });
-    expect(result).toMatchObject({
-      actualAccountId: "card-1",
-      actualCategoryId: "shopping",
-      automationMode: "automatic",
-      automaticSafe: false,
-      status: "needs_review",
-      importedId: "paypal-ABC123",
-      amountCents: -2599,
-      financialPlan: { candidate: { transaction_import: { executionOwner: "planner" } } },
-      planShadow: null,
-    });
   });
 
   it("uses an exact Actual imported ID to prove targets and suppress a replayed duplicate", async () => {

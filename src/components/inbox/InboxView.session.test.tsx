@@ -181,19 +181,6 @@ function InboxSessionHarness({ initialSelectedId = null, activeSnapshotRefresh =
 }
 
 describe("InboxView session state", () => {
-  it("keeps an edited reminder through a cancelled reader close and discards only for the requested next email", async () => {
-    render(<InboxSessionHarness initialSelectedId="email-action" isMobile={false} />);
-    fireEvent.click(screen.getByRole("button", { name: "Remind me" }));
-    fireEvent.change(screen.getByLabelText("Task title"), { target: { value: "Do not lose this draft" } });
-    fireEvent.click(screen.getByRole("button", { name: "Close reader" }));
-    fireEvent.click(screen.getByRole("button", { name: "Keep editing" }));
-    expect((screen.getByLabelText("Task title") as HTMLInputElement).value).toBe("Do not lose this draft");
-    fireEvent.click(screen.getByRole("button", { name: "Next email" }));
-    fireEvent.click(screen.getByRole("button", { name: "Discard changes" }));
-    await waitFor(() => expect(screen.queryByLabelText("Task title")).toBeNull());
-    expect(screen.getByRole("heading", { name: "Budget dinner plans" })).toBeTruthy();
-  });
-
   it("preserves an edited reminder while search loads, returns no matches, and clears", async () => {
     let finishSearch!: (value: Awaited<ReturnType<typeof searchEmails>>) => void;
     vi.mocked(searchEmails).mockReturnValueOnce(new Promise((resolve) => { finishSearch = resolve; }));

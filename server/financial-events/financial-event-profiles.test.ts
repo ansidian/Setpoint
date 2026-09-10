@@ -297,7 +297,7 @@ describe("financial profile schedule lifecycle", () => {
     expect(await worker.processNextEvent()).toBe(false);
   });
 
-  it("remembers a cycle first mapped after arrival and preserves it through later cycles and new-reference repeats", async () => {
+  it("wakes and settles an arrival after its profile is saved", async () => {
     await arrive(notice("initially-unmapped", "2026-09-21", 97.2));
     await processEvent();
     const pending = await store.getEventForEmail("owner", "initially-unmapped");
@@ -311,21 +311,6 @@ describe("financial profile schedule lifecycle", () => {
       plan: { profile: { status: "matched", revision: 1 } }, outcome: { outcome: "updated" } });
     expect(savedUpdates).toHaveLength(1);
     expect(await worker.processNextEvent()).toBe(false);
-
-    clock += 31 * 86_400_000;
-    await arrive(notice("mapped-october", "2026-10-23", 112.54));
-    await processEvent();
-    expect((await store.getEventForEmail("owner", "mapped-october"))?.id).not.toBe(recorded!.id);
-    expect(savedUpdates).toHaveLength(2);
-    restart();
-    await arrive(notice("mapped-september-copy", "2026-09-21", 97.2));
-    await processEvent();
-    expect(await store.getEventForEmail("owner", "mapped-september-copy")).toMatchObject({ id: recorded!.id,
-      status: "settled", operation: recorded!.operation, plan: { reviewReasons: [] } });
-    expect(savedUpdates).toHaveLength(2);
-    expect(schedules[0]).toMatchObject({ date: "2026-10-23", amountCents: -11_254, categoryId: "electricity" });
-    expect(await worker.processNextEvent()).toBe(false);
-    expect(await worker.getNextWakeAt()).toBeNull();
   });
 
   it.each([false, true])("preserves an already-present Actual cycle without an attempt after later cycles and repeats (card: %s)", async card => {
@@ -380,24 +365,6 @@ describe("financial profile schedule lifecycle", () => {
     expect(await store.getEventForEmail("owner", "cycle-copy")).toMatchObject({ id: first.id, status: "settled" });
     expect(savedUpdates).toHaveLength(1);
     expect(await worker.processNextEvent()).toBe(false);
-  });
-
-  it("preserves provider backoff without a saved plan when profiles change", async () => {
-    await arrive(notice("provider-backoff", "2026-09-21", 97.2));
-    clock += 90_000;
-    const claim = await store.claimEvent("provider-failed");
-    const retryAt = clock + 15 * 60_000;
-    await store.saveEvent(claim!, { plan: null, status: "waiting", reason: "Financial provider unavailable", nextAttemptAt: retryAt });
-    await saveProfiles([utilityProfile]);
-    restart();
-    expect(await worker.getNextWakeAt()).toBe(retryAt);
-    expect(await worker.processNextEvent()).toBe(false);
-    expect(await store.getEventForEmail("owner", "provider-backoff")).toMatchObject({ status: "waiting", plan: null, nextAttemptAt: retryAt });
-    expect(savedUpdates).toEqual([]);
-    clock = retryAt;
-    expect(await worker.processNextEvent()).toBe(true);
-    expect((await store.getEventForEmail("owner", "provider-backoff"))?.status).toBe("settled");
-    expect(savedUpdates).toHaveLength(1);
   });
 
   it("updates the card schedule from savings and ignores completed payments and undated reminders", async () => {

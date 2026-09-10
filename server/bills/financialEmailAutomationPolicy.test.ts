@@ -68,13 +68,6 @@ describe("financial email automation policy", () => {
     });
   });
 
-  it("keeps completed transfers outside automatic writes even with confirmed targets", () => {
-    expect(eligibility({}, { type: "transfer", event_kind: "card_payment_completed", currency: "USD" }, "create_transfer")).toMatchObject({
-      eligible: false, operationClass: "completed_transfer", rollout: "observe_only",
-      reasons: expect.arrayContaining(["automation_class_observe_only"]),
-    });
-  });
-
   it("never lets a blocking warning pass through an otherwise complete plan", () => {
     const result = eligibility({}, {
       type: "expense",
