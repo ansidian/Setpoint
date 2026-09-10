@@ -1,52 +1,62 @@
 [
   {
-    "id": "smooth_modern",
-    "label": "Smooth Modern",
-    "path": "/sounds/notifications/smooth-modern.mp3"
+    "id": "settled",
+    "label": "Settled",
+    "path": "/sounds/notifications/settled.mp3"
   },
   {
-    "id": "clear_chime",
-    "label": "Clear chime",
-    "path": "/sounds/notifications/clear-chime.mp3"
+    "id": "signal",
+    "label": "Signal",
+    "path": "/sounds/notifications/signal.mp3"
   },
   {
-    "id": "hard_pop_click",
-    "label": "Hard pop click",
-    "path": "/sounds/notifications/hard-pop-click.mp3"
+    "id": "threshold",
+    "label": "Threshold",
+    "path": "/sounds/notifications/threshold.mp3"
   },
   {
-    "id": "quick_chime",
-    "label": "Quick chime",
-    "path": "/sounds/notifications/quick-chime.mp3"
+    "id": "arrival",
+    "label": "Arrival",
+    "path": "/sounds/notifications/arrival.mp3"
   },
   {
-    "id": "bells_echo",
-    "label": "Bells echo",
-    "path": "/sounds/notifications/bells-echo.mp3"
+    "id": "aside",
+    "label": "Aside",
+    "path": "/sounds/notifications/aside.mp3"
   },
   {
-    "id": "flute_alert",
-    "label": "Flute alert",
-    "path": "/sounds/notifications/flute-alert.mp3"
+    "id": "latch",
+    "label": "Latch",
+    "path": "/sounds/notifications/latch.mp3"
   },
   {
-    "id": "interface_start",
-    "label": "Interface start",
-    "path": "/sounds/notifications/interface-start.mp3"
+    "id": "droplet",
+    "label": "Droplet",
+    "path": "/sounds/notifications/droplet.mp3"
   },
   {
-    "id": "interface_remove",
-    "label": "Interface remove",
-    "path": "/sounds/notifications/interface-remove.mp3"
+    "id": "beacon",
+    "label": "Beacon",
+    "path": "/sounds/notifications/beacon.mp3"
   },
   {
-    "id": "uplifting_flute",
-    "label": "Uplifting flute",
-    "path": "/sounds/notifications/uplifting-flute.mp3"
+    "id": "knock",
+    "label": "Knock",
+    "path": "/sounds/notifications/knock.mp3"
   },
   {
-    "id": "low_tone",
-    "label": "Low tone",
-    "path": "/sounds/notifications/low-tone.mp3"
+    "id": "resolve",
+    "label": "Resolve",
+    "path": "/sounds/notifications/resolve.mp3"
+  },
+  {
+    "id": "interval",
+    "label": "Interval",
+    "path": "/sounds/notifications/interval.mp3"
+  },
+  {
+    "id": "check",
+    "label": "Check",
+    "path": "/sounds/notifications/check.mp3"
   }
 ]

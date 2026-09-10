@@ -11,12 +11,12 @@ const settings = {
   laneScope: "needs_attention_and_fyi",
   volume: 0.9,
   triggers: {
-    needs_attention_finalized: { enabled: true, soundId: "clear_chime" },
-    email_queued: { enabled: true, soundId: "quick_chime" },
-    fyi_finalized: { enabled: true, soundId: "smooth_modern" },
-    triage_failed: { enabled: false, soundId: "low_tone" },
-    event_upcoming: { enabled: true, soundId: "clear_chime" },
-    task_completed: { enabled: true, soundId: "smooth_modern" },
+    needs_attention_finalized: { enabled: true, soundId: "signal" },
+    email_queued: { enabled: true, soundId: "arrival" },
+    fyi_finalized: { enabled: true, soundId: "aside" },
+    triage_failed: { enabled: false, soundId: "check" },
+    event_upcoming: { enabled: true, soundId: "signal" },
+    task_completed: { enabled: true, soundId: "aside" },
   },
 };
 
@@ -41,13 +41,13 @@ describe("triage sound router", () => {
     expect(resolveTriageSoundForEvent(event("needs_attention_finalized"), settings, registry)).toMatchObject({
       eventKey: "event:needs_attention_finalized",
       triggerType: "needs_attention_finalized",
-      sound: { id: "clear_chime" },
+      sound: { id: "signal" },
       volume: 0.9,
     });
     expect(resolveTriageSoundForEvent(event("email_queued"), settings, registry)).toMatchObject({
       eventKey: "event:email_queued",
       triggerType: "email_queued",
-      sound: { id: "quick_chime" },
+      sound: { id: "arrival" },
       volume: 0.9,
     });
   });
@@ -55,12 +55,12 @@ describe("triage sound router", () => {
   it("maps upcoming events and task completions to configured sounds", () => {
     expect(resolveDashboardSoundForTrigger("event_upcoming", settings, registry, "event-1")).toMatchObject({
       eventKey: "event-1",
-      sound: { id: "clear_chime" },
+      sound: { id: "signal" },
       volume: 0.9,
     });
     expect(resolveDashboardSoundForTrigger("task_completed", settings, registry, "task-1")).toMatchObject({
       eventKey: "task-1",
-      sound: { id: "smooth_modern" },
+      sound: { id: "aside" },
       volume: 0.9,
     });
   });

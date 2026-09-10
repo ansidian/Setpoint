@@ -22,6 +22,7 @@ export const TRIAGE_SOUND_TRIGGER_KEYS = {
   TRIAGE_FAILED: "triage_failed",
   EVENT_UPCOMING: "event_upcoming",
   TASK_COMPLETED: "task_completed",
+  ACTUAL_RECORDED: "actual_recorded",
 } as const;
 
 export const TRIAGE_NOTIFICATION_SOUNDS = JSON.parse(
@@ -39,27 +40,31 @@ export const DEFAULT_TRIAGE_SOUND_SETTINGS: TriageSoundSettings = {
   triggers: {
     [TRIAGE_SOUND_TRIGGER_KEYS.NEEDS_ATTENTION_FINALIZED]: {
       enabled: true,
-      soundId: "clear_chime",
+      soundId: "signal",
     },
     [TRIAGE_SOUND_TRIGGER_KEYS.EMAIL_QUEUED]: {
       enabled: true,
-      soundId: "quick_chime",
+      soundId: "arrival",
     },
     [TRIAGE_SOUND_TRIGGER_KEYS.FYI_FINALIZED]: {
       enabled: true,
-      soundId: "smooth_modern",
+      soundId: "aside",
     },
     [TRIAGE_SOUND_TRIGGER_KEYS.TRIAGE_FAILED]: {
       enabled: false,
-      soundId: "low_tone",
+      soundId: "check",
     },
     [TRIAGE_SOUND_TRIGGER_KEYS.EVENT_UPCOMING]: {
       enabled: true,
-      soundId: "clear_chime",
+      soundId: "threshold",
+    },
+    [TRIAGE_SOUND_TRIGGER_KEYS.ACTUAL_RECORDED]: {
+      enabled: true,
+      soundId: "resolve",
     },
     [TRIAGE_SOUND_TRIGGER_KEYS.TASK_COMPLETED]: {
       enabled: true,
-      soundId: "smooth_modern",
+      soundId: "settled",
     },
   },
 };

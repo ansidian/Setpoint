@@ -244,6 +244,7 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useMobileInboxNavigation` | `src/components/dashboard/useMobileInboxNavigation.ts` |
 | `useSnapshotNavigation` | `src/components/dashboard/useSnapshotNavigation.ts` |
 | `useWorkspaceTabRoute` | `src/components/dashboard/useWorkspaceTabRoute.ts` |
+| `useActualRecordingSound` | `src/components/financial/useActualRecordingSound.ts` |
 | `useFinancialAttentionCount` | `src/components/financial/useFinancialAttentionCount.ts` |
 | `useFinancialNavigationGuard` | `src/components/financial/useFinancialNavigationGuard.ts` |
 | `useBillPayResolver` | `src/components/inbox/reader/useBillPayResolver.ts` |
@@ -742,7 +743,7 @@ erDiagram
 | `ea_financial_documents` | `062_financial_events.sql`, `068_financial_candidate_dismissal.sql`, `070_financial_document_sources.sql` |
 | `ea_financial_event_ai_requests` | `067_financial_event_ai_requests.sql` |
 | `ea_financial_event_references` | `062_financial_events.sql` |
-| `ea_financial_events` | `062_financial_events.sql`, `068_financial_candidate_dismissal.sql` |
+| `ea_financial_events` | `062_financial_events.sql`, `068_financial_candidate_dismissal.sql`, `071_financial_event_readiness.sql` |
 | `ea_financial_identity_backfill` | `063_financial_activity.sql` |
 | `ea_financial_identity_conflicts` | `063_financial_activity.sql` |
 | `ea_financial_intake_state` | `062_financial_events.sql` |

@@ -15,7 +15,7 @@ Financial activity and records live at `/finance` inside WorkspaceRoute's retain
 - `FinancialRecordHistory.tsx` — chronological related emails, original receipts, and all admitted corrections; protected inline disclosures and explicitly unknown dates.
 - `FinancialAttentionBadge.tsx` — shared positive-only attention count, inline or above the Activity entrance.
 - `useFinancialAttentionCount.ts` — attention total for the current source/context/batch scope (otherwise owner-wide), refreshed on visibility, focus and financial changes.
-- `FinancialWorkspace.tsx` — retained list filters, pagination, selection, list scroll and financial-publication/focus refresh; a selected processing original has sequential read-only status refresh until settlement, attention, or navigation.
+- `FinancialWorkspace.tsx` — retained list filters, pagination, selection, list scroll and financial-publication/focus refresh; a selected processing original has sequential read-only status refresh until settlement, attention, or navigation; source alias promotion preserves the selected form and feedback lifetime.
 - `correctionPresentation.ts` — raw evidence interpretation and applicable draft fields.
 - `financialActivityPresentation.ts` — currency-aware signed amounts, saved type/date facts, and conservative outcome labels shared by dashboard and activity rows.
 - `PaymentConfirmation.tsx` — shared ordinary-payment money-flow review; source owners retain submission and validation.
@@ -30,3 +30,5 @@ Financial activity and records live at `/finance` inside WorkspaceRoute's retain
 - `KeepActualResult.tsx` — frozen current-result review and explicit keep confirmation; shared snapshot display for accepted results.
 
 The Needs attention list groups processing records under Pending and keeps the badge actionable-only. Managed completion places Dismiss candidate opposite submit, with Confirm dismissal replacing the same button and Keep candidate restoring the draft. Revision-checked dismissal never sends to Actual; its source owner enforces admission protection.
+
+- `useActualRecordingSound.ts` — one fresh confirmed recording cue after explicit submission, with no confirmation deadline while the requested record remains visible; navigation, hidden tabs, rejection, attention, corrections and historical results stay quiet. Audio startup retains its short expiry.

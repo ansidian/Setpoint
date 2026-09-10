@@ -4,6 +4,7 @@ import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import sharedRegistry from "../../shared/triage-notification-sounds.json";
 import {
+  normalizeTriageSoundSettings as normalizeServerSettings,
   DEFAULT_TRIAGE_SOUND_SETTINGS as SERVER_DEFAULT_TRIAGE_SOUND_SETTINGS
 } from "../../server/triage/triage-sound-settings.ts";
 import {
@@ -35,26 +36,44 @@ describe("triage sound settings registry", () => {
     }
   });
 
-  it("normalizes stale trigger sound IDs back to valid defaults", () => {
-    const normalized = normalizeTriageSoundSettings({
+  it("replaces retired selections with trigger defaults while preserving volume and enabled state", () => {
+    const saved = {
+      laneScope: "needs_attention_only",
+      volume: 0.4,
       triggers: {
-        fyi_finalized: { enabled: true, soundId: "soft_ping" },
-        task_completed: { enabled: true, soundId: "soft_ping" },
+        needs_attention_finalized: { enabled: false, soundId: "clear_chime" },
+        email_queued: { enabled: true, soundId: "quick_chime" },
+        fyi_finalized: { enabled: true, soundId: "smooth_modern" },
+        triage_failed: { enabled: false, soundId: "low_tone" },
+        event_upcoming: { enabled: true, soundId: "bells_echo" },
+        task_completed: { enabled: true, soundId: "hard_pop_click" },
+      },
+    };
+    const normalized = normalizeTriageSoundSettings(saved);
+    expect(normalized).toEqual({
+      laneScope: "needs_attention_only",
+      volume: 0.4,
+      triggers: {
+        needs_attention_finalized: { enabled: false, soundId: "signal" },
+        email_queued: { enabled: true, soundId: "arrival" },
+        fyi_finalized: { enabled: true, soundId: "aside" },
+        triage_failed: { enabled: false, soundId: "check" },
+        event_upcoming: { enabled: true, soundId: "threshold" },
+        task_completed: { enabled: true, soundId: "settled" },
+        actual_recorded: { enabled: true, soundId: "resolve" },
       },
     });
-
-    expect(normalized.triggers.fyi_finalized.soundId).toBe("smooth_modern");
-    expect(normalized.triggers.task_completed.soundId).toBe("smooth_modern");
+    expect(normalizeServerSettings(saved)).toEqual(normalized);
   });
 
   it("updates one trigger without changing the other persisted trigger choices", () => {
     const updated = updateTriageSoundTrigger(
       DEFAULT_TRIAGE_SOUND_SETTINGS,
       "fyi_finalized",
-      { enabled: false, soundId: "hard_pop_click" },
+      { enabled: false, soundId: "latch" },
     );
 
-    expect(updated.triggers.fyi_finalized).toEqual({ enabled: false, soundId: "hard_pop_click" });
+    expect(updated.triggers.fyi_finalized).toEqual({ enabled: false, soundId: "latch" });
     expect(updated.triggers.email_queued).toEqual(DEFAULT_TRIAGE_SOUND_SETTINGS.triggers.email_queued);
     expect(updated.triggers.task_completed).toEqual(DEFAULT_TRIAGE_SOUND_SETTINGS.triggers.task_completed);
   });

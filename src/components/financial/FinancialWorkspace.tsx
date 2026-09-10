@@ -25,8 +25,10 @@ export default function FinancialWorkspace({ search,onNavigate,onClose,onRepair,
   const list = params.get('financial') === 'list' && !emailUid;
   const showDetail = Boolean(reference) && params.get('showList') !== '1';
   const [pages,setPages] = useState<{ revision:number; entries:Record<string,{ page:FinancialActivityPage|null; error:string }> }>({ revision:0,entries:{} });
-  const [loadedSelected,setSelected] = useState<FinancialActivity|null>(null);
-  const selected = JSON.stringify(loadedSelected?.reference) === referenceKey ? loadedSelected : null;
+  const [loadedSelected,setSelected] = useState<{ referenceKey:string; activity:FinancialActivity }|null>(null);
+  // A requested document/import alias remains valid when its canonical event
+  // changes. Bind the response and form lifetime to the requested record.
+  const selected = loadedSelected && loadedSelected.referenceKey === referenceKey ? loadedSelected.activity : null;
   const [detailError,setDetailError] = useState<{ referenceKey:string|undefined; revision:number; message:string }|null>(null);
   const [revision,setRevision] = useState(0);
   // Results belong to the exact filter/page and are reusable only until the next refresh.
@@ -69,7 +71,7 @@ export default function FinancialWorkspace({ search,onNavigate,onClose,onRepair,
       try {
         const value = await getFinancialActivity(ref);
         if (!active) return;
-        setSelected(value);
+        setSelected({ referenceKey, activity:value });
         setDetailError(null);
         const processing = value.status === 'processing' && !value.correction;
         processingReference.current = processing ? referenceKey : null;
@@ -134,7 +136,7 @@ export default function FinancialWorkspace({ search,onNavigate,onClose,onRepair,
       <div className="financial-detail">
         {!list && reference && <button type="button" className="financial-button financial-back mb-4" onClick={() => onNavigate(financialHref(query))}><ArrowLeft size={14} />{view === 'needs_attention' ? 'Back to review' : 'Back to activity'}</button>}
         {list && reference && <button className="financial-button financial-back financial-mobile-back mb-4" onClick={() => onNavigate(`${financialHref(query,reference,true)}&showList=1`)}><ArrowLeft size={14} />Back to list</button>}
-        {selected ? <FinancialRecord key={selected.id} activity={selected} onDirty={onDirty} onChanged={recordChanged} onRepair={onRepair} registerBack={registerBack} requestDiscard={requestDiscard} /> : <p role="status" className="financial-empty financial-note"><Inbox size={24} aria-hidden="true" />{reference ? 'Loading the selected record…' : 'Select a record to inspect its result and source evidence.'}</p>}
+        {selected ? <FinancialRecord key={referenceKey} recordScope={referenceKey} activity={selected} open={showDetail} onDirty={onDirty} onChanged={recordChanged} onRepair={onRepair} registerBack={registerBack} requestDiscard={requestDiscard} /> : <p role="status" className="financial-empty financial-note"><Inbox size={24} aria-hidden="true" />{reference ? 'Loading the selected record…' : 'Select a record to inspect its result and source evidence.'}</p>}
       </div>
     </div>
   </div>;

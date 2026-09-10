@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { BellRing, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Dropdown from "@/components/shared/Dropdown";
@@ -31,8 +30,7 @@ const LANE_SCOPE_OPTIONS = [
   },
 ];
 
-export default function TriageSoundSettingsCard({ settings, setSettings, patch }: SettingsCardStateProps) {
-  const [lastTested, setLastTested] = useState<TriageSoundTriggerKey | null>(null);
+export default function TriageSoundSettingsCard({ settings, setSettings, patch, scope = "triage" }: SettingsCardStateProps & { scope?: "triage" | "finance" }) {
   const soundSettings = normalizeTriageSoundSettings(settings?.triage_sound_settings);
   const sounds = resolveTriageSoundRegistry(settings?.triage_notification_sounds);
 
@@ -52,28 +50,17 @@ export default function TriageSoundSettingsCard({ settings, setSettings, patch }
     applySoundSettings(updateTriageSoundTrigger(soundSettings, triggerKey, updates));
   }
 
-  return (
-    <SettingsCard
-      title="Triage Notification Sounds"
-      icon={<BellRing size={14} />}
-      description="Controls app-level sounds for triage transitions. Browser notification permission is separate."
-    >
-      <div className="flex flex-col gap-3">
-        <div className="rounded-lg border border-white/[0.06] bg-white/[0.025] p-3">
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px_150px] lg:items-center">
-            <div>
-              <SectionLabel className="mb-1">Finalized lane scope</SectionLabel>
-              <FieldHint>Choose which finalized lanes can play sound.</FieldHint>
-            </div>
-            <Dropdown
-              ariaLabel="Finalized lane scope"
-              value={soundSettings.laneScope}
-              onChange={value => applySoundSettings({ ...soundSettings, laneScope: value as TriageSoundLaneScope })}
-              options={LANE_SCOPE_OPTIONS.map(option => ({ id: option.value, name: option.label }))}
-            />
-            <div className="space-y-1">
+  function previewSound(soundId: string) {
+    void playTriageNotificationSound(sounds.find(entry => entry.id === soundId), {
+      markUnlocked: true,
+      volume: soundSettings.volume,
+    });
+  }
+
+  const volumeControl = (
+    <div className={cn("space-y-1", scope === "finance" && "w-32")}>
               <div className="flex items-center justify-between gap-2">
-                <SectionLabel className="mb-0">Volume</SectionLabel>
+                <SectionLabel className="mb-0">{scope === "finance" ? "All sounds" : "Volume"}</SectionLabel>
                 <span className="text-[11px] font-medium text-muted-foreground/75">
                   {Math.round(soundSettings.volume * 100)}%
                 </span>
@@ -89,19 +76,40 @@ export default function TriageSoundSettingsCard({ settings, setSettings, patch }
                 className="h-2 w-full cursor-pointer accent-primary"
               />
             </div>
+  );
+
+  return (
+    <SettingsCard
+      title={scope === "finance" ? "Actual Notification Sound" : "Triage Notification Sounds"}
+      icon={<BellRing size={14} />}
+      description={scope === "finance" ? "A brief confirmation after recording a payment in Actual." : "Controls app-level sounds for triage transitions. Browser notification permission is separate."}
+    >
+      <div className="flex flex-col gap-3">
+        {scope === "triage" && <div className="rounded-lg border border-white/[0.06] bg-white/[0.025] p-3">
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px_150px] lg:items-center">
+            <div>
+              <SectionLabel className="mb-1">Finalized lane scope</SectionLabel>
+              <FieldHint>Choose which finalized lanes can play sound.</FieldHint>
+            </div>
+            <Dropdown
+              ariaLabel="Finalized lane scope"
+              value={soundSettings.laneScope}
+              onChange={value => applySoundSettings({ ...soundSettings, laneScope: value as TriageSoundLaneScope })}
+              options={LANE_SCOPE_OPTIONS.map(option => ({ id: option.value, name: option.label }))}
+            />
+            {volumeControl}
           </div>
-        </div>
+        </div>}
 
         <div className="overflow-hidden rounded-lg border border-white/[0.06]">
-          {TRIAGE_SOUND_TRIGGER_ROWS.map((row) => {
+          {TRIAGE_SOUND_TRIGGER_ROWS.filter(row => (row.key === "actual_recorded") === (scope === "finance")).map((row) => {
             const trigger = soundSettings.triggers[row.key];
-            const sound = sounds.find((entry) => entry.id === trigger.soundId) || sounds[0];
             return (
               <div
                 key={row.key}
-                className={cn(SURFACE_ROW_CLASS, "grid gap-3 p-3 lg:grid-cols-[minmax(0,1fr)_180px_96px] lg:items-center")}
+                className={cn(SURFACE_ROW_CLASS, "grid gap-3 p-3 lg:items-center", scope === "finance" ? "grid-cols-[minmax(0,1fr)_96px] lg:grid-cols-[minmax(0,1fr)_180px_128px_96px]" : "lg:grid-cols-[minmax(0,1fr)_180px_96px]")}
               >
-                <label className="flex min-w-0 items-start gap-3">
+                <label className={cn("flex min-w-0 items-start gap-3", scope === "finance" && "col-span-2 lg:col-span-1")}>
                   <input
                     type="checkbox"
                     checked={trigger.enabled}
@@ -121,25 +129,24 @@ export default function TriageSoundSettingsCard({ settings, setSettings, patch }
                   </span>
                 </label>
 
-                <Dropdown
+                <div className={cn("min-w-0", scope === "finance" && "col-span-2 lg:col-span-1")}><Dropdown
                   ariaLabel={`${row.label} sound`}
                   value={trigger.soundId}
-                  onChange={soundId => updateTrigger(row.key, { soundId })}
+                  onChange={soundId => {
+                    updateTrigger(row.key, { soundId });
+                    previewSound(soundId);
+                  }}
                   options={sounds.map(entry => ({ id: entry.id, name: entry.label || entry.id }))}
-                />
+                /></div>
+
+                {scope === "finance" && volumeControl}
 
                 <Button
                   type="button"
                   size="sm"
                   variant="outline"
-                  className={cn(SETTINGS_SECONDARY_BUTTON_CLASS, "justify-center")}
-                  onClick={() => {
-                    playTriageNotificationSound(sound, {
-                      markUnlocked: true,
-                      volume: soundSettings.volume,
-                    });
-                    setLastTested(row.key);
-                  }}
+                  className={cn(SETTINGS_SECONDARY_BUTTON_CLASS, "justify-center focus-visible:-translate-y-px")}
+                  onClick={() => previewSound(trigger.soundId)}
                 >
                   <Play size={13} />
                   Test
@@ -149,9 +156,6 @@ export default function TriageSoundSettingsCard({ settings, setSettings, patch }
           })}
         </div>
 
-        <FieldHint>
-          {lastTested ? "Test playback unlocks audio for this browser session when the browser allows it." : "Use Test once after opening the app so the browser can allow playback."}
-        </FieldHint>
       </div>
     </SettingsCard>
   );

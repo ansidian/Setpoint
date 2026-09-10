@@ -23,7 +23,8 @@ export type TriageSoundTriggerKey =
   | "fyi_finalized"
   | "triage_failed"
   | "event_upcoming"
-  | "task_completed";
+  | "task_completed"
+  | "actual_recorded";
 
 export interface TriageSoundSettings {
   laneScope: TriageSoundLaneScope;

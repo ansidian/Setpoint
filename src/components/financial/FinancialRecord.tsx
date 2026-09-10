@@ -8,6 +8,7 @@ import type { FinancialEmailPlan } from '../../../shared/types/bills';
 import { ensureMetadataLoaded, type ActualMetadata } from '../../lib/actualMetadata';
 import FinancialBindingRepair from './FinancialBindingRepair';
 import FinancialCorrectionEditor from './FinancialCorrectionEditor';
+import useActualRecordingSound from "./useActualRecordingSound";
 import PendingFinancialRecord from './PendingFinancialRecord';
 import { dateLabel, money, record, rows, typeLabels } from './correctionPresentation';
 import FinancialRecordHistory from './FinancialRecordHistory';
@@ -15,9 +16,10 @@ import { ActualResultSnapshot } from './KeepActualResult';
 import type { CorrectionSnapshot } from '../../../shared/types/financial-corrections';
 import { activityOutcome } from './financialActivityPresentation';
 
-export default function FinancialRecord({ activity,onDirty,onChanged,onRepair,registerBack,requestDiscard }: {
-  requestDiscard:(action:()=>void)=>void; activity:FinancialActivity; onDirty:(dirty:boolean)=>void; onChanged:(processing?:boolean)=>void; onRepair:()=>void; registerBack:(back:(()=>boolean)|null)=>void;
+export default function FinancialRecord({ activity,onDirty,onChanged,onRepair,registerBack,requestDiscard,open = true,recordScope }: {
+  recordScope?: string; open?: boolean; requestDiscard:(action:()=>void)=>void; activity:FinancialActivity; onDirty:(dirty:boolean)=>void; onChanged:(processing?:boolean)=>void; onRepair:()=>void; registerBack:(back:(()=>boolean)|null)=>void;
 }) {
+  const beginRecordingSound = useActualRecordingSound(activity, open, recordScope);
   const [acceptedRevision,setAcceptedRevision] = useState<number|null>(null);
   const awaitingRefresh = acceptedRevision === activity.updatedAt && activity.status === 'needs_attention';
   const processing = awaitingRefresh || activity.status === 'processing';
@@ -50,17 +52,17 @@ export default function FinancialRecord({ activity,onDirty,onChanged,onRepair,re
   const accepted = () => { setAcceptedRevision(activity.updatedAt); setConfirmingImport(false); onChanged(true); };
   const progress = activity.completionPlan?.workflow?.progress;
   const progressCopy = progress ? {
-    queued: ['Queued for Actual', 'This record is queued for processing.'],
-    checking_emails: ['Checking received emails', 'Waiting for email checks to finish so related or conflicting payment details can be checked before recording.'],
-    saving: ['Saving to Actual', 'Checking current Actual records and recording this entry.'],
-    recovering: ['Verifying in Actual', 'Checking the result of the saved attempt. An uncertain attempt will not be submitted again.'],
-  }[progress] : [acceptedRevision != null ? 'Confirmation received' : 'Processing financial record', awaitingRefresh ? 'Your confirmation is saved and queued for processing.' : activity.reason];
+    queued: ['Saving to Actual', 'We’ll confirm when this entry is saved and verified.'],
+    checking_emails: ['Checking related details', 'Source details for this entry are still being checked.'],
+    saving: ['Saving to Actual', 'We’ll confirm when this entry is saved and verified.'],
+    recovering: ['Verifying in Actual', 'Checking whether Actual saved the expected result.'],
+  }[progress] : [acceptedRevision != null ? 'Saving to Actual' : 'Processing financial record', awaitingRefresh ? 'We’ll confirm when this entry is saved and verified.' : activity.reason];
   return <article aria-label={payee} data-record-type={kind}>
     <div className="financial-record-heading"><TypeIcon className="financial-type-icon" size={20} aria-hidden="true" /><h3 tabIndex={-1} className="outline-none text-base font-semibold break-words">{payee}</h3>{!confirmingImport && <span className="financial-record-amount">{money(activity.amountCents)}</span>}</div>
     <p className="financial-record-meta"><span className="financial-status" data-tone={status === 'completed' ? 'success' : status === 'dismissed' || status === 'processing' ? 'muted' : 'attention'}><StatusIcon size={13} aria-hidden="true" />{status === 'completed' ? 'Completed' : status === 'processing' ? 'Processing' : status === 'dismissed' ? 'Dismissed' : 'Needs attention'}</span><span>{activity.source === 'managed' ? 'Financial email' : `${transactionImportSourceLabel(activity.source)} import`}</span><span>{label}</span></p>
     {!activity.correction && (processing || activity.status === 'completed') && <div role="status" aria-live="polite" aria-atomic="true" className="financial-status-panel financial-completion-status" data-tone={processing ? 'progress' : 'success'}>
       <h3>{processing ? <Clock3 size={18} aria-hidden="true" /> : <CheckCircle2 size={18} aria-hidden="true" />}{processing ? progressCopy[0] : activityOutcome(activity)}</h3>
-      <p>{processing ? <>{progressCopy[1]} You can close this record; processing will continue.</> : original?.outcome === 'already_present' ? 'Matched the existing Actual record. No duplicate was added.' : original?.outcome === 'added' || original?.outcome === 'updated' ? kind === 'transfer' ? 'The transfer is recorded in Actual. This review is complete.' : scheduledTransfer || kind === 'bill' ? 'The schedule is saved in Actual. This review is complete.' : 'The transaction is saved in Actual. This review is complete.' : 'The saved result and its history are available below.'}</p>
+      <p>{processing ? <>{progressCopy[1]} You can close this record; processing will continue.</> : original?.outcome === 'already_present' ? 'Verified the existing Actual record. No duplicate was added.' : original?.outcome === 'added' || original?.outcome === 'updated' ? kind === 'transfer' ? 'The transfer is saved and verified in Actual.' : scheduledTransfer || kind === 'bill' ? 'The schedule is saved and verified in Actual.' : 'The transaction is saved and verified in Actual.' : 'The saved result and its history are available below.'}</p>
     </div>}
     <AnimatedCollapse open={!editing && !confirmingImport && !completing}><div>
     {kept ? <><ActualResultSnapshot snapshot={effective.snapshot as CorrectionSnapshot}/><p className="financial-note">This is the result you chose to keep. Actual may have changed since it was saved.</p></> : <dl className="financial-summary">
@@ -72,7 +74,7 @@ export default function FinancialRecord({ activity,onDirty,onChanged,onRepair,re
     </div></AnimatedCollapse>
     {activity.status === "completed" && !activity.actions.correct && !activity.correction && activity.reference.owner === "import" && !activity.identityConflict && <FinancialBindingRepair activity={activity} onChanged={onChanged} onRepair={onRepair} />}
     {(activity.actions.correct || activity.correction) && <FinancialCorrectionEditor onHistoryChange={setCurrentCorrection} onEditing={setEditing} activity={activity} onDirty={onDirty} onChanged={onChanged} onRepair={onRepair} registerBack={registerBack} requestDiscard={requestDiscard} />}
-    {!processing && (activity.actions.complete || activity.actions.retry) && <AnimatedHeight><div className="mt-5 p-1"><PendingFinancialRecord onAccepted={accepted} onConfirming={setConfirmingImport} activity={activity} onDirty={onDirty} onChanged={onChanged} onRepair={onRepair} requestDiscard={requestDiscard} /></div></AnimatedHeight>}
+    {!processing && (activity.actions.complete || activity.actions.retry) && <AnimatedHeight><div className="mt-5 p-1"><PendingFinancialRecord onRecordingSubmitted={beginRecordingSound} onAccepted={accepted} onConfirming={setConfirmingImport} activity={activity} onDirty={onDirty} onChanged={onChanged} onRepair={onRepair} requestDiscard={requestDiscard} /></div></AnimatedHeight>}
     {activity.status === 'completed' && !activity.actions.correct && !activity.actions.complete && !activity.actions.retry && !activity.correction && <p className="financial-note mt-4">This saved result is available for inspection. An exact supported Actual target is required before correction.</p>}
     <FinancialRecordHistory activity={activity} metadata={metadata} currentCorrection={currentCorrection} />
   </article>;

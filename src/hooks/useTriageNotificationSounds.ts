@@ -17,6 +17,7 @@ import {
   isTriageSoundAudioUnlocked,
   markTriageSoundAudioUnlocked,
   playTriageNotificationSound,
+  TRIAGE_SOUND_START_TIMEOUT_MS,
 } from "@/lib/triageSoundPlayback";
 import type { CurrentDashboardLiveData } from "./currentDashboardModel";
 
@@ -26,6 +27,8 @@ interface QueuedSnapshotItem {
   id?: string | number | null;
   account_id?: string | number | null;
   read?: boolean | null;
+  date?: string | null;
+  email_date?: string | null;
 }
 
 interface ActiveSnapshotSoundView {
@@ -90,6 +93,8 @@ export default function useTriageNotificationSounds(): TriageNotificationSoundHa
   const gate = gateRef.current;
   const playQueueRef = useRef<Promise<void>>(Promise.resolve());
   const lastPlayAtRef = useRef(0);
+  const visitStartedAtRef = useRef(Number.POSITIVE_INFINITY);
+  const playbackLifetimeRef = useRef(new AbortController());
   const taskCompletionSequenceRef = useRef(0);
   const queuedSnapshotBaselineSeededRef = useRef(false);
   const calendarUpcomingTimersRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
@@ -136,24 +141,55 @@ export default function useTriageNotificationSounds(): TriageNotificationSoundHa
     return removeListeners;
   }, []);
 
-  useEffect(() => () => {
-    for (const timerId of calendarUpcomingTimersRef.current) {
-      clearTimeout(timerId);
-    }
-    calendarUpcomingTimersRef.current = [];
+  useEffect(() => {
+    visitStartedAtRef.current = Date.now();
+    playbackLifetimeRef.current = new AbortController();
+    let wasHidden = document.visibilityState === "hidden";
+    const resumeVisit = () => {
+      visitStartedAtRef.current = Date.now();
+      playbackLifetimeRef.current.abort();
+      playbackLifetimeRef.current = new AbortController();
+      playQueueRef.current = Promise.resolve();
+      lastPlayAtRef.current = 0;
+    };
+    const visibilityChanged = () => {
+      const hidden = document.visibilityState === "hidden";
+      if (wasHidden && !hidden) resumeVisit();
+      wasHidden = hidden;
+    };
+    const pageShown = (event: PageTransitionEvent) => {
+      if (event.persisted) resumeVisit();
+    };
+    const pageHidden = () => playbackLifetimeRef.current.abort();
+    document.addEventListener("visibilitychange", visibilityChanged);
+    window.addEventListener("pageshow", pageShown);
+    window.addEventListener("pagehide", pageHidden);
+    return () => {
+      playbackLifetimeRef.current.abort();
+      document.removeEventListener("visibilitychange", visibilityChanged);
+      window.removeEventListener("pageshow", pageShown);
+      window.removeEventListener("pagehide", pageHidden);
+      for (const timerId of calendarUpcomingTimersRef.current) {
+        clearTimeout(timerId);
+      }
+      calendarUpcomingTimersRef.current = [];
+    };
   }, []);
 
   const schedulePlayback = useCallback((sound: TriageSoundDefinition, volume: number, { markUnlocked = false, immediate = false, eventInfo = null }: PlaybackOptions = {}) => {
+    const expiresAt = Date.now() + TRIAGE_SOUND_START_TIMEOUT_MS;
+    const signal = playbackLifetimeRef.current.signal;
     const play = async () => {
+      if (signal.aborted || Date.now() >= expiresAt) return;
       if (!immediate) {
         const waitMs = Math.max(0, lastPlayAtRef.current + TRIAGE_SOUND_SPACING_MS - Date.now());
         if (waitMs > 0) await sleep(waitMs);
       }
-      const didPlay = await playTriageNotificationSound(sound, { volume, markUnlocked });
-      // A rejected play() (autoplay block, suspended context) made no sound:
-      // release the dedup key so the next offer of the same event can retry.
-      if (!didPlay && eventInfo) gate.forget(eventInfo);
-      lastPlayAtRef.current = Date.now();
+      if (signal.aborted || Date.now() >= expiresAt) return;
+      const didPlay = await playTriageNotificationSound(sound, { volume, markUnlocked, signal, expiresAt });
+      // A prompt rejection can retry, but expired/abandoned work stays seen.
+      if (!didPlay && eventInfo && !signal.aborted && Date.now() < expiresAt) gate.forget(eventInfo);
+      if (!signal.aborted) lastPlayAtRef.current = Date.now();
     };
     if (immediate) {
       playQueueRef.current = play().catch(() => {});
@@ -168,6 +204,8 @@ export default function useTriageNotificationSounds(): TriageNotificationSoundHa
       event,
       settingsRef.current,
       registryRef.current,
+      Date.now(),
+      visitStartedAtRef.current,
     );
     if (!eventInfo) return;
     if (!gate.accept(eventInfo)) return;
@@ -230,13 +268,23 @@ export default function useTriageNotificationSounds(): TriageNotificationSoundHa
       return;
     }
     const freshKeys = eventKeys.filter((eventKey) => !gate.has(eventKey));
-    for (const eventKey of freshKeys) {
-      handleAppTrigger("email_queued", eventKey);
+    for (const row of queuedRows) {
+      const eventKey = queuedSnapshotEventKey(row);
+      if (!eventKey || gate.has(eventKey)) continue;
+      handleDashboardEvent({
+        source: "email_triage",
+        details: {
+          triggerType: "email_queued",
+          eventKey,
+          emailReceivedAt: row.email_date || row.date,
+          read: row.read,
+        },
+      });
     }
     // Rows that arrived while audio was locked or the trigger was disabled
     // still count as seen; they should not sound on a later snapshot.
     gate.remember(freshKeys);
-  }, [gate, handleAppTrigger]);
+  }, [gate, handleDashboardEvent]);
 
   return useMemo(() => ({
     handleDashboardEvent,

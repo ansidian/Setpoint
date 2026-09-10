@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { getActualMetadata } from "@/api";
+import TriageSoundSettingsCard from "../cards/TriageSoundSettingsCard";
 import UtilityMappingsCard from "../cards/UtilityMappingsCard";
 import UtilityPayLinksCard from "@/components/settings/cards/UtilityPayLinksCard";
 import FinancialProfilesCard from "@/components/settings/cards/FinancialProfilesCard";
@@ -97,6 +98,7 @@ export default function ActualBudgetSettingsSection({
     return (
       <>
         <FinancialReviewNotificationsControl />
+        <TriageSoundSettingsCard scope="finance" settings={settings} setSettings={setSettings} patch={patch} />
         <ConnectionDependencyPrompt
           title="Connect Actual Budget"
           description="Finance tools become available after Actual Budget is connected. Existing profiles and pay links remain saved while disconnected."
@@ -121,6 +123,7 @@ export default function ActualBudgetSettingsSection({
   return (
     <>
       <FinancialReviewNotificationsControl />
+        <TriageSoundSettingsCard scope="finance" settings={settings} setSettings={setSettings} patch={patch} />
       {dependency.actual === "needs_attention" ? (
         <ConnectionDependencyPrompt
           title="Actual Budget needs attention"

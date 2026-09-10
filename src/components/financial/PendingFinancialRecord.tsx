@@ -16,6 +16,7 @@ interface Props {
   activity: FinancialActivity;
   onChanged: () => void;
   onAccepted: () => void;
+  onRecordingSubmitted: () => () => void;
   onDirty: (dirty: boolean) => void;
   onRepair: () => void;
   onConfirming: (confirming:boolean) => void;
@@ -29,12 +30,12 @@ export default function PendingFinancialRecord(props: Props) {
   if (activity.reference.owner === 'import') return <ImportCompletion {...props} />;
   const plan = activity.completionPlan;
   if (!activity.actions.complete || !plan?.workflow?.completion) return <p className="financial-note">{activity.reason}</p>;
-  return editing ? <FinancialEventCompletionForm plan={plan} onDirty={onDirty} onRepair={onRepair} onConfirming={props.onConfirming} onDismissed={() => { onDirty(false); props.onChanged(); }}
+  return editing ? <FinancialEventCompletionForm onRecordingSubmitted={props.onRecordingSubmitted} plan={plan} onDirty={onDirty} onRepair={onRepair} onConfirming={props.onConfirming} onDismissed={() => { onDirty(false); props.onChanged(); }}
     onCancel={() => requestDiscard(() => { setEditing(false); onDirty(false); })} onQueued={() => { props.onAccepted(); onDirty(false); }} />
     : <button type="button" className="financial-button" onClick={() => setEditing(true)}>Complete record</button>;
 }
 
-function ImportCompletion({ activity, onAccepted, onChanged, onDirty, onRepair, onConfirming }: Props) {
+function ImportCompletion({ activity, onAccepted, onChanged, onDirty, onRepair, onConfirming, onRecordingSubmitted }: Props) {
   const item = activity.importItem!;
   const [draft, setDraft] = useState(() => itemToConfirmation(item));
   const [amount, setAmount] = useState(item.amountCents == null ? '' : String(Math.abs(item.amountCents) / 100));
@@ -75,6 +76,7 @@ function ImportCompletion({ activity, onAccepted, onChanged, onDirty, onRepair, 
   async function perform(action: 'commit' | 'retry' | 'dismiss') {
     if (busy) return;
     setBusy(true); setError('');
+    const cancelSound = action === 'commit' ? onRecordingSubmitted() : undefined;
     try {
       if (action === 'commit') {
         const result = await commitTransactionImportItems(item.runId, [{ ...draft, amountCents: signedAmount }]);
@@ -89,7 +91,7 @@ function ImportCompletion({ activity, onAccepted, onChanged, onDirty, onRepair, 
       onDirty(false);
       if (action === 'dismiss') onChanged();
       else onAccepted();
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not save this record. Your details are still here.'); }
+    } catch (cause) { cancelSound?.(); setError(cause instanceof Error ? cause.message : 'Could not save this record. Your details are still here.'); }
     finally { setBusy(false); }
   }
   function preview(event: FormEvent) { event.preventDefault(); if (valid) setConfirming(true); }

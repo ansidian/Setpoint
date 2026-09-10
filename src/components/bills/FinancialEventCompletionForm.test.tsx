@@ -75,7 +75,7 @@ describe("owner completion of a managed financial record", () => {
     fireEvent.submit(screen.getByRole("form", { name: "Complete financial record" }));
     expect(confirmed).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Record in Actual' }));
-    expect(await screen.findByText("Confirmation received")).toBeTruthy();
+    expect(await screen.findByText("Saving to Actual")).toBeTruthy();
     expect(screen.queryByText("Recorded in Actual")).toBeNull();
     expect(screen.queryByRole("button", { name: "Review before sending" })).toBeNull();
     expect(confirmed).toEqual({ emailUid: "receipt-one", documentRevision: 1, eventRevision: 1,

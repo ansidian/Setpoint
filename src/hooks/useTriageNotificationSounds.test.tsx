@@ -10,19 +10,19 @@ const settings = {
     laneScope: "needs_attention_and_fyi",
     volume: 0.9,
     triggers: {
-      needs_attention_finalized: { enabled: true, soundId: "clear_chime" },
-      email_queued: { enabled: true, soundId: "quick_chime" },
-      fyi_finalized: { enabled: true, soundId: "smooth_modern" },
-      triage_failed: { enabled: false, soundId: "low_tone" },
-      event_upcoming: { enabled: true, soundId: "clear_chime" },
-      task_completed: { enabled: true, soundId: "smooth_modern" },
+      needs_attention_finalized: { enabled: true, soundId: "signal" },
+      email_queued: { enabled: true, soundId: "arrival" },
+      fyi_finalized: { enabled: true, soundId: "aside" },
+      triage_failed: { enabled: false, soundId: "check" },
+      event_upcoming: { enabled: true, soundId: "signal" },
+      task_completed: { enabled: true, soundId: "aside" },
     },
   },
   triage_notification_sounds: [
-    { id: "smooth_modern", label: "Smooth Modern", path: "/sounds/notifications/smooth-modern.mp3" },
-    { id: "clear_chime", label: "Clear chime", path: "/sounds/notifications/clear-chime.mp3" },
-    { id: "quick_chime", label: "Quick chime", path: "/sounds/notifications/quick-chime.mp3" },
-    { id: "low_tone", label: "Low tone", path: "/sounds/notifications/low-tone.mp3" },
+    { id: "aside", label: "Aside", path: "/sounds/notifications/aside.mp3" },
+    { id: "signal", label: "Signal", path: "/sounds/notifications/signal.mp3" },
+    { id: "arrival", label: "Arrival", path: "/sounds/notifications/arrival.mp3" },
+    { id: "check", label: "Check", path: "/sounds/notifications/check.mp3" },
   ],
 };
 
@@ -86,6 +86,7 @@ describe("useTriageNotificationSounds", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
     vi.clearAllMocks();
     vi.useRealTimers();
     sessionStorage.clear();
@@ -107,7 +108,7 @@ describe("useTriageNotificationSounds", () => {
     });
 
     await waitFor(() => {
-      expect(audio.paths).toContain("/sounds/notifications/clear-chime.mp3");
+      expect(audio.paths).toContain("/sounds/notifications/signal.mp3");
     });
     expect(audio.playCount()).toBe(1);
     expect(audio.instances[0]?.volume).toBe(0.9);
@@ -128,7 +129,7 @@ describe("useTriageNotificationSounds", () => {
     });
 
     await waitFor(() => {
-      expect(audio.paths).toContain("/sounds/notifications/clear-chime.mp3");
+      expect(audio.paths).toContain("/sounds/notifications/signal.mp3");
     });
   });
 
@@ -188,7 +189,7 @@ describe("useTriageNotificationSounds", () => {
     });
 
     await waitFor(() => {
-      expect(audio.paths).toContain("/sounds/notifications/quick-chime.mp3");
+      expect(audio.paths).toContain("/sounds/notifications/arrival.mp3");
     });
   });
 
@@ -209,7 +210,7 @@ describe("useTriageNotificationSounds", () => {
         snapshot: { id: "active" },
         lanes: {
           queued: [{
-            account_id: "icloud",
+            account_id: "icloud", date: new Date().toISOString(),
             email_id: "icloud-3232",
           }],
         },
@@ -217,7 +218,7 @@ describe("useTriageNotificationSounds", () => {
     });
 
     await waitFor(() => {
-      expect(audio.paths).toContain("/sounds/notifications/quick-chime.mp3");
+      expect(audio.paths).toContain("/sounds/notifications/arrival.mp3");
     });
   });
 
@@ -236,7 +237,7 @@ describe("useTriageNotificationSounds", () => {
         snapshot: { id: "active" },
         lanes: {
           queued: [{
-            account_id: "icloud",
+            account_id: "icloud", date: new Date().toISOString(),
             email_id: "icloud-read",
             read: true,
           }],
@@ -266,7 +267,7 @@ describe("useTriageNotificationSounds", () => {
         snapshot: { id: "active" },
         lanes: {
           queued: [{
-            account_id: "icloud",
+            account_id: "icloud", date: new Date().toISOString(),
             email_id: "icloud-3232",
           }],
         },
@@ -289,7 +290,7 @@ describe("useTriageNotificationSounds", () => {
       snapshot: { id: "active" },
       lanes: {
         queued: [{
-          account_id: "icloud",
+          account_id: "icloud", date: new Date().toISOString(),
           email_id: "icloud-3232",
         }],
       },
@@ -329,9 +330,9 @@ describe("useTriageNotificationSounds", () => {
         snapshot: { id: "active" },
         lanes: {
           queued: [
-            { account_id: "icloud", email_id: "icloud-1" },
-            { account_id: "icloud", email_id: "icloud-2" },
-            { account_id: "icloud", email_id: "icloud-3" },
+            { account_id: "icloud", date: new Date().toISOString(), email_id: "icloud-1" },
+            { account_id: "icloud", date: new Date().toISOString(), email_id: "icloud-2" },
+            { account_id: "icloud", date: new Date().toISOString(), email_id: "icloud-3" },
           ],
         },
       });
@@ -353,7 +354,7 @@ describe("useTriageNotificationSounds", () => {
         snapshot: { id: "active" },
         lanes: {
           queued: [{
-            account_id: "icloud",
+            account_id: "icloud", date: new Date().toISOString(),
             email_id: "icloud-3232",
           }],
         },
@@ -373,7 +374,7 @@ describe("useTriageNotificationSounds", () => {
     });
 
     await waitFor(() => {
-      expect(audio.paths).toContain("/sounds/notifications/smooth-modern.mp3");
+      expect(audio.paths).toContain("/sounds/notifications/aside.mp3");
       expect(sessionStorage.getItem(TRIAGE_SOUND_AUDIO_UNLOCK_KEY)).toBe("1");
     });
   });
@@ -391,8 +392,8 @@ describe("useTriageNotificationSounds", () => {
 
     await waitFor(() => {
       expect(audio.paths).toEqual([
-        "/sounds/notifications/smooth-modern.mp3",
-        "/sounds/notifications/smooth-modern.mp3",
+        "/sounds/notifications/aside.mp3",
+        "/sounds/notifications/aside.mp3",
       ]);
     });
   });
@@ -417,8 +418,8 @@ describe("useTriageNotificationSounds", () => {
 
     await waitFor(() => {
       expect(audio.paths).toEqual(expect.arrayContaining([
-        "/sounds/notifications/clear-chime.mp3",
-        "/sounds/notifications/smooth-modern.mp3",
+        "/sounds/notifications/signal.mp3",
+        "/sounds/notifications/aside.mp3",
       ]));
     });
   });
@@ -448,6 +449,143 @@ describe("useTriageNotificationSounds", () => {
       await vi.advanceTimersByTimeAsync(60 * 1000);
     });
 
-    expect(audio.paths).toContain("/sounds/notifications/clear-chime.mp3");
+    expect(audio.paths).toContain("/sounds/notifications/signal.mp3");
   });
+
+  it('does not release queued overnight email sounds when suspended audio resumes on return', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-09T06:00:00Z"));
+    sessionStorage.setItem(TRIAGE_SOUND_AUDIO_UNLOCK_KEY, "1");
+    let resumeAudio: () => void = () => {};
+    const suspendedUntilReturn = new Promise<void>((resolve) => { resumeAudio = resolve; });
+    let returned = false;
+    const played: string[] = [];
+    vi.stubGlobal('Audio', function AudioMock(this: Record<string, unknown>, path: string) {
+      this.duration = 0.5;
+      this.currentTime = 0;
+      this.play = () => { played.push(path); return Promise.resolve(); };
+      this.addEventListener = () => {};
+    });
+    vi.stubGlobal('AudioContext', function ContextMock() {
+      return {
+        state: returned ? 'running' : 'suspended',
+        currentTime: 0,
+        destination: {},
+        createMediaElementSource: () => ({ connect: () => {} }),
+        createGain: () => ({ gain: { value: 0 }, connect: () => {} }),
+        resume: () => suspendedUntilReturn,
+        close: () => Promise.resolve(),
+      };
+    });
+    const { result } = renderHook(() => useTriageNotificationSounds());
+    await act(async () => {});
+    for (let i = 0; i < 3; i += 1) {
+      act(() => result.current.handleDashboardEvent({
+        source: 'email_triage',
+        occurredAt: new Date().toISOString(),
+        details: {
+          triggerType: 'needs_attention_finalized',
+          eventKey: `overnight-${i}`,
+          emailReceivedAt: new Date().toISOString(),
+          read: false,
+        },
+      }));
+      await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    }
+    expect(played).toEqual([]);
+    await act(async () => { await vi.advanceTimersByTimeAsync(8 * 60 * 60 * 1000); });
+    returned = true;
+    await act(async () => { resumeAudio(); await vi.advanceTimersByTimeAsync(2000); });
+    expect(played).toEqual([]);
+  });
+
+  it('does not sound old unread rows discovered after the first snapshot during visiting sync', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-09T06:00:00Z"));
+    sessionStorage.setItem(TRIAGE_SOUND_AUDIO_UNLOCK_KEY, "1");
+    const played: string[] = [];
+    vi.stubGlobal('Audio', function AudioMock(this: Record<string, unknown>, path: string) {
+      this.play = () => { played.push(path); return Promise.resolve(); };
+    });
+    const { result } = renderHook(() => useTriageNotificationSounds());
+    await act(async () => {});
+    act(() => result.current.handleActiveSnapshot({ snapshot: { id: 'active' }, lanes: { queued: [] } }));
+    const oldRows = [1, 2, 3].map((i) => ({ account_id: 'gmail', email_id: `old-${i}`, read: false, date: '2026-09-08T22:00:00Z', email_date: '2026-09-08T22:00:00Z' }));
+    for (let count = 1; count <= oldRows.length; count += 1) {
+      act(() => result.current.handleActiveSnapshot({ snapshot: { id: 'active' }, lanes: { queued: oldRows.slice(0, count) } }));
+      await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    }
+    expect(played).toEqual([]);
+  });
+
+  it("keeps playable background arrivals audible but suppresses pre-return mail still inside five minutes", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-09T06:00:00Z"));
+    sessionStorage.setItem(TRIAGE_SOUND_AUDIO_UNLOCK_KEY, "1");
+    const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    const audio = installAudioBoundary();
+    const { result } = renderHook(() => useTriageNotificationSounds());
+    await act(async () => {});
+    act(() => {
+      result.current.handleActiveSnapshot({ snapshot: { id: "active" }, lanes: { queued: [] } });
+      visibility.mockReturnValue("hidden");
+      document.dispatchEvent(new Event("visibilitychange"));
+      result.current.handleDashboardEvent(triageEvent("playable-background"));
+    });
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    expect(audio.playCount()).toBe(1);
+    const preReturnArrival = new Date().toISOString();
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    act(() => {
+      visibility.mockReturnValue("visible");
+      document.dispatchEvent(new Event("visibilitychange"));
+      result.current.handleDashboardEvent(triageEvent("caught-up-sse", preReturnArrival));
+      result.current.handleActiveSnapshot({ snapshot: { id: "active" }, lanes: { queued: [{
+        account_id: "gmail", email_id: "caught-up-snapshot", date: preReturnArrival,
+      }] } });
+    });
+    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
+    expect(audio.playCount()).toBe(1);
+    act(() => result.current.handleDashboardEvent(triageEvent("post-return")));
+    await act(async () => {});
+    expect(audio.playCount()).toBe(2);
+  });
+
+  it("uses this document's activation instead of a previous document's saved unlock", async () => {
+    sessionStorage.setItem(TRIAGE_SOUND_AUDIO_UNLOCK_KEY, "1");
+    const activation = { hasBeenActive: false, isActive: false };
+    vi.stubGlobal("navigator", { ...navigator, userActivation: activation });
+    const audio = installAudioBoundary();
+    const { result } = renderHook(() => useTriageNotificationSounds());
+    await act(async () => {});
+    act(() => result.current.handleDashboardEvent(triageEvent("before-activation")));
+    await act(async () => {});
+    expect(audio.playCount()).toBe(0);
+    activation.hasBeenActive = true;
+    act(() => result.current.handleDashboardEvent(triageEvent("after-activation")));
+    await act(async () => {});
+    expect(audio.playCount()).toBe(1);
+  });
+
+  it("cancels a pending browser play when the dashboard unmounts", async () => {
+    sessionStorage.setItem(TRIAGE_SOUND_AUDIO_UNLOCK_KEY, "1");
+    let stopped = false;
+    let finishStartup: () => void = () => {};
+    let audible = false;
+    vi.stubGlobal("Audio", function AudioMock(this: Record<string, unknown>) {
+      this.play = () => new Promise<void>((resolve) => {
+        finishStartup = () => { audible = !stopped; resolve(); };
+      });
+      this.pause = () => { stopped = true; };
+    });
+    const { result, unmount } = renderHook(() => useTriageNotificationSounds());
+    await act(async () => {});
+    act(() => result.current.handleDashboardEvent(triageEvent("pending-unmount")));
+    await act(async () => {});
+    unmount();
+    await act(async () => { finishStartup(); });
+    expect(stopped).toBe(true);
+    expect(audible).toBe(false);
+  });
+
 });

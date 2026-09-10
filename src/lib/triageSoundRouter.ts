@@ -18,6 +18,7 @@ const TRIGGER_TO_SETTING_KEY = {
   triage_failed: TRIAGE_SOUND_TRIGGER_KEYS.TRIAGE_FAILED,
   event_upcoming: TRIAGE_SOUND_TRIGGER_KEYS.EVENT_UPCOMING,
   task_completed: TRIAGE_SOUND_TRIGGER_KEYS.TASK_COMPLETED,
+  actual_recorded: TRIAGE_SOUND_TRIGGER_KEYS.ACTUAL_RECORDED,
 } as const satisfies Record<string, TriageSoundTriggerKey>;
 
 export type DashboardSoundTriggerType = keyof typeof TRIGGER_TO_SETTING_KEY;
@@ -85,12 +86,13 @@ export function resolveTriageSoundForEvent(
   settings: unknown,
   registry: unknown,
   now = Date.now(),
+  receivedSince = Number.NEGATIVE_INFINITY,
 ): ResolvedDashboardSound | null {
   const details = event?.details;
   if (event?.source !== "email_triage" || typeof details?.triggerType !== "string") return null;
   if (details.read === true) return null;
   const referenceTime = triageSoundReferenceTime(event);
-  if (!Number.isFinite(referenceTime) || now - referenceTime > EMAIL_TRIAGE_SOUND_FRESHNESS_MS) return null;
+  if (!Number.isFinite(referenceTime) || referenceTime < receivedSince || now - referenceTime > EMAIL_TRIAGE_SOUND_FRESHNESS_MS) return null;
   return resolveDashboardSoundForTrigger(
     details.triggerType,
     settings,

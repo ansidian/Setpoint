@@ -30,7 +30,7 @@ The settings surface: a Connections directory plus Automation, Finance, and Syst
 - `cards/EmailAiModelCard.tsx` — email triage LLM provider/model selection with fallbacks
 - `cards/EmailTriageModeCard.tsx` — triage automation toggle (auto/real/no-model/paused) with a labeled legacy usage glance; current usage lives in AI analytics
 - `cards/BillExtractionAiCard.tsx` — bill extraction model choice, separate from triage model
-- `cards/TriageSoundSettingsCard.tsx` — sound lanes, volume, per-trigger playback
+- `cards/TriageSoundSettingsCard.tsx` — sound lanes, shared volume, per-trigger playback; Finance renders its scoped Actual recording control
 - `cards/ImportantSendersCard.tsx` — auto-learned and manual important sender lists
 - `cards/TrustedRemoteContentCard.tsx` — persisted exact-sender + receiving-account remote-image trust list and removal
 

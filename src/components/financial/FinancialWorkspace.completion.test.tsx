@@ -19,31 +19,42 @@ const plan:FinancialEmailPlan = {
 let current:FinancialActivity;
 let failDetail = 0;
 let rejectImport = false;
+let played = 0;
 beforeEach(() => {
   invalidateActualMetadata();
-  failDetail = 0; rejectImport = false;
+  failDetail = 0; rejectImport = false; played = 0;
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+  vi.stubGlobal('AudioContext', undefined);
+  vi.stubGlobal('Audio', class {
+    volume = 1;
+    async play() { played++; }
+    pause() {} removeAttribute() {} load() {}
+  });
   current = { id:'event',reference:{ owner:'event',id:'event' },occurrences:[],source:'managed',contexts:['arrival'],emailUids:[],subject:'Receipt',payee:'Example Merchant',amountCents:-3000,currency:'USD',createdAt:1,updatedAt:1,status:'needs_attention',reason:'Confirm details',actions:{ complete:true,retry:false,inspect:true,correct:false },originalReceipts:[],sourceEvidence:[],targetBindings:[],liveState:'not_checked',effectiveResult:null,completionPlan:plan,importItem:null,runs:[] };
   vi.stubGlobal('fetch',async (path:string) => {
+    if (path === '/api/ea/settings') return Response.json({ triage_sound_settings:{ volume:0.6,triggers:{ actual_recorded:{ enabled:true,soundId:'latch' } } } });
     if (path === '/api/briefing/actual/metadata') return Response.json({ accounts:[{ id:'checking',name:'Checking' }],payees:[],categories:[] });
-    if (path.startsWith('/api/briefing/financial-activity/event/') || path.startsWith('/api/briefing/financial-activity/import/')) { if (failDetail-- > 0) return Response.json({ message:'Temporary status failure' },{status:503}); return Response.json(current); }
+    if (/\/financial-activity\/(event|document|import)\//.test(path)) { if (failDetail-- > 0) return Response.json({ message:'Temporary status failure' },{status:503}); return Response.json(current); }
     if (path.startsWith('/api/briefing/financial-activity?')) return Response.json({ items:current.status !== 'completed' ? [current] : [],total:current.status !== 'completed' ? 1 : 0,attentionTotal:current.status === 'needs_attention' ? 1 : 0,offset:0,limit:20 });
     if (path === '/api/briefing/financial-events/complete' || path.endsWith('/commit')) {
       if (path.endsWith('/commit') && rejectImport) return Response.json({accepted:0},{status:202});
       current = { ...current,status:'processing',updatedAt:2,reason:'Owner-confirmed entry queued for Actual.',actions:{ ...current.actions,complete:false } };
+      if (current.reference.owner === 'document') current = { ...current,id:'event',reference:{ owner:'event',id:'event' } };
       return Response.json(path.endsWith('/commit') ? { accepted:1 } : { ...plan,workflow:{ ...plan.workflow,state:'pending' } },{ status:202 });
     }
     throw Error('Unexpected request: '+path);
   });
 });
-afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 function useImportFixture() {
   current = { ...current,source:'paypal',reference:{ owner:'import',id:'event',runId:'run' },completionPlan:null,importItem:{ id:'event',runId:'run',gmailAccountId:'gmail',gmailMessageId:'message',emailUid:'receipt',emailSubject:'Receipt',internetMessageId:null,source:'paypal',parserVersion:'1',externalId:null,importedId:null,date:'2026-09-08',amountCents:-3000,currency:'USD',payee:'Example Merchant',notes:'',actualAccountId:'checking',actualCategoryId:null,automationMode:'observe',automaticSafe:false,blockingWarnings:[],evidence:[],financialPlan:null,planShadow:null,status:'needs_review',reconciliationStatus:null,attempts:0,lastError:null,confirmedAt:null,createdAt:1,updatedAt:1 } };
 }
 
-it.each(['managed','import'] as const)('keeps %s Needs attention submissions pending until a receipt arrives, even without publication',async owner => {
+it.each(['managed','import','document'] as const)('keeps %s submissions selected and silent until a fresh verified receipt arrives',async owner => {
   if (owner === 'import') useImportFixture();
-  render(<FinancialWorkspace search={`?financial=list&view=needs_attention&owner=${owner === 'import' ? 'import' : 'event'}&record=event&recordRun=run`} onNavigate={()=>{}} onClose={()=>{}} onRepair={()=>{}} onDirty={()=>{}} registerBack={()=>{}} requestDiscard={action=>action()} />);
+  if (owner === 'document') current = { ...current,id:'document:1',reference:{ owner:'document',id:'1' },completionPlan:{ ...plan,workflow:{ ...plan.workflow!,id:'document:1',completion:{ ...plan.workflow!.completion!,eventRevision:null } } } };
+  render(<FinancialWorkspace search={`?financial=list&view=needs_attention&owner=${owner === 'import' ? 'import' : owner === 'document' ? 'document' : 'event'}&record=${owner === 'document' ? '1' : 'event'}&recordRun=run`} onNavigate={()=>{}} onClose={()=>{}} onRepair={()=>{}} onDirty={()=>{}} registerBack={()=>{}} requestDiscard={action=>action()} />);
   const review = await screen.findByRole('button',{ name:'Review before sending' });
   await waitFor(()=>expect((review as HTMLButtonElement).disabled).toBe(false));
   fireEvent.submit(screen.getByRole('form',{ name:'Complete financial record' }));
@@ -56,6 +67,7 @@ it.each(['managed','import'] as const)('keeps %s Needs attention submissions pen
   expect(screen.getByRole('status').textContent).toContain('processing will continue');
   expect(screen.queryByRole('button',{ name:'Record in Actual' })).toBeNull();
   expect(screen.queryByText('Already recorded in Actual')).toBeNull();
+  expect(played).toBe(0);
   // A publication may race a transient failed read; it must not cancel recovery.
   failDetail = 1;
   await act(async()=>window.dispatchEvent(new Event('ea-financial-event-changed')));
@@ -66,6 +78,7 @@ it.each(['managed','import'] as const)('keeps %s Needs attention submissions pen
   expect(screen.getByRole('status').textContent).toContain('Already recorded in Actual');
   expect(screen.getByRole('status').textContent).toContain('No duplicate');
   expect(screen.queryByRole('button',{ name:'Record in Actual' })).toBeNull();
+  expect(played).toBe(1);
 },10000);
 
 

@@ -35,7 +35,7 @@ function Field({ name, icon, children }: { name: string; icon?:ReactNode; childr
   return <div className="flex min-w-0 flex-col gap-1 text-[11px] font-medium text-foreground/85">{searchable ? <span className="flex items-center gap-1.5">{label}</span> : <label className="flex items-center gap-1.5" htmlFor={id}>{label}</label>}{searchable ? children : cloneElement(children, { id })}</div>;
 }
 
-export default function FinancialEventCompletionForm({ plan, onCancel, onQueued, onDirty, onRepair, onConfirming, onDismissed }: {
+export default function FinancialEventCompletionForm({ plan, onCancel, onQueued, onDirty, onRepair, onConfirming, onDismissed, onRecordingSubmitted }: {
   plan: FinancialEmailPlan;
   onCancel: () => void;
   onQueued: (plan: FinancialEmailPlan) => void;
@@ -43,6 +43,7 @@ export default function FinancialEventCompletionForm({ plan, onCancel, onQueued,
   onRepair?: () => void;
   onConfirming?: (confirming:boolean) => void;
   onDismissed?: () => void;
+  onRecordingSubmitted?: () => () => void;
 }) {
   // Capture the displayed revision once. A poll must not silently authorize an
   // entry against source changes the owner has not reviewed.
@@ -108,6 +109,7 @@ export default function FinancialEventCompletionForm({ plan, onCancel, onQueued,
     submitted.current = true;
     setSending(true);
     setError("");
+    const cancelSound = ordinaryPayment ? onRecordingSubmitted?.() : undefined;
     try {
       const result = await completeFinancialEvent({
         emailUid: revision.emailUid, documentRevision: revision.documentRevision, eventRevision: revision.eventRevision,
@@ -119,6 +121,7 @@ export default function FinancialEventCompletionForm({ plan, onCancel, onQueued,
       });
       if (alive.current) { onDirty?.(false); onQueued(result); }
     } catch (cause) {
+      cancelSound?.();
       if (!alive.current) return;
       const conflict = cause && typeof cause === "object" && "status" in cause && cause.status === 409;
       setStale(Boolean(conflict));

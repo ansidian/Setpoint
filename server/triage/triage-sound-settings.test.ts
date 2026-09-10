@@ -8,7 +8,7 @@ function validSettings(): Record<string, unknown> {
     laneScope: "needs_attention_and_fyi",
     volume: 0.5,
     triggers: {
-      needs_attention_finalized: { enabled: true, soundId: "clear_chime" },
+      needs_attention_finalized: { enabled: true, soundId: "signal" },
     },
   };
 }
@@ -27,7 +27,7 @@ describe("validateTriageSoundSettings", () => {
   it("accepts and drops the retired weak-security trigger from persisted settings", () => {
     const settings = validSettings();
     settings.triggers = {
-      weak_security_grace: { enabled: true, soundId: "low_tone" },
+      weak_security_grace: { enabled: true, soundId: "check" },
     };
 
     expect(validateTriageSoundSettings(settings)).toEqual({ valid: true });
@@ -85,7 +85,7 @@ describe("validateTriageSoundSettings", () => {
 
   it("rejects an unrecognized trigger key", () => {
     const settings = validSettings();
-    settings.triggers = { not_a_real_trigger: { enabled: true, soundId: "clear_chime" } };
+    settings.triggers = { not_a_real_trigger: { enabled: true, soundId: "signal" } };
     expect(validateTriageSoundSettings(settings)).toEqual({
       valid: false,
       message: "Invalid triage_sound_settings trigger",
@@ -106,7 +106,7 @@ describe("validateTriageSoundSettings", () => {
   it("rejects a trigger row whose enabled is not a boolean", () => {
     const settings = validSettings();
     settings.triggers = {
-      needs_attention_finalized: { enabled: "yes", soundId: "clear_chime" },
+      needs_attention_finalized: { enabled: "yes", soundId: "signal" },
     };
     expect(validateTriageSoundSettings(settings)).toEqual({
       valid: false,
