@@ -405,6 +405,7 @@ export default memo(function CalendarGrid({
     }
     if (!layout.stacked && anchorMeta?.triggerElement) {
       onOpenFloatingDetail?.({
+        toggleOnRepeat: true,
         view,
         detailKind: anchorMeta.detailKind || null,
         itemId: itemId != null ? String(itemId) : null,

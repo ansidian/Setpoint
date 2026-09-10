@@ -11,6 +11,7 @@ import {
 } from "./calendarFloatingDetailModel";
 
 export interface CalendarFloatingDetail extends CalendarFloatingDetailState {
+  toggleOnRepeat?: boolean;
   placementKey?: string;
   detailKind?: string | null;
   day?: number | null;
@@ -135,6 +136,14 @@ export default function useCalendarFloatingDetail({ open, view, panelRef, railRe
     const preferredSide = nextDetail.preferredSide
       || (String(nextDetail.anchorKind || "").startsWith("agenda") ? "left" : null);
     setSyncedFloatingDetail((current) => {
+      if (nextDetail.toggleOnRepeat && mode === "detail" && current?.open
+        && current.mode === "detail" && current.view === nextView
+        && current.dateKey === nextDateKey
+        && (current.detailKind || null) === (nextDetail.detailKind || null)
+        && String(current.itemId) === String(nextDetail.itemId)) {
+        clearAllSessionSides(sessionSideByViewRef);
+        return null;
+      }
       if (
         mode === "detail"
         && current?.open

@@ -159,6 +159,7 @@ export default function useCalendarAgendaInteractions({
       anchorKind: anchorKind || "agenda-row",
     };
     floating.openDetail({
+      toggleOnRepeat: true,
       mode: "detail",
       view,
       detailKind: detailKind || null,
