@@ -14,6 +14,7 @@ beforeEach(async () => {
   db = createClient({ url: "file::memory:" });
   await db.executeMultiple(migration("001_ea_tables.sql"));
   await db.executeMultiple(migration("057_email_ai_usage.sql"));
+  await db.executeMultiple(migration("072_ai_usage_diagnostics.sql"));
 });
 afterEach(() => { db.close(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
@@ -29,13 +30,62 @@ function event(overrides: Partial<AiUsageEvent> = {}): AiUsageEvent {
 }
 
 describe("durable email AI call ledger", () => {
+  it.each([
+    { error: new Error("private provider body"), status: 429, code: "http_error" },
+    { error: new TypeError("private connection details"), status: null, code: "transport_error" },
+    { error: new Error("fetch timeout after 120000ms: private URL"), status: null, code: "timeout" },
+    { error: new SyntaxError("private response body"), status: 200, code: "invalid_json" },
+  ])("retains $code without storing raw errors", async ({ error, status, code }) => {
+    const result = withAiUsageContext({ userId: "owner", origin: "manual_extraction", dbClient: db }, () =>
+      trackedAiProviderCall({ provider: "openai", model: "test-model", purpose: "extraction", maxOutputTokens: 1600 }, async (call) => {
+        if (status !== null) call.setHttpStatus(status);
+        throw error;
+      }));
+    await expect(result).rejects.toBe(error);
+    const rows = (await db.execute("SELECT * FROM ea_ai_usage_events")).rows;
+    expect(rows[0]).toMatchObject({ outcome: "provider_error", http_status: status, input_tokens: null });
+    expect(JSON.parse(String(rows[0]!.diagnostics_json))).toMatchObject({ failureCode: code, maxOutputTokens: 1600 });
+    expect(JSON.stringify(rows)).not.toContain("private");
+  });
+
+  it("drops arbitrary provider metadata and does not infer truncation from a full token budget", async () => {
+    const result = withAiUsageContext({ userId: "owner", origin: "background_triage", dbClient: db }, () =>
+      trackedAiProviderCall({ provider: "openai", model: "test-model", purpose: "triage_strong", maxOutputTokens: 1600 }, async (call) => {
+        await call.capture({ status: "private text", incomplete_details: { reason: "private text" }, usage: { output_tokens: 1600, output_tokens_details: { reasoning_tokens: "private text" } } });
+        throw new Error("private text");
+      }));
+    await expect(result).rejects.toThrow("private text");
+    const rows = (await db.execute("SELECT diagnostics_json FROM ea_ai_usage_events")).rows;
+    expect(JSON.parse(String(rows[0]!.diagnostics_json))).toEqual({ responseStatus: null, stopReason: null, maxOutputTokens: 1600, reasoningTokens: null, failureCode: "invalid_response" });
+  });
+
+  it("bounds recent failures by category and isolates owner, production and exact window, retaining legacy unknowns", async () => {
+    for (let i = 0; i < 23; i++) await recordAiUsageEvent(event({ eventId: `failure-${String(i).padStart(2, "0")}`, outcome: "parse_error" }), { dbClient: db });
+    for (const fixture of [
+      { eventId: "financial", purpose: "extraction" as const },
+      { eventId: "other", userId: "other" },
+      { eventId: "evaluation", runContext: "evaluation" as const },
+      { eventId: "old", startedAt: "2026-08-27T11:59:59.999Z" },
+      { eventId: "future", startedAt: "2026-09-03T12:00:00.001Z" },
+      { eventId: "edge", startedAt: "2026-08-27T12:00:00.000Z", purpose: "extraction" as const },
+    ]) await recordAiUsageEvent(event({ outcome: "provider_error", ...fixture }), { dbClient: db });
+    const stats = await getEmailAiUsageStats("owner", { dbClient: db, now: NOW });
+    expect(stats.contexts.production.triage.failures).toBe(23);
+    expect(stats.contexts.production.triage.recentFailures).toHaveLength(20);
+    expect(stats.contexts.production.triage.recentFailures.map((f) => f.eventId)).toEqual(Array.from({ length: 20 }, (_, i) => `failure-${String(22 - i).padStart(2, "0")}`));
+    expect(stats.contexts.production.triage.recentFailures[0]).toMatchObject({ diagnostics: null, httpStatus: 200, inputTokens: 100 });
+    expect(stats.contexts.production.financialEmail.recentFailures.map((f) => f.eventId)).toEqual(["financial", "edge"]);
+    expect(stats.contexts.evaluation.triage.recentFailures).toEqual([]);
+  });
+
   it("records an attempt idempotently, permits finalization, and never regresses terminal outcomes", async () => {
     await recordAiUsageEvent(event({ outcome: "response_received" }), { dbClient: db });
-    await Promise.all(Array.from({ length: 4 }, () => recordAiUsageEvent(event({ outcome: "parse_error" }), { dbClient: db })));
+    await Promise.all(Array.from({ length: 4 }, () => recordAiUsageEvent(event({ outcome: "parse_error", diagnostics: { responseStatus: null, stopReason: null, maxOutputTokens: 1600, reasoningTokens: null, failureCode: "invalid_response" } }), { dbClient: db })));
     await recordAiUsageEvent(event({ outcome: "response_received" }), { dbClient: db });
     await recordAiUsageEvent(event({ userId: "another-owner", outcome: "succeeded" }), { dbClient: db });
     const stats = await getEmailAiUsageStats("owner", { dbClient: db, now: NOW });
     expect(stats.contexts.production.triage).toMatchObject({ calls: 1, failures: 1, inputTokens: 100, pendingCalls: 0 });
+    expect(stats.contexts.production.triage.recentFailures[0]?.diagnostics?.failureCode).toBe("invalid_response");
     expect((await db.execute("SELECT outcome, user_id FROM ea_ai_usage_events")).rows).toEqual([
       { outcome: "parse_error", user_id: "owner" },
     ]);
@@ -177,6 +227,7 @@ describe("durable email AI call ledger", () => {
         args: [NOW.toISOString(), JSON.stringify({ cheap: usage }), JSON.stringify({ provider: "openai", model: "gpt-5.4-nano", usage, decision: { summary: "private email content" } })],
       });
       await legacyDb.executeMultiple(migration("057_email_ai_usage.sql"));
+      await legacyDb.executeMultiple(migration("072_ai_usage_diagnostics.sql"));
       await legacyDb.execute("UPDATE ea_email_triage SET model_usage_json = '{\"cheap\":{\"input_tokens\":9999}}'");
       await recordAiUsageEvent(event(), { dbClient: legacyDb });
       const legacy = await getTriageCacheStats("owner", { dbClient: legacyDb, now: NOW });

@@ -1,6 +1,6 @@
 import db from "../db/connection.ts";
 import type { AiUsageDb } from "./ai-usage.ts";
-import type { AiUsageCategory, AiUsagePurpose, AiUsageTotals, EmailAiUsageStats } from "../../shared/types/ai-usage.ts";
+import type { AiUsageCategory, AiUsageFailure, AiUsagePurpose, AiUsageTotals, EmailAiUsageStats } from "../../shared/types/ai-usage.ts";
 
 function emptyTotals(): AiUsageTotals {
   return {
@@ -12,7 +12,7 @@ function emptyTotals(): AiUsageTotals {
 }
 
 function emptyCategory(): AiUsageCategory {
-  return { ...emptyTotals(), byPurpose: {}, models: [] };
+  return { ...emptyTotals(), byPurpose: {}, models: [], recentFailures: [] };
 }
 
 const measurements = {
@@ -45,7 +45,7 @@ export async function getEmailAiUsageStats(userId: string, {
   windowDays = 7,
 }: { dbClient?: AiUsageDb; now?: Date; windowDays?: number } = {}): Promise<EmailAiUsageStats> {
   const cutoff = new Date(now.getTime() - windowDays * 86_400_000).toISOString();
-  const [boundary, result] = await Promise.all([
+  const [boundary, result, triageFailures, financialFailures] = await Promise.all([
     dbClient.execute({ sql: "SELECT started_at FROM ea_ai_usage_cutover WHERE id = 1", args: [] }),
     dbClient.execute({
       sql: `SELECT run_context, purpose, provider, model, COUNT(*) AS calls,
@@ -63,6 +63,15 @@ export async function getEmailAiUsageStats(userId: string, {
         GROUP BY run_context, purpose, provider, model`,
       args: [userId, cutoff, now.toISOString()],
     }),
+    ...["purpose IN ('triage_cheap', 'triage_strong')", "purpose IN ('extraction', 'verification', 'matching')"].map((purposes) => dbClient.execute({
+      sql: `SELECT event_id, run_id, purpose, origin, provider, model, started_at,
+        provider_latency_ms, outcome, http_status, input_tokens, output_tokens, diagnostics_json
+        FROM ea_ai_usage_events
+        WHERE user_id = ? AND run_context = 'production' AND started_at >= ? AND started_at <= ?
+          AND outcome IN ('provider_error', 'parse_error') AND ${purposes}
+        ORDER BY started_at DESC, event_id DESC LIMIT 20`,
+      args: [userId, cutoff, now.toISOString()],
+    })),
   ]);
   const response: EmailAiUsageStats = {
     generatedAt: now.toISOString(), windowDays,
@@ -72,6 +81,19 @@ export async function getEmailAiUsageStats(userId: string, {
       evaluation: { triage: emptyCategory(), financialEmail: emptyCategory() },
     },
   };
+  for (const [category, failures] of [["triage", triageFailures], ["financialEmail", financialFailures]] as const) {
+    response.contexts.production[category].recentFailures = (failures?.rows ?? []).map((row): AiUsageFailure => ({
+      eventId: String(row.event_id), runId: String(row.run_id),
+      purpose: row.purpose as AiUsagePurpose, origin: row.origin as AiUsageFailure["origin"],
+      provider: row.provider as AiUsageFailure["provider"], model: String(row.model),
+      startedAt: String(row.started_at), providerLatencyMs: Number(row.provider_latency_ms),
+      outcome: row.outcome as AiUsageFailure["outcome"],
+      httpStatus: row.http_status == null ? null : Number(row.http_status),
+      inputTokens: row.input_tokens == null ? null : Number(row.input_tokens),
+      outputTokens: row.output_tokens == null ? null : Number(row.output_tokens),
+      diagnostics: row.diagnostics_json == null ? null : JSON.parse(String(row.diagnostics_json)),
+    }));
+  }
   for (const row of result.rows) {
     const purpose = row.purpose as AiUsagePurpose;
     const context = row.run_context === "evaluation" ? response.contexts.evaluation : response.contexts.production;

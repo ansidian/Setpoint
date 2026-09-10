@@ -66,7 +66,7 @@ async function migrate(filename: string) {
 
 beforeEach(async () => {
   dbClient = createClient({ url: ":memory:" });
-  for (const filename of ["001_ea_tables.sql", "057_email_ai_usage.sql"]) {
+  for (const filename of ["001_ea_tables.sql", "057_email_ai_usage.sql", "072_ai_usage_diagnostics.sql"]) {
     await migrate(filename);
   }
   vi.spyOn(console, "log").mockImplementation(() => {});
@@ -80,6 +80,29 @@ afterEach(() => {
 });
 
 describe("provider attempts to durable AI accounting", () => {
+  it.each(["openai", "anthropic"] as const)("retains %s strong-pass truncation diagnostics from the actual provider adapter", async (provider) => {
+    const budget = provider === "openai" ? 1600 : 1400;
+    const fetchImpl = async (_input: unknown, options?: RequestInit) => {
+      const request = JSON.parse(String(options?.body));
+      // Model the external provider returning a response truncated at the requested limit.
+      const limit = request.max_output_tokens ?? request.max_tokens;
+      return response(provider === "openai"
+        ? { status: "incomplete", incomplete_details: { reason: "max_output_tokens" }, usage: { input_tokens: 100, output_tokens: limit, output_tokens_details: { reasoning_tokens: 1200 } }, output: [{ type: "function_call", name: "submit_email_triage", arguments: '{"private email text":' }] }
+        : { stop_reason: "max_tokens", usage: { input_tokens: 100, output_tokens: limit }, content: [{ type: "text", text: "private email text" }] });
+    };
+    const client = createTriageModelClient({ fetchImpl, config: { cheap: { provider, model }, strong: { provider, model } }, credentialResolver: resolveApiKey });
+    await expect(scoped(() => client.classify({ tier: "strong", email, reason: "test" }))).rejects.toThrow();
+    const rows = await events();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ purpose: "triage_strong", outcome: "parse_error", http_status: 200, output_tokens: budget });
+    expect(JSON.parse(String(rows[0]!.diagnostics_json))).toEqual({
+      responseStatus: provider === "openai" ? "incomplete" : null,
+      stopReason: provider === "openai" ? "max_output_tokens" : "max_tokens",
+      maxOutputTokens: budget, reasoningTokens: provider === "openai" ? 1200 : null, failureCode: "output_limit",
+    });
+    expect(JSON.stringify(rows)).not.toContain("private email text");
+  });
+
   it("retains a rejected cache-fields attempt separately from its successful retry", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     const fetchImpl = async (_input: unknown, options?: RequestInit) => {
@@ -126,6 +149,9 @@ describe("provider attempts to durable AI accounting", () => {
       input_tokens: providerId === "openai" ? 80 : 110,
       cached_input_tokens: providerId === "openai" ? 0 : 25,
     }]);
+    expect(JSON.parse(String((await events())[0]!.diagnostics_json))).toMatchObject({
+      maxOutputTokens: providerId === "openai" ? 1600 : 1400, failureCode: "invalid_response",
+    });
   });
 
   it("counts amount/event audits and a rejected matching result independently", async () => {

@@ -2,8 +2,9 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import type { InStatement } from "@libsql/client";
 import db from "../db/connection.ts";
-import type { AiUsageOrigin, AiUsagePurpose, AiUsageRunContext } from "../../shared/types/ai-usage.ts";
+import type { AiUsageDiagnostics, AiUsageOrigin, AiUsagePurpose, AiUsageRunContext } from "../../shared/types/ai-usage.ts";
 import { estimateAiUsageCost, normalizeAiUsage, type AiUsageTokens } from "./ai-usage-tokens.ts";
+import { captureAiUsageDiagnostics, classifyAiUsageFailure } from "./ai-usage-diagnostics.ts";
 import { withTimeout } from "./fetch-with-timeout.ts";
 
 export interface AiUsageDb {
@@ -54,6 +55,7 @@ export interface AiUsageEvent extends AiUsageTokens {
   httpStatus: number | null;
   estimatedCostUsd: number | null;
   pricingVersion: string | null;
+  diagnostics?: AiUsageDiagnostics | null;
 }
 
 // One event ID is one actual attempt. The only legal rewrite finishes a received
@@ -64,9 +66,9 @@ export async function recordAiUsageEvent(event: AiUsageEvent, { dbClient = db }:
       (event_id, user_id, run_id, run_context, origin, account_id, email_id, provider, model, purpose,
        started_at, finished_at, provider_latency_ms, outcome, http_status, input_tokens, output_tokens,
        cached_input_tokens, cache_creation_input_tokens, cache_creation_5m_tokens, cache_creation_1h_tokens,
-       estimated_cost_usd, pricing_version)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(event_id) DO UPDATE SET outcome = excluded.outcome
+       estimated_cost_usd, pricing_version, diagnostics_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(event_id) DO UPDATE SET outcome = excluded.outcome, diagnostics_json = excluded.diagnostics_json
       WHERE ea_ai_usage_events.user_id = excluded.user_id
         AND ea_ai_usage_events.outcome = 'response_received'
         AND excluded.outcome IN ('succeeded', 'parse_error', 'provider_error')`,
@@ -74,7 +76,8 @@ export async function recordAiUsageEvent(event: AiUsageEvent, { dbClient = db }:
       event.accountId ?? null, event.emailId ?? null, event.provider, event.model, event.purpose,
       event.startedAt, event.finishedAt, event.providerLatencyMs, event.outcome, event.httpStatus,
       event.inputTokens, event.outputTokens, event.cachedInputTokens, event.cacheCreationInputTokens,
-      event.cacheCreation5mTokens, event.cacheCreation1hTokens, event.estimatedCostUsd, event.pricingVersion],
+      event.cacheCreation5mTokens, event.cacheCreation1hTokens, event.estimatedCostUsd, event.pricingVersion,
+      event.diagnostics ? JSON.stringify(event.diagnostics) : null],
   });
 }
 
@@ -84,7 +87,7 @@ interface UsageCall {
 }
 
 export async function trackedAiProviderCall<T>(
-  options: { provider: "openai" | "anthropic"; model: string; purpose: AiUsagePurpose },
+  options: { provider: "openai" | "anthropic"; model: string; purpose: AiUsagePurpose; maxOutputTokens?: number },
   work: (call: UsageCall) => Promise<T>,
 ): Promise<T> {
   const context = runScope.getStore();
@@ -126,6 +129,7 @@ export async function trackedAiProviderCall<T>(
       eventId, startedAt, finishedAt: new Date().toISOString(),
       providerLatencyMs: Math.max(0, performance.now() - started),
       outcome: "response_received", httpStatus,
+      diagnostics: captureAiUsageDiagnostics(options.provider, response, options.maxOutputTokens),
     };
     await save();
   };
@@ -138,7 +142,10 @@ export async function trackedAiProviderCall<T>(
   } catch (error) {
     const hadResponse = received;
     if (!received) await capture(null);
-    if (event) event.outcome = hadResponse ? "parse_error" : "provider_error";
+    if (event) {
+      event.outcome = hadResponse ? "parse_error" : "provider_error";
+      event.diagnostics!.failureCode = classifyAiUsageFailure(error, hadResponse, httpStatus, event.diagnostics!);
+    }
     await save();
     throw error;
   }

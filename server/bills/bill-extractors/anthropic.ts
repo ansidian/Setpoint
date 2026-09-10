@@ -13,6 +13,7 @@ interface AnthropicResponse {
 
 // LLM completions legitimately run long; this deadline is a wedge-breaker
 // (guards against a hung connection), not a latency budget.
+const MAX_OUTPUT_TOKENS = 1400;
 const BILL_EXTRACT_TIMEOUT_MS = 120_000;
 
 const TOOL = {
@@ -75,7 +76,7 @@ export function createAnthropicProvider({
       throw err;
     }
 
-    return trackedAiProviderCall({ provider: "anthropic", model, purpose: usagePurpose }, async (call) => {
+    return trackedAiProviderCall({ provider: "anthropic", model, purpose: usagePurpose, maxOutputTokens: MAX_OUTPUT_TOKENS }, async (call) => {
       const apiRes = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: {
@@ -85,7 +86,7 @@ export function createAnthropicProvider({
         },
         body: JSON.stringify({
           model,
-          max_tokens: 1400,
+          max_tokens: MAX_OUTPUT_TOKENS,
           system: systemPrompt,
           tools: [TOOL],
           tool_choice: { type: "tool", name: "submit_bill" },

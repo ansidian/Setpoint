@@ -243,6 +243,9 @@ function isOpenAICacheParameterError(status: number, text: unknown): boolean {
   return Number(status) === 400 && /prompt_cache_(key|retention)/i.test(String(text || ""));
 }
 
+const OPENAI_MAX_OUTPUT_TOKENS = 1600;
+const ANTHROPIC_MAX_OUTPUT_TOKENS = 1400;
+
 function buildOpenAITriageRequestBody({ model, email, reason, cacheKey, includeCacheFields = true }: { model: string; email: Partial<TriageEmail>; reason: string; cacheKey: string; includeCacheFields?: boolean }): Record<string, unknown> {
   return {
     model,
@@ -255,7 +258,7 @@ function buildOpenAITriageRequestBody({ model, email, reason, cacheKey, includeC
       : {}),
     instructions: TRIAGE_SYSTEM_PROMPT,
     input: compactEmailForPrompt(email, reason),
-    max_output_tokens: 1600,
+    max_output_tokens: OPENAI_MAX_OUTPUT_TOKENS,
     reasoning: { effort: "low" },
     tools: [{
       type: "function",
@@ -399,7 +402,7 @@ export function createTriageModelClient({
             },
           };
           const attempt = (includeCacheFields: boolean) => trackedAiProviderCall({
-            provider: "openai", model: choice.model, purpose: tier === "cheap" ? "triage_cheap" : "triage_strong",
+            provider: "openai", model: choice.model, maxOutputTokens: OPENAI_MAX_OUTPUT_TOKENS, purpose: tier === "cheap" ? "triage_cheap" : "triage_strong",
           }, async (call) => {
             const res = await fetchWithTimeout<TriageFetchResponse>("https://api.openai.com/v1/responses", {
                 ...requestOptions,
@@ -465,7 +468,7 @@ export function createTriageModelClient({
         }
         const started = Date.now();
         const { decision, usage, responseModel } = await trackedAiProviderCall({
-          provider: "anthropic", model: choice.model, purpose: tier === "cheap" ? "triage_cheap" : "triage_strong",
+          provider: "anthropic", model: choice.model, maxOutputTokens: ANTHROPIC_MAX_OUTPUT_TOKENS, purpose: tier === "cheap" ? "triage_cheap" : "triage_strong",
         }, async (call) => {
           const res = await fetchWithTimeout<TriageFetchResponse>("https://api.anthropic.com/v1/messages", {
             method: "POST",
@@ -476,7 +479,7 @@ export function createTriageModelClient({
             },
             body: JSON.stringify({
               model: choice.model,
-              max_tokens: 1400,
+              max_tokens: ANTHROPIC_MAX_OUTPUT_TOKENS,
               // Mark the stable prefix (tools render before system) as ephemeral
               // cacheable so repeated classifications in a tick reuse it instead of
               // re-billing the prompt + schema. Prompt caching is GA — no beta

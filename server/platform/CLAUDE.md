@@ -15,6 +15,7 @@ Cross-domain infrastructure: config, account canonicalization, settings validati
 - `weather.ts` — Pirate Weather fetch and condition → lucide icon mapping
 - `fetch-with-timeout.ts` — shared timeout helper for external provider fetches and non-fetch async operations
 - `ai-usage.ts` — scoped email-AI run attribution and idempotent, best-effort production per-provider-call ledger; tagged evaluations bypass accounting writes
+- `ai-usage-diagnostics.ts` — allowlisted response measurements and normalized failure categories; never raw provider/error content
 - `ai-usage-tokens.ts` — OpenAI/Anthropic cache-token normalization and nullable standard-text pricing estimates
 - `ai-usage-stats.ts` — owner/window/context-isolated triage and financial-email ledger rollups
 - `provider-reauth.ts` — OAuth reconnect signaling: check for `invalid_grant` errors, flag/clear needs-reauth on accounts and Todoist

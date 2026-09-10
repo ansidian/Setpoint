@@ -1,6 +1,7 @@
 import { ArrowDownToLine, Bot, ChevronDown, Coins, Gauge, Layers3, Timer, TriangleAlert } from "lucide-react";
 import type { AiUsagePurpose, AiUsageTotals, EmailAiUsageStats } from "../../../../shared/types/ai-usage";
 import { isDemoMode } from "@/demo/config";
+import AiUsageFailures from "./AiUsageFailures";
 import { Metric, Stat } from "./analyticsPrimitives";
 import { formatCompactNumber, formatUsdEstimate } from "./analyticsFormat";
 
@@ -82,6 +83,8 @@ export default function EmailAiUsageSection({ stats, category }: {
           </section>
         </>
       )}
+
+      <AiUsageFailures failures={usage.recentFailures ?? []} total={usage.failures} />
 
       <details className="group text-[11px] text-muted-foreground">
         <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1.5 rounded-md py-1 transition-[color,transform] duration-150 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 motion-safe:hover:translate-x-px motion-safe:focus-visible:translate-x-px active:scale-[0.99] motion-reduce:transform-none motion-reduce:transition-none sm:min-h-0 [&::-webkit-details-marker]:hidden">

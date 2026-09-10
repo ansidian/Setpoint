@@ -20,6 +20,7 @@ interface OpenAiResponse {
 
 // LLM completions legitimately run long; this deadline is a wedge-breaker
 // (guards against a hung connection), not a latency budget.
+const MAX_OUTPUT_TOKENS = 1600;
 const BILL_EXTRACT_TIMEOUT_MS = 120_000;
 
 const SCHEMA = {
@@ -80,7 +81,7 @@ export function createOpenAiProvider({
       throw err;
     }
 
-    return trackedAiProviderCall({ provider: "openai", model, purpose: usagePurpose }, async (call) => {
+    return trackedAiProviderCall({ provider: "openai", model, purpose: usagePurpose, maxOutputTokens: MAX_OUTPUT_TOKENS }, async (call) => {
       const apiRes = await fetchWithTimeout("https://api.openai.com/v1/responses", {
         method: "POST",
         headers: {
@@ -91,7 +92,7 @@ export function createOpenAiProvider({
           model,
           instructions: systemPrompt,
           input: content,
-          max_output_tokens: 1600,
+          max_output_tokens: MAX_OUTPUT_TOKENS,
           reasoning: { effort: "low" },
           text: {
             format: {
