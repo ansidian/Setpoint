@@ -18,16 +18,15 @@ interface MenuItemProps {
   onClick: () => void;
   onPrepare?: () => void;
   danger?: boolean;
-  isMobile: boolean;
 }
 
-function MenuItem({ icon, label, kbd, onClick, onPrepare, danger = false, isMobile }: MenuItemProps) {
+function MenuItem({ icon, label, kbd, onClick, onPrepare, danger = false }: MenuItemProps) {
   const Icon = icon;
   const [hover, setHover] = useState(false);
 
   return (
     <div
-      className={isMobile ? undefined : "shell-desktop-menu-item"}
+      className={"shell-desktop-menu-item"}
       role="menuitem"
       tabIndex={-1}
       onClick={onClick}
@@ -44,8 +43,7 @@ function MenuItem({ icon, label, kbd, onClick, onPrepare, danger = false, isMobi
         display: "flex",
         alignItems: "center",
         gap: 10,
-        padding: isMobile ? "12px 12px" : "8px 10px",
-        minHeight: isMobile ? "var(--sp-touch-min)" : undefined,
+        padding: "8px 10px",
         borderRadius: 6,
         cursor: "pointer",
         fontSize: 12,
@@ -61,12 +59,11 @@ function MenuItem({ icon, label, kbd, onClick, onPrepare, danger = false, isMobi
   );
 }
 
-function MenuLink({ icon, label, to, onClick, isMobile }: {
+function MenuLink({ icon, label, to, onClick }: {
   icon: LucideIcon;
   label: string;
   to: string;
   onClick: () => void;
-  isMobile: boolean;
 }) {
   const Icon = icon;
   const [hover, setHover] = useState(false);
@@ -74,7 +71,7 @@ function MenuLink({ icon, label, to, onClick, isMobile }: {
   return (
     <Link
       to={to}
-      className={isMobile ? undefined : "shell-desktop-menu-item"}
+      className={"shell-desktop-menu-item"}
       role="menuitem"
       tabIndex={-1}
       onClick={onClick}
@@ -84,8 +81,7 @@ function MenuLink({ icon, label, to, onClick, isMobile }: {
         display: "flex",
         alignItems: "center",
         gap: 10,
-        padding: isMobile ? "12px 12px" : "8px 10px",
-        minHeight: isMobile ? "var(--sp-touch-min)" : undefined,
+        padding: "8px 10px",
         borderRadius: 6,
         textDecoration: "none",
         fontSize: 12,
@@ -100,10 +96,9 @@ function MenuLink({ icon, label, to, onClick, isMobile }: {
   );
 }
 
-function OverflowButton({ open, onClick, isMobile, triggerRef }: {
+function OverflowButton({ open, onClick, triggerRef }: {
   open: boolean;
   onClick: () => void;
-  isMobile: boolean;
   triggerRef: RefObject<HTMLButtonElement | null>;
 }) {
   const [hover, setHover] = useState(false);
@@ -115,7 +110,7 @@ function OverflowButton({ open, onClick, isMobile, triggerRef }: {
     <button
       type="button"
       ref={triggerRef}
-      className={isMobile ? undefined : "shell-more-control"}
+      className={"shell-more-control"}
       title="More actions"
       aria-label="Open more actions"
       aria-haspopup="menu"
@@ -129,12 +124,10 @@ function OverflowButton({ open, onClick, isMobile, triggerRef }: {
       onMouseDown={() => setPressed(true)}
       onMouseUp={() => setPressed(false)}
       style={{
-        padding: isMobile ? 10 : 6,
-        minWidth: isMobile ? 40 : undefined,
-        minHeight: isMobile ? 40 : undefined,
+        padding: 6,
         borderRadius: 8,
-        border: `1px solid ${!isMobile && !active ? "transparent" : active ? "rgba(255,255,255,0.16)" : "rgba(255,255,255,0.08)"}`,
-        background: active ? "rgba(255,255,255,0.06)" : isMobile ? "rgba(255,255,255,0.03)" : "transparent",
+        border: `1px solid ${!active ? "transparent" : active ? "rgba(255,255,255,0.16)" : "rgba(255,255,255,0.08)"}`,
+        background: active ? "rgba(255,255,255,0.06)" : "transparent",
         color: active ? "var(--sp-text)" : "rgba(205,214,244,0.75)",
         cursor: "pointer",
         display: "grid",
@@ -143,13 +136,12 @@ function OverflowButton({ open, onClick, isMobile, triggerRef }: {
         transition: "transform 150ms, background 150ms, border-color 150ms, color 150ms",
       }}
     >
-      <MoreHorizontal size={isMobile ? 18 : 14} />
+      <MoreHorizontal size={14} />
     </button>
   );
 }
 
 export interface OverflowMenuProps {
-  isMobile: boolean;
   menuOpen: boolean;
   onToggleMenu: () => void;
   onCloseMenu: () => void;
@@ -158,7 +150,6 @@ export interface OverflowMenuProps {
 }
 
 export function OverflowMenu({
-  isMobile,
   menuOpen,
   onToggleMenu,
   onCloseMenu,
@@ -180,7 +171,7 @@ export function OverflowMenu({
 
   const [position, setPosition] = useState({ top: 0, left: 0 });
   useLayoutEffect(() => {
-    if (!menuOpen || isMobile) return;
+    if (!menuOpen) return;
     const update = () => {
       const rect = triggerRef.current?.getBoundingClientRect();
       if (rect) setPosition({ top: rect.bottom + 6, left: Math.max(8, Math.min(rect.right - 210, window.innerWidth - 218)) });
@@ -192,7 +183,7 @@ export function OverflowMenu({
       window.removeEventListener("resize", update);
       window.removeEventListener("scroll", update, true);
     };
-  }, [menuOpen, isMobile]);
+  }, [menuOpen]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -286,10 +277,9 @@ export function OverflowMenu({
         if ((panel.scrollTop <= 0 && event.deltaY < 0) || (panel.scrollTop + panel.clientHeight >= panel.scrollHeight - 1 && event.deltaY > 0)) event.preventDefault();
       }}
       style={{
-        position: isMobile ? "absolute" : "fixed",
-        right: isMobile ? 0 : undefined,
-        left: isMobile ? undefined : position.left,
-        top: isMobile ? "calc(100% + 6px)" : position.top,
+        position: "fixed",
+        left: position.left,
+        top: position.top,
         width: 210,
         maxWidth: "calc(100vw - 16px)",
         maxHeight: "calc(100vh - 72px)",
@@ -308,8 +298,7 @@ export function OverflowMenu({
       <MenuItem
         icon={History}
         label="Snapshots"
-        kbd={isMobile ? null : "Y"}
-        isMobile={isMobile}
+        kbd="Y"
         onClick={() => {
           onCloseMenu();
           onOpenHistory?.();
@@ -318,8 +307,7 @@ export function OverflowMenu({
       <MenuItem
         icon={BarChart3}
         label="Analytics"
-        kbd={isMobile ? null : "A"}
-        isMobile={isMobile}
+        kbd="A"
         onClick={() => {
           onCloseMenu();
           onOpenAnalytics?.();
@@ -329,7 +317,6 @@ export function OverflowMenu({
         icon={SettingsIcon}
         label="Settings"
         to="/settings"
-        isMobile={isMobile}
         onClick={onCloseMenu}
       />
     </div>
@@ -337,8 +324,8 @@ export function OverflowMenu({
 
   return (
     <>
-      <OverflowButton open={menuOpen} onClick={onToggleMenu} isMobile={isMobile} triggerRef={triggerRef} />
-      {isMobile ? panel : createPortal(panel, document.body)}
+      <OverflowButton open={menuOpen} onClick={onToggleMenu} triggerRef={triggerRef} />
+      {createPortal(panel, document.body)}
     </>
   );
 }

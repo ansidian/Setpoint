@@ -2,7 +2,7 @@
 
 Utilities-first `/finances` surface; `/finance` remains the retained record/review foreground.
 
-- `FinancesWorkspace.tsx` — view composition, refresh and foreground entrances
+- `FinancesWorkspace.tsx` — view composition, refresh and foreground entrances; mobile uses one compact title/Activity header with shared app actions
 - `src/components/shared/WorkspaceLoading.tsx` — app-level loading owner; Finances registers its wallet hero through startup, lazy code and initial Utilities/Journal reads without remounting the animation
 - `financesNavigation.ts` — discriminated Utilities, schedule and Journal URL targets
 - `financeWorkspaceModel.ts` — date/currency presentation and exact Journal topology
@@ -16,7 +16,7 @@ Utilities-first `/finances` surface; `/finance` remains the retained record/revi
 - `monthlyPaymentModel.ts` — monthly recorded totals, deduplicated transactions, and original sources associated by exact payment IDs or bill date within the same twelve months
 - `paymentPresentationModel.ts` — exact occurrence settlement, independent recorded history and shared row/calendar projection
 - `UtilityDetail.tsx` — direct original-email preview and saved-record actions for a month’s bill
-- `FinanceJournal.tsx` — month-scoped Actual rows with split/pair expansion and calendar-linked day selection; calendar UI/model live in the calendar area
+- `FinanceJournal.tsx` — month-scoped Actual rows with split/pair expansion and calendar-linked day selection; mobile selection filters to that day until Show all days or a month change, desktop selection scrolls the full ledger; calendar UI/model live in the calendar area
 - `finances.css` — dense desktop/mobile layout and control states
 
 No provider calls or inferred financial joins in render trees. Source email uses the existing protected reader. Reads refresh on financial publication, Actual invalidation, focus and tab restoration. Statement history grows from future financial events; there is no backfill workflow.

@@ -1,11 +1,11 @@
 import { publicAssetUrl } from "@/publicAsset";
 
-export function ShellBrand({ isMobile }: { isMobile: boolean }) {
+export function ShellBrand() {
   return (
     <img
       src={publicAssetUrl("setpoint.svg")}
       alt="Setpoint"
-      style={{ height: isMobile ? 18 : 24, width: "auto", flexShrink: 0 }}
+      style={{ height: 24, width: "auto", flexShrink: 0 }}
     />
   );
 }

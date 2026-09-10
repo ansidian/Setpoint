@@ -12,7 +12,6 @@
   transition: transform 150ms, background 150ms, border-color 150ms;
 }
 .system-status-trigger > span { display: inline-grid; place-items: center; }
-.system-status-trigger[data-mobile] { width: 40px; height: 40px; }
 .system-status-trigger[data-attention] { border-color: color-mix(in srgb, var(--status-color) 35%, transparent); background: color-mix(in srgb, var(--status-color) 8%, transparent); }
 .system-status-trigger:hover, .system-status-trigger:focus-visible:where([data-sp-keyboard-focus="true"] *) { transform: translateY(-1px); background: #ffffff10; border-color: #ffffff29; }
 .system-status-trigger:active { transform: translateY(0); background: #ffffff1b; }

@@ -7,7 +7,6 @@ import { memo, useEffect, useRef, useState } from "react";
 import {
   OverflowMenu,
   PaletteTriggerButton,
-  RefreshButton,
   ShellBrand,
   ShellTabs,
 } from "./ShellHeaderChrome";
@@ -41,7 +40,7 @@ export interface ShellHeaderProps extends SystemStatusRetryProps {
 /**
  * ShellHeader — top chrome for the dashboard/inbox shell.
  * Tabs retain their number shortcuts; ⌘K opens the palette.
- * Desktop health owns Sync now; mobile keeps its existing sync control.
+ * Desktop health owns Sync now; mobile exposes shared app actions.
  *
  * Wrapped in React.memo: its callback props are now referentially stable from
  * DashboardShell, so the header chrome no longer re-renders on every dashboard
@@ -143,7 +142,7 @@ function ShellHeader({
     return () => window.removeEventListener("keydown", onKey);
   }, [onTab, anyBlockingOverlayOpen, demoMode, isMobile, tab]);
 
-  if (isMobile && tab === "dashboard") {
+  if (isMobile) {
     const date = new Date();
     return (
       <header className="mobile-dashboard-header" data-testid="shell-header-mobile">
@@ -158,13 +157,13 @@ function ShellHeader({
 
   return (
     <div
-      data-testid={isMobile ? "shell-header-mobile" : "shell-header-desktop"}
+      data-testid="shell-header-desktop"
       style={{
         display: "flex",
         alignItems: "center",
         gap: 12,
-        padding: isMobile ? "10px 12px" : "8px 20px",
-        paddingTop: `calc(${isMobile ? "10px" : "8px"} + var(--sp-safe-top))`,
+        padding: "8px 20px",
+        paddingTop: "calc(8px + var(--sp-safe-top))",
         borderBottom: "1px solid rgba(255,255,255,0.05)",
         background: "color-mix(in srgb, var(--sp-deep) 94%, transparent)",
         position: "sticky",
@@ -172,7 +171,7 @@ function ShellHeader({
         zIndex: 40,
       }}
     >
-      <ShellBrand isMobile={isMobile} />
+      <ShellBrand />
       {demoMode ? (
         <span
           aria-label="Demo data: mocked data"
@@ -180,13 +179,13 @@ function ShellHeader({
             display: "inline-flex",
             alignItems: "center",
             gap: 5,
-            height: isMobile ? 24 : 26,
-            padding: isMobile ? "0 8px" : "0 10px",
+            height: 26,
+            padding: "0 10px",
             borderRadius: 999,
             border: "1px solid color-mix(in srgb, var(--sp-blue) 24%, transparent)",
             background: "color-mix(in srgb, var(--sp-blue) 8%, transparent)",
             color: "var(--sp-blue)",
-            fontSize: isMobile ? 10 : 10.5,
+            fontSize: 10.5,
             fontWeight: 700,
             letterSpacing: 0.4,
             textTransform: "uppercase",
@@ -207,31 +206,23 @@ function ShellHeader({
           Demo data
         </span>
       ) : null}
-      {!isMobile && (
-        <ShellTabs
+      <ShellTabs
           tab={tab}
           onTab={onTab}
           inboxUnreadSignalCount={inboxUnreadSignalCount}
           notesEnabled={!demoMode}
-        />
-      )}
+      />
       <div style={{ flex: 1 }} />
-      {!isMobile && !demoMode && onAskAlfred && (
+      {!demoMode && onAskAlfred && (
         <button type="button" className="shell-alfred-trigger" aria-label="Ask Alfred" onClick={onAskAlfred} aria-expanded={alfredOpen} title="Ask Alfred (⌘\)">
           <MessageSquare size={14} aria-hidden="true" />
           <span>Alfred</span>
         </button>
       )}
-      {!isMobile && <PaletteTriggerButton onOpenPalette={onOpenPalette} />}
-      {isMobile && <RefreshButton
-        isMobile={isMobile}
-        refreshing={refreshing}
-        onQuickRefresh={onQuickRefresh}
-      />}
-      <SystemStatusButton onRetrySource={onRetrySource} sourceRetry={sourceRetry} isMobile={isMobile} systemStatus={systemStatus} refreshing={refreshing} onQuickRefresh={isMobile ? undefined : onQuickRefresh} />
+      <PaletteTriggerButton onOpenPalette={onOpenPalette} />
+      <SystemStatusButton onRetrySource={onRetrySource} sourceRetry={sourceRetry} systemStatus={systemStatus} refreshing={refreshing} onQuickRefresh={onQuickRefresh} />
       <div style={{ position: "relative" }}>
         <OverflowMenu
-          isMobile={isMobile}
           menuOpen={menuOpen}
           onToggleMenu={() => setMenuOpen((value) => !value)}
           onCloseMenu={() => setMenuOpen(false)}

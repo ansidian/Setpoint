@@ -415,7 +415,7 @@ export function DashboardShell({
         overflow: "hidden",
       }}
     >
-      {!(isMobile && (tab === "inbox" || tab === "calendar")) && <ShellHeader
+      {!(isMobile && (tab === "inbox" || tab === "calendar" || tab === "finances")) && <ShellHeader
         isMobile={isMobile}
         tab={tab}
         onTab={setShellTab}
@@ -517,7 +517,7 @@ export function DashboardShell({
         </DashboardTabPanel>
         {/* Finance details portal outside Activity; unmount this surface when leaving. */}
         {tab === "finances" && !settingsOpen && !financialOpen && <DashboardTabPanel tab="finances" active isMobile={isMobile}>
-          {financesRoute.mounted && <Suspense fallback={<WorkspaceLoading surface="finances" />}><FinancesWorkspace search={financesRoute.search} active scrollTopRequestId={financesScrollTopRequestId}/></Suspense>}
+          {financesRoute.mounted && <Suspense fallback={<WorkspaceLoading surface="finances" />}><FinancesWorkspace search={financesRoute.search} active scrollTopRequestId={financesScrollTopRequestId} mobileShellActions={isMobile ? <MobileShellActions onRetrySource={onRetrySource} sourceRetry={sourceRetry} refreshing={bd.refreshing} onQuickRefresh={onQuickRefresh} systemStatus={liveData.systemStatus} onOpenHistory={handleHeaderToggleHistory} onOpenAnalytics={openAnalytics} /> : undefined}/></Suspense>}
         </DashboardTabPanel>}
         <DashboardTabPanel tab="notes" active={tab === "notes"} isMobile={isMobile}>
           {notesMounted && !isMobile && !demoMode ? (

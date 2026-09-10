@@ -10,6 +10,7 @@ import WorkspaceLoading from '../shared/WorkspaceLoading';
 import AnimatedCollapse from '../shared/AnimatedCollapse';
 import AnchoredFloatingPanel from '../shared/pickers/AnchoredFloatingPanel';
 import CalendarDateTimeView from '../shared/pickers/CalendarDateTimeView';
+import useMediaQuery from '../../hooks/useMediaQuery';
 import { DASHBOARD_TZ } from '../../lib/dashboard-helpers';
 
 function scrollToJournalDay(element: HTMLElement) {
@@ -18,6 +19,7 @@ function scrollToJournalDay(element: HTMLElement) {
 }
 
 export default function FinanceJournal({ date,transactionId,data,revision,onNavigate }:{date?:string;transactionId?:string;data:FinanceWorkspace;revision:number;onNavigate:(target:FinanceDestination)=>void}) {
+  const mobile=useMediaQuery('(max-width: 767px)');
   const [range,setRange]=useState<JournalRange|null>(null),[error,setError]=useState(''),[loading,setLoading]=useState(false),[expanded,setExpanded]=useState<string|null>(transactionId || null);
   const initialDate=date && date<=data.end ? date : data.end;
   const [month,setMonth]=useState(initialDate.slice(0,7));
@@ -34,6 +36,9 @@ export default function FinanceJournal({ date,transactionId,data,revision,onNavi
   const visibleRange=range?.start===start && range.end===end ? range : null;
   const days=useMemo(()=>visibleRange ? financeActivityDays(visibleRange,transactionId) : [],[visibleRange,transactionId]);
   const entries=days.flatMap(day=>day.entries);
+  const filteringDay=mobile&&selectedDate!==null;
+  const ledgerDays=days.filter(day=>filteringDay ? day.date===selectedDate : day.entries.length||day.date===selectedDate);
+  const clearDay=()=>{setSelectedDate(null);pendingScroll.current=null;};
   useEffect(()=>{
     const target=pendingScroll.current;
     if(!target || !visibleRange)return;
@@ -53,14 +58,14 @@ export default function FinanceJournal({ date,transactionId,data,revision,onNavi
   const selectedElsewhere=visibleRange?.relatives.find(row=>row.id===transactionId && (row.date<start||row.date>end));
   if (!range && !error) return <WorkspaceLoading surface="finances" />;
   return <section className="fin-journal"><div className="fin-journal-layout">
-    <FinanceActivityCalendar month={month} today={data.end} days={days} selectedDate={selectedDate} previewDate={previewDate} loading={loading||(!visibleRange&&!error)} unavailable={!!error} onSelect={selectDay} onClearSelection={()=>{setSelectedDate(null);pendingScroll.current=null;}} onMonth={changeMonth}/>
-    <div className="fin-journal-ledger"><div className="fin-journal-controls"><div className="fin-between fin-journal-title"><h2>Recent activity</h2><span className="fin-muted">Recorded transactions</span></div>
-    <div className="fin-journal-tools"><JournalDatePicker date={selectedDate || undefined} end={end} maxDate={data.end} onSelect={value=>onNavigate({view:'journal',date:value})}/>{(date||month!==data.end.slice(0,7))&&<button className="fin-recent-days" onClick={()=>{changeMonth(data.end.slice(0,7));onNavigate({view:'journal'});}}><History size={15} aria-hidden="true"/>This month</button>}<span className="fin-journal-period"><span className="fin-journal-period-full">{financeDate(start)} – {financeDate(end)}</span><span className="fin-journal-period-compact" title={`${financeDate(start)} – ${financeDate(end)}`}>{financeDate(start).replace(/, \d{4}$/, '')}–{Number(end.slice(-2))}</span></span></div>
+    <FinanceActivityCalendar preserveSelection={mobile} month={month} today={data.end} days={days} selectedDate={selectedDate} previewDate={previewDate} loading={loading||(!visibleRange&&!error)} unavailable={!!error} onSelect={selectDay} onClearSelection={clearDay} onMonth={changeMonth}/>
+    <div className="fin-journal-ledger"><div className="fin-journal-controls"><div className="fin-between fin-journal-title"><h2>{filteringDay?'Daily activity':'Recent activity'}</h2><span className="fin-muted">Recorded transactions</span></div>
+    <div className="fin-journal-tools"><JournalDatePicker date={selectedDate || undefined} end={end} maxDate={data.end} onSelect={value=>onNavigate({view:'journal',date:value})}/>{filteringDay?<button className="fin-recent-days" onClick={clearDay}>Show all days</button>:(date||month!==data.end.slice(0,7))&&<button className="fin-recent-days" onClick={()=>{changeMonth(data.end.slice(0,7));onNavigate({view:'journal'});}}><History size={15} aria-hidden="true"/>This month</button>}<span className="fin-journal-period"><span className="fin-journal-period-full">{financeDate(start)} – {financeDate(end)}</span><span className="fin-journal-period-compact" title={`${financeDate(start)} – ${financeDate(end)}`}>{filteringDay?financeDate(selectedDate).replace(/, \d{4}$/, ''):<>{financeDate(start).replace(/, \d{4}$/, '')}–{Number(end.slice(-2))}</>}</span></span></div>
     </div>
     {loading&&<p role="status">Loading Journal…</p>}{error&&<p role="alert">{error}</p>}{visibleRange?.truncated&&<p className="fin-notice">Showing the newest available records. Daily totals are unavailable because this month’s history is incomplete.</p>}
     {transactionId&&visibleRange&&!selectedExists&&(selectedElsewhere?<button className="fin-link" onClick={()=>onNavigate({view:'journal',date:selectedElsewhere.date,transactionId})}>View recorded transaction · {financeDate(selectedElsewhere.date)} <ArrowRight size={14}/></button>:<p role="status">This transaction is unavailable in the selected dates.</p>)}
     {visibleRange&&!entries.length&&!selectedDate&&<p className="fin-empty">No recorded transactions in these dates.</p>}
-    {days.filter(day=>day.entries.length||day.date===selectedDate).map(day=><section className="fin-journal-day" data-payment-date={day.date} key={day.date} data-selected={day.date===selectedDate} aria-label={financeDate(day.date)} ref={element=>{if(element)dayRefs.current.set(day.date,element);else dayRefs.current.delete(day.date);}}>
+    {ledgerDays.map(day=><section className="fin-journal-day" data-payment-date={day.date} key={day.date} data-selected={day.date===selectedDate} aria-label={financeDate(day.date)} ref={element=>{if(element)dayRefs.current.set(day.date,element);else dayRefs.current.delete(day.date);}}>
       <h3 className="fin-datehead">{financeDate(day.date)}{day.date===selectedDate&&<span>Selected day</span>}</h3>
       {!day.entries.length&&<p className="fin-empty">{day.complete?'No recorded transactions on this day.':'No loaded records on this day. History is incomplete.'}</p>}
       {day.entries.map(entry=>{

@@ -305,14 +305,14 @@
 @media(max-width:767px){
  .fin-view-nav>span{white-space:nowrap;max-width:none;font-size:10px}
  .fin-workspace[data-view=journal]{display:block;overflow-y:auto}
- .fin-workspace[data-view=journal]>.fin-view-nav{position:static;height:56px;padding:4px 0;background:#1e1e2e}
+ .fin-workspace[data-view=journal]>.fin-view-nav{position:static;height:56px;padding:4px 0;background:transparent}
  .fin-journal{overflow:visible;scrollbar-gutter:auto}
  .fin-journal-layout>.fin-activity-calendar{position:static}
  .fin-journal-controls{display:contents}
  .fin-journal-controls::after{display:none}
  .fin-journal-title{padding:0 4px}
  .fin-journal-title>span{display:none}
- .fin-journal-controls .fin-journal-tools{position:static;isolation:isolate;flex-wrap:nowrap;gap:8px;margin:8px 0 0;padding:4px;background:#1e1e2e;border-radius:0 0 8px 8px;box-shadow:0 10px 12px -10px #11111b}
+ .fin-journal-controls .fin-journal-tools{position:static;isolation:isolate;flex-wrap:nowrap;gap:8px;margin:8px 0 0;padding:4px;background:transparent;border-radius:0;box-shadow:none}
  .fin-journal-tools .fin-journal-period{flex-basis:auto;margin-left:auto;white-space:nowrap}
  .fin-journal-period-full,.fin-date-trigger-label{display:none}
  .fin-journal-period-compact,.fin-date-trigger-compact{display:inline}
@@ -334,3 +334,13 @@
 .fin-payment-account dd { margin:0; color:var(--sp-text); overflow-wrap:anywhere; }
 .fin-payment-date { display:block; }
 .fin-record-status { flex-wrap:wrap; }
+
+.fin-mobile-surface{display:flex;flex-direction:column;height:100%;min-height:0}
+.fin-mobile-surface>.fin-workspace{flex:1;width:100%;height:auto;min-height:0;padding-top:0}
+.fin-mobile-heading h1{font-size:18px;font-weight:650}
+.fin-mobile-heading .fin-foreground-links{padding:0;flex-wrap:nowrap;font-size:11px}
+.fin-mobile-heading .fin-foreground-links>button{display:inline-flex;align-items:center;gap:4px;min-height:var(--sp-touch-min);padding:8px;border:0;border-radius:6px;background:transparent;color:inherit;font:inherit;cursor:pointer;transition:background 160ms,transform 160ms}
+.fin-mobile-heading .fin-foreground-links>button:hover{background:#ffffff12;transform:translateY(-1px)}
+.fin-mobile-heading .fin-foreground-links>button:focus-visible{outline:2px solid var(--ea-accent);outline-offset:-2px;background:#ffffff12;transform:translateY(-1px)}
+.fin-mobile-heading .fin-foreground-links>button:active{background:#ffffff1b;transform:scale(.98)}
+@media(prefers-reduced-motion:reduce){.fin-mobile-heading .fin-foreground-links>button{transition:none;transform:none!important}}

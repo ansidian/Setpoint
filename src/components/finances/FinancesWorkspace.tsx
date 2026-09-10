@@ -1,3 +1,6 @@
+import type { ReactNode } from 'react';
+import { publicAssetUrl } from '@/publicAsset';
+import '../shell/MobileShell.css';
 import CalendarPaymentPreview from './CalendarPaymentPreview';
 import { getScheduleUrl } from './recurringPaymentModel';
 import { useEffect,useState,useCallback,useRef } from 'react';
@@ -27,7 +30,7 @@ import FinanceDetailDrawer from './FinanceDetailDrawer';
 import type { FinancePayment } from '../../hooks/calendar/financePaymentsModel';
 import './finances.css';
 
-export default function FinancesWorkspace({search,active,scrollTopRequestId=0}:{search:string;active:boolean;scrollTopRequestId?:number}) {
+export default function FinancesWorkspace({search,active,scrollTopRequestId=0,mobileShellActions}:{search:string;active:boolean;scrollTopRequestId?:number;mobileShellActions?:ReactNode}) {
   const navigate=useNavigate();
   const destination=financeDestination(search);
   const [data,setData]=useState<WorkspaceData|null>(null),[error,setError]=useState(''),[revision,setRevision]=useState(0),[query,setQuery]=useState('');
@@ -90,7 +93,8 @@ export default function FinancesWorkspace({search,active,scrollTopRequestId=0}:{
   const detail=selected&&<FinanceDetailDrawer triggerRef={triggerRef} onClose={closeDetail} identity={selected.id}>
     <PaymentDetail month={paymentCalendar.month} row={selected} historyComplete={model?.historyComplete ?? false} onNavigate={go} onForeground={href=>navigate(href)} onClose={closeDetail} actions={(!data?.budgetId||paymentScheduleIds.length>0)&&<div className="fin-external-actions">{!data?.budgetId&&<button disabled={isDemoMode()||!actualUrl} onClick={()=>actualUrl && window.open(actualUrl,'_blank','noopener,noreferrer')}>Open in Actual</button>}{paymentScheduleIds.map(id=><button className="fin-pay-online" key={id} disabled={isDemoMode()} onClick={()=>window.open(payLinks[id], '_blank','noopener,noreferrer')}>Pay online<ArrowUpRight size={14} aria-hidden="true"/></button>)}</div>}/>
   </FinanceDetailDrawer>;
-  return <main ref={workspaceRef} className="fin-workspace" data-view={destination.view}><header className="fin-heading"><h1>Finances</h1><div className="fin-foreground-links"><button className="relative" onClick={()=>navigate(financialHref({view:'all'}))}>Activity<ArrowUpRight size={14} aria-hidden="true"/><FinancialAttentionBadge count={attentionCount} floating/></button></div></header>
+  const heading=<header className={mobileShellActions ? "fin-heading fin-mobile-heading mobile-dashboard-header" : "fin-heading"}><h1>{mobileShellActions&&<img src={publicAssetUrl("favicon.svg")} alt="" width={22} height={22}/>}Finances</h1><div className="fin-foreground-links"><button className="relative" onClick={()=>navigate(financialHref({view:'all'}))}>Activity<ArrowUpRight size={14} aria-hidden="true"/><FinancialAttentionBadge count={attentionCount} floating/></button></div>{mobileShellActions}</header>;
+  return <div className={mobileShellActions ? "fin-mobile-surface" : undefined} style={mobileShellActions ? undefined : {display:"contents"}}>{mobileShellActions&&heading}<main ref={workspaceRef} className="fin-workspace" data-view={destination.view}>{!mobileShellActions&&heading}
     <nav className="fin-view-nav" aria-label="Finance view"><button aria-current={destination.view!=='journal'?'page':undefined} onClick={()=>go({view:'utilities'})}>Utilities</button><button aria-current={destination.view==='journal'?'page':undefined} onClick={()=>go({view:'journal'})}>Journal</button><span>{data?.updatedAt?`Actual synced ${financeDate(data.updatedAt)}`:data?'Sync time unavailable':''}</span></nav>
     {!data&&!error&&<WorkspaceLoading surface="finances" />} {error&&<p role="alert">{error}</p>}{data?.issues.map(issue=><p className="fin-notice" key={issue}>{issue}{issue.includes('configured payee')&&<button className="fin-link" onClick={()=>navigate('/settings?tab=finance#utility-mappings')}>Fix mapping<ArrowUpRight size={14}/></button>}</p>)}{data?.truncated&&<p className="fin-notice">Available history is incomplete. Missing months are not zero spending.</p>}
     {data&&(destination.view==='journal'?<FinanceJournal key={`${destination.date || "recent"}:${destination.transactionId || ""}`} date={destination.date} transactionId={destination.transactionId} data={data} revision={revision} onNavigate={go}/>:<>
@@ -107,5 +111,5 @@ export default function FinancesWorkspace({search,active,scrollTopRequestId=0}:{
       </aside></div>
     </>)}
     {active&&!selected&&destination.view!=='journal'&&previewRow&&calendarPreview&&<CalendarPaymentPreview key={previewRow.id} row={previewRow} date={calendarPreview.date} anchorRef={previewTriggerRef} payLinks={previewPayLinks} onClose={()=>setCalendarPreview(null)} onDetails={()=>{triggerRef.current=previewTriggerRef.current;openRow(previewRow);}} onNavigate={go}/>}
-  </main>;
+  </main></div>;
 }

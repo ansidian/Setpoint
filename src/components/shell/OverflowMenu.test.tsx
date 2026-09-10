@@ -19,7 +19,7 @@ function Harness(overrides: Partial<OverflowMenuProps> = {}) {
     ...render(
       <MemoryRouter>
         <OverflowMenu
-          isMobile={overrides.isMobile ?? false}
+
           menuOpen={overrides.menuOpen ?? false}
           onToggleMenu={onToggleMenu}
           onCloseMenu={onCloseMenu}
@@ -37,7 +37,7 @@ function StatefulHarness({ history = false }: { history?: boolean }) {
   return (
     <MemoryRouter>
       <OverflowMenu
-        isMobile={false}
+
         menuOpen={menuOpen}
         onToggleMenu={() => setMenuOpen((open) => !open)}
         onCloseMenu={() => setMenuOpen(false)}
@@ -114,7 +114,7 @@ describe("OverflowMenu menu-button semantics + keyboard model", () => {
               Bump {bump}
             </button>
             <OverflowMenu
-              isMobile={false}
+
               menuOpen
               onToggleMenu={vi.fn()}
               // Inline, non-memoized: a fresh function identity every render.

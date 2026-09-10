@@ -134,11 +134,10 @@ export function SystemStatusDetails({ status, onNavigate, onRetrySource, sourceR
   </div>;
 }
 
-export function SystemStatusButton({ systemStatus, isMobile = false, refreshing = false, onQuickRefresh, onRetrySource, sourceRetry }: {
+export function SystemStatusButton({ systemStatus, refreshing = false, onQuickRefresh, onRetrySource, sourceRetry }: {
   refreshing?: boolean;
   onQuickRefresh?: () => unknown;
   systemStatus?: SystemStatusView | null;
-  isMobile?: boolean;
 } & SystemStatusRetryProps) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -168,13 +167,13 @@ export function SystemStatusButton({ systemStatus, isMobile = false, refreshing 
   const close = () => { setOpen(false); triggerRef.current?.focus(); };
   const Glyph = attention ? AlertTriangle : state === "checking" ? CircleDashed : Activity;
   return <>
-    <button ref={triggerRef} type="button" className="system-status-trigger" data-mobile={isMobile || undefined} data-attention={attention || undefined}
+    <button ref={triggerRef} type="button" className="system-status-trigger" data-attention={attention || undefined}
       style={{ "--status-color": STATE_COLOR[state] } as CSSProperties}
-      title={`System status: ${STATE_COPY[state]}${!isMobile ? " · Sync now: R" : ""}`}
+      title={`System status: ${STATE_COPY[state]} · Sync now: R`}
       aria-label={`System status: ${STATE_COPY[state]}`} aria-busy={busy} aria-expanded={open} aria-haspopup="dialog"
       onClick={() => setOpen((value) => !value)}>
       <span aria-hidden="true" data-testid="system-status-signal" className={busy ? "system-status-signal--busy" : undefined} style={{ "--system-status-signal-color": STATE_COLOR[state] } as CSSProperties}>
-        <Glyph size={isMobile ? 15 : 13} strokeWidth={2} />
+        <Glyph size={13} strokeWidth={2} />
       </span>
     </button>
     <span className="sr-only" role="status" aria-live="polite">{refreshing ? "Syncing…" : `System status: ${STATE_COPY[state]}`}</span>
