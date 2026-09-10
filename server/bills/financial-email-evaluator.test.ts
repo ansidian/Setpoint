@@ -1,6 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import type { BillCandidate } from "../../shared/types/bills.ts";
 import { evaluateFinancialEmail } from "./financial-email-evaluator.ts";
+import db from "../db/connection.ts";
+
+// test-architecture: allow-boundary-mock -- Use migrated ephemeral SQLite at the database boundary so the real evaluator and planner never read the development database.
+vi.mock("../db/connection.ts", async () => {
+  const { createMigratedDb } = await import("../triage/triage-worker.test-utils.ts");
+  return { default: await createMigratedDb() };
+});
+
+afterAll(() => db.close());
 
 function candidate(overrides: BillCandidate = {}): BillCandidate {
   return {

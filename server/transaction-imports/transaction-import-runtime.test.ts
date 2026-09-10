@@ -2,6 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createTransactionImportRuntime } from "./transaction-import-runtime.ts";
 import { createFinancialEventStore } from "../financial-events/financial-event-store.ts";
 import { createFinancialEventIntake } from "../financial-events/financial-event-intake.ts";
+import { createFinancialEventWorker } from "../financial-events/financial-event-service.ts";
+import { createFinancialEventExecutor } from "../financial-events/financial-event-operation.ts";
+import { createFinancialEventCompletion } from "../financial-events/financial-event-completion.ts";
+import { createMigratedDb } from "../triage/triage-worker.test-utils.ts";
 import { createEmailIndexTestDb, seedEmailAccount, seedIndexedEmail } from "../email/test-utils/email-index-db.ts";
 
 const workerMock = vi.hoisted(() => ({
@@ -286,5 +290,79 @@ describe("transaction import runtime", () => {
       await runtime.stop();
       database.close();
     }
+  });
+
+  it("settles an owner-confirmed record before waiting on unrelated capture", async () => {
+    vi.useFakeTimers();
+    const database = await createMigratedDb();
+    await database.execute("UPDATE ea_financial_workflow_state SET cutover_at = '2000-01-01T00:00:00Z'");
+    await seedIndexedEmail(database, { uid: 'ready' });
+    const store = createFinancialEventStore(database);
+    await createFinancialEventCompletion({ store }).complete('user-1', {
+      emailUid:'ready', documentRevision:1, eventRevision:null,
+      entry:{ kind:'expense', amount:12, date:'2026-09-06', accountId:'card', payee:'Market', notes:'' },
+    });
+    let recorded = false;
+    const finance = createFinancialEventWorker({ store, afterWrite:async () => {}, execute:createFinancialEventExecutor({
+      financial:async (_owner, _input, mode) => {
+        if (mode === 'write_once') recorded = true;
+        return { outcome:mode === 'preview' ? 'would_add' : 'added', budgetId:'budget', transactionId:recorded ? 'entry' : undefined, reason:'Checked' };
+      },
+    }) });
+    let release!: () => void;
+    const blocked = new Promise<void>(resolve => { release = resolve; });
+    let started!: () => void;
+    const captureStarted = new Promise<void>(resolve => { started = resolve; });
+    const runtime = createTransactionImportRuntime(workerMock, finance, {
+      recoverStaleClaims:async () => 0, getNextWakeAt:async () => null,
+      processNextPage:async () => { started(); await blocked; return false; },
+    });
+    try {
+      await runtime.start();
+      await vi.advanceTimersByTimeAsync(0);
+      await captureStarted;
+      expect(recorded).toBe(true);
+      expect(await store.getEventForEmail('user-1', 'ready')).toMatchObject({ status:'settled' });
+    } finally {
+      release(); await runtime.stop(); database.close();
+    }
+  });
+
+  it.each(['saturated capture', 'a slow import batch'])("honors a two-second verification deadline around %s", async (background) => {
+    vi.useFakeTimers();
+    const database = await createMigratedDb();
+    await database.execute("UPDATE ea_financial_workflow_state SET cutover_at = '2000-01-01T00:00:00Z'");
+    await seedIndexedEmail(database, { uid:'uncertain' });
+    const store = createFinancialEventStore(database);
+    await createFinancialEventCompletion({ store }).complete('user-1', {
+      emailUid:'uncertain', documentRevision:1, eventRevision:null,
+      entry:{ kind:'expense', amount:12, date:'2026-09-06', accountId:'card', payee:'Market', notes:'' },
+    });
+    let entries = 0;
+    const finance = createFinancialEventWorker({ store, afterWrite:async () => {}, execute:createFinancialEventExecutor({
+      financial:async (_owner, _input, mode) => {
+        if (mode === 'write_once') { entries++; throw new Error('Lost reply'); }
+        return { outcome:mode === 'preview' ? 'would_add' : 'already_present', budgetId:'budget', transactionId:entries ? 'entry' : undefined, reason:'Checked' };
+      },
+    }) });
+    let release!: () => void;
+    const blocked = new Promise<boolean>(resolve => { release = () => resolve(false); });
+    if (background === 'a slow import batch') workerMock.processNextItemBatch.mockImplementationOnce(() => blocked);
+    const runtime = createTransactionImportRuntime(workerMock, finance, {
+      recoverStaleClaims:async () => 0, getNextWakeAt:async () => Date.now(), processNextPage:async () => true,
+    });
+    try {
+      await runtime.start();
+      await vi.advanceTimersByTimeAsync(0); await flushDrain();
+      expect(await store.getEventForEmail('user-1', 'uncertain')).toMatchObject({ status:'waiting', nextAttemptAt:Date.now() + 2000 });
+      await vi.advanceTimersByTimeAsync(1999);
+      expect((await store.getEventForEmail('user-1', 'uncertain'))?.status).toBe('waiting');
+      await vi.advanceTimersByTimeAsync(1);
+      if (background === 'a slow import batch') release();
+      else await vi.advanceTimersToNextTimerAsync();
+      await flushDrain();
+      expect(await store.getEventForEmail('user-1', 'uncertain')).toMatchObject({ status:'settled' });
+      expect(entries).toBe(1);
+    } finally { release(); await runtime.stop(); database.close(); }
   });
 });

@@ -23,3 +23,31 @@ it('never guesses fees from provider policy, notes, ambiguous links, or conflict
 it('does not turn partial recorded amounts into a false total', () => {
   expect(monthlyPaymentAmounts([payment('a'), payment('b', { amountCents: null })], [], '2026-09')[11]).toMatchObject({ amountCents: null, paymentCount: 2 });
 });
+
+it('attaches original bills to exact payments by recording month, preserving their distinct due dates', () => {
+  const original = statement({ dueDate:'2026-08-31', paymentDate:'2026-09-03' });
+  const result = monthlyPaymentAmounts([payment('paid', { date:'2026-09-03' })], [original, original], '2026-09');
+  expect(result[10]).toMatchObject({ month:'2026-08', payments:[], statements:[] });
+  expect(result[11]?.payments[0]?.statements).toEqual([original]);
+  expect(result[11]?.statements).toEqual([]);
+});
+
+it('keeps statement-only months available without fabricating a payment or matching by amount', () => {
+  const unpaid = statement({ paymentTransactionIds:[], paymentDate:null, recordedTotalCents:null, feeCents:null });
+  const credit = statement({ id:'credit', nothingDue:true, dueDate:null, statementDate:'2026-08-01', paymentTransactionIds:[], paymentDate:null, amountCents:0 });
+  const old = statement({ id:'old', dueDate:'2025-09-01', paymentTransactionIds:[], paymentDate:null });
+  const result = monthlyPaymentAmounts([], [unpaid, credit, old], '2026-09');
+  expect(result).toHaveLength(12);
+  expect(result[11]).toMatchObject({ amountCents:null, paymentCount:0, payments:[], statements:[unpaid] });
+  expect(result[10]?.statements).toEqual([credit]);
+  expect(result.flatMap(month => month.statements)).not.toContainEqual(old);
+  expect(monthlyPaymentAmounts([payment('unrelated')], [unpaid], '2026-09')[11]).toMatchObject({ payments:[{ statements:[] }], statements:[unpaid] });
+});
+
+it('shows a shared source once within a month and preserves unavailable recorded-payment evidence', () => {
+  const shared = statement({ paymentTransactionIds:['a','b'] });
+  const unavailable = statement({ id:'unavailable', paymentTransactionIds:['missing'], paymentDate:'2026-08-30', paymentRecorded:true });
+  const result = monthlyPaymentAmounts([payment('a'),payment('b')], [shared, unavailable], '2026-09');
+  expect(result[11]?.payments.flatMap(payment => payment.statements)).toEqual([shared]);
+  expect(result[10]).toMatchObject({ amountCents:null, statements:[unavailable] });
+});

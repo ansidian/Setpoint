@@ -34,11 +34,11 @@
 .fin-workspace .fin-activity-calendar .fac-expand,.fac-week-navigation{display:none}
 .fac-day-summary{margin-top:12px;padding-top:12px;border-top:1px solid #39394e;min-height:72px}
 .fac-day-summary>div{display:flex;justify-content:space-between;gap:8px;font-size:11px}
-.fac-day-summary strong{font-weight:500}.fac-day-summary>div>span{color:#a6adc8}
-.fac-day-summary dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:8px 0 0}
+.fac-day-summary>div:first-child>strong{font-size:13px;font-weight:600;color:var(--sp-text)}.fac-day-summary>div>span{color:#a6adc8}
+.fac-day-summary dl{display:flex;justify-content:space-around;gap:12px;margin:12px 0 0}
+.fac-day-summary dl>div{flex:1;min-width:0;text-align:center}
 .fin-workspace .fin-activity-calendar .fac-day-summary dd{font-size:16px;font-weight:500;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .fin-workspace .fin-activity-calendar .fac-day-summary p{font-size:10px;margin-top:8px}
-.fin-workspace .fin-activity-calendar .fac-hint{font-size:10px;color:#a6adc8;margin-top:12px}
 @container(min-width:530px){.fac-exact{display:inline}.fac-compact{display:none}.fac-amounts{font-size:11px}.fin-workspace .fin-activity-calendar .fac-day{height:64px;padding:4px}}
 @container(max-width:355px){.fac-amounts{display:none}.fac-markers{display:flex}.fin-workspace .fin-activity-calendar .fac-day{height:52px;align-items:center;padding:4px 2px;gap:2px}}
 @media(max-width:767px){
@@ -53,7 +53,7 @@
   .fin-workspace .fin-activity-calendar .fac-day{height:44px;min-height:44px;align-items:center;padding:4px 2px;gap:2px}
   .fac-day-summary{min-height:0;margin-top:4px;padding-top:8px}
   .fac-day-summary>div{font-size:10px}
-  .fac-day-summary dl>div{display:flex;align-items:baseline;gap:6px}
+  .fac-day-summary dl>div{display:flex;flex-direction:column;align-items:center;gap:2px}
   .fin-workspace .fin-activity-calendar .fac-day-summary dd{margin:0;font-size:12px}
   .fac-day-summary dl{margin:4px 0 0}
   .fin-workspace .fin-activity-calendar .fac-controls>button{min-height:44px}
@@ -63,7 +63,6 @@
   .fin-activity-calendar[data-expanded=false] .fac-day[data-week=false]{display:none}
   .fin-activity-calendar[data-expanded=false] .fac-month-navigation{display:none}
   .fin-activity-calendar[data-expanded=false] .fac-week-navigation{display:flex}
-  .fin-workspace .fin-activity-calendar .fac-hint{display:none}
 }
 @media(prefers-reduced-motion:reduce){.fac-expand>svg{transition:none}}
 

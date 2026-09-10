@@ -20,7 +20,7 @@ Deterministic Gmail email-to-transaction parsing for arriving receipts. This dom
 - `transaction-import-service.ts` — arrival preparation and saved-item confirmation
 - `transaction-import-worker.ts` — Actual preview/commit drains; settled batches publish the shared financial signal and recovered original imports reuse Actual invalidation
 - `transaction-import-arrivals.ts` — transient Gmail normalized-email adapter used by the non-blocking sync hook
-- `transaction-import-runtime.ts` — shared bounded financial-document/event and legacy-import drains, startup stale recovery, and graceful shutdown
+- `transaction-import-runtime.ts` — shared bounded financial-document/event and legacy-import drains, startup stale recovery, ready-event priority between provider work, durable recovery deadlines, and graceful shutdown
 
 - `transaction-import.test-utils.ts` — shared saved-state reader and profile-authorized receipt fixture preparation for ephemeral import behavior tests
 

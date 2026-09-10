@@ -3,9 +3,9 @@ import { readActualMetadataProjection } from '../actual/actual.ts';
 import { readJournalRange } from '../actual/actual.ts';
 import { readBillsMirrorRange } from '../bills/bills-service.ts';
 import { financialActivityReader } from '../financial-activity/financial-activity.ts';
-import { projectStatement, linkStatementPayment, hydrateLegacyOccurrencePayments } from './finance-statement-model.ts';
-import type { BillCandidate } from '../../shared/types/bills.ts';
-import type { FinanceWorkspace, UtilityIdentity, UtilityStatement } from '../../shared/types/finances.ts';
+import { linkStatementPayment, hydrateLegacyOccurrencePayments } from './finance-statement-model.ts';
+import { readUtilityStatements } from './finance-statement-sources.ts';
+import type { FinanceWorkspace, UtilityIdentity } from '../../shared/types/finances.ts';
 
 export async function readFinanceWorkspace(userId: string): Promise<FinanceWorkspace> {
   const end = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
@@ -36,10 +36,8 @@ export async function readFinanceWorkspace(userId: string): Promise<FinanceWorks
   if (activities.status === 'rejected') result.issues.push('Saved record links are temporarily unavailable.');
   if (mirror.status === 'rejected') result.issues.push('Recurring payment schedules are unavailable.');
   if (!identities.length) result.issues.push('No verified utility identities are configured for this budget.');
-  const sources = await db.execute({ sql: `SELECT d.email_uid,d.candidate_json,e.subject,e.body_text,e.from_address,e.email_date_utc
-    FROM ea_financial_documents d JOIN ea_email_index e ON e.user_id=d.user_id AND e.uid=d.email_uid
-    WHERE d.user_id=? AND d.candidate_json IS NOT NULL AND e.email_date_utc>=? ORDER BY e.email_date_utc DESC LIMIT 501`, args: [userId, range.start] });
-  result.truncated ||= sources.rows.length > 500;
+  const sources = await readUtilityStatements(userId, budgetId, range.start);
+  result.truncated ||= sources.truncated;
   const usedSchedules = new Set<string>();
   for (const configured of identities) {
     const identity = { ...configured, scheduleIds: [...new Set([...configured.scheduleIds, ...(meta?.schedules || [])
@@ -47,19 +45,7 @@ export async function readFinanceWorkspace(userId: string): Promise<FinanceWorks
       .flatMap(schedule => schedule.id ? [schedule.id] : [])])] };
     if (meta && !meta.payees.some(payee => payee.id === identity.payeeId)) result.issues.push(`${identity.label}: the configured payee is unavailable in this budget.`);
     identity.scheduleIds.forEach(id => usedSchedules.add(id));
-    const statements = new Map<string, UtilityStatement>();
-    for (const source of sources.rows.slice(0, 500)) {
-      if (!identity.sourceSenders.includes(String(source.from_address).toLowerCase())) continue;
-      if (identity.sourceIdentityText && !`${source.subject} ${source.body_text}`.toLowerCase().includes(identity.sourceIdentityText)) continue;
-      const uid = String(source.email_uid);
-      try {
-        const candidate = JSON.parse(String(source.candidate_json)) as BillCandidate;
-        const statement = projectStatement({ id: `managed:${uid}`, utilityId: identity.id, emailUid: uid,
-          subject: String(source.subject || ''), receivedAt: String(source.email_date_utc || ''), body: String(source.body_text || ''), candidate });
-        if (!statement.issue || candidate.document_role === 'statement') statements.set(uid, statement);
-      } catch { /* Invalid source facts cannot become a billed amount. */ }
-    }
-    const projected = [...statements.values()].map(statement => {
+    const projected = sources.statements.filter(statement => statement.utilityId === identity.id).map(statement => {
       const record = records.find(activity => activity.emailUids.includes(statement.emailUid));
       const occurrence = occurrences.find(item => identity.scheduleIds.includes(item.scheduleId) && item.next_date === statement.dueDate);
       let effective = { ...statement, paymentRecorded: statement.paymentRecorded || !!occurrence?.paid };

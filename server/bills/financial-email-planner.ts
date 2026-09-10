@@ -46,7 +46,7 @@ import type {
 import type { TransactionQueryResult, TransactionRecord } from "../../shared/types/transactions.ts";
 
 export { financialEmailSourceIdentity } from "./financialEmailSourceIdentity.ts";
-export { financialProfileCycleKey } from "./financialProfilePlanning.ts";
+export { financialProfileCycleKey, matchFinancialProfile } from "./financialProfilePlanning.ts";
 export { selectSemanticBillAmount } from "./billSemanticAmountPolicy.ts";
 export { financialEmailAutomationEnabled } from "./financialEmailAutomationPolicy.ts";
 export { hasFinancialSemanticConflict, hasStrongFinancialType, hasVerbatimFinancialEvidence, isIgnoredFinancialNotice } from "./financialEmailClassificationPolicy.ts";
@@ -461,7 +461,10 @@ export function createFinancialEmailPlanner({
           `${input.email?.subject || ""}\n${input.email?.body || input.email?.body_snippet || ""}`)
         : { resolution: match.resolution, inference: null };
       const today = todayYmd(now());
+      // Managed mapped entries reconcile against live SDK records at admission;
+      // their configured targets do not need a year of discovery history.
       const historyResult: TransactionQueryResult = needsActualEvidence && metadataAvailable
+        && !(input.source === "financial_event" && mapped.inference)
         ? await transactionReader(userId, {
             start: addDaysYmd(today, -365),
             end: today,

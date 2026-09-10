@@ -21,6 +21,49 @@ afterEach(async () => {
 });
 
 describe("Actual financial operation SDK compatibility", () => {
+  it("binds and verifies submitted payee and category through the managed operation facade", async () => {
+    dataDir = await createTestTempDir("actual-financial-handshake-");
+    const internal = await actualApi.init({ dataDir, verbose: false });
+    started = true;
+    await internal.send("create-budget", { budgetName: "Verified transaction fields", avoidUpload: true });
+    const accountId = await actualApi.createAccount({ name: "Fictional checking", offbudget: false });
+    const payeeId = await actualApi.createPayee({ name: "Fictional shop" });
+    const categoryId = (await actualApi.getCategories()).find((category) => "group_id" in category)!.id;
+    const sdk = { ...actualApi, sync: async () => undefined } as unknown as ActualFinancialSdk;
+    const execute = createFinancialEventExecutor({ financial: (_userId, input, mode) =>
+      reconcileActualFinancialOperation(sdk, "isolated", input, mode) });
+    const operation = { executor: "financial" as const, input: {
+      kind: "transaction" as const, identityKey: "financial-event:handshake", accountId,
+      payee: "Fictional shop", payeeId, categoryId, amountCents: -1_234, date: "2026-09-05", notes: "Receipt",
+    } };
+    const preview = await execute("owner", operation, "preview");
+    expect(preview).toMatchObject({ outcome: "would_add", effectiveCategoryId: categoryId });
+    const bound = bindFinancialEventOperation(operation, preview);
+    expect(bound.input).toMatchObject({ effectiveCategoryId: categoryId });
+    expect(await execute("owner", bound, "write_once")).toMatchObject({ outcome: "added" });
+    const [transaction] = await actualApi.getTransactions(accountId, operation.input.date, operation.input.date);
+    expect(transaction).toMatchObject({ payee: payeeId, category: categoryId });
+    expect(await execute("owner", bound, "recover")).toMatchObject({ outcome: "already_present" });
+    const otherCategoryId = (await actualApi.getCategories()).find((category) => "group_id" in category && category.id !== categoryId)!.id;
+    await actualApi.updateTransaction(transaction!.id, { category: otherCategoryId });
+    // This SDK version's update API returns before its batch finishes. Observe
+    // the owner's external edit before evaluating Setpoint's recovery result.
+    await vi.waitFor(async () => {
+      expect(await actualApi.getTransactions(accountId, operation.input.date, operation.input.date))
+        .toEqual([expect.objectContaining({ category: otherCategoryId })]);
+    });
+    expect(await execute("owner", bound, "recover")).toMatchObject({ outcome: "needs_review" });
+    const otherPayeeId = await actualApi.createPayee({ name: "Different shop" });
+    await actualApi.updateTransaction(transaction!.id, { category: categoryId, payee: otherPayeeId });
+    await vi.waitFor(async () => {
+      expect(await actualApi.getTransactions(accountId, operation.input.date, operation.input.date))
+        .toEqual([expect.objectContaining({ payee: otherPayeeId, category: categoryId })]);
+    });
+    expect(await execute("owner", bound, "recover")).toMatchObject({ outcome: "needs_review" });
+    expect(await actualApi.getTransactions(accountId, operation.input.date, operation.input.date))
+      .toEqual([expect.objectContaining({ payee: otherPayeeId, category: categoryId })]);
+  }, 30_000);
+
   it("records distinct event transactions, a reciprocal transfer, and a utility schedule in an offline budget", async () => {
     dataDir = await createTestTempDir("actual-financial-operations-");
     // Supplying only a new dataDir prevents use of environment credentials or

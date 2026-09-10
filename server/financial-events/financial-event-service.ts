@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { readFinancialProfiles } from "../bills/financial-profiles.ts";
 import { assessFinancialDocument, canAssessFinancialDocuments } from "../triage/financial-document-classifier.ts";
-import { planFinancialEmail, financialEmailSourceIdentity, financialProfileCycleKey, hasFinancialSemanticConflict, isIgnoredFinancialNotice } from "../bills/financial-email-planner.ts";
+import { planFinancialEmail, financialEmailSourceIdentity, financialProfileCycleKey, matchFinancialProfile, selectSemanticBillAmount, hasFinancialSemanticConflict, isIgnoredFinancialNotice } from "../bills/financial-email-planner.ts";
 import { invalidateActualAfterTransactionImport } from "../bills/bills-service.ts";
 import { publishCurrentDashboardEvent } from "../dashboard/current-events.ts";
 import { withAiUsageContext } from "../platform/ai-usage.ts";
@@ -22,6 +22,10 @@ const WAIT_FOR_EVIDENCE_MS = 15 * 60_000;
 
 function retryAt(now: number, attempts: number): number {
   return now + Math.min(30_000 * 2 ** Math.min(attempts, 7), 60 * 60_000);
+}
+
+function actualRetryDelay(event: FinancialEvent): number {
+  return Math.min(2_000 * 2 ** Math.min(Math.max(event.attempts - 1, 0), 8), 5 * 60_000);
 }
 
 function errorText(error: unknown): string {
@@ -160,8 +164,14 @@ export function createFinancialEventWorker({
         publish(document.userId);
         return true;
       }
+      const profile = matchFinancialProfile(configuration, {
+        sourceIdentity: { senderAddress: document.fromAddress }, email: { subject: document.subject, body: document.body },
+      }, candidate).profile;
+      const independent = !!profile && referenceKeys.length > 0 && document.senderAuthentication?.status === "pass"
+        && candidate.currency === "USD" && !!selectSemanticBillAmount(candidate)
+        && !hasFinancialSemanticConflict(candidate) && !failedVerification && !missingSourceDate;
       const associated = await store.associateDocument(document, { candidate, contentHash, eventId: correlation.eventId || randomUUID(), referenceKeys,
-        nextAttemptAt: now() + COLLECT_EVIDENCE_MS });
+        collectEvidence: !independent, nextAttemptAt: now() + (independent ? 0 : COLLECT_EVIDENCE_MS) });
       if (!associated) await store.settleDocument(document, { candidate, contentHash, status: "retry",
         error: "Waiting for evidence that distinguishes similar purchases.", nextAttemptAt: now() + WAIT_FOR_EVIDENCE_MS });
       publish(document.userId);
@@ -173,8 +183,8 @@ export function createFinancialEventWorker({
   }
 
   async function settle(event: FinancialEvent, plan: FinancialEmailPlan | null, state: "waiting" | "settled" | "needs_review", reason: string,
-    result?: ActualFinancialOperationResult): Promise<void> {
-    const nextAttemptAt = state === "waiting" ? now() + WAIT_FOR_EVIDENCE_MS : null;
+    result?: ActualFinancialOperationResult, retryDelay = WAIT_FOR_EVIDENCE_MS): Promise<void> {
+    const nextAttemptAt = state === "waiting" ? now() + retryDelay : null;
     const projected = plan ? { ...plan, workflow: { id: event.id, state, relatedEmails: event.documents.length, reason, nextAttemptAt } } : null;
     const saved = await store.saveEvent(event, { plan: projected, status: state, reason, nextAttemptAt, outcome: result });
     if (saved) publish(event.userId);
@@ -184,7 +194,7 @@ export function createFinancialEventWorker({
     result: ActualFinancialOperationResult): Promise<void> {
     const done = ["added", "updated", "already_present"].includes(result.outcome);
     const nextPlan = plan ? planWithActualResult(plan, result, now()) : null;
-    await settle(event, nextPlan, done ? "settled" : result.outcome === "needs_review" ? "needs_review" : "waiting", result.reason, result);
+    await settle(event, nextPlan, done ? "settled" : result.outcome === "needs_review" ? "needs_review" : "waiting", result.reason, result, actualRetryDelay(event));
     if (done) await afterWrite(event.userId).catch((error: unknown) => {
       console.warn("[Financial Events] Actual projection refresh will retry:", errorText(error));
     });
@@ -196,6 +206,7 @@ export function createFinancialEventWorker({
     if (await store.isCorrected(event.userId, event.id)) return true;
     let plan = event.plan;
     let attempted = event.attemptedAt !== null;
+    let checkingActual = false;
     try {
       const verified = event.outcome as ActualFinancialOperationResult | null;
       if (!attempted && plan && verified && ["added", "updated", "already_present"].includes(verified.outcome)) {
@@ -288,6 +299,7 @@ export function createFinancialEventWorker({
         await settle(event, plan, "needs_review", "This billing cycle already belongs to another record. Review its existing entry.");
         return true;
       }
+      checkingActual = true;
       const preview = await execute(event.userId, operation, "preview");
       plan = planWithActualResult(plan, preview, now());
       if (!["would_add", "would_update"].includes(preview.outcome)) {
@@ -306,9 +318,10 @@ export function createFinancialEventWorker({
         return true;
       }
       attempted = true;
-      await settleActualResult(event, plan, await execute(event.userId, bound, "write_once"));
+      await settleActualResult({ ...event, attemptedAt: now(), attempts: 1 }, plan, await execute(event.userId, bound, "write_once"));
     } catch (error) {
-      await settle(event, plan, "waiting", `${attempted ? "Verifying the previous Actual operation" : "Financial processing will retry"}: ${errorText(error)}`);
+      await settle(event, plan, "waiting", `${attempted ? "Verifying the previous Actual operation" : "Financial processing will retry"}: ${errorText(error)}`,
+        undefined, attempted || checkingActual ? actualRetryDelay(attempted && event.attemptedAt === null ? { ...event, attempts: 1 } : event) : WAIT_FOR_EVIDENCE_MS);
     }
     return true;
   }

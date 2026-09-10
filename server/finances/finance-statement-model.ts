@@ -30,11 +30,12 @@ export function projectStatement(input: { id: string; utilityId: string; emailUi
   const candidate = input.candidate;
   const facts = candidate?.statement_facts;
   const grounded = (evidence: unknown) => hasVerbatimFinancialEvidence(input.body, evidence);
-  const nothingDue = facts?.no_payment_required === true && grounded(facts.no_payment_evidence)
+  const validStatement = !!candidate && ['statement_issued', 'bill_issued'].includes(candidate.event_kind || '')
+    && (!candidate.document_role || candidate.document_role === 'statement') && candidate.type === 'bill'
+    && ![candidate.amount_verification, candidate.event_verification, candidate.type_verification].some(value => value?.status === 'failed');
+  const nothingDue = validStatement && facts?.no_payment_required === true && grounded(facts.no_payment_evidence)
     && /no payment (?:is )?required|nothing (?:is )?due|zero (?:balance|amount due)|(?:amount|balance|total) due\s*[:\s]*\$?0(?:\.00)?\b/i.test(facts.no_payment_evidence || '');
   const monetaryFact = (value: unknown, evidence: unknown) => grounded(evidence) && currencyValuesInText(String(evidence)).some(amount => cents(amount) === cents(value)) ? cents(value) : null;
-  const validStatement = !!candidate && ['statement_issued', 'bill_issued', 'payment_due'].includes(candidate.event_kind || '')
-    && candidate.type === 'bill' && candidate.amount_verification?.status !== 'failed' && candidate.event_verification?.status !== 'failed';
   const amountKind = candidate?.amount_kind || null;
   const amountCents = nothingDue ? 0 : validStatement && candidate?.currency === 'USD' && ['total_due', 'statement_balance'].includes(amountKind || '') ? cents(candidate?.amount) : null;
   return { id: input.id, utilityId: input.utilityId, emailUid: input.emailUid, subject: input.subject,

@@ -10,7 +10,7 @@ export function demoFinances(seed:DemoSeed):FinanceWorkspace {
   const activities=getDemoFinancialActivities();
   const shifted=(days:number)=>{const value=new Date(`${seed.dateKey}T12:00:00Z`);value.setUTCDate(value.getUTCDate()+days);return value.toISOString().slice(0,10);};
   const billed:Record<string,{provider:string;dueDate:string;amountCents:number}>= {
-    electricity:{provider:'Fictional Electric',dueDate:shifted(14),amountCents:9000},
+    electricity:{provider:'Fictional Electric',dueDate:shifted(14),amountCents:8200},
     water:{provider:'Northstar Water',dueDate:shifted(8),amountCents:5811},
     internet:{provider:'Fiber Co-op',dueDate:shifted(-1),amountCents:7999},
   };
@@ -28,8 +28,8 @@ export function demoFinances(seed:DemoSeed):FinanceWorkspace {
     if(id==='electricity'&&statements[0]) {
       const row=statements[0];
       const activity=activities.find(item=>item.reference.id==='demo-event-partial');
-      const email=activity?.history?.emails.find(item=>item.uid==='demo-electric-revised');
-      row.emailUid='demo-electric-revised'; row.subject=email?.subject || row.subject;
+      const email=activity?.history?.emails.find(item=>item.uid==='demo-electric-original');
+      row.emailUid='demo-electric-original'; row.subject=email?.subject || row.subject;
       row.receivedAt=email?.receivedAt ? new Date(email.receivedAt).toISOString() : row.receivedAt;
       const result=activity?.effectiveResult as {entry?:{type?:string;amountCents?:number;date?:string}} | null;
       if(activity?.correction?.state==='completed'&&result?.entry?.type==='bill') {

@@ -197,6 +197,8 @@ describe('shared fictional financial settlement', () => {
     expect(times[1]).toBeLessThan(original.history!.corrections[0]!.updatedAt);
     expect(await api.getEmailBody('demo-electric-original')).toMatchObject({ body:expect.stringContaining('ELEC-2048') });
     expect(await api.getEmailBody('demo-electric-revised')).toMatchObject({ body:expect.stringContaining('$90.00') });
+    const source = (await api.getFinances()).utilities.find(utility => utility.identity.id === 'electricity')!.statements[0]!;
+    expect(source).toMatchObject({ emailUid:'demo-electric-original', amountCents:8200, activity:reference });
     const inspection = await api.inspectFinancialCorrection(reference);
     const seeded = inspection.correction!;
     expect(seeded).toMatchObject({ state: 'attention', executionStopped: true, steps: [{ state: 'applied' }, { state: 'no_write' }] });

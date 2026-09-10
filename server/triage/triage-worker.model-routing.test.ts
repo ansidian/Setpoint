@@ -1,9 +1,22 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { clearCurrentDashboardEventSubscribers, subscribeCurrentDashboardEvents } from "../dashboard/current-events.ts";
 import { createMigratedDb, queueEmail } from "./triage-worker.test-utils.ts";
 import { processNextEmailTriageJob } from "./triage-worker.ts";
 import { boundEmailEvidence, EMAIL_EVIDENCE_CHAR_LIMIT } from "../email/email-evidence.ts";
-import type { InStatement } from "@libsql/client";
+import type { Client, InStatement } from "@libsql/client";
+
+const testDb = vi.hoisted(() => ({ client: null as Client | null }));
+
+// test-architecture: allow-boundary-mock -- Default planner database reads use the same migrated ephemeral SQLite as the worker, keeping real profile/settings queries isolated from the development database.
+vi.mock("../db/connection.ts", () => ({
+  default: {
+    execute: (statement: InStatement) => testDb.client!.execute(statement),
+    batch: (...args: Parameters<Client["batch"]>) => testDb.client!.batch(...args),
+  },
+}));
+
+beforeEach(async () => { testDb.client = await createMigratedDb(); });
+afterEach(() => { testDb.client?.close(); testDb.client = null; });
 
 // test-architecture: allow-boundary-mock -- AI API-key resolution is a write-only secret boundary; routing tests use process-local test credentials while asserting migrated decision/usage rows.
 vi.mock("../ai-credentials.ts", () => ({
@@ -13,7 +26,7 @@ vi.mock("../ai-credentials.ts", () => ({
 
 describe("email triage worker model routing", () => {
   it("retains an incomplete email for review before rules or models can dismiss it", async () => {
-    const dbClient = await createMigratedDb();
+    const dbClient = testDb.client!;
     await queueEmail(dbClient, {
       subject: "Weekly newsletter",
       from_name: "Newsletter",
@@ -28,7 +41,7 @@ describe("email triage worker model routing", () => {
   });
 
   it("routes a receipt rule through semantic triage and persists its incomplete financial candidate", async () => {
-    const dbClient = await createMigratedDb();
+    const dbClient = testDb.client!;
     const queued = await queueEmail(dbClient, {
       subject: "Your Apple receipt",
       body_snippet: "Order total $84.12",
@@ -156,7 +169,7 @@ describe("email triage worker model routing", () => {
 
   it("routes high-risk payment mail directly to the strong model and stores usage", async () => {
     clearCurrentDashboardEventSubscribers();
-    const dbClient = await createMigratedDb();
+    const dbClient = testDb.client!;
     await queueEmail(dbClient, {
       subject: "Payment due for tuition",
       body_snippet: "Your payment due date is May 8.",
@@ -254,7 +267,7 @@ describe("email triage worker model routing", () => {
     });
 
   it("escalates low-confidence cheap results and stores both model results", async () => {
-    const dbClient = await createMigratedDb();
+    const dbClient = testDb.client!;
     await queueEmail(dbClient, {
       subject: "Question about next week",
       body_snippet: "Can you take a look and let me know?",
@@ -341,7 +354,7 @@ describe("email triage worker model routing", () => {
 
   it("fails open into Needs Attention with Needs Review when model triage fails", async () => {
     clearCurrentDashboardEventSubscribers();
-    const dbClient = await createMigratedDb();
+    const dbClient = testDb.client!;
     await queueEmail(dbClient, {
       subject: "Can you review this?",
       body_snippet: "Please review the attached request.",
@@ -414,7 +427,7 @@ describe("email triage worker model routing", () => {
 
   it("defers a retryable model error (429) instead of marking the email failed (P2-32)", async () => {
     clearCurrentDashboardEventSubscribers();
-    const dbClient = await createMigratedDb();
+    const dbClient = testDb.client!;
     await queueEmail(dbClient, {
       subject: "Payment due for tuition",
       body_snippet: "Your payment due date is May 8.",
@@ -444,7 +457,7 @@ describe("email triage worker model routing", () => {
 
   it("computes retry backoff from the actual post-claim attempt count", async () => {
     clearCurrentDashboardEventSubscribers();
-    const dbClient = await createMigratedDb();
+    const dbClient = testDb.client!;
     await queueEmail(dbClient, {
       subject: "Payment due for tuition",
       from_name: "University Billing",
@@ -467,7 +480,7 @@ describe("email triage worker model routing", () => {
 
   it("goes terminal on the 5th retryable failure instead of granting a 6th attempt", async () => {
     clearCurrentDashboardEventSubscribers();
-    const dbClient = await createMigratedDb();
+    const dbClient = testDb.client!;
     await queueEmail(dbClient, {
       subject: "Payment due for tuition",
       from_name: "University Billing",
@@ -499,7 +512,7 @@ describe("email triage worker model routing", () => {
 
   it("re-queues a job when snapshot attach fails during finalize, not leaving it stuck running (P2-31)", async () => {
     clearCurrentDashboardEventSubscribers();
-    const realDb = await createMigratedDb();
+    const realDb = testDb.client!;
     await queueEmail(realDb, {
       subject: "Payment due for tuition",
       body_snippet: "Your payment due date is May 8.",

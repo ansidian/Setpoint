@@ -8,6 +8,7 @@ export interface FinanceActivityDay {
   incomeCents: number;
   outflowCents: number;
   transfers: number;
+  transferCents: number;
   complete: boolean;
 }
 
@@ -45,7 +46,7 @@ export function financeActivityDays(range: JournalRange, transactionId?: string)
     : range;
   const groups = new Map<string, FinanceActivityDay>();
   for (let date = range.start; date <= range.end; date = shiftFinanceDate(date, 1)) {
-    groups.set(date, { date, entries: [], incomeCents: 0, outflowCents: 0, transfers: 0, complete: !range.truncated });
+    groups.set(date, { date, entries: [], incomeCents: 0, outflowCents: 0, transfers: 0, transferCents: 0, complete: !range.truncated });
   }
   for (const entry of journalEntries(selectedRange)) {
     const day = groups.get(entry.transaction.date);
@@ -56,6 +57,7 @@ export function financeActivityDays(range: JournalRange, transactionId?: string)
     if (entry.incomplete || entry.children.some(child => child.transferId || child.transferAccountId)) day.complete = false;
     if (entry.transaction.transferId || entry.transaction.transferAccountId || ['transfer', 'sent', 'received'].includes(entry.kind)) {
       day.transfers += 1;
+      day.transferCents += Math.abs(entry.transaction.amountCents);
     } else if (entry.transaction.amountCents > 0) {
       day.incomeCents += entry.transaction.amountCents;
     } else {

@@ -35,6 +35,7 @@ interface TransactionRow {
   id: string;
   account: string;
   payee: string | null;
+  category?: string | null;
   amount: number;
   date: string;
   imported_id: string | null;
@@ -118,7 +119,7 @@ async function transaction(
     sdk.getAccounts(), sdk.getPayees(),
     sdk.runQuery(sdk.q("transactions").withDead().withoutValidatedRefs().filter({
       $or: [{ imported_id: input.identityKey }, { account: input.accountId, date: input.date }],
-    }).select(["id", "account", "payee", "amount", "date", "imported_id", "transfer_id", "tombstone"])),
+    }).select(["id", "account", "payee", "category", "amount", "date", "imported_id", "transfer_id", "tombstone"])),
   ]);
   if (!accounts.some((account) => account.id === input.accountId && !account.closed)) return review("The transaction account is closed or unavailable.");
   const matchingPayees = payees.filter((payee) => input.payeeId
@@ -126,13 +127,16 @@ async function transaction(
   if (matchingPayees.length > 1 || (input.payeeId && matchingPayees.length !== 1)
     || matchingPayees.some((payee) => !!payee.transfer_acct)) return review("The transaction payee cannot be identified uniquely.");
   const payee = matchingPayees[0];
+  const categoryId = input.effectiveCategoryId !== undefined ? input.effectiveCategoryId || undefined
+    : mode === "recover" ? undefined : await availableCategoryId(sdk, input.categoryId);
   const rows = records.data as TransactionRow[];
   const owned = rows.filter((row) => row.imported_id === input.identityKey);
   if (owned.some((row) => row.tombstone)) return review("The previously recorded transaction was deleted. It will not be recreated.");
   if (owned.length) {
     const recorded = owned[0]!;
     if (owned.length !== 1 || recorded.account !== input.accountId || recorded.date !== input.date
-      || recorded.amount !== input.amountCents || recorded.transfer_id) return review("The recorded transaction identity conflicts with this event.");
+      || recorded.amount !== input.amountCents || recorded.transfer_id || !payee || recorded.payee !== payee.id
+      || (categoryId && recorded.category !== categoryId)) return review("The recorded transaction identity conflicts with this event.");
     return result("already_present", "The transaction identity is already recorded.", { transactionId: recorded.id });
   }
   // Distinct managed event IDs prove distinct purchases even when all their
@@ -142,10 +146,12 @@ async function transaction(
     && !row.imported_id?.startsWith("financial-event:")
     && row.account === input.accountId && row.date === input.date && row.amount === input.amountCents
     && payee && row.payee === payee.id);
-  if (legacy.length === 1) return result("already_present", "An exact existing Actual transaction matches this event.", { transactionId: legacy[0]!.id });
+  if (legacy.length === 1) {
+    if (categoryId && legacy[0]!.category !== categoryId) return review("An existing Actual transaction has a different category than this event.");
+    return result("already_present", "An exact existing Actual transaction matches this event.", { transactionId: legacy[0]!.id });
+  }
   if (legacy.length > 1) return review("Multiple existing Actual transactions match this event.");
   if (mode === "recover") return review("A transaction write was attempted but its result cannot be verified.");
-  const categoryId = await availableCategoryId(sdk, input.categoryId);
   const groups = [{ accountId: input.accountId, transactions: [{
     itemId: input.identityKey, importedId: input.identityKey, date: input.date,
     amountCents: input.amountCents, payee: payee?.name || input.payee.trim(), notes: input.notes, categoryId,
@@ -158,11 +164,11 @@ async function transaction(
   };
   const preview = await runActualTransactionImport({ ...importInput, dryRun: true });
   if (preview.groups[0]?.items[0]?.outcome !== "would_add") return review("Actual import reconciliation would change or ambiguously match existing activity.");
-  if (mode === "preview") return result("would_add", "Current Actual data confirms this transaction can be imported.");
+  if (mode === "preview") return result("would_add", "Current Actual data confirms this transaction can be imported.", { effectiveCategoryId: categoryId || null });
   const committed = await runActualTransactionImport({ ...importInput, dryRun: false });
   const outcome = committed.groups[0]?.items[0]?.outcome;
   if (outcome !== "added" && outcome !== "already_present") return review("Actual did not confirm the expected transaction import.");
-  const verified = await transaction(sdk, input, "recover", result);
+  const verified = await transaction(sdk, { ...input, effectiveCategoryId: categoryId || null }, "recover", result);
   return verified.outcome === "already_present"
     ? { ...verified, outcome: outcome === "added" ? "added" : "already_present", reason: "The transaction import was verified against Actual." } : verified;
 }
@@ -275,7 +281,8 @@ async function utilitySchedule(
     ? payee.id === input.payeeId : !payee.transfer_acct && normalizeName(payee.name) === normalizeName(input.payee));
   if (matchingPayees.length > 1 || (input.payeeId && matchingPayees.length !== 1)
     || matchingPayees.some((payee) => !!payee.transfer_acct)) return review("The utility payee cannot be identified uniquely.");
-  const categoryId = mode === "recover" ? undefined : await availableCategoryId(sdk, input.categoryId);
+  const categoryId = input.effectiveCategoryId !== undefined ? input.effectiveCategoryId || undefined
+    : mode === "recover" ? undefined : await availableCategoryId(sdk, input.categoryId);
   let payeeId = matchingPayees[0]?.id;
   if (payeeId) {
     const paidRows = await sdk.runQuery(sdk.q("transactions").withoutValidatedRefs().filter({
@@ -340,7 +347,7 @@ async function utilitySchedule(
   }
   if (mode === "preview") return result(selected ? "would_update" : "would_add",
     selected ? "The exact utility schedule can be updated." : "A utility schedule can be created.",
-    { scheduleId: selected?.id || deterministicId, scheduleFingerprint });
+    { scheduleId: selected?.id || deterministicId, scheduleFingerprint, effectiveCategoryId: categoryId || null });
   payeeId ||= await sdk.createPayee({ name: input.payee.trim() });
   const conditions: ActualScheduleCondition[] = rule
     ? rule.conditions.map((item) => item.field === "amount" ? { ...item, value: input.amountCents }
@@ -375,7 +382,7 @@ async function utilitySchedule(
     if (updatedResult && typeof updatedResult === "object" && "error" in updatedResult) throw new Error("The utility schedule category could not be written.");
   }
   await sdk.sync();
-  const verified = await utilitySchedule(sdk, budgetId, { ...input, payeeId, scheduleId }, "recover", result);
+  const verified = await utilitySchedule(sdk, budgetId, { ...input, payeeId, scheduleId, effectiveCategoryId: categoryId || null }, "recover", result);
   return verified.outcome === "already_present"
     ? { ...verified, outcome: selected ? "updated" : "added", reason: "The utility schedule was written and synced." } : verified;
 }

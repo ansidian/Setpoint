@@ -41,6 +41,9 @@ describe('statement evidence projection', () => {
   it('keeps missing evidence unavailable and never converts a payment notice to a monthly bill', () => {
     expect(statement({})).toMatchObject({ amountCents:null, dueDate:null, nothingDue:false });
     expect(statement({ ...candidate, event_kind:'payment_completed', amount_kind:'payment_amount' })).toMatchObject({ amountCents:null, dueDate:null });
+    expect(statement({ ...candidate, event_kind:'payment_due' })).toMatchObject({ amountCents:null, dueDate:null });
+    expect(statement({ ...candidate, document_role:'payment_notice' })).toMatchObject({ amountCents:null, dueDate:null });
+    expect(statement({ ...candidate, type_verification:{status:'failed'} })).toMatchObject({ amountCents:null, dueDate:null });
     expect(statement({ ...candidate, amount:0 })).toMatchObject({ amountCents:0, nothingDue:false });
   });
   it('preserves due-less explicit credit without inventing a month or payment', () => {

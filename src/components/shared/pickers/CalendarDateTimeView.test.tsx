@@ -8,6 +8,26 @@ afterEach(() => {
 });
 
 describe("CalendarDateTimeView", () => {
+  it("enforces the latest allowed day for selection and button/wheel navigation", () => {
+    let selectedEpoch: number | null = null;
+    render(<CalendarDateTimeView nowTick={epochFromLa(2026, 8, 9, 21, 0)}
+      initialEpoch={epochFromLa(2026, 8, 9, 12, 0)} maxDate="2026-09-09"
+      mode="date-only" allowPastDates submitOnDateSelect
+      onSelect={epoch => { selectedEpoch = epoch; }} onBack={() => {}} />);
+    const nextDay = screen.getByRole("button", { name: "20" });
+    expect((nextDay as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(nextDay);
+    expect(selectedEpoch).toBeNull();
+    expect((screen.getByRole("button", { name: "Next month" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.wheel(screen.getByRole("group", { name: "Calendar month view" }), { deltaY: 100 });
+    expect(screen.getByText("September 2026")).toBeTruthy();
+    fireEvent.click(screen.getAllByRole("button", { name: "9" })[0]!);
+    expect(selectedEpoch).toBe(epochFromLa(2026, 8, 9, 12, 0));
+    fireEvent.click(screen.getByRole("button", { name: "Previous month" }));
+    expect(screen.getByText("August 2026")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Next month" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it("supports keyboard AM/PM selection from a single tab stop", () => {
     let selectedEpoch: number | null = null;
     const initialEpoch = epochFromLa(2026, 3, 19, 9, 15);

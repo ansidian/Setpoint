@@ -33,7 +33,7 @@ describe("owner completion of managed financial events", () => {
   beforeEach(async () => {
     db = createClient({ url: "file::memory:" });
     await db.execute("PRAGMA foreign_keys = ON");
-    for (const file of ["001_ea_tables.sql", "013_email_index_normalized_date.sql", "025_email_thread_identity.sql", "054_email_sender_authentication.sql", "062_financial_events.sql", "068_financial_candidate_dismissal.sql", "067_financial_event_ai_requests.sql", "069_financial_profiles.sql", "070_financial_document_sources.sql"]) {
+    for (const file of ["001_ea_tables.sql", "013_email_index_normalized_date.sql", "025_email_thread_identity.sql", "054_email_sender_authentication.sql", "062_financial_events.sql", "071_financial_event_readiness.sql", "068_financial_candidate_dismissal.sql", "067_financial_event_ai_requests.sql", "069_financial_profiles.sql", "070_financial_document_sources.sql"]) {
       await db.executeMultiple(readFileSync(new URL(`../db/migrations/${file}`, import.meta.url), "utf8"));
     }
     await addFinancialCorrectionSchema(db);
@@ -229,7 +229,7 @@ describe("owner completion of managed financial events", () => {
     await expect(completion().complete("owner", await request())).rejects.toMatchObject({ status: 409 });
   });
 
-  it("closes the automatic collection window at confirmation, but waits for capture through that instant", async () => {
+  it("records a confirmed entry immediately despite capture lag and unrelated pending source work", async () => {
     await arrive();
     const document = await store.claimDocument("assessment");
     await store.associateDocument(document!, { candidate: partial, contentHash: "source", eventId: "existing", nextAttemptAt: now + 90_000 });
@@ -237,11 +237,11 @@ describe("owner completion of managed financial events", () => {
       VALUES ('owner', 'gmail', ?, 'waiting', ?, ?)`, args: [new Date(now - 1000).toISOString(), now + 300_000, now] });
     const queued = await completion().complete("owner", await request());
     expect(queued.workflow?.nextAttemptAt).toBe(now);
-    expect(queued.workflow?.progress).toBe('checking_emails');
+    expect(queued.workflow?.progress).toBe('queued');
     expect((await store.getEventForEmail("owner", "receipt"))?.collectionDeadline).toBe(now);
-    expect(await worker().processNextEvent()).toBe(false);
-    expect(ledger.size).toBe(0);
-    await db.execute({ sql: "UPDATE ea_financial_intake_state SET completed_through = ?", args: [new Date(now).toISOString()] });
+    await arrive("unrelated", null);
+    const unrelated = await store.claimDocument("slow-assessment");
+    expect(unrelated?.emailUid).toBe("unrelated");
     expect((await resolveManagedFinancialPlan('owner', 'receipt', { dbClient: db }))?.workflow?.progress).toBe('queued');
     expect(await worker().processNextEvent()).toBe(true);
     expect((await store.getEventForEmail("owner", "receipt"))?.status).toBe("settled");
@@ -267,12 +267,9 @@ describe("owner completion of managed financial events", () => {
     await arrive("receipt", null);
     await completion().complete("owner", await request());
     await arrive("newsletter", null, { body: "This week's neighborhood news.", sender: "news@example.test" });
-    now += 90_000;
-    expect(await worker().processNextEvent()).toBe(false);
     assessmentPaused = true;
-    await worker().processNextDocument();
-    expect(await store.getDocumentForEmail("owner", "newsletter")).toMatchObject({ status: "retry", processedRevision: 0 });
     await worker().processNextEvent();
+    expect(await store.getDocumentForEmail("owner", "newsletter")).toMatchObject({ status: "pending", processedRevision: 0 });
     expect((await store.getEventForEmail("owner", "receipt"))?.status).toBe("settled");
     expect(ledger.size).toBe(1);
   });
@@ -323,9 +320,11 @@ describe("owner completion of managed financial events", () => {
     loseResponse = true;
     await drainEvent();
     const attempted = await store.getEventForEmail("owner", "receipt");
-    expect(attempted).toMatchObject({ status: "waiting", attemptedAt: now });
+    expect(attempted).toMatchObject({ status: "waiting", attemptedAt: now, nextAttemptAt: now + 2_000 });
     store = createFinancialEventStore(db, () => now);
-    now += 15 * 60_000;
+    now += 1_999;
+    expect(await worker().processNextEvent()).toBe(false);
+    now += 1;
     await worker().processNextEvent();
     expect(await store.getEventForEmail("owner", "receipt")).toMatchObject({ status: "settled", operation: attempted!.operation, ownerCompletion: attempted!.ownerCompletion });
     expect(ledger.size).toBe(1);

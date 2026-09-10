@@ -179,9 +179,10 @@ export default function CalendarFloatingDetailPanel({
         // gate below already supplies the same faded+scaled-down start via
         // `animate`, so the open animation is unchanged while re-show stays in sync.
         initial={false}
+        data-floating-dragging={dragging ? "true" : undefined}
         animate={{
           opacity: awaitingMeasuredPlacement ? 0 : 1,
-          scale: awaitingMeasuredPlacement ? 0.985 : 1,
+          scale: awaitingMeasuredPlacement ? 0.985 : dragging && !reducedMotion ? 1.01 : 1,
           x: snapToDevicePixel(resolvedPlacement.left),
           y: snapToDevicePixel(resolvedPlacement.top),
         }}
@@ -190,7 +191,7 @@ export default function CalendarFloatingDetailPanel({
           x: shellTransition(reducedMotion, instantPlacementTransition),
           y: shellTransition(reducedMotion, instantPlacementTransition),
           opacity: contentTransition(reducedMotion),
-          scale: contentTransition(reducedMotion),
+          scale: dragging || reducedMotion ? { duration: 0 } : { duration: 0.18, ease: [0.16, 1, 0.3, 1] },
         }}
       >
         {!manualPlacementActive ? (

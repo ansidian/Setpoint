@@ -40,6 +40,7 @@ interface DbOptions {
 interface RefreshOptions extends DbOptions {
   actualBudgetUrl?: string | null;
   refreshLocalActual?: boolean;
+  afterVerifiedWrite?: boolean;
 }
 
 function errorMessage(error: unknown): string {
@@ -321,16 +322,20 @@ export async function refreshBillsMirror(userId: string, {
   dbClient = db,
   now = new Date(),
   refreshLocalActual = false,
+  afterVerifiedWrite = false,
 }: RefreshOptions = {}): Promise<BillsMirrorPayload> {
   const inFlightKey = `${userId}:${actualBudgetUrl || "unconfigured"}`;
   const existingRefresh = BILLS_MIRROR_REFRESH_IN_FLIGHT.get(inFlightKey);
-  if (existingRefresh) return existingRefresh;
-  const refreshPromise = refreshBillsMirrorInner(userId, {
-    actualBudgetUrl,
-    dbClient,
-    now,
-    refreshLocalActual,
-  })
+  if (existingRefresh && !afterVerifiedWrite) return existingRefresh;
+  const refreshPromise = (async () => {
+    if (existingRefresh) {
+      await existingRefresh.catch(() => undefined);
+      // The older refresh may have cleared the write's durable fallback while
+      // publishing a snapshot taken before that write. Restore it before IO.
+      await scheduleBillsMirrorRefresh(userId, { dbClient, delayMs: 60_000 });
+    }
+    return refreshBillsMirrorInner(userId, { actualBudgetUrl, dbClient, now, refreshLocalActual, afterVerifiedWrite });
+  })()
     .finally(() => {
       if (BILLS_MIRROR_REFRESH_IN_FLIGHT.get(inFlightKey) === refreshPromise) {
         BILLS_MIRROR_REFRESH_IN_FLIGHT.delete(inFlightKey);
@@ -345,6 +350,7 @@ async function refreshBillsMirrorInner(userId: string, {
   dbClient = db,
   now = new Date(),
   refreshLocalActual = false,
+  afterVerifiedWrite = false,
 }: RefreshOptions = {}): Promise<BillsMirrorPayload> {
   const timestamp = isoNow(now);
   if (!actualBudgetUrl) {
@@ -399,6 +405,7 @@ async function refreshBillsMirrorInner(userId: string, {
     const metadata = metadataWithPayeeMap(await loadActualMetadataForProjection(userId, {
       allowWorkerFallback: false,
       preferFreshLocal: refreshLocalActual,
+      refreshLocal: !afterVerifiedWrite,
     }));
     // P3-38: a transient empty-but-successful local Actual read (no accounts/payees/
     // categories/schedules) must NOT wipe a populated mirror and commit an empty

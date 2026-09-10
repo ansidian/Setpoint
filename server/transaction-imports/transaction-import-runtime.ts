@@ -20,7 +20,7 @@ type TransactionImportWorker = Pick<typeof transactionImportWorker,
 interface FinancialEventWorker {
   processNextDocument(): Promise<boolean>;
   processNextEvent(): Promise<boolean>;
-  getNextWakeAt(): Promise<number | null>;
+  getNextWakeAt(options?: { eventsOnly?: boolean }): Promise<number | null>;
   recoverStaleClaims(): Promise<unknown>;
 }
 
@@ -75,24 +75,39 @@ export function createTransactionImportRuntime(worker: TransactionImportWorker, 
         await financeIntake?.recoverStaleClaims();
       }
       await corrections?.recoverPending();
+      let eventCount = 0;
+      const drainEvents = async () => {
+        while (financeWorker && !stopping && eventCount < MAX_FINANCIAL_EVENTS_PER_DRAIN) {
+          if (!await financeWorker.processNextEvent()) break;
+          eventCount++;
+        }
+      };
+      // Ready records should not queue behind a full batch of provider pages or
+      // AI assessments. The same overall event cap still bounds each drain.
+      await drainEvents();
+      const backgroundStep = async (processNext: () => Promise<boolean>) => {
+        const worked = await processNext();
+        await drainEvents();
+        return worked;
+      };
       const intakeSaturated = financeIntake ? await drainBounded(
-        MAX_FINANCIAL_INTAKE_PAGES_PER_DRAIN, financeIntake.processNextPage,
+        MAX_FINANCIAL_INTAKE_PAGES_PER_DRAIN, () => backgroundStep(financeIntake.processNextPage),
       ) : false;
       const documentsSaturated = financeWorker ? await drainBounded(
         MAX_FINANCIAL_DOCUMENTS_PER_DRAIN,
-        financeWorker.processNextDocument,
-      ) : false;
-      const eventsSaturated = financeWorker ? await drainBounded(
-        MAX_FINANCIAL_EVENTS_PER_DRAIN,
-        financeWorker.processNextEvent,
+        () => backgroundStep(financeWorker.processNextDocument),
       ) : false;
       const itemsSaturated = await drainBounded(
         MAX_ITEM_BATCHES_PER_DRAIN,
-        worker.processNextItemBatch,
+        () => backgroundStep(worker.processNextItemBatch),
       );
+      const eventsSaturated = eventCount >= MAX_FINANCIAL_EVENTS_PER_DRAIN;
       if (stopping) return;
       if (intakeSaturated || documentsSaturated || eventsSaturated || itemsSaturated) {
-        scheduleDrainAt(Date.now() + SATURATED_DRAIN_RECHECK_MS);
+        const now = Date.now();
+        const eventWakeAt = await financeWorker?.getNextWakeAt({ eventsOnly: true });
+        scheduleDrainAt(eventWakeAt != null && eventWakeAt > now
+          ? Math.min(eventWakeAt, now + SATURATED_DRAIN_RECHECK_MS) : now + SATURATED_DRAIN_RECHECK_MS);
         return;
       }
       const wakeTimes = [await worker.getNextWakeAt(), await financeWorker?.getNextWakeAt(), await financeIntake?.getNextWakeAt()]

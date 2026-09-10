@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createClient } from "@libsql/client";
 import type { InStatement } from "@libsql/client";
+import { readFileSync } from "node:fs";
 
 const mockActual = {
   sendBill: vi.fn(),
@@ -42,37 +43,14 @@ let reconciliationDb: ReturnType<typeof createClient> | null = null;
 
 async function useReconciliationDb() {
   reconciliationDb = createClient({ url: "file::memory:" });
-  await reconciliationDb.executeMultiple(`
-    CREATE TABLE ea_actual_metadata_mirror (
-      user_id TEXT PRIMARY KEY,
-      status TEXT NOT NULL DEFAULT 'needs_sync',
-      accounts_json TEXT NOT NULL DEFAULT '[]',
-      payees_json TEXT NOT NULL DEFAULT '[]',
-      categories_json TEXT NOT NULL DEFAULT '[]',
-      schedules_json TEXT NOT NULL DEFAULT '[]',
-      recent_transactions_json TEXT NOT NULL DEFAULT '[]',
-      last_success_at TEXT,
-      last_attempt_at TEXT,
-      last_error TEXT,
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-    CREATE TABLE ea_bills_mirror_state (
-      user_id TEXT PRIMARY KEY,
-      status TEXT NOT NULL DEFAULT 'needs_sync',
-      actual_configured INTEGER NOT NULL DEFAULT 0,
-      actual_budget_url TEXT,
-      last_success_at TEXT,
-      last_attempt_at TEXT,
-      last_error TEXT,
-      pending_refresh_at TEXT,
-      refresh_started_at TEXT,
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-  `);
+  for (const migration of ["001_ea_tables.sql", "009_actual_metadata_mirror.sql"]) {
+    await reconciliationDb.executeMultiple(readFileSync(new URL(`../db/migrations/${migration}`, import.meta.url), "utf8"));
+  }
   mockDb.execute.mockImplementation(async (statement) => {
     const result = await reconciliationDb!.execute(statement);
     return result as unknown as { rows: Array<Record<string, unknown>>; rowsAffected?: number };
   });
+  mockDb.batch.mockImplementation((statements) => reconciliationDb!.batch(statements));
   return reconciliationDb;
 }
 
@@ -154,12 +132,48 @@ function rowResult(rows: Array<Record<string, unknown>> = []) {
 
 
 describe("settled Actual invalidation", () => {
+  it("publishes the already synchronized budget into metadata and paid bill projections immediately", async () => {
+    const database = await useReconciliationDb();
+    await database.execute("INSERT INTO ea_settings (user_id, actual_budget_url) VALUES ('u1', 'https://actual.example.test')");
+    const date = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+    const metadata = {
+      accounts: [{ id: "checking", name: "Checking" }],
+      payees: [{ id: "power", name: "Fictional Power" }], categories: [],
+      schedules: [{ id: "bill", name: "Fictional Power", next_date: date, type: "bill",
+        conditions: [{ field: "payee", value: "power" }, { field: "amount", value: -5_000 }] }],
+      recentTransactions: [{ id: "paid", scheduleId: "bill", payeeId: "power", amount: 50, date }],
+    };
+    mockActualLocal.readLocalActualMetadata.mockImplementation(async (_userId, options) => {
+      if (options.refresh !== false) throw new Error("The verified write must not request another provider sync");
+      return metadata;
+    });
+    await invalidateActualAfterTransactionImport("u1");
+    expect((await database.execute("SELECT status, pending_refresh_at FROM ea_bills_mirror_state")).rows)
+      .toEqual([expect.objectContaining({ status: "current", pending_refresh_at: null })]);
+    expect((await database.execute("SELECT schedule_id, paid, amount FROM ea_bill_occurrence_mirror")).rows)
+      .toEqual([expect.objectContaining({ schedule_id: "bill", paid: 1, amount: 50 })]);
+    const projection = (await database.execute("SELECT status, recent_transactions_json FROM ea_actual_metadata_mirror")).rows[0]!;
+    expect(projection.status).toBe("current");
+    expect(JSON.parse(String(projection.recent_transactions_json))).toEqual(metadata.recentTransactions);
+  });
+
   it("retains a durable mirror retry when metadata invalidation fails", async () => {
     const database = await useReconciliationDb();
     mockActual.invalidateActualMetadataCache.mockRejectedValue(new Error('Actual cache unavailable'));
     await expect(invalidateActualAfterTransactionImport('u1')).rejects.toThrow('Actual cache unavailable');
     const { rows } = await database.execute("SELECT status, pending_refresh_at FROM ea_bills_mirror_state WHERE user_id='u1'");
     expect(rows).toEqual([expect.objectContaining({ status:'needs_sync', pending_refresh_at:expect.any(String) })]);
+  });
+
+  it("retains reconciliation when publishing the local verified budget fails", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const database = await useReconciliationDb();
+    await database.execute("INSERT INTO ea_settings (user_id, actual_budget_url) VALUES ('u1', 'https://actual.example.test')");
+    mockActualLocal.readLocalActualMetadata.mockRejectedValue(new Error("Local verified budget unavailable"));
+    await invalidateActualAfterTransactionImport("u1");
+    expect((await database.execute("SELECT status, pending_refresh_at, last_error FROM ea_bills_mirror_state")).rows)
+      .toEqual([expect.objectContaining({ status: "needs_sync", pending_refresh_at: expect.any(String),
+        last_error: "Local verified budget unavailable" })]);
   });
 });
 

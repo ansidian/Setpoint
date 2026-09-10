@@ -25,6 +25,8 @@ The desktop and mobile email detail pane: body loading/rendering, triage context
 ### Body + triage
 - `EmailContentSection.tsx` — message attachments and source body at full content height
 - `EmailBodyPane.tsx` — iframe HTML/plain-text body renderer
+- `src/components/email/EmailPreviewContent.tsx` — shared read-only preview header, body loading, and bounded scrolling for Alfred and finances
+- `src/components/email/EmailPreviewModal.tsx` — centered dialog wrapper above floating panels, with focus restoration and nested-dialog dismissal
 - `EmailAttachmentShelf.tsx` / `EmailAttachmentPreview.tsx` — compact file shelf plus safe PDF/raster preview overlay
 - `EmailCsvPreview.tsx` — bounded read-only CSV table preview with sticky headers and truncation limits
 - `EmailImagePreview.tsx` — raster-image preview viewport with zoom out, zoom in, and fit controls

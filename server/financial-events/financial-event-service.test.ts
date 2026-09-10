@@ -153,7 +153,7 @@ describe("autonomous financial event processing", () => {
     db = createClient({ url: "file::memory:" });
     await db.execute("PRAGMA foreign_keys = ON");
     for (const file of ["001_ea_tables.sql", "013_email_index_normalized_date.sql", "025_email_thread_identity.sql",
-      "054_email_sender_authentication.sql", "062_financial_events.sql", "068_financial_candidate_dismissal.sql", "067_financial_event_ai_requests.sql", "069_financial_profiles.sql", "070_financial_document_sources.sql"]) {
+      "054_email_sender_authentication.sql", "062_financial_events.sql", "071_financial_event_readiness.sql", "068_financial_candidate_dismissal.sql", "067_financial_event_ai_requests.sql", "069_financial_profiles.sql", "070_financial_document_sources.sql"]) {
       await db.executeMultiple(readFileSync(new URL("../db/migrations/" + file, import.meta.url), "utf8"));
     }
     await addFinancialCorrectionSchema(db);
@@ -194,6 +194,29 @@ describe("autonomous financial event processing", () => {
     for (let i = 0; i < 20; i++) if (!await worker.processNextEvent()) return;
     throw new Error("Event processing did not become idle");
   }
+
+  it("records an exact profile-backed receipt without waiting for unrelated capture or assessment", async () => {
+    await arrive(receipt("ready"));
+    await assessArrivals();
+    await db.execute({ sql: `INSERT INTO ea_financial_intake_state (user_id, account_id, completed_through, status, updated_at)
+      VALUES ('owner', 'gmail', ?, 'retry', ?)`, args: [new Date(clock - 86400_000).toISOString(), clock] });
+    await arrive(receipt("unrelated", { reference: "different-order", value: 50 }));
+    const unrelated = await store.claimDocument("slow-provider");
+    expect(unrelated?.emailUid).toBe("unrelated");
+    expect(await store.getEventForEmail("owner", "ready")).toMatchObject({ nextAttemptAt: clock });
+    worker = newWorker();
+    expect(await worker.processNextEvent()).toBe(true);
+    expect(ledger.map(entry => entry.amountCents)).toEqual([-3000]);
+    expect(await store.getEventForEmail("owner", "ready")).toMatchObject({ status: "settled" });
+  });
+
+  it("retains collection for a receipt that needs correlation without a permanent source identity", async () => {
+    await arrive(receipt("unidentified", { reference: "" }));
+    await assessArrivals();
+    expect(await store.getEventForEmail("owner", "unidentified")).toMatchObject({ nextAttemptAt: clock + 90_000 });
+    expect(await worker.processNextEvent()).toBe(false);
+    expect(ledger).toEqual([]);
+  });
 
   it("bounds failed document assessments across restarts without charging paused checks, and admits changed evidence", async () => {
     await arrive(receipt("assessment-outage"));
@@ -300,7 +323,7 @@ describe("autonomous financial event processing", () => {
     }
     expect(providerCredits).toBe(recovers ? 8 : 7);
     expect(await store.getEventForEmail("owner", source.uid)).toMatchObject({
-      status: recovers ? "settled" : "waiting", attempts: recovers ? 2 : 5,
+      status: recovers ? "settled" : "waiting", attempts: recovers ? 1 : 5,
     });
     expect(ledger.map((entry) => entry.amountCents)).toEqual(recovers ? [-3000] : []);
   });

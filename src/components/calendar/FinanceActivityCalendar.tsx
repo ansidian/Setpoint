@@ -130,9 +130,8 @@ export default function FinanceActivityCalendar({ month, today, days, selectedDa
     </div></AnimatedHeight>
     <div className="fac-controls"><button className="fac-expand" aria-expanded={expanded} onClick={() => setExpanded(value => !value)}>{expanded ? 'Show week' : 'Show month'}<ChevronDown size={13}/></button></div>
     <div className="fac-day-summary" data-payment-date={activeDate} aria-live="polite" aria-atomic="true"><div><strong>{dayLabel(activeDate)}</strong><span>{paymentMode ? 'Paid & due' : loading ? 'Loading…' : unavailable || !activeDay ? 'Recorded activity unavailable' : `${activeDay.entries.length} ${activeDay.complete ? '' : 'visible '}record${activeDay.entries.length === 1 ? '' : 's'}${activeDay.complete && activeDay.transfers ? ` · ${activeDay.transfers} transfer${activeDay.transfers === 1 ? '' : 's'}` : ''}`}</span></div>
-      {!paymentMode && activeDay && !loading && !unavailable && (activeDay.complete ? <dl><div><dt>In</dt><dd className="fin-income">+{financeMoney(activeDay.incomeCents)}</dd></div><div><dt>Out</dt><dd className="fin-outflow">−{financeMoney(activeDay.outflowCents)}</dd></div></dl> : <p>Totals unavailable for this day. Review its recorded rows for details.</p>)}
+      {!paymentMode && activeDay && !loading && !unavailable && (activeDay.complete ? <dl><div><dt>In</dt><dd className="fin-income">+{financeMoney(activeDay.incomeCents)}</dd></div><div><dt>Out</dt><dd className="fin-outflow">−{financeMoney(activeDay.outflowCents)}</dd></div><div><dt>Transfer</dt><dd className="fin-transfer">{financeMoney(activeDay.transferCents)}</dd></div></dl> : <p>Totals unavailable for this day. Review its recorded rows for details.</p>)}
       {payments && onPayment && <FinancePaymentDayList date={activeDate} payments={payments} loading={loading} unavailable={unavailable} complete={!!activeDay?.complete} onNavigate={onPayment}/>}
     </div>
-    <p className="fac-hint">{paymentMode ? 'Utilities and recurring payments · available schedules only.' : 'Select a day to find its rows.'}</p>
   </aside>;
 }

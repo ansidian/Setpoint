@@ -113,7 +113,11 @@ export async function invalidateActualAfterTransactionImport(userId: string): Pr
   // Persist reconciliation before a fallible cache refresh: settled originals
   // have no correction journal to retry a failed projection publication.
   await scheduleBillsMirrorRefresh(userId, { delayMs: 60_000 });
-  await invalidateActualMetadata(userId);
+  await invalidateActualMetadataCache();
+  const actualBudgetUrl = await loadActualBudgetUrl(userId);
+  // The admitted write has already synchronized and read back its result.
+  // Publish that local budget immediately to both Setpoint projections.
+  await refreshBillsMirror(userId, { actualBudgetUrl, refreshLocalActual: false, afterVerifiedWrite: true });
 }
 
 async function scheduleBillsMirrorRefreshInBackground(userId: string, delayMs: number) {

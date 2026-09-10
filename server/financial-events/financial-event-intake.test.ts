@@ -57,7 +57,7 @@ describe("financial received-email capture", () => {
     });
   }
 
-  it("captures through owner confirmation promptly across restart without accelerating ordinary polling", async () => {
+  it("keeps background capture on its own polling schedule after owner confirmation and restart", async () => {
     vi.stubGlobal("fetch", async () => response({ messages: [] }));
     await intake().recoverStaleClaims();
     await intake().processNextPage();
@@ -66,14 +66,16 @@ describe("financial received-email capture", () => {
     expect(await intake().getNextWakeAt()).toBe(START + POLL);
     await ownerCaptureRequest();
     const resumed = intake();
-    expect(await resumed.getNextWakeAt()).toBe(now);
+    expect(await resumed.getNextWakeAt()).toBe(START + POLL);
+    expect(await resumed.processNextPage()).toBe(false);
+    now = START + POLL;
     expect(await resumed.processNextPage()).toBe(true);
     expect(await state()).toMatchObject({ status: "waiting", completed_through: new Date(now).toISOString() });
     expect(await resumed.getNextWakeAt()).toBe(now + POLL);
     expect(await resumed.processNextPage()).toBe(false);
   });
 
-  it("catches up immediately when confirmation arrives during an older capture window", async () => {
+  it("finishes an active capture window without restarting it for an owner confirmation", async () => {
     let releasePage!: () => void;
     let pageStarted!: () => void;
     const started = new Promise<void>((resolve) => { pageStarted = resolve; });
@@ -93,9 +95,8 @@ describe("financial received-email capture", () => {
     releasePage();
     await active;
     expect(await state()).toMatchObject({ status: "waiting", completed_through: new Date(START).toISOString() });
-    expect(await intake().getNextWakeAt()).toBe(now);
-    expect(await intake().processNextPage()).toBe(true);
-    expect(await state()).toMatchObject({ status: "waiting", completed_through: new Date(now).toISOString() });
+    expect(await intake().getNextWakeAt()).toBe(now + POLL);
+    expect(await intake().processNextPage()).toBe(false);
   });
 
   it("preserves failed provider retry deadlines despite an outstanding owner capture request", async () => {
@@ -106,6 +107,7 @@ describe("financial received-email capture", () => {
     now += 1_000;
     await ownerCaptureRequest();
     fail = true;
+    now = START + POLL;
     await intake().processNextPage();
     const failed = await state();
     expect(failed).toMatchObject({ status: "retry", completed_through: new Date(START).toISOString() });

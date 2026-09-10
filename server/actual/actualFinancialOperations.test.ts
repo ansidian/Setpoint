@@ -129,6 +129,7 @@ function fixture() {
     partialTransfer: () => { partialTransfer = true; },
     failSyncAfterWrite: () => { failSyncAfterWrite = true; },
     failCategoryRead: () => { unavailableCategoryMetadata = true; },
+    restoreCategoryRead: () => { unavailableCategoryMetadata = false; },
   };
 }
 
@@ -157,11 +158,14 @@ describe("Actual financial operations", () => {
     const state = fixture();
     const input = { ...purchase, categoryId: failure === "missing" ? "removed-category" : "utilities" };
     if (failure === "unavailable") state.failCategoryRead();
-    expect(await reconcileActualFinancialOperation(state.sdk, "budget", input, "preview", now)).toMatchObject({ outcome: "would_add" });
-    expect(await reconcileActualFinancialOperation(state.sdk, "budget", input, "write_once", now)).toMatchObject({ outcome: "added" });
+    const preview = await reconcileActualFinancialOperation(state.sdk, "budget", input, "preview", now);
+    expect(preview).toMatchObject({ outcome: "would_add", effectiveCategoryId: null });
+    const bound = { ...input, effectiveCategoryId: preview.effectiveCategoryId };
+    state.restoreCategoryRead();
+    expect(await reconcileActualFinancialOperation(state.sdk, "budget", bound, "write_once", now)).toMatchObject({ outcome: "added" });
     expect(state.transactions[0]?.category).toBeUndefined();
     state.transactions[0]!.category = "owner-selected";
-    expect(await reconcileActualFinancialOperation(state.sdk, "budget", input, "recover", now)).toMatchObject({ outcome: "already_present" });
+    expect(await reconcileActualFinancialOperation(state.sdk, "budget", bound, "recover", now)).toMatchObject({ outcome: "already_present" });
     expect(state.transactions).toEqual([expect.objectContaining({ category: "owner-selected" })]);
   });
 
@@ -170,6 +174,28 @@ describe("Actual financial operations", () => {
     state.payees.push({ id: "first-shop", name: purchase.payee, transfer_acct: "" }, { id: "selected-shop", name: purchase.payee, transfer_acct: "" });
     expect(await reconcileActualFinancialOperation(state.sdk, "budget", { ...purchase, payeeId: "selected-shop" }, "write_once", now)).toMatchObject({ outcome: "added" });
     expect(state.transactions).toEqual([expect.objectContaining({ payee: "selected-shop" })]);
+  });
+
+  it.each(["payee", "category"] as const)("requires review when the synchronized transaction's %s disagrees with its admitted entry", async (field) => {
+    const state = fixture();
+    const input = { ...purchase, categoryId: "utilities" };
+    const preview = await reconcileActualFinancialOperation(state.sdk, "budget", input, "preview", now);
+    expect(preview).toMatchObject({ outcome: "would_add", effectiveCategoryId: "utilities" });
+    const bound = { ...input, effectiveCategoryId: preview.effectiveCategoryId };
+    expect(await reconcileActualFinancialOperation(state.sdk, "budget", bound, "write_once", now)).toMatchObject({ outcome: "added" });
+    state.transactions[0]![field] = "owner-edited";
+    state.failCategoryRead();
+    expect(await reconcileActualFinancialOperation(state.sdk, "budget", bound, "recover", now)).toMatchObject({ outcome: "needs_review" });
+    expect(state.transactions).toEqual([expect.objectContaining({ [field]: "owner-edited" })]);
+  });
+
+  it("does not impose newly normalized category requirements on operations admitted before normalization", async () => {
+    const state = fixture();
+    const input = { ...purchase, categoryId: "utilities" };
+    await reconcileActualFinancialOperation(state.sdk, "budget", input, "write_once", now);
+    state.transactions[0]!.category = "owner-edited";
+    expect(await reconcileActualFinancialOperation(state.sdk, "budget", input, "recover", now)).toMatchObject({ outcome: "already_present" });
+    expect(state.transactions).toHaveLength(1);
   });
 
   it("recognizes a unique legacy transaction but contains ambiguous old matches", async () => {
@@ -183,6 +209,17 @@ describe("Actual financial operations", () => {
     state.transactions.push({ ...legacy, id: "manual-2" });
     expect(await reconcileActualFinancialOperation(state.sdk, "budget", purchase, "write_once", now)).toMatchObject({ outcome: "needs_review" });
     expect(state.transactions).toHaveLength(2);
+  });
+
+  it("reviews a legacy category conflict without importing a duplicate", async () => {
+    const state = fixture();
+    state.payees.push({ id: "shop", name: purchase.payee, transfer_acct: "" });
+    state.transactions.push({ id: "manual", account: purchase.accountId, payee: "shop", amount: purchase.amountCents,
+      date: purchase.date, imported_id: null, transfer_id: null, tombstone: false, category: "owner-selected" });
+    const input = { ...purchase, categoryId: "utilities" };
+    expect(await reconcileActualFinancialOperation(state.sdk, "budget", input, "preview", now)).toMatchObject({ outcome: "needs_review" });
+    expect(await reconcileActualFinancialOperation(state.sdk, "budget", input, "write_once", now)).toMatchObject({ outcome: "needs_review" });
+    expect(state.transactions).toEqual([expect.objectContaining({ id: "manual", category: "owner-selected" })]);
   });
 
   it("binds transaction writes to the preview budget and never imports during empty recovery", async () => {
@@ -306,6 +343,19 @@ describe("Actual financial operations", () => {
     expect(state.schedules).toHaveLength(1);
     expect(state.rules[0]?.actions).toEqual([{ op: "link-schedule", value: state.schedules[0]!.id }]);
     expect(state.transactions).toEqual([]);
+  });
+
+  it("verifies the utility category selected in preview even if category metadata later fails", async () => {
+    const state = fixture();
+    const input = { ...utility, categoryId: "utilities" };
+    const preview = await reconcileActualFinancialOperation(state.sdk, "budget", input, "preview", now);
+    const bound = { ...input, effectiveCategoryId: preview.effectiveCategoryId, scheduleId: preview.scheduleId };
+    expect(await reconcileActualFinancialOperation(state.sdk, "budget", bound, "write_once", now)).toMatchObject({ outcome: "added" });
+    state.rules[0]!.actions.find((action) => action.field === "category")!.value = "owner-selected";
+    state.failCategoryRead();
+    expect(await reconcileActualFinancialOperation(state.sdk, "budget", bound, "recover", now)).toMatchObject({ outcome: "needs_review" });
+    expect(state.schedules).toHaveLength(1);
+    expect(state.rules[0]!.actions).toContainEqual({ op: "set", field: "category", value: "owner-selected" });
   });
 
   it("does not schedule a utility payment that already exists in Actual", async () => {

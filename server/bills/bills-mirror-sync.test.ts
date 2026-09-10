@@ -306,6 +306,43 @@ describe("Bills mirror", () => {
     expect(await occurrenceRows()).toHaveLength(1);
   });
 
+  it("publishes a verified write after an older refresh instead of reusing its stale snapshot", async () => {
+    let release!: (value: ReturnType<typeof billMetadata>) => void;
+    mockActualLocal.readLocalActualMetadata
+      .mockReturnValueOnce(new Promise((resolve) => { release = resolve; }))
+      .mockResolvedValueOnce(billMetadata({ nextDate: "2026-06-10" }));
+    const options = { actualBudgetUrl: "https://actual.example.test", now: new Date("2026-05-06T12:00:00.000Z") };
+    const older = refreshBillsMirror(options);
+    await scheduleBillsMirrorRefresh({ delayMs: 60_000 });
+    const publication = refreshBillsMirror({ ...options, afterVerifiedWrite: true });
+    release(billMetadata());
+    await older;
+    const out = await publication;
+    expect(out.allSchedules).toEqual([expect.objectContaining({ id: "sched-1:2026-06-10" })]);
+    expect((await occurrenceRows()).map((row) => row.occurrence_id)).toEqual(["sched-1:2026-06-10"]);
+    expect(await stateRow()).toMatchObject({ status: "current", pending_refresh_at: null });
+    const projection = (await testDb.execute("SELECT schedules_json FROM ea_actual_metadata_mirror")).rows[0]!;
+    expect(JSON.parse(String(projection.schedules_json))).toEqual([expect.objectContaining({ next_date: "2026-06-10" })]);
+  });
+
+  it("keeps a durable retry if verified-write publication fails after an older refresh cleared pending work", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    let release!: (value: ReturnType<typeof billMetadata>) => void;
+    mockActualLocal.readLocalActualMetadata
+      .mockReturnValueOnce(new Promise((resolve) => { release = resolve; }))
+      .mockRejectedValueOnce(new Error("Local budget unavailable after write"));
+    const options = { actualBudgetUrl: "https://actual.example.test", now: new Date("2026-05-06T12:00:00.000Z") };
+    const older = refreshBillsMirror(options);
+    await scheduleBillsMirrorRefresh({ delayMs: 60_000 });
+    const publication = refreshBillsMirror({ ...options, afterVerifiedWrite: true });
+    release(billMetadata());
+    await older;
+    const out = await publication;
+    expect(out.billsSyncHealth).toMatchObject({ state: "degraded", lastError: "Local budget unavailable after write" });
+    expect(await stateRow()).toMatchObject({ status: "degraded", pending_refresh_at: expect.any(String) });
+    expect((await occurrenceRows()).map((row) => row.occurrence_id)).toEqual(["sched-1:2026-05-10"]);
+  });
+
   it("schedules and consumes a durable delayed refresh", async () => {
     const scheduled = await scheduleBillsMirrorRefresh({
       delayMs: 60_000,

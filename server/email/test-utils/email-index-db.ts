@@ -21,7 +21,7 @@ const CORE_MIGRATION_FILES = [
   "025_email_thread_identity.sql",
   "047_email_verification_codes.sql",
   "054_email_sender_authentication.sql",
-  "062_financial_events.sql",
+  "062_financial_events.sql", "071_financial_event_readiness.sql",
   "068_financial_candidate_dismissal.sql",
 ];
 

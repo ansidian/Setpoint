@@ -44,6 +44,8 @@ export interface ActualUtilityScheduleInput extends ActualFinancialOperationBase
   payee: string;
   payeeId?: string | null;
   categoryId?: string | null;
+  /** Previewed category to submit; null preserves Actual's optional category. */
+  effectiveCategoryId?: string | null;
   amountCents: number;
   date: string;
   name: string;
@@ -57,6 +59,8 @@ export interface ActualFinancialTransactionInput extends ActualFinancialOperatio
   payee: string;
   payeeId?: string | null;
   categoryId?: string | null;
+  /** Previewed category to submit; absent on operations admitted before normalization. */
+  effectiveCategoryId?: string | null;
   amountCents: number;
   date: string;
   notes: string;
@@ -73,4 +77,5 @@ export interface ActualFinancialOperationResult {
   transactionId?: string;
   scheduleId?: string;
   scheduleFingerprint?: string;
+  effectiveCategoryId?: string | null;
 }

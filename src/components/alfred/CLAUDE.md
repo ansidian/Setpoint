@@ -17,7 +17,7 @@ The desktop-only Alfred Panel (CONTEXT.md): a centered workbench or an Inbox-int
 - `AlfredEmailContext.tsx` — pending/sent email reference cards and the conditional earlier-email/context-overflow notice
 - `alfredEmailContextModel.ts` — pure pending-context projection into display references and preview items
 - `AlfredRows.tsx` — verbatim domain rows: bill/event/deadline/email/transaction (cite-by-reference; never reshape values)
-- `AlfredEmailPreview.tsx` — read-only email preview overlay opened from an email chip (Esc/outside-click close it, never the panel)
+- `AlfredEmailPreview.tsx` — read-only email preview overlay opened from an email chip (Esc/outside-click close it, never the panel); shares `src/components/email/EmailPreviewContent.tsx` with the financial source modal
 - `alfredChipActionModel.ts` — pure chip-click → navigation action resolver (email preview, exact Finances targets, or calendar request via the dashboard's request builders)
 - `alfredRowOrdering.ts` — pure sort/section logic for surfaced rows: ordering rules and kind-based sectioning for the Alfred panel result list
 - `AlfredTransactionBreakdown.tsx` — auto-rendered breakdown card for the summarize_transactions tool result (spending or income): accent-driven proportional bars, period/group-by header, "Other" greyed, reduced-motion-safe bar-grow animation

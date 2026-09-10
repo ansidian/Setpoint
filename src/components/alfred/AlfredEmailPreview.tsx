@@ -5,17 +5,12 @@
 // Esc ordering (preview first, panel second) is owned by AlfredPanel.
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { X } from "lucide-react";
-import EmailBodyPane from "../inbox/reader/EmailBodyPane";
-import useEmailBody from "../inbox/reader/useEmailBody";
+import EmailPreviewContent from "../email/EmailPreviewContent";
 import { formatAlfredAbsolute, formatAlfredAgo } from "./alfredPanelModel";
 import type { AlfredEmailItem } from "../../../shared/types/alfred";
 
-const text = "var(--sp-text)";
-
 export default function AlfredEmailPreview({ item, onClose }: { item: AlfredEmailItem; onClose: () => void }) {
   const panelRef = useRef<HTMLDivElement>(null);
-  const bodyState = useEmailBody({ uid: item.uid, body_preview: item.body_snippet || "" });
 
   useEffect(() => {
     function onPointerDown(e: PointerEvent): void {
@@ -46,33 +41,8 @@ export default function AlfredEmailPreview({ item, onClose }: { item: AlfredEmai
         boxShadow: "-24px 0 60px rgba(0,0,0,0.55)",
       }}
     >
-      <div style={{
-        display: "flex", alignItems: "flex-start", gap: 10, padding: "14px 16px 12px",
-        borderBottom: "1px solid rgba(255,255,255,0.06)", flexShrink: 0,
-      }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 600, color: text, lineHeight: 1.35 }}>
-            {item.subject || "(No subject)"}
-          </div>
-          <div
-            title={absoluteDate ? `Received ${absoluteDate}` : undefined}
-            style={{ fontSize: 11, color: "var(--color-text-faint)", marginTop: 3 }}
-          >
-            {fromName}{fromAddress && fromAddress !== fromName ? ` <${fromAddress}>` : ""}
-            {" · "}{formatAlfredAgo(item.email_date)}
-          </div>
-        </div>
-        <button type="button" title="Close (esc)" onClick={onClose}
-          className="bg-transparent text-[rgba(205,214,244,0.55)] transition-[background-color,color,transform] hover:-translate-y-px hover:bg-white/[0.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 active:translate-y-0 motion-reduce:transform-none motion-reduce:transition-none"
-          style={{ display: "inline-flex", padding: "4px 6px", border: "none", cursor: "pointer", borderRadius: 6 }}>
-          <X size={13} />
-        </button>
-      </div>
-      <EmailBodyPane
-        state={bodyState}
-        fallback={item.body_snippet || ""}
-        email={{ uid: item.uid, account_id: item.account?.id, from_address: fromAddress }}
-      />
+      <EmailPreviewContent email={{ uid:item.uid, subject:item.subject, fromName, fromAddress, accountId:item.account?.id, bodySnippet:item.body_snippet }}
+        dateLabel={formatAlfredAgo(item.email_date)} dateTitle={absoluteDate ? `Received ${absoluteDate}` : undefined} onClose={onClose}/>
     </div>,
     document.body,
   );

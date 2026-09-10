@@ -44,6 +44,10 @@ export function buildFinancialEventOperation(eventId: string, plan: FinancialEma
 }
 
 export function bindFinancialEventOperation(operation: FinancialEventOperation, preview: ActualFinancialOperationResult): FinancialEventOperation {
+  if (operation.executor === "financial" && operation.input.kind !== "completed_transfer"
+    && preview.effectiveCategoryId !== undefined) {
+    operation = { ...operation, input: { ...operation.input, effectiveCategoryId: preview.effectiveCategoryId } };
+  }
   if (operation.executor === "transfer_schedule" || operation.input.kind === "utility_schedule") {
     return { ...operation, input: { ...operation.input, budgetId: preview.budgetId, preparedEvidence: preview.evidence,
       ...(preview.scheduleId ? { scheduleId: preview.scheduleId } : {}),

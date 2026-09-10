@@ -23,6 +23,8 @@ export type CalendarDateTimeViewProps = {
   confirmLabel?: string;
   mode?: "date-time" | "date-only";
   allowPastDates?: boolean;
+  /** Inclusive calendar-day limit in the dashboard timezone (YYYY-MM-DD). */
+  maxDate?: string;
   submitOnDateSelect?: boolean;
 };
 
@@ -35,10 +37,12 @@ export default function CalendarDateTimeView({
   confirmLabel = "Confirm",
   mode = "date-time",
   allowPastDates = false,
+  maxDate,
   submitOnDateSelect = false,
 }: CalendarDateTimeViewProps) {
   const monthWheelDeltaRef = useRef(0);
   const today = useMemo(() => laComponents(nowTick), [nowTick]);
+  const latest = maxDate ? laComponents(new Date(`${maxDate}T12:00:00Z`).getTime()) : null;
   const showTime = mode !== "date-only";
   const [draft, setDraft] = useState(() => {
     if (typeof initialEpoch === "number" && Number.isFinite(initialEpoch)) return laComponents(initialEpoch);
@@ -71,6 +75,7 @@ export default function CalendarDateTimeView({
 
   const changeMonth = (delta: number) => {
     const next = new Date(Date.UTC(viewYear, viewMonth + delta, 1));
+    if (latest && compareDay({ year: next.getUTCFullYear(), month: next.getUTCMonth(), day: 1 }, latest) > 0) return;
     setViewYear(next.getUTCFullYear());
     setViewMonth(next.getUTCMonth());
   };
@@ -86,6 +91,7 @@ export default function CalendarDateTimeView({
 
   const selectDay = (cell: CalendarDay) => {
     if (!allowPastDates && compareDay(cell, today) < 0) return;
+    if (latest && compareDay(cell, latest) > 0) return;
     const isSameDay =
       cell.year === draft.year && cell.month === draft.month && cell.day === draft.day;
     if (!showTime && (submitOnDateSelect || isSameDay)) {
@@ -152,9 +158,10 @@ export default function CalendarDateTimeView({
   const draftEpoch = showTime
     ? epochFromLa(draft.year, draft.month, draft.day, draft.hour, draft.minute)
     : epochFromLa(draft.year, draft.month, draft.day, 12, 0);
-  const confirmDisabled = showTime
+  const confirmDisabled = !!(latest && compareDay(draft, latest) > 0) || (showTime
     ? (!allowPastDates && draftEpoch <= nowTick)
-    : (!allowPastDates && compareDay(draft, today) < 0);
+    : (!allowPastDates && compareDay(draft, today) < 0));
+  const nextMonthDisabled = !!latest && (viewYear > latest.year || viewYear === latest.year && viewMonth >= latest.month);
   const monthLabel = new Intl.DateTimeFormat("en-US", {
     month: "long",
     year: "numeric",
@@ -239,6 +246,7 @@ export default function CalendarDateTimeView({
           <button
             type="button"
             aria-label="Next month"
+            disabled={nextMonthDisabled}
             onClick={() => changeMonth(1)}
             style={navBtn()}
             onMouseEnter={(event) => { event.currentTarget.style.background = "rgba(255,255,255,0.04)"; }}
@@ -282,13 +290,13 @@ export default function CalendarDateTimeView({
           }}
         >
           {cells.map((cell, index) => {
-            const isPast = !allowPastDates && compareDay(cell, today) < 0;
+            const disabled = (!allowPastDates && compareDay(cell, today) < 0) || !!(latest && compareDay(cell, latest) > 0);
             const isToday = compareDay(cell, today) === 0;
             const isSelected =
               cell.year === draft.year && cell.month === draft.month && cell.day === draft.day;
             const baseColor = !cell.inMonth
               ? "var(--color-text-faint)"
-              : isPast
+              : disabled
                 ? "rgba(205,214,244,0.22)"
                 : "rgba(205,214,244,0.85)";
 
@@ -296,10 +304,10 @@ export default function CalendarDateTimeView({
               <button
                 key={index}
                 type="button"
-                disabled={isPast}
+                disabled={disabled}
                 onClick={() => selectDay(cell)}
                 onMouseEnter={(event) => {
-                  if (isPast || isSelected) return;
+                  if (disabled || isSelected) return;
                   event.currentTarget.style.background = "rgba(255,255,255,0.04)";
                 }}
                 onMouseLeave={(event) => {
@@ -322,7 +330,7 @@ export default function CalendarDateTimeView({
                     ? `1px solid color-mix(in srgb, ${accent} 60%, transparent)`
                     : "1px solid transparent",
                   borderRadius: 6,
-                  cursor: isPast ? "not-allowed" : "pointer",
+                  cursor: disabled ? "not-allowed" : "pointer",
                   transition: "background 120ms, color 120ms",
                 }}
               >

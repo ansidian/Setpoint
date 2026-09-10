@@ -39,7 +39,7 @@ export function financePayments(data: FinanceWorkspace, range: JournalRange | nu
   const byDate = new Map(recordedDays.map(day => [day.date, day]));
   const days: FinanceActivityDay[] = [];
   for (let date = `${month}-01`; date <= last; date = shiftFinanceDate(date, 1)) {
-    days.push(byDate.get(date) || { date, entries: [], incomeCents: 0, outflowCents: 0, transfers: 0, complete: date > data.end });
+    days.push(byDate.get(date) || { date, entries: [], incomeCents: 0, outflowCents: 0, transfers: 0, transferCents: 0, complete: date > data.end });
   }
   const payments: FinancePayment[] = recordedDays.flatMap(day => day.entries.map(entry => {
     const rows = [entry.transaction, ...entry.children, ...(entry.counterpart ? [entry.counterpart] : [])];

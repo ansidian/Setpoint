@@ -20,7 +20,7 @@ it('counts split purchases once, keeps signed flows separate, and excludes recip
     row('sent', { transferId: 'received', amountCents: -25000 }),
     row('received', { transferId: 'sent', accountId: 'b', amountCents: 25000 }),
   ]));
-  expect(days[0]).toMatchObject({ date: '2026-09-08', incomeCents: 420000, outflowCents: 300, transfers: 1, complete: true });
+  expect(days[0]).toMatchObject({ date: '2026-09-08', incomeCents: 420000, outflowCents: 300, transfers: 1, transferCents: 25000, complete: true });
   expect(days[0]!.entries).toHaveLength(3);
   expect(days[1]).toMatchObject({ date: '2026-09-07', incomeCents: 0, outflowCents: 0, entries: [], complete: true });
 });
@@ -51,7 +51,7 @@ it('recognizes transfer payees without paired rows and keeps ordinary credits as
     row('withdrawal', { amountCents:-2500,transferAccountId:'card',transferAccount:'Credit card' }),
     row('cashback', { amountCents:1250 }),
   ]));
-  expect(days[0]).toMatchObject({incomeCents:1250,outflowCents:0,transfers:2,complete:true});
+  expect(days[0]).toMatchObject({incomeCents:1250,outflowCents:0,transfers:2,transferCents:125403,complete:true});
   expect(days[0]?.entries.find(entry=>entry.id==='card-payment')).toMatchObject({kind:'received',counterpart:null,incomplete:false});
   expect(days[0]?.entries.find(entry=>entry.id==='withdrawal')).toMatchObject({kind:'sent',counterpart:null,incomplete:false});
 });

@@ -3,7 +3,6 @@ import type { ReactNode } from 'react';
 import type { PaymentPresentationRow } from './paymentPresentationModel';
 import type { FinanceDestination } from './financesNavigation';
 import { financeDate, financeMoney } from './financeWorkspaceModel';
-import UtilityDetail from './UtilityDetail';
 import MonthlyPaymentChart from './MonthlyPaymentChart';
 
 const statusLabels = { paid: 'Paid', received: 'Received', transferred: 'Transferred', scheduled: 'Scheduled', nothing_due: 'Nothing due', unknown: 'Status unknown' } as const;
@@ -32,10 +31,9 @@ export default function PaymentDetail({ row, historyComplete, onNavigate, onFore
       {row.status === 'scheduled' && <p className="fin-muted">{row.occurrence ? 'Scheduled in Actual. No exact payment link is available for this occurrence.' : 'Statement due. No linked payment is available.'}</p>}
       {row.status === 'unknown' && <p className="fin-muted">No statement or scheduled occurrence establishes a payment status for this month.</p>}
     </section>
-    {(row.payments.length > 0 || row.history.length > 0) && <MonthlyPaymentChart payments={[...row.payments, ...row.history]} statements={statements} month={month || row.paymentDate?.slice(0, 7) || row.scheduledDate?.slice(0, 7) || new Date().toISOString().slice(0, 7)} historyComplete={historyComplete} onNavigate={onNavigate}/>}
+    {(row.payments.length > 0 || row.history.length > 0 || statements.length > 0) && <MonthlyPaymentChart payments={[...row.payments, ...row.history]} statements={statements} month={month || row.paymentDate?.slice(0, 7) || row.scheduledDate?.slice(0, 7) || new Date().toISOString().slice(0, 7)} historyComplete={historyComplete} onNavigate={onNavigate} onForeground={onForeground}/>}
     {!!row.unconfirmedOccurrences?.length && <details className="fin-schedule-evidence"><summary>Unconfirmed schedule history <span>{row.unconfirmedOccurrences.length}</span></summary><p className="fin-muted">Actual’s schedule previously marked these occurrences paid. {historyComplete ? 'No matching transaction is present in the available payment history.' : 'Their matching transactions are not available in the loaded history.'} They are not counted as payments.</p><ul>{row.unconfirmedOccurrences.map(occurrence=><li key={occurrence.id}><span>Scheduled {financeDate(occurrence.next_date)}</span><span>{financeMoney(Math.round(Math.abs(occurrence.amount)*100))} estimate</span></li>)}</ul></details>}
     {!historyComplete && <p className="fin-notice">Payment history is incomplete. Additional payments may appear in Journal.</p>}
-    <UtilityDetail statements={statements} provider={row.provider || row.name} onForeground={onForeground}/>
   </article>;
 }
 
