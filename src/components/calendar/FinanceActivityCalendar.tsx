@@ -15,11 +15,12 @@ interface Props {
   days: FinanceActivityDay[];
   selectedDate: string | null;
   previewDate: string | null;
+  preserveSelection?: boolean;
   loading: boolean;
   unavailable: boolean;
   scheduledDays?: ScheduledPaymentDay[];
   payments?: FinancePayment[];
-  onPayment?: (payment: FinancePayment) => void;
+  onPayment?: (payment: FinancePayment, trigger: HTMLButtonElement) => void;
   through?: string;
   earliest?: string;
   onSelect: (date: string) => void;
@@ -34,9 +35,9 @@ const dayLabel = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateStr
   weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC',
 });
 
-export default function FinanceActivityCalendar({ month, today, days, selectedDate, previewDate, loading, unavailable, scheduledDays, payments, onPayment, through = today, earliest, onSelect, onClearSelection, onMonth }: Props) {
+export default function FinanceActivityCalendar({ month, today, days, selectedDate, previewDate, preserveSelection = false, loading, unavailable, scheduledDays, payments, onPayment, through = today, earliest, onSelect, onClearSelection, onMonth }: Props) {
   useEffect(() => {
-    if (!selectedDate) return;
+    if (!selectedDate || preserveSelection) return;
     const clearOutsideDay = (event: MouseEvent) => {
       const target = event.target instanceof Element ? event.target.closest('[data-payment-date]') : null;
       if (target?.getAttribute('data-payment-date') !== selectedDate) onClearSelection();
@@ -44,7 +45,7 @@ export default function FinanceActivityCalendar({ month, today, days, selectedDa
     // Capture clears the previous selection before a different date's click selects it.
     document.addEventListener('click', clearOutsideDay, true);
     return () => document.removeEventListener('click', clearOutsideDay, true);
-  }, [selectedDate, onClearSelection]);
+  }, [selectedDate, onClearSelection, preserveSelection]);
   const cells = financeMonthCells(month);
   const latest = today.startsWith(month) ? today : financeMonthRange(month, through).end;
   const scheduledByDate = new Map(scheduledDays?.map(day => [day.date, day]));
@@ -94,7 +95,7 @@ export default function FinanceActivityCalendar({ month, today, days, selectedDa
     return `${financeDate(date)}, ${financeMoney(day.incomeCents)} in, ${financeMoney(day.outflowCents)} out, ${day.transfers} transfers, ${day.entries.length} records${scheduled}`;
   };
   return <aside className="fin-activity-calendar" data-payments={paymentMode} aria-label={paymentMode ? "Payment calendar" : "Activity calendar"} data-expanded={expanded} aria-busy={loading}>
-    <div className="fac-heading"><h2>{monthLabel}</h2><div className="fac-month-navigation">
+    <div className="fac-heading"><h2><button className="fac-month-reset" aria-label="Return calendar to current month" onClick={() => { navigateMonth(today.slice(0, 7)); select(today); }}>{monthLabel}</button></h2><div className="fac-month-navigation">
       <button aria-label="Previous activity month" disabled={!!earliest && month <= earliest.slice(0, 7)} onClick={() => navigateMonth(shiftFinanceMonth(month, -1))}><ChevronLeft size={16}/></button>
       <button aria-label="Next activity month" disabled={month >= through.slice(0, 7)} onClick={() => navigateMonth(shiftFinanceMonth(month, 1))}><ChevronRight size={16}/></button>
     </div><div className="fac-week-navigation">
@@ -127,7 +128,7 @@ export default function FinanceActivityCalendar({ month, today, days, selectedDa
         </button>;
       })}
     </div></AnimatedHeight>
-    <div className="fac-controls"><button className="fac-expand" aria-expanded={expanded} onClick={() => setExpanded(value => !value)}>{expanded ? 'Show week' : 'Show month'}<ChevronDown size={13}/></button><button className="fac-current" onClick={() => { if (month !== today.slice(0, 7)) navigateMonth(today.slice(0, 7)); else select(today); }}>Today</button></div>
+    <div className="fac-controls"><button className="fac-expand" aria-expanded={expanded} onClick={() => setExpanded(value => !value)}>{expanded ? 'Show week' : 'Show month'}<ChevronDown size={13}/></button></div>
     <div className="fac-day-summary" data-payment-date={activeDate} aria-live="polite" aria-atomic="true"><div><strong>{dayLabel(activeDate)}</strong><span>{paymentMode ? 'Paid & due' : loading ? 'Loading…' : unavailable || !activeDay ? 'Recorded activity unavailable' : `${activeDay.entries.length} ${activeDay.complete ? '' : 'visible '}record${activeDay.entries.length === 1 ? '' : 's'}${activeDay.complete && activeDay.transfers ? ` · ${activeDay.transfers} transfer${activeDay.transfers === 1 ? '' : 's'}` : ''}`}</span></div>
       {!paymentMode && activeDay && !loading && !unavailable && (activeDay.complete ? <dl><div><dt>In</dt><dd className="fin-income">+{financeMoney(activeDay.incomeCents)}</dd></div><div><dt>Out</dt><dd className="fin-outflow">−{financeMoney(activeDay.outflowCents)}</dd></div></dl> : <p>Totals unavailable for this day. Review its recorded rows for details.</p>)}
       {payments && onPayment && <FinancePaymentDayList date={activeDate} payments={payments} loading={loading} unavailable={unavailable} complete={!!activeDay?.complete} onNavigate={onPayment}/>}

@@ -4,14 +4,14 @@ import type { FinanceWorkspace, JournalRange } from '../../../shared/types/finan
 import { financePayments } from './financePaymentsModel';
 import { financeMonthRange } from './financeActivityModel';
 
-export default function useFinancePaymentCalendar(data: FinanceWorkspace | null, revision: number, active: boolean) {
+export default function useFinancePaymentCalendar(data: FinanceWorkspace | null, revision: number, active: boolean, initialMonth?: string) {
   const [chosenMonth, setMonth] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [previewDate, setPreviewDate] = useState<string | null>(null);
   const [range, setRange] = useState<JournalRange | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const month = chosenMonth || data?.end.slice(0, 7) || '';
+  const month = initialMonth || chosenMonth || data?.end.slice(0, 7) || '';
   const today = data?.end || '';
   const { start, end } = month && today ? financeMonthRange(month, today) : { start: '', end: '' };
   useEffect(() => {

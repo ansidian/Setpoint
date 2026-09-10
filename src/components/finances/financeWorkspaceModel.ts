@@ -1,8 +1,7 @@
-import type { FinanceUtility, JournalRange, JournalTransaction, UtilityStatement } from '../../../shared/types/finances';
+import type { JournalRange, JournalTransaction, UtilityStatement } from '../../../shared/types/finances';
 export const financeMoney = (cents:number|null) => cents === null ? 'Unavailable' : new Intl.NumberFormat('en-US',{ style:'currency', currency:'USD' }).format(cents / 100);
 export const financeDate = (date:string|null) => date && Number.isFinite(Date.parse(date)) ? new Date(date.length === 10 ? `${date}T12:00:00` : date).toLocaleDateString('en-US',{ month:'short', day:'numeric', year:'numeric' }) : 'Unavailable';
 export function priorMonth(month:string):string { const date = new Date(`${month}-01T12:00:00Z`); date.setUTCMonth(date.getUTCMonth()-1); return date.toISOString().slice(0,7); }
-export function statementMonths(end:string):string[] { const months = [end.slice(0,7)]; while (months.length < 12) months.unshift(priorMonth(months[0]!)); return months; }
 /** Only an exact reference or one source defines one obligation. Competing bills remain selectable. */
 export function monthStatement(statements:UtilityStatement[], month:string):UtilityStatement|null {
   const rows = statements.filter(row => row.dueDate?.startsWith(month) && !row.issue);
@@ -19,18 +18,6 @@ export function statementComparison(statement:UtilityStatement|null, statements:
   const delta = statement.amountCents - previous.amountCents;
   const month = new Date(`${previous.dueDate!.slice(0,7)}-01T12:00:00`).toLocaleDateString('en-US',{month:'short'});
   return delta === 0 ? `Unchanged from ${month}` : `${financeMoney(Math.abs(delta))} ${delta > 0 ? 'higher' : 'lower'} than ${month}`;
-}
-export function utilityOverview(utility:FinanceUtility, today:string) {
-  const occurrences = utility.occurrences.filter(row => row.next_date.startsWith(today.slice(0,7)) || (!row.paid && row.next_date < today));
-  const occurrence = occurrences.find(row => !row.paid) || occurrences[occurrences.length-1];
-  const statement = monthStatement(utility.statements,occurrence?.next_date.slice(0,7) || today.slice(0,7));
-  const latest = utility.statements.find(row => !row.issue);
-  const nothingDue = !statement && latest?.nothingDue && !occurrence;
-  const paid = !!statement?.paymentRecorded || !!statement?.paymentTransactionIds.length || !!occurrence?.paid;
-  const status = nothingDue || statement?.nothingDue ? 'nothing' : paid ? 'paid' : occurrence || statement ? 'due' : 'unknown';
-  return { statement:statement || (nothingDue ? latest : null), occurrence, status,
-    amountCents:statement?.amountCents ?? (nothingDue ? 0 : occurrence ? Math.round(occurrence.amount*100) : null),
-    date:statement?.dueDate || occurrence?.next_date || null };
 }
 export interface JournalEntry { id:string; transaction:JournalTransaction; children:JournalTransaction[]; counterpart:JournalTransaction|null; kind:'transaction'|'split'|'transfer'|'sent'|'received'; incomplete:boolean; ids:string[] }
 export function journalEntries(range:JournalRange):JournalEntry[] {
