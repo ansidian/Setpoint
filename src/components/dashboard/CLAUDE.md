@@ -57,7 +57,7 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 - `context/comingUpModel.ts` — builds the coming-up rows from live deadlines/bills; mobile excludes today through includeToday
 
 ### Rails (context-column building blocks)
-- `rails/InboxPeek.tsx` — full snapshot lane counts and three useful summaries excluding urgent-band emails; filtered Inbox handoffs
+- `rails/InboxPeek.tsx` — full snapshot lane counts and three useful summaries excluding urgent-band emails; lane-colored labels, shared email-body preview modal with Jump to inbox, and filtered Inbox handoffs
 - `rails/railModel.ts` — `timeAgo` relative-time formatting for the inbox peek
 - `rails/railPrimitives.tsx` — shared `SectionHeader`/`EmptyRow` used by the inbox peek and Coming-up card
 
@@ -89,7 +89,7 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 
 - One fixed layout, branched on `isMobile` inside `ThreeTierLayout` (`layout/DashboardScenePrimitives.tsx`): desktop is a no-page-scroll column (band on top, scrolling Today/finance stack + 344px scrolling context column below); mobile stacks Needs You, Today, Ahead, weather, then finance, without Inbox Peek. There are no per-user layout modes.
 - Overdue/due-today deadlines live only in the Needs-you band (the single home for "open this now"); Ahead shows future deadlines and Money Ahead shows unpaid bills from today through seven days ahead, excluding transfers and income. Actual bill posting stays in Actual and reflects through the existing sync. Today retains deadline context but future deadlines do not repeat in its later groups. `DashboardBody` passes the band `{ upcoming: deadlines }` because the band model reads the object form.
-- Desktop email card and Start here bodies open the shared anchored preview; their Open email actions enter Inbox. Mobile email taps go directly to the reader. Previews never fetch bodies or mutate read/handled state; Mark handled belongs in the reader.
+- Desktop email card and Start here bodies open the shared anchored snapshot-only preview; their Open email actions enter Inbox. Inbox Peek rows open the shared email-body modal used by financial sources, reusing Alfred's preview content; Jump to inbox enters the selected reader. Mobile email taps go directly to the reader. Previews never mutate read/handled state; Mark handled belongs in the reader.
 - Motion uses scene tokens for staggered entry; respect reduced motion.
 
 ## Related

@@ -33,7 +33,7 @@ function dateKey(date: Date, timeZone: string): string {
   }).format(date);
 }
 
-export function formatSnapshotContext(snapshot: SnapshotRecord | null, now = new Date()): string | null {
+export function snapshotContextParts(snapshot: SnapshotRecord | null, now = new Date()) {
   if (!snapshot?.start_at) return null;
   const start = new Date(snapshot.start_at);
   const end = snapshot.end_at ? new Date(snapshot.end_at) : null;
@@ -66,5 +66,10 @@ export function formatSnapshotContext(snapshot: SnapshotRecord | null, now = new
     : null;
   const windowLabel = endLabel ? `${startLabel}–${endLabel}` : startLabel;
   const boundaryLabel = snapshot.schedule_label || (snapshot.status === "active" ? "Current" : "Snapshot");
-  return `${dayLabel} · ${boundaryLabel} · ${windowLabel}`;
+  return { dayLabel, boundaryLabel, windowLabel };
+}
+
+export function formatSnapshotContext(snapshot: SnapshotRecord | null, now = new Date()): string | null {
+  const context = snapshotContextParts(snapshot, now);
+  return context ? `${context.dayLabel} · ${context.boundaryLabel} · ${context.windowLabel}` : null;
 }

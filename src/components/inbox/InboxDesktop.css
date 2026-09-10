@@ -14,7 +14,7 @@
 .inbox-a-search:focus-within:where([data-sp-keyboard-focus="true"] *) { outline: 2px solid var(--ea-accent); outline-offset: 2px; }
 .inbox-a-search input:focus { outline: none; }
 .inbox-a-search kbd { font: inherit; font-size: 10px; padding-right: 12px; white-space: nowrap; }
-.inbox-a-scope-tools { display: flex; justify-content: flex-end; align-items: center; padding: 0 26px; }
+.inbox-a-scope-tools { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 12px 20px; min-width: 0; padding: 0 26px; }
 .inbox-a-history-error { margin: 0; padding: 8px 26px; color: #f38ba8; font-size: 11px; }
 .inbox-a-rail { width: 196px; flex-shrink: 0; padding: 24px 14px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #ffffff25 transparent; border-right: 1px solid var(--inbox-line); background: #191925; }
 .inbox-a-lanes, .inbox-a-secondary-lanes { display: flex; flex-direction: column; gap: 3px; }
@@ -121,7 +121,11 @@
 .inbox-a-history-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .inbox-a-history-actions > svg { flex-shrink: 0; color: #a6adc8; }
 .inbox-a-history-actions .inbox-a-control { white-space: nowrap; }
-.inbox-a-history-context { margin: 7px 0 0; color: #a6adc8; font-size: 10px; line-height: 1.5; text-align: right; }
+.inbox-a-snapshot-context { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; min-width: 0; max-width: 100%; color: #a6adc8; font-size: 11px; line-height: 1.5; }
+.inbox-a-snapshot-identity { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: baseline; gap: 4px 12px; overflow-wrap: anywhere; }
+.inbox-a-snapshot-identity strong { color: #cdd6f4; font-weight: 500; }
+.inbox-a-snapshot-readonly { padding-left: 12px; border-left: 1px solid var(--inbox-line); }
+.inbox-a-snapshot-window { font-variant-numeric: tabular-nums; }
 @media (min-width: 1001px) and (max-width: 1350px) {
   .inbox-a-page-header:has(.inbox-a-history) { grid-template-columns: var(--inbox-rail-width) minmax(250px, 1fr) auto; }
   .inbox-a-page-header:has(.inbox-a-history) .inbox-a-scope-tools { padding-inline: 12px; }

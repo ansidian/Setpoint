@@ -2,7 +2,7 @@ import type { RefObject } from "react";
 import { History, LoaderCircle, Search, X } from "lucide-react";
 import InboxSearchFlagChips from "./InboxSearchFlagChips";
 import DesktopSnapshotNavigator from "./DesktopSnapshotNavigator";
-import { formatSnapshotContext } from "./snapshotSummary";
+import { snapshotContextParts } from "./snapshotSummary";
 import type { InboxSnapshotNavigation } from "./inboxViewTypes";
 
 export default function InboxDesktopHeader({
@@ -21,12 +21,12 @@ export default function InboxDesktopHeader({
 }) {
   const updating = !readOnly && (liveLoading || processingCount > 0);
   const busy = navigation?.historyLoading || !!navigation?.navigating;
-  const context = formatSnapshotContext(navigation?.snapshot || null);
+  const context = snapshotContextParts(navigation?.snapshot || null);
   return <>
     <header className="inbox-a-page-header">
       <div className="inbox-a-page-title">
         <h1>Inbox</h1>
-        <p>{updating ? <><LoaderCircle size={12} className="animate-spin motion-reduce:animate-none" /> {processingCount > 0 ? `Updating ${processingCount} emails` : "Checking mail"}</> : readOnly ? "Snapshot history" : context || "A clear next step for every email."}</p>
+        {updating && <p role="status"><LoaderCircle size={12} className="animate-spin motion-reduce:animate-none" />{processingCount > 0 ? `Updating ${processingCount} emails` : "Checking mail"}</p>}
       </div>
       <div className="inbox-a-search-tools">
         <div className="inbox-a-search">
@@ -54,6 +54,10 @@ export default function InboxDesktopHeader({
         <InboxSearchFlagChips query={search} onChange={onSearchChange} accent={accent} />
       </div>
       <div className="inbox-a-scope-tools">
+        {context && <div className="inbox-a-snapshot-context">
+          <div className="inbox-a-snapshot-identity"><strong>{context.dayLabel}</strong><span>{context.boundaryLabel}</span>{readOnly && <span className="inbox-a-snapshot-readonly">Read only</span>}</div>
+          <span className="inbox-a-snapshot-window">{context.windowLabel}</span>
+        </div>}
         {readOnly && navigation ? <DesktopSnapshotNavigator navigation={navigation} /> : navigation && <button
           className="inbox-a-control inbox-a-history-control"
           type="button"

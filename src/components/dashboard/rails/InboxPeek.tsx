@@ -1,5 +1,8 @@
-import { memo, useMemo } from "react";
+import Metadata from "../../shared/Metadata";
+import { memo, useMemo, useRef, useState } from "react";
 import { ArrowRight, Inbox } from "lucide-react";
+import EmailPreviewModal from "../../email/EmailPreviewModal";
+import { LANE } from "../../../lib/shell-helpers";
 import { EmptyRow, SectionHeader } from "./railPrimitives";
 import { timeAgo } from "./railModel";
 import { buildInboxPeek } from "./inboxPeekModel";
@@ -18,6 +21,8 @@ interface InboxPeekProps {
 }
 
 function InboxPeek({ activeSnapshot, excludedEmailIds, onJump, onOpenInbox, isMobile = false }: InboxPeekProps) {
+  const [previewEmail, setPreviewEmail] = useState<InboxPeekEmail | null>(null);
+  const previewTrigger = useRef<HTMLButtonElement | null>(null);
   const model = useMemo(() => buildInboxPeek(activeSnapshot, excludedEmailIds), [activeSnapshot, excludedEmailIds]);
   const counts: Array<{ lane: InboxPeekLane; label: string; count: number }> = [
     { lane: "needs_attention", label: "Need action", count: model.counts.needs_attention },
@@ -44,16 +49,30 @@ function InboxPeek({ activeSnapshot, excludedEmailIds, onJump, onOpenInbox, isMo
           const action = email.action?.trim();
           const text = lane !== "fyi" && action && !/^(none|no action|n\/a|review|reply|read|respond|follow up)[.!]?$/i.test(action)
             ? action : email.summary || email.subject;
-          return <button type="button" key={key} className="inbox-peek-row" data-read={email.read || undefined} onClick={() => onJump?.({ kind: "email", id, email: { ...email, id } })}>
+          return <button type="button" key={key} className="inbox-peek-row" data-read={email.read || undefined} aria-haspopup="dialog" onClick={(event) => {
+            previewTrigger.current = event.currentTarget;
+            setPreviewEmail({ ...email, id });
+          }}>
             <span className="inbox-peek-sender">{email.from_name || email.from_address || email.from || "Unknown sender"}</span>
             <span className="inbox-peek-age">{timeAgo(email.email_date || email.date)}</span>
             <span className="inbox-peek-summary">{text}</span>
-            <span className="inbox-peek-row-meta">{lane === "carryover" ? "Carried over" : lane === "needs_attention" ? "Needs action" : "FYI"}{email.read ? " · Read" : " · Unread"}</span>
+            <Metadata className="inbox-peek-row-meta" items={[<span style={{ color: LANE[lane]?.color }}>{lane === "carryover" ? "Carried over" : lane === "needs_attention" ? "Needs action" : "FYI"}</span>, email.read ? "Read" : <strong>Unread</strong>]}/>
           </button>;
         })}
         {model.rows.length === 0 && <EmptyRow icon={Inbox} label={emptyLabel} />}
       </div>
       {model.processing && model.rows.length > 0 && <p className="inbox-peek-processing" role="status">More mail is being processed</p>}
+      {previewEmail && <EmailPreviewModal
+        email={{ uid: String(previewEmail.uid || previewEmail.email_id || previewEmail.id), subject: previewEmail.subject,
+          fromName: previewEmail.from_name || previewEmail.from, fromAddress: previewEmail.from_address,
+          accountId: previewEmail.account_id, bodySnippet: previewEmail.preview }}
+        dateLabel={timeAgo(previewEmail.email_date || previewEmail.date)} triggerRef={previewTrigger}
+        onClose={() => setPreviewEmail(null)}
+        onJumpToInbox={onJump ? () => {
+          setPreviewEmail(null);
+          onJump({ kind: "email", id: previewEmail.id, email: previewEmail });
+        } : undefined}
+      />}
     </section>
   );
 }

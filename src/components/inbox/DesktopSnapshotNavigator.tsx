@@ -1,5 +1,4 @@
 import { History } from "lucide-react";
-import { formatSnapshotContext } from "./snapshotSummary";
 import SnapshotNavigationControls from "./SnapshotNavigationControls";
 import type { InboxSnapshotNavigation } from "./inboxViewTypes";
 
@@ -24,7 +23,6 @@ export default function DesktopSnapshotNavigator({ navigation }: {
           onClick={navigation.onReturnToCurrent}
         >Back to current</button>}
       </div>
-      <p className="inbox-a-history-context">{formatSnapshotContext(navigation.snapshot)} · Read only</p>
     </div>
   );
 }

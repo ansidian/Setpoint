@@ -1,8 +1,9 @@
+import Metadata from "../shared/Metadata";
 import { useState, useMemo, useCallback } from "react";
 import { AnimatePresence } from "motion/react";
 import type { MouseEventHandler, CSSProperties } from "react";
 import {
-  Inbox, SearchX, CheckCheck, RefreshCw,
+  Inbox, SearchX, CheckCheck, ChevronsDownUp, ChevronsUpDown,
 } from "lucide-react";
 
 import EmailRow from "./EmailRow";
@@ -192,6 +193,15 @@ export default function InboxList({
     return g;
   }, [emails, layout]);
 
+  const visibleLaneKeys = Object.keys(grouped).filter(key => grouped[key]!.length > 0);
+  const allLanesCollapsed = visibleLaneKeys.length > 0 && visibleLaneKeys.every(key => effectiveCollapsed[key]);
+  const toggleAllLanes = () => {
+    const nextCollapsed = !allLanesCollapsed;
+    setCollapsed(current => ({ ...current, ...Object.fromEntries(visibleLaneKeys.map(key => [key, nextCollapsed])) }));
+    if (lane === "handled") setFilterDisclosure(current => ({ ...current, collapsed: nextCollapsed }));
+  };
+  const laneToggleLabel = allLanesCollapsed ? "Expand all lanes" : "Collapse all lanes";
+
   // Stable across unrelated InboxList re-renders (filters, sheet toggles, hover
   // state, etc.) so LaneSection's memo actually engages — see LaneSection.tsx.
   // selectedId and nowTick still legitimately churn this on selection changes
@@ -232,9 +242,12 @@ export default function InboxList({
           <h2>{indexedSearchActive ? "Search results" : collection === "snoozed" ? "Snoozed" : lane === "__all" ? "All mail" : LANE[lane]?.label || "Inbox"}</h2>
           <span className="inbox-a-queue-total">{totalCount}</span>
           {!readOnly && <button className="inbox-a-control inbox-a-icon-control" type="button" onClick={onMarkAllRead} aria-label="Mark all read" title="Mark all read" disabled={unreadCount === 0}><CheckCheck size={14} /></button>}
-          {!readOnly && <button className="inbox-a-control inbox-a-icon-control" type="button" onClick={onRefresh} aria-label="Sync now" title="Sync now"><RefreshCw size={13} /></button>}
+          {layout === "swimlanes" && visibleLaneKeys.length > 0 && !showSearchSkeletonRows && <button className="inbox-a-control inbox-a-icon-control" type="button" onClick={toggleAllLanes} aria-label={laneToggleLabel} title={laneToggleLabel}>
+            {allLanesCollapsed ? <ChevronsUpDown size={14} aria-hidden="true" /> : <ChevronsDownUp size={14} aria-hidden="true" />}
+          </button>}
         </div>
-        <p>{indexedSearchActive ? "All accounts · all indexed dates" : <>{readOnly && "Historical snapshot · read only. "}{LANE_DESCRIPTIONS[collection === "snoozed" ? "snoozed" : lane] || LANE_DESCRIPTIONS.__all}</>}</p>
+        {readOnly && !indexedSearchActive && <Metadata items={[<strong>Historical snapshot</strong>, "Read only"]}/>}
+        <p>{indexedSearchActive ? <Metadata items={["All accounts", "All indexed dates"]}/> : LANE_DESCRIPTIONS[collection === "snoozed" ? "snoozed" : lane] || LANE_DESCRIPTIONS.__all}</p>
       </header>
       {collection === "snoozed" && !indexedSearchActive && (snoozedError || snoozedLoading) && <div role="status" style={{ padding: "8px 16px", fontSize: 12, color: "#a6adc8" }}>
         {snoozedError ? <>{snoozedError} <button className="inbox-a-control" type="button" onClick={onRefresh}>Retry</button></>

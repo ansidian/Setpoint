@@ -186,6 +186,8 @@ function DashboardBodyInner({
       : undefined;
     if (payload.kind === "email" && data) {
       onPreviewEmail(data as NeedsYouEmail, anchor);
+    } else if (payload.kind === "email" && payload.id != null) {
+      onOpenEmail(payload.id);
     } else if (payload.kind === "deadline") {
       onOpenDeadline((data || payload) as DashboardDeadline, anchor);
     } else if (payload.kind === "bill") {
@@ -198,7 +200,7 @@ function DashboardBodyInner({
       }).format(new Date(data.startMs));
       onOpenEventsCalendar(ymd, payload.id || getEventSelectionId(data), data, anchor);
     }
-  }, [onPreviewEmail, onOpenDeadline, onOpenBillsCalendar, onOpenEventsCalendar]);
+  }, [onPreviewEmail, onOpenEmail, onOpenDeadline, onOpenBillsCalendar, onOpenEventsCalendar]);
 
   // Stable inbox-open handler shared by the band and the context column, so a
   // pure poll/refresh re-render does not hand them a fresh arrow identity.
