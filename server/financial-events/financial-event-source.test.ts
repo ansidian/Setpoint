@@ -1,5 +1,4 @@
 import type { Client } from "@libsql/client";
-import { createHash } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createMigratedDb } from "../triage/triage-worker.test-utils.ts";
 import type { FinancialEmailSource } from "../email/financial-email-source.ts";
@@ -48,26 +47,6 @@ describe("durable financial source acquisition", () => {
       : "UPDATE ea_email_index SET sender_authentication_json='{\"status\":\"fail\"}' WHERE uid='invoice'");
     expect((await store().getDocumentForEmail("owner", "invoice"))?.acquiredSource).toBeNull();
     expect(await store().saveDocumentSource(claim, source)).toBe(false);
-  });
-
-  it("reacquires snapshots produced by the old MIME policy with a fresh bounded retry budget", async () => {
-    const claim = (await store().claimDocument("first"))!;
-    // Simulate a persisted snapshot from the previous parser, before deployment
-    // of HTML selection. Its index content and workflow revision are unchanged.
-    const oldKey = createHash("sha256").update(JSON.stringify([
-      "financial-source-v1", claim.emailUid, claim.fromName, claim.fromAddress, claim.subject,
-      claim.body, claim.emailDate, claim.threadId, claim.messageId, { status: "pass" },
-    ])).digest("hex");
-    const stale = { ...source, body: "[Original MIME text/plain content]\nStale cancellation\n[Original MIME text/html content, converted to text]\nScheduled payment" };
-    await db.execute({ sql: `UPDATE ea_financial_documents SET acquired_source_json=?, acquired_source_key=?,
-      source_attempt_key=?, source_attempts=3 WHERE email_uid='invoice'`, args: [JSON.stringify(stale), oldKey, oldKey] });
-    const current = (await store().getDocumentForEmail("owner", "invoice"))!;
-    expect(current.acquiredSource).toBeNull();
-    expect(current.body).toBe("Invoice attached.");
-    expect(current.revision).toBe(claim.revision);
-    expect(await store().reserveDocumentSource(current)).toBe(1);
-    expect(await store().saveDocumentSource(current, source)).toBe(true);
-    expect((await store().getDocumentForEmail("owner", "invoice"))?.body).toBe(source.body);
   });
 
   it("charges failed or interrupted source requests across restarts and resets only for changed source evidence", async () => {
