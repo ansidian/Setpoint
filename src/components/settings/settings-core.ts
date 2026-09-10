@@ -1,5 +1,5 @@
 export const SURFACE_ROW_CLASS =
-  "border-t border-white/[0.05] bg-transparent transition-colors first:border-t-0 hover:bg-white/[0.025]";
+  "rounded-lg border-t border-white/[0.05] bg-transparent transition-colors first:border-t-0 hover:bg-white/[0.025] focus-within:bg-white/[0.025] motion-reduce:transition-none";
 export const SETTINGS_PRIMARY_BUTTON_CLASS =
   "border border-primary/20 bg-primary/[0.12] text-primary hover:bg-primary/[0.16] hover:border-primary/28 hover:-translate-y-px active:translate-y-0 motion-reduce:transition-none motion-reduce:transform-none";
 export const SETTINGS_SECONDARY_BUTTON_CLASS =

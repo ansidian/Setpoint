@@ -140,7 +140,7 @@ export default function ConnectionsDirectory({ groups, rows, onboardingProgress,
                         aria-controls={`connection-panel-${row.id}`}
                         onClick={() => toggleConnection(row)}
                         className={cn(
-                          "group flex min-h-[72px] w-full items-center gap-3 px-3 py-3 text-left outline-none transition-[background-color,color] duration-200",
+                          "group flex rounded-lg min-h-[72px] w-full items-center gap-3 px-3 py-3 text-left outline-none transition-[background-color,color] duration-200",
                           "hover:bg-white/[0.035] focus-visible:bg-white/[0.04] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/60 active:bg-white/[0.055]",
                           "motion-reduce:transition-none sm:px-4",
                           expanded && "bg-white/[0.03]",
