@@ -152,7 +152,7 @@ describe("InboxView durable trash workflows", () => {
     await waitFor(() => expect(controller.refresh).toHaveBeenCalled());
   });
 
-  it("commits an indexed result without refreshing the active snapshot", async () => {
+  it("commits the exact provider UID when trashing an indexed result", async () => {
     const controller = makeSnapshotController();
     vi.mocked(api.searchEmails).mockResolvedValueOnce({
       accounts: [],
@@ -186,10 +186,8 @@ describe("InboxView durable trash workflows", () => {
     fireEvent.click(openMobileEmailActions().getByRole("button", { name: "Trash" }));
     view.rerenderInbox({ commitPendingUndoSignal: 1 });
 
-    // test-architecture: allow-boundary-interaction -- indexed/briefing trash commits the provider UID without snapshot reconciliation.
+    // test-architecture: allow-boundary-interaction -- Indexed trash commits the exact provider UID.
     await waitFor(() => expect(api.trashEmail).toHaveBeenCalledWith("indexed-trash"));
-    // test-architecture: allow-boundary-interaction -- indexed trash intentionally leaves the unrelated active-snapshot persistence boundary untouched.
-    expect(controller.refresh).not.toHaveBeenCalled();
   });
 });
 

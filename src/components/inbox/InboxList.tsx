@@ -159,8 +159,20 @@ export default function InboxList({
   readOnly?: boolean;
 }) {
   const [collapsed, setCollapsed] = useState<CollapsedLanes>(() => (activeSnapshotMode ? { handled: true, untriaged_read: true } : {}));
-  const effectiveCollapsed = activeSnapshotMode ? { handled: true, untriaged_read: true, ...collapsed } : collapsed;
-  const toggleLane = (k: string) => setCollapsed((c) => ({ ...c, [k]: !c[k] }));
+  const [filterDisclosure, setFilterDisclosure] = useState({ lane, collapsed: false });
+  if (filterDisclosure.lane !== lane) setFilterDisclosure({ lane, collapsed: false });
+  const effectiveCollapsed: CollapsedLanes = {
+    ...(activeSnapshotMode ? { handled: true, untriaged_read: true } : {}),
+    ...collapsed,
+    ...(lane === "handled" ? { handled: filterDisclosure.collapsed } : {}),
+  };
+  const toggleLane = (k: string) => {
+    if (k === "handled" && lane === "handled") {
+      setFilterDisclosure(value => ({ ...value, collapsed: !value.collapsed }));
+      return;
+    }
+    setCollapsed((c) => ({ ...c, [k]: !c[k] }));
+  };
   const showSkeletonRows = !activeSnapshotMode && liveEmailsLoading && emails.length === 0;
   const showSearchSkeletonRows = indexedSearchActive && indexedSearchLoading;
 

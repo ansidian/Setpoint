@@ -1,6 +1,7 @@
 import { createContext, useContext, useCallback, useEffect, useMemo, useRef } from "react";
 import type { ReactNode } from "react";
 import { completeDeadlineOccurrence, updateDeadline } from "../api";
+import { completionReceiptDuration } from "../lib/motion";
 import { buildDeadlineReschedulePayload } from "../components/calendar/views/deadlines/calendarDeadlineRescheduleModel.ts";
 import {
   EMPTY_DEADLINES,
@@ -124,7 +125,7 @@ export function DashboardProvider({
     const timerId = setTimeout(() => {
       completionTimersRef.current.delete(timerId);
       removeCompletedTask(taskId, occurrenceDate);
-    }, 600);
+    }, completionReceiptDuration * 1000);
     completionTimersRef.current.add(timerId);
     return true;
   }, [applyTaskMutation, onTaskCompleted, onTaskCompletionIntent, removeCompletedTask]);

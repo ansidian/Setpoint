@@ -1,4 +1,5 @@
 import db from "../db/connection.ts";
+import { publishCurrentDashboardEvent } from "../dashboard/current-events.ts";
 export { restoreSnoozedEmail } from "./snooze-restoration.ts";
 import type { Client } from "@libsql/client";
 import { loadUserConfig, type UserConfig } from "../platform/config-service.ts";
@@ -426,6 +427,11 @@ export async function markProviderRemovedFromActiveSnapshots(
         providerState,
       );
     }
+    publishCurrentDashboardEvent(userId, {
+      source: "email_triage",
+      reason: "email_provider_removed",
+      occurredAt: removedAt,
+    });
   }
 
   return { updated: items.length };

@@ -11,6 +11,7 @@ import {
 } from "./snapshot-service.ts";
 import { createMigratedDb, migrationSql, seedSnapshotItem } from "./snapshot-test-fixtures.ts";
 import type { UserConfig } from "../platform/config-service.ts";
+import { subscribeCurrentDashboardEvents } from "../dashboard/current-events.ts";
 
 const pinWithSnapshot = pin as unknown as (
   userId: string,
@@ -399,7 +400,7 @@ describe("active briefing snapshots", () => {
     expect(secondLoad.carryover.map((item) => item.email_id)).toEqual(["msg-unresolved"]);
   });
 
-  it("hides provider-archived or trashed messages from active lanes while preserving rows", async () => {
+  it.each(["archived", "trashed"])("publishes refreshed active lanes after %s removal while preserving rows", async (providerState) => {
     const dbClient = await createMigratedDb();
     const { itemId, triageId } = await seedSnapshotItem(dbClient, {
       accountId: "gmail-work",
@@ -407,18 +408,37 @@ describe("active briefing snapshots", () => {
       lane: "needs_attention",
     });
 
-    const result = await markProviderRemovedFromActiveSnapshots(
-      "user-1",
-      "gmail-work",
-      "msg-archived",
-      "archived",
-      {
-        dbClient,
-        now: new Date("2026-05-03T16:15:00.000Z"),
-      },
-    );
+    const options = { dbClient, now: new Date("2026-05-03T16:15:00.000Z") };
+    const publishedViews: Array<ReturnType<typeof getActiveSnapshotView>> = [];
+    const soundTriggers: unknown[] = [];
+    const otherOwnerEvents: unknown[] = [];
+    const unsubscribe = subscribeCurrentDashboardEvents("user-1", (event) => {
+      if (event.source === "email_triage") {
+        soundTriggers.push(event.details?.triggerType);
+        publishedViews.push(getActiveSnapshotView("user-1", options));
+      }
+    });
+    const unsubscribeOther = subscribeCurrentDashboardEvents("user-2", (event) => otherOwnerEvents.push(event));
+    let result;
+    try {
+      result = await markProviderRemovedFromActiveSnapshots(
+        "user-1",
+        "gmail-work",
+        "msg-archived",
+        providerState,
+        options,
+      );
+    } finally {
+      unsubscribe();
+      unsubscribeOther();
+    }
 
     expect(result).toEqual({ updated: 1 });
+    expect(otherOwnerEvents).toEqual([]);
+    expect(soundTriggers).toEqual([undefined]);
+    const refreshedViews = await Promise.all(publishedViews);
+    expect(refreshedViews).toHaveLength(1);
+    expect(refreshedViews[0]!.lanes.needs_attention).toEqual([]);
 
     const rows = await dbClient.execute({
       sql: `SELECT i.id, i.provider_removed_at, t.id AS triage_id, t.provider_state,
@@ -435,10 +455,10 @@ describe("active briefing snapshots", () => {
         id: itemId,
         provider_removed_at: "2026-05-03T16:15:00.000Z",
         triage_id: triageId,
-        provider_state: "archived",
+        provider_state: providerState,
         feedback_type: "provider_removed",
         from_value: "available",
-        to_value: "archived",
+        to_value: providerState,
       },
     ]);
 

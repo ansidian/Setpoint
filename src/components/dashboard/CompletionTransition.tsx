@@ -1,8 +1,8 @@
-import type { CSSProperties, ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { Check } from "lucide-react";
-import { motion as Motion, useIsPresent, usePresenceData } from "motion/react";
+import { motion as Motion, usePresence, usePresenceData } from "motion/react";
 import useMediaQuery from "../../hooks/useMediaQuery";
-import { heightTransition } from "../../lib/motion";
+import { completionReceiptDuration, heightTransition } from "../../lib/motion";
 
 /** Keep a visual receipt while the existing completion action proceeds immediately. */
 export default function CompletionTransition({ children, itemId, completing: completingInPlace = false, horizontal = false, style }: {
@@ -13,18 +13,44 @@ export default function CompletionTransition({ children, itemId, completing: com
   horizontal?: boolean;
   style?: CSSProperties;
 }) {
-  const present = useIsPresent();
+  const [present, safeToRemove] = usePresence();
   const completedIds = usePresenceData() as readonly string[] | undefined;
-  const completing = completingInPlace || (!present && !!completedIds?.includes(itemId));
+  // Freeze the departure reason: a fast refetch can prune the completed id
+  // while this retained row is still showing its receipt.
+  const [exitReceipt, setExitReceipt] = useState<boolean | null>(null);
+  if (present && exitReceipt !== null) setExitReceipt(null);
+  if (!present && exitReceipt === null) setExitReceipt(!!completedIds?.includes(itemId));
   const reduced = useMediaQuery("(prefers-reduced-motion: reduce)");
+  // The receipt has its own clock, independent of provider/refetch latency.
+  // Keep the actual pending flag separate so a slow write still blocks clicks.
+  const [receipt, setReceipt] = useState({ itemId, pending: completingInPlace, visible: completingInPlace });
+  if (receipt.itemId !== itemId || receipt.pending !== completingInPlace) {
+    setReceipt({ itemId, pending: completingInPlace, visible: completingInPlace || (receipt.itemId === itemId && receipt.visible) });
+  }
+  useEffect(() => {
+    if (!receipt.visible) return;
+    const timer = window.setTimeout(() => setReceipt(value => ({ ...value, visible: false })), reduced ? 0 : completionReceiptDuration * 1000);
+    return () => window.clearTimeout(timer);
+  }, [receipt.visible, receipt.itemId, reduced]);
+  const completing = receipt.visible || (!present && (exitReceipt ?? !!completedIds?.includes(itemId)));
   const transition = heightTransition(reduced || !completing);
+  const receiptDelay = completing && !reduced ? completionReceiptDuration : 0;
+  const exitMs = (receiptDelay + transition.duration) * 1000;
+
+  // Activity disconnects Motion's effects when a tab is hidden. Explicit
+  // presence ownership resumes removal on return instead of stranding inert DOM.
+  useEffect(() => {
+    if (present || !safeToRemove) return;
+    const timer = window.setTimeout(safeToRemove, exitMs);
+    return () => window.clearTimeout(timer);
+  }, [present, safeToRemove, exitMs]);
 
   return (
     <Motion.div
       initial={false}
-      animate={{ opacity: 1, height: "auto", scale: 1 }}
-      exit={{ opacity: 0, ...(horizontal ? { scale: 0.96 } : { height: 0 }), transition: { ...transition, delay: completing && !reduced ? 0.18 : 0 } }}
-      inert={!present || completing || undefined}
+      animate={present ? { opacity: 1, height: "auto", scale: 1 } : { opacity: 0, ...(horizontal ? { scale: 0.96 } : { height: 0 }) }}
+      transition={{ ...transition, delay: present ? 0 : receiptDelay }}
+      inert={!present || completing || completingInPlace || undefined}
       data-height-animating={!present && !horizontal && completing && !reduced ? "true" : undefined}
       aria-hidden={!present || undefined}
       style={{ position: "relative", minWidth: 0, overflow: present ? "visible" : "clip", ...style }}

@@ -4,6 +4,7 @@ export const motionEaseOut = [0.16, 1, 0.3, 1] as const;
 export const heightMotionDuration = 0.16;
 export const heightMotionMaxDuration = 0.25;
 export const heightMotionEase = [0.25, 0.1, 0.25, 1] as const;
+export const completionReceiptDuration = 0.6;
 
 export function heightTransition(reduce: boolean | null) {
   return { duration: reduce ? 0 : heightMotionDuration, ease: heightMotionEase };

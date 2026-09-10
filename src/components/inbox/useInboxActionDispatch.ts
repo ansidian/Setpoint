@@ -429,6 +429,7 @@ export default function useInboxActionDispatch({
           message: "Email moved to trash",
           commit: async () => {
             await trashEmail(commandUid);
+            await onActiveSnapshotRefresh();
           },
           commitOnExit: () => trashEmailOnExit(commandUid),
           undo: async () => {
