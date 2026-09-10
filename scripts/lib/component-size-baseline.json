@@ -1,6 +1,0 @@
-{
-  "_comment": "Ratcheting size guardrail for check:harness. Files above the threshold are grandfathered at their recorded allowance and may not grow beyond it.",
-  "_justifications": {},
-  "threshold": 600,
-  "files": {}
-}

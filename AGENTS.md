@@ -19,7 +19,8 @@ Use this file as a map. Standing guidance belongs in tracked top-level docs; `do
 - Resolve material uncertainty before editing. Prefer the simplest solution and existing repo patterns; add abstractions only when they remove real complexity. Keep edits within the requested scope.
 - Prefer explorer agents for independent, bounded codebase questions. Keep immediate blocking investigation local and synthesize findings before editing.
 - For complex or multi-surface work, keep a local execution plan in `docs/exec-plans/active/`: goal, context, scope/non-goals, locked decisions, relevant files, acceptance criteria, and verification. Split independent surfaces into focused plans and keep decisions/results current. Routine fixes do not require a plan file.
-- Before adding significant UI or state near or above 600 lines, evaluate decomposition of domain logic, fetching, layout mechanics, and render trees. Explain intentionally oversized components in the handoff; flag existing overload without doing unrelated refactors.
+- Source-file size above 600 lines is an advisory review signal, never a verification failure or a required line allowance. When substantially growing a module, review its responsibilities, state ownership, reasons to change, and the interface callers must understand. Separate domain logic, fetching, layout mechanics, or rendering when doing so hides complexity behind a simpler interface and keeps related changes local.
+- Do not split files, move types, or compress formatting solely to satisfy a line count. In the handoff for substantial growth, explain the module's responsibility and why retaining or extracting behavior improves cohesion and modularity. Flag existing overload without doing unrelated refactors; import-boundary violations remain blocking.
 - Commits: one logical change per commit, single-line `feat:`, `fix:`, or `chore:` message, no agent co-author.
 
 ## Area Maps
@@ -37,7 +38,7 @@ Match verification to the change. Small, isolated changes can be reviewed and co
 - **Before push / CI:** the pre-push hook and CI must continue running `npm run verify`. Push the checkout/commits that were verified; uncommitted fixes or another branch's passing run do not verify the pushed snapshot. Avoid an identical manual run immediately before the hook; do not bypass the hook.
 - Reuse passing results while the tested code and relevant inputs remain unchanged. Recheck affected work after edits or failures; broaden checks when new evidence warrants it. State what ran, what passed, and any gaps; never describe targeted checks as full verification.
 
-Commands: `npm test -- <test-file> ...` for focused tests, `npx eslint <file> ...` for changed-file lint (`npm run lint` scans the repository), and `npm run build` for the production build. `npm run check:harness` also checks import boundaries, reachability, file sizes, and test policy.
+Commands: `npm test -- <test-file> ...` for focused tests, `npx eslint <file> ...` for changed-file lint (`npm run lint` scans the repository), and `npm run build` for the production build. `npm run check:harness` also checks import boundaries, reachability, and test policy (including the test-file size ratchet), and reports source-file sizes as advisory only.
 
 ## Test Architecture
 

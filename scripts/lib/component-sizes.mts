@@ -17,9 +17,7 @@ interface SizeCheckResult {
   warnings: string[]
 }
 
-// A source file the size guardrail governs: any non-test .ts/.tsx under src/.
-// Deliberately NOT restricted to /components/ or /pages/ — hooks (src/hooks/**) and
-// loose controllers/models were the harness blind spot that let a 1519-line hook grow.
+// Source-size reporting covers non-test .ts/.tsx under both src/ and server/.
 export function isSizeCheckedSource(relPath: string): boolean {
   return SOURCE_RE.test(relPath) && !TEST_RE.test(relPath)
 }
@@ -28,14 +26,28 @@ export function isSizeCheckedTest(relPath: string): boolean {
   return VITEST_RE.test(relPath)
 }
 
-// Ratcheting size check. `files` is [{ path, lineCount }]; `baseline` is
+// Size is a review signal, not evidence of an architectural violation.
+export function reportSourceFileSizes(files: SizedFile[]): SizeCheckResult {
+  const oversized = files
+    .filter((file) => file.lineCount > 600)
+    .sort((a, b) => b.lineCount - a.lineCount)
+
+  return {
+    failures: [],
+    warnings: oversized.length > 0
+      ? [`Source files above 600 lines (advisory only; review responsibilities and interfaces):\n${oversized.map(({ path, lineCount }) => `  - ${path}: ${lineCount}`).join("\n")}`]
+      : [],
+  }
+}
+
+// Test-file ratcheting size check. `files` is [{ path, lineCount }]; `baseline` is
 // { threshold:number, files: { [path]: allowedLineCount } }. A file over the
 // threshold must appear in the baseline and must not exceed its recorded allowance.
 export function checkSizeBaseline({
   files,
   baseline,
-  baselineName = "component-size",
-  debtName = "source-file",
+  baselineName = "test-size",
+  debtName = "test-file",
 }: {
   files: SizedFile[]
   baseline: SizeBaseline
@@ -65,7 +77,7 @@ export function checkSizeBaseline({
   for (const file of Object.keys(baseline.files)) {
     if (!oversizedPaths.has(file)) {
       warnings.push(
-        `${file} is in the component-size baseline but no longer exceeds ${threshold} lines; remove it from the baseline`,
+        `${file} is in the ${baselineName} baseline but no longer exceeds ${threshold} lines; remove it from the baseline`,
       )
     }
   }

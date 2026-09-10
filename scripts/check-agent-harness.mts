@@ -6,6 +6,7 @@ import {
   checkSizeBaseline,
   isSizeCheckedSource,
   isSizeCheckedTest,
+  reportSourceFileSizes,
 } from './lib/component-sizes.mts'
 import { findForbiddenSourcePatterns } from './lib/design-policy.mts'
 import { findTestSourcePolicyViolations } from './lib/test-source-policy.mts'
@@ -21,7 +22,6 @@ import {
 import { checkTestPersistenceContracts } from './lib/test-persistence-policy.mts'
 
 const root = process.cwd()
-const componentSizeBaselinePath = 'scripts/lib/component-size-baseline.json'
 const testSizeBaselinePath = 'scripts/lib/test-size-baseline.json'
 const testArchitectureBaselinePath = 'scripts/lib/test-architecture-baseline.json'
 const testPersistenceContractsPath = 'scripts/lib/test-persistence-contracts.json'
@@ -179,13 +179,7 @@ async function readSizeBaseline(baselinePath: string) {
 }
 
 async function checkSourceFileSizes() {
-  const baseline = await readSizeBaseline(componentSizeBaselinePath)
-  if (!baseline) return
-
-  // Govern every non-test source file under src/ AND server/ — not just .tsx under
-  // /components/ or /pages/. Hooks (src/hooks/**) and loose controllers/models
-  // were the first blind spot; the entire server/ tree (11 modules at 686-918 lines)
-  // was the second, growing with no size enforcement at all.
+  // Report source size across UI, hooks, models, and server modules without a ratchet.
   const sourceFiles = [
     ...await collectFiles('src', isSizeCheckedSource),
     ...await collectFiles('server', isSizeCheckedSource),
@@ -197,8 +191,7 @@ async function checkSourceFileSizes() {
     files.push({ path: file, lineCount })
   }
 
-  const result = checkSizeBaseline({ files, baseline })
-  failures.push(...result.failures)
+  const result = reportSourceFileSizes(files)
   warnings.push(...result.warnings)
 }
 

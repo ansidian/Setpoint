@@ -3,6 +3,7 @@ import {
   checkSizeBaseline,
   isSizeCheckedSource,
   isSizeCheckedTest,
+  reportSourceFileSizes,
 } from "./component-sizes.mts"
 
 describe("isSizeCheckedSource", () => {
@@ -23,64 +24,88 @@ describe("isSizeCheckedSource", () => {
 
   test("governs non-test source under server/, not just src/", () => {
     // The server tree was the blind spot that let 11 modules grow to 686-918 lines
-    // with no size enforcement; the predicate is path-agnostic so it already governs them.
+    // outside the original size report; the predicate covers both trees.
     expect(isSizeCheckedSource("server/email/gmail-sync.ts")).toBe(true)
     expect(isSizeCheckedSource("server/triage/triage-worker.test.ts")).toBe(false)
   })
 })
 
-describe("checkSizeBaseline", () => {
+describe("source-size advisory", () => {
+  test("reports oversized source without failing, regardless of its size", () => {
+    const result = reportSourceFileSizes([
+      { path: "src/components/calendar/modal/CalendarGrid.tsx", lineCount: 601 },
+      { path: "server/email/gmail-sync.ts", lineCount: 1500 },
+      { path: "src/api.ts", lineCount: 600 },
+    ])
+    expect(result).toEqual({
+      failures: [],
+      warnings: [
+        "Source files above 600 lines (advisory only; review responsibilities and interfaces):\n  - server/email/gmail-sync.ts: 1500\n  - src/components/calendar/modal/CalendarGrid.tsx: 601",
+      ],
+    })
+  })
+
+  test("stays quiet when no source exceeds the review threshold", () => {
+    expect(reportSourceFileSizes([
+      { path: "src/api.ts", lineCount: 600 },
+      { path: "src/main.tsx", lineCount: 20 },
+    ])).toEqual({ failures: [], warnings: [] })
+    expect(reportSourceFileSizes([])).toEqual({ failures: [], warnings: [] })
+  })
+})
+
+describe("test-size baseline", () => {
   const baseline = { threshold: 600, files: {} }
 
   test("fails an oversized file that is not in the baseline", () => {
-    const files = [{ path: "src/components/Huge.tsx", lineCount: 742 }]
+    const files = [{ path: "src/components/Huge.test.tsx", lineCount: 742 }]
     const { failures } = checkSizeBaseline({ files, baseline })
     expect(failures).toEqual([
-      "src/components/Huge.tsx is 742 lines and is not in the component-size baseline",
+      "src/components/Huge.test.tsx is 742 lines and is not in the test-size baseline",
     ])
   })
 
   test("passes a file at or under the threshold with no baseline entry", () => {
-    const files = [{ path: "src/components/Fine.tsx", lineCount: 600 }]
+    const files = [{ path: "src/components/Fine.test.tsx", lineCount: 600 }]
     expect(checkSizeBaseline({ files, baseline }).failures).toEqual([])
   })
 
   test("passes a grandfathered file at exactly its recorded allowance", () => {
-    const grandfathered = { threshold: 600, files: { "src/demo/store.ts": 815 } }
-    const files = [{ path: "src/demo/store.ts", lineCount: 815 }]
+    const grandfathered = { threshold: 600, files: { "src/demo/store.test.ts": 815 } }
+    const files = [{ path: "src/demo/store.test.ts", lineCount: 815 }]
     expect(checkSizeBaseline({ files, baseline: grandfathered }).failures).toEqual([])
   })
 
   test("fails a grandfathered file that grew past its recorded allowance", () => {
-    const grandfathered = { threshold: 600, files: { "src/demo/store.ts": 815 } }
-    const files = [{ path: "src/demo/store.ts", lineCount: 816 }]
+    const grandfathered = { threshold: 600, files: { "src/demo/store.test.ts": 815 } }
+    const files = [{ path: "src/demo/store.test.ts", lineCount: 816 }]
     expect(checkSizeBaseline({ files, baseline: grandfathered }).failures).toEqual([
-      "src/demo/store.ts grew from baseline 815 lines to 816; decompose or update the baseline with justification",
+      "src/demo/store.test.ts grew from baseline 815 lines to 816; decompose or update the baseline with justification",
     ])
   })
 
   test("warns to remove a baseline entry that no longer exceeds the threshold", () => {
-    const grandfathered = { threshold: 600, files: { "src/demo/store.ts": 815 } }
-    const files = [{ path: "src/demo/store.ts", lineCount: 540 }]
+    const grandfathered = { threshold: 600, files: { "src/demo/store.test.ts": 815 } }
+    const files = [{ path: "src/demo/store.test.ts", lineCount: 540 }]
     const { failures, warnings } = checkSizeBaseline({ files, baseline: grandfathered })
     expect(failures).toEqual([])
     expect(warnings).toContain(
-      "src/demo/store.ts is in the component-size baseline but no longer exceeds 600 lines; remove it from the baseline",
+      "src/demo/store.test.ts is in the test-size baseline but no longer exceeds 600 lines; remove it from the baseline",
     )
   })
 
   test("summarizes oversized debt sorted by line count, largest first", () => {
     const grandfathered = {
       threshold: 600,
-      files: { "src/a.ts": 700, "src/b.ts": 900 },
+      files: { "src/a.test.ts": 700, "src/b.test.ts": 900 },
     }
     const files = [
-      { path: "src/a.ts", lineCount: 700 },
-      { path: "src/b.ts", lineCount: 900 },
+      { path: "src/a.test.ts", lineCount: 700 },
+      { path: "src/b.test.ts", lineCount: 900 },
     ]
     const { warnings } = checkSizeBaseline({ files, baseline: grandfathered })
     expect(warnings).toContain(
-      "Oversized source-file debt above 600 lines:\n  - src/b.ts: 900\n  - src/a.ts: 700",
+      "Oversized test-file debt above 600 lines:\n  - src/b.test.ts: 900\n  - src/a.test.ts: 700",
     )
   })
 })
