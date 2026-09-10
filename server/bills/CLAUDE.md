@@ -1,6 +1,6 @@
 # Server Bills Map
 
-Bill domain logic: AI extraction from emails, zero-configuration financial-email planning, and the bills mirror. Entry point is `bills-service.ts`, which drives the `server/actual/` engine layer and owns Actual-metadata invalidation fan-out on writes.
+Bill domain logic: AI extraction from emails, profile-authorized financial-email planning, and the bills mirror. Entry point is `bills-service.ts`, which drives the `server/actual/` engine layer and owns Actual-metadata invalidation fan-out on writes.
 
 ## Files
 
@@ -14,12 +14,15 @@ Bill domain logic: AI extraction from emails, zero-configuration financial-email
 - `billAmountVerifier.ts` — bounded second-pass LLM audit for incomplete amount coverage or ungrounded/conflicting monetary labels; failed audits block canonical selection
 - `billEventVerifier.ts` — bounded second-pass LLM audit for uncertain events or missing payment purpose, with source-grounded type/account evidence and persisted attempt markers
 - `bill-candidate-verification-service.ts` — public bills-domain facade for semantic amount and event verification of email candidates
-- `financial-email-planner.ts` — zero-configuration financial-email contract seam; classifies purpose, preserves intended versus final operation, derives stable identity, adapts reconciliation, and never writes or persists
+- `financial-email-planner.ts` — financial-email contract seam with saved owner context; classifies purpose, preserves intended versus final operation, derives stable identity, adapts reconciliation, and never writes to Actual or persists plans
+- `financial-profiles.ts` — public owner-profile persistence and validation facade; exact sender identities, budget-bound Actual destinations, with revisions for write admission
+- `financialProfilePlanning.ts` — exact profile matching, grounded account-conflict checks, current target resolution and schedule-cycle identity independent of profile IDs
+- `financialProfileSuggestion.ts` — source-grounded missing-profile drafts using only unambiguous existing Actual targets; suggestions grant no automation authority
 - `financial-email-adoption-service.ts` — live read/persistence facade; refreshes historical plans once for newer target inference, stronger authentication, or bounded missing-purpose verification, compare-and-swap persists the winner, and stages exact expense preflight without promoting stored observe-only plans
 - `financial-email-evaluator.ts` — write-disabled redacted comparison of the planner result with a supplied legacy resolution
 - `financial-email-observe-report.ts` — read-only legacy planner sample plus owner/window aggregates of all new financial documents, unplanned failures, event states and verified Actual outcomes; writes are counted by event
 - `financialEmailClassificationPolicy.ts` — validates source-grounded semantic identity and classifies document/intent independently of resolved Actual targets; ambiguous payment purposes stay review
-- `financialEmailAutomationPolicy.ts` — semantic consistency, amount/date, authentication and Actual gates; the new event worker enables expenses, income, obligation schedules and completed transfers
+- `financialEmailAutomationPolicy.ts` — semantic consistency, saved profile authority, amount/date, authentication and Actual gates; automatic classes are expenses, income, utility bills and scheduled card payments
 - `financialEmailIdentity.ts` — one-way, versioned stable identity derived from owner, provider account, provider message, and optional candidate hint
 - `financialEmailSourceIdentity.ts` — validates normalized email authentication projections and adapts them into planner source identity
 - `financialEmailTargetInference.ts` — Package 2 deterministic Actual target inference from metadata, schedules, and bounded direction-aware history; returns provenance and competing candidates
@@ -41,6 +44,8 @@ Bill domain logic: AI extraction from emails, zero-configuration financial-email
 ## Local patterns
 
 - Bills write through `server/actual/actual.ts`; this domain decides *what* to write, the actual domain decides *how*.
+- Generic card/account last-four references may resolve through the exact saved profile without a product name in the email or suffix in Actual; named destinations and conflicting suffixes still require agreement.
+- Only an enabled, unambiguous profile in the current budget authorizes automatic writes. Unmatched inference stays review-only; reminder and completed card-payment notices are ignored before missing-fact audits. Saved profile revisions are rechecked at first write admission.
 - Categories are optional for all planning sources. Only deterministic evidence may prefill a category; missing or conflicting category evidence never blocks a resolved account/payee, and old category-only blockers refresh once on read.
 - Extraction leaves unstated operation dates null. The shared timing context distinguishes initial undated purchase confirmations from follow-ups without merchant/subject rules; independent audits can revoke that context. The managed event worker alone derives an original-email date with server-owned provenance.
 - Extraction providers are registered in `bill-extractors/catalog.ts`; add new providers there, not inline.

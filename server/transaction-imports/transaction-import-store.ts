@@ -294,7 +294,11 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
               AND source = 'generic'
               AND json_extract(financial_email_plan_json, '$.operation.intended') = 'create_transfer_schedule'
               AND json_extract(financial_email_plan_json, '$.transferExecution.budgetId') IS NOT NULL
-              AND json_extract(financial_email_plan_json, '$.transferExecution.attemptedAt') IS NULL`,
+              AND json_extract(financial_email_plan_json, '$.transferExecution.attemptedAt') IS NULL
+              AND (confirmed_at IS NOT NULL OR (json_extract(financial_email_plan_json, '$.profile.status') = 'matched'
+                AND EXISTS (SELECT 1 FROM ea_settings settings WHERE settings.user_id = ea_transaction_import_items.user_id
+                  AND settings.actual_budget_sync_id = json_extract(financial_email_plan_json, '$.profile.budgetId')
+                  AND settings.financial_profiles_revision = json_extract(financial_email_plan_json, '$.profile.revision'))))`,
       args: [attemptedAt, now(), userId, itemId, claimToken],
     });
     return Number(result.rowsAffected || 0) === 1;
@@ -331,8 +335,12 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
   async function admitOriginalImport(item: ClaimedItem, evidence: FinancialWriteEvidence): Promise<boolean> {
     const result = await dbClient.execute({
       sql: `UPDATE ea_transaction_import_items SET prepared_actual_json = ?, original_attempted_at = ?
-        WHERE user_id = ? AND id = ? AND claim_token = ? AND status = 'importing' AND ${ORIGINAL_UNGUARDED} AND ${ARRIVAL_ITEM} AND original_attempted_at IS NULL`,
-      args: [JSON.stringify(evidence), now(), item.userId, item.id, item.claimToken],
+        WHERE user_id = ? AND id = ? AND claim_token = ? AND status = 'importing' AND ${ORIGINAL_UNGUARDED} AND ${ARRIVAL_ITEM} AND original_attempted_at IS NULL
+          AND (confirmed_at IS NOT NULL OR (? = 'matched' AND EXISTS (SELECT 1 FROM ea_settings settings
+            WHERE settings.user_id = ea_transaction_import_items.user_id AND settings.actual_budget_sync_id = ?
+              AND settings.financial_profiles_revision = ?)))`,
+      args: [JSON.stringify(evidence), now(), item.userId, item.id, item.claimToken,
+        item.financialPlan?.profile?.status ?? null, item.financialPlan?.profile?.budgetId ?? null, item.financialPlan?.profile?.revision ?? null],
     });
     return result.rowsAffected === 1;
   }

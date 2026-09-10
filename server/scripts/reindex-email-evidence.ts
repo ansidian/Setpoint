@@ -7,7 +7,7 @@ function usage(): string {
 
 Refetches one existing indexed email through its configured provider.
 Default: dry run; reports body lengths and whether indexed content would change.
---apply: updates the email index, full-text search, and stale search embeddings.
+--apply: updates the indexed body/preview, full-text search, and stale search embeddings.
 Requires EA_USER_ID and the usual database/provider environment configuration.
 
 Applying changed evidence requeues existing managed financial documents/events
@@ -50,7 +50,7 @@ function indexedEnvelope(row: Row, bodyText: string): NormalizedFetchedEmail {
     from: fromName,
     from_email: fromAddress,
     subject: String(row.subject || ""),
-    body_preview: String(row.body_snippet || ""),
+    body_preview: bodyText.slice(0, 600),
     body_text: bodyText,
     date: String(row.email_date || ""),
     read: Boolean(Number(row.read)),
@@ -93,8 +93,7 @@ async function main(): Promise<void> {
       const messageId = options.uid.slice(prefix.length);
       if (!messageId) throw new Error("Email UID has no Gmail message ID.");
       const { fetchEmailsByIds } = await import("../email/gmail.ts");
-      // Reuse ingestion's MIME-alternative selection, including its plain-text
-      // preference. The reader body chooses HTML and is not equivalent evidence.
+      // Reuse ingestion's reader-aligned MIME selection and table normalization.
       const emails = await fetchEmailsByIds(found.account, [messageId]);
       const fetched = emails.find((email) => email.uid === `gmail-${found.account.id}-${messageId}`);
       if (!fetched) throw new Error("Gmail did not return the requested email; the existing index was not changed.");
@@ -112,7 +111,8 @@ async function main(): Promise<void> {
     if (current.account_id !== existing.account_id) {
       throw new Error("Indexed account changed during refetch; retry against the current account.");
     }
-    const changed = String(current.body_text || "") !== bodyText;
+    const bodyChanged = String(current.body_text || "") !== bodyText;
+    const changed = bodyChanged || String(current.body_snippet || "") !== bodyText.slice(0, 600);
     if (options.apply && changed) await indexEmails(userId, [indexedEnvelope(current, bodyText)]);
     console.log(JSON.stringify({
       mode: options.apply ? "apply" : "dry_run",
@@ -123,7 +123,7 @@ async function main(): Promise<void> {
       indexedBodyChars: bodyText.length,
       changed,
       applied: options.apply && changed,
-      managedFinancialEvents: options.apply && changed
+      managedFinancialEvents: options.apply && bodyChanged
         ? "existing managed documents/events requeued by the index trigger; automatic processing may resume"
         : "unchanged; applying changed evidence requeues existing managed documents/events",
       historicalPlansTriageAndSnapshots: "unchanged; separate explicit re-triage required",

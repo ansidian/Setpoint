@@ -1,4 +1,4 @@
-import { readImportRun } from './transaction-import.test-utils.ts';
+import { readImportRun, seedProfileAuthorizedImportItems } from './transaction-import.test-utils.ts';
 import { subscribeCurrentDashboardEvents, clearCurrentDashboardEventSubscribers } from "../dashboard/current-events.ts";
 import { createClient, type Client } from "@libsql/client";
 import { readFileSync } from "fs";
@@ -7,8 +7,9 @@ import { fileURLToPath } from "url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ActualImportAccountGroup, ActualImportBatchResult } from "../../shared/types/transaction-imports.ts";
 import type { FinancialEmailPlan } from "../../shared/types/bills.ts";
+import { readFinancialProfiles } from "../bills/financial-profiles.ts";
 import { emailFixture, paypalPaidText } from "./parsers/fixtures.ts";
-import { createTransactionImportService, prepareTransactionImportItems } from "./transaction-import-service.ts";
+import { createTransactionImportService } from "./transaction-import-service.ts";
 import { createTransactionImportStore } from "./transaction-import-store.ts";
 import { createTransactionImportWorker } from "./transaction-import-worker.ts";
 import { financialEmailPreflightItem, stageFinancialEmailPreflight } from "./financial-email-preflight.ts";
@@ -16,6 +17,7 @@ import type { TransactionEmailInput } from "./transaction-import-types.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(here, "..", "db", "migrations");
+const AUTHORIZATION = { status: "matched" as const, revision: 1, budgetId: "fixture-budget", profileId: "generic-expense", reason: "Owner configured this financial profile." };
 
 describe("transaction import worker", () => {
   let db: Client;
@@ -26,13 +28,20 @@ describe("transaction import worker", () => {
     sequence = 0;
     db = createClient({ url: "file::memory:" });
     await db.execute("PRAGMA foreign_keys = ON");
-    for (const file of ["001_ea_tables.sql", "013_email_index_normalized_date.sql", "025_email_thread_identity.sql", "030_owner_bootstrap.sql", "041_email_transaction_imports.sql", "042_transaction_import_item_subject.sql", "052_financial_email_plans.sql", "053_transaction_import_financial_plans.sql", "054_email_sender_authentication.sql", "055_generic_financial_email_imports.sql", "056_generic_financial_email_automation.sql", "058_generic_financial_email_income_automation.sql", "062_financial_events.sql", "068_financial_candidate_dismissal.sql", "063_financial_activity.sql", "064_financial_corrections.sql"]) {
+    for (const file of ["001_ea_tables.sql", "013_email_index_normalized_date.sql", "025_email_thread_identity.sql", "030_owner_bootstrap.sql", "041_email_transaction_imports.sql", "042_transaction_import_item_subject.sql", "052_financial_email_plans.sql", "053_transaction_import_financial_plans.sql", "054_email_sender_authentication.sql", "055_generic_financial_email_imports.sql", "056_generic_financial_email_automation.sql", "058_generic_financial_email_income_automation.sql", "062_financial_events.sql", "068_financial_candidate_dismissal.sql", "063_financial_activity.sql", "064_financial_corrections.sql", "069_financial_profiles.sql"]) {
       await db.executeMultiple(readFileSync(join(migrationsDir, file), "utf8"));
     }
     await db.execute(`INSERT INTO ea_owner (singleton_id, user_id, password_hash, claimed_at)
                       VALUES (1, 'owner-1', 'hash', 1)`);
     await db.execute(`INSERT INTO ea_accounts (id, user_id, type, email, label)
                       VALUES ('gmail-1', 'owner-1', 'gmail', 'owner@example.test', 'Personal')`);
+    await db.execute({
+      sql: "INSERT INTO ea_settings (user_id, actual_budget_sync_id, financial_profiles_json, financial_profiles_revision) VALUES ('owner-1', 'fixture-budget', ?, 1)",
+      args: [JSON.stringify([
+        { id: "generic-expense", name: "Market receipts", enabled: true, budgetId: "fixture-budget", senderAddresses: ["receipts@market.example.test"], target: { kind: "expense", accountId: "actual-checking", payeeId: "payee-1", categoryId: "category-1" } },
+        { id: "generic-income", name: "Cashback notices", enabled: true, budgetId: "fixture-budget", senderAddresses: ["rewards@bank.example.test"], target: { kind: "income", accountId: "actual-checking", payeeId: "cashback", categoryId: "cashback-category" } },
+      ])],
+    });
   });
 
   afterEach(() => { clearCurrentDashboardEventSubscribers(); db.close(); });
@@ -43,33 +52,19 @@ describe("transaction import worker", () => {
     return { store, service };
   }
 
-  async function seedLegacyItems(
+  function createWorker(options: Parameters<typeof createTransactionImportWorker>[0]) {
+    return createTransactionImportWorker({ profileReader: userId => readFinancialProfiles(userId, { dbClient: db }), ...options });
+  }
+
+  async function seedAuthorizedItems(
     store: ReturnType<typeof setup>["store"],
     emails: TransactionEmailInput[] = [emailFixture()],
     automationMode: "observe" | "automatic" = "automatic",
     accounts: { amazon: string; paypal: string } = { amazon: "actual-1", paypal: "actual-1" },
   ) {
-    const runId = createId();
-    const prepared = prepareTransactionImportItems("owner-1", runId, emails, createId);
-    await store.createRun({
-      id: runId, userId: "owner-1", trigger: "arrival", optionsKey: `legacy:${runId}`,
-      gmailAccountIds: ["gmail-1"], sources: [...new Set(prepared.items.map((item) => item.source))],
+    return seedProfileAuthorizedImportItems({
+      db, store, userId: "owner-1", createId, emails, automationMode, accounts, plan: enabledGenericPlan(),
     });
-    for (const item of prepared.items) {
-      await store.insertItem({
-        ...item,
-        actualAccountId: accounts[item.source as "amazon" | "paypal"],
-        actualCategoryId: null,
-        automationMode,
-        automaticSafe: Boolean(item.importedId && item.externalId && item.date && item.amountCents
-          && item.currency === "USD" && !item.blockingWarnings.some((warning) => (
-          typeof warning === "object" && warning !== null && (warning as { blocking?: boolean }).blocking
-        ))),
-        status: item.date && item.amountCents && item.payee ? "queued" : "needs_review",
-      });
-    }
-    await store.updateRunProgress("owner-1", runId, { status: "completed", cursor: { complete: true } });
-    return { runId };
   }
 
   function actualResult(groups: ActualImportAccountGroup[], dryRun: boolean, outcome: "would_add" | "added" | "already_present" = dryRun ? "would_add" : "added"): ActualImportBatchResult {
@@ -91,6 +86,7 @@ describe("transaction import worker", () => {
   function exactGenericPlan(): FinancialEmailPlan {
     return {
       version: 1,
+      profile: { ...AUTHORIZATION },
       identity: { version: 1, status: "resolved", key: "financial-email:v1:worker" },
       candidate: { payee: "Example Market", amount: 12.34, amount_kind: "transaction_amount", due_date: "2026-09-01", event_kind: "purchase", type: "expense", currency: "USD" },
       classification: { documentKind: "one_time_transaction", eventKind: "purchase", confidence: 1, reasons: [] },
@@ -110,7 +106,7 @@ describe("transaction import worker", () => {
         operationClass: "one_time_expense",
         rollout: "observe_only",
         gates: [
-          ...["semantic", "canonical_amount", "date", "targets", "authenticity", "stable_identity", "warnings"].map((gate) => ({ gate, status: "pass", reasons: [] })),
+          ...["profile", "semantic", "canonical_amount", "date", "targets", "authenticity", "stable_identity", "warnings"].map((gate) => ({ gate, status: "pass", reasons: [] })),
           { gate: "reconciliation", status: "unknown", reasons: ["reconciliation_unavailable"] },
           { gate: "actual_preflight", status: "unknown", reasons: ["actual_preflight_not_run"] },
           { gate: "rollout", status: "fail", reasons: ["automation_class_observe_only"] },
@@ -134,6 +130,7 @@ describe("transaction import worker", () => {
   }
   function enabledIncomePlan(): FinancialEmailPlan {
     const plan = enabledGenericPlan();
+    plan.profile = { ...AUTHORIZATION, profileId: "generic-income" };
     plan.candidate = {
       ...plan.candidate, payee: "Cashback", amount: 22.25, type: "income", event_kind: "reward",
       transaction_import: {
@@ -148,18 +145,36 @@ describe("transaction import worker", () => {
   }
   async function stageGeneric(store: ReturnType<typeof setup>["store"], plan = enabledGenericPlan()) {
     const result = await stageFinancialEmailPreflight("owner-1", {
-      accountId: "gmail-1", emailId: "generic-email", emailSubject: "Receipt",
+      accountId: "gmail-1", emailId: "generic-email", emailSubject: "Receipt", emailFrom: plan.candidate.type === "income" ? "rewards@bank.example.test" : "receipts@market.example.test",
     }, plan, store);
     expect(result.staged).toBe(true);
     return result.runId!;
   }
+
+  it.each(["queued", "ready"] as const)("returns a pre-profile %s automatic item to review before any original write", async status => {
+    const { store } = setup();
+    const { runId } = await seedAuthorizedItems(store);
+    await db.execute({ sql: "UPDATE ea_transaction_import_items SET financial_email_plan_json = NULL, status = ? WHERE run_id = ?", args: [status, runId] });
+    const ledger: string[] = [];
+    const worker = createWorker({ store, createId, importGroups: async (_userId, groups, dryRun) => {
+      if (!dryRun) ledger.push(...groups.flatMap(group => group.transactions.map(transaction => transaction.importedId)));
+      return actualResult(groups, dryRun);
+    } });
+
+    await expect(worker.processNextItemBatch()).resolves.toBe(true);
+    await expect(worker.processNextItemBatch()).resolves.toBe(false);
+    const item = (await readImportRun(db, store, "owner-1", runId))!.items[0]!;
+    expect(item).toMatchObject({ status: "needs_review", automaticSafe: false, actualAccountId: "actual-1", importedId: "amazon-111-2222222-3333333", financialPlan: null });
+    expect(item.originalAttemptedAt).toBeUndefined();
+    expect(ledger).toEqual([]);
+  });
   it("automatically previews and commits an enabled generic expense exactly once", async () => {
     const { store } = setup();
     const runId = await stageGeneric(store);
     const ledger = new Map<string, number>();
     const statuses: string[] = [];
     subscribeCurrentDashboardEvents('owner-1', event => { if (event.reason === 'financial_event_changed') statuses.push(event.reason); });
-    const worker = createTransactionImportWorker({
+    const worker = createWorker({
       store, createId,
       importGroups: async (_userId, groups, dryRun) => {
         if (!dryRun) {
@@ -192,7 +207,7 @@ describe("transaction import worker", () => {
     const { store } = setup();
     const runId = await stageGeneric(store, enabledIncomePlan());
     const ledger = new Map<string, number>();
-    const worker = createTransactionImportWorker({
+    const worker = createWorker({
       store, createId,
       importGroups: async (_userId, groups, dryRun) => {
         if (!dryRun) for (const transaction of groups.flatMap((group) => group.transactions)) {
@@ -219,7 +234,7 @@ describe("transaction import worker", () => {
     const { store } = setup();
     const runId = await stageGeneric(store);
     const committed: string[] = [];
-    const worker = createTransactionImportWorker({
+    const worker = createWorker({
       store, createId,
       importGroups: async (_userId, groups, dryRun) => {
         if (!dryRun) committed.push(...groups.flatMap((group) => group.transactions.map((transaction) => transaction.importedId)));
@@ -237,13 +252,13 @@ describe("transaction import worker", () => {
     });
   });
 
-  it("re-previews an uncertain generic commit with its original identity", async () => {
+  it("recovers an attempted generic commit with its original identity after the profile is removed", async () => {
     const { store } = setup();
     const runId = await stageGeneric(store);
     const ledger = new Map<string, number>();
     const statuses: string[] = [];
     subscribeCurrentDashboardEvents('owner-1', event => { if (event.reason === 'financial_event_changed') statuses.push(event.reason); });
-    const worker = createTransactionImportWorker({
+    const worker = createWorker({
       store, createId, now: () => 1_000, invalidateAfterCommit: async () => undefined,
       importGroups: async (_userId, groups, dryRun) => {
         const transaction = groups[0]!.transactions[0]!;
@@ -255,7 +270,8 @@ describe("transaction import worker", () => {
     });
     await worker.processNextItemBatch();
     await worker.processNextItemBatch();
-    expect((await readImportRun(db, store, "owner-1", runId))!.items[0]).toMatchObject({ status: "queued" });
+    expect((await readImportRun(db, store, "owner-1", runId))!.items[0]).toMatchObject({ status: "queued", originalAttemptedAt: 1_000 });
+    await db.execute("UPDATE ea_settings SET financial_profiles_json = '[]', financial_profiles_revision = 2 WHERE user_id = 'owner-1'");
     await worker.processNextItemBatch();
     expect((await readImportRun(db, store, "owner-1", runId))!.items[0]).toMatchObject({
       status: "already_present", importedId: "financial-email:v1:worker", automaticSafe: false,
@@ -268,10 +284,10 @@ describe("transaction import worker", () => {
 
   it("honors a historical observe snapshot by dry-running without committing", async () => {
     const { store } = setup();
-    const arrival = await seedLegacyItems(store, [emailFixture()], "observe");
+    const arrival = await seedAuthorizedItems(store, [emailFixture()], "observe");
     const importGroups = vi.fn(async (_userId, groups, dryRun) => actualResult(groups, dryRun));
     const invalidateAfterCommit = vi.fn();
-    const worker = createTransactionImportWorker({ store, importGroups, invalidateAfterCommit, createId });
+    const worker = createWorker({ store, importGroups, invalidateAfterCommit, createId });
 
     await expect(worker.processNextItemBatch()).resolves.toBe(true);
     await expect(worker.processNextItemBatch()).resolves.toBe(false);
@@ -322,7 +338,7 @@ describe("transaction import worker", () => {
     expect(item).not.toBeNull();
     await store.insertItem(item!);
     const importGroups = vi.fn(async (_userId, groups, dryRun) => actualResult(groups, dryRun));
-    const worker = createTransactionImportWorker({ store, importGroups, createId });
+    const worker = createWorker({ store, importGroups, createId });
 
     await expect(worker.processNextItemBatch()).resolves.toBe(true);
     await expect(worker.processNextItemBatch()).resolves.toBe(false);
@@ -350,7 +366,7 @@ describe("transaction import worker", () => {
 
   it("automatic dry-runs before one grouped commit and one invalidation fan-out", async () => {
     const { store } = setup();
-    const arrival = await seedLegacyItems(store, [
+    const arrival = await seedAuthorizedItems(store, [
       emailFixture(),
       emailFixture({
         uid: "gmail-personal-paypal-1",
@@ -362,7 +378,7 @@ describe("transaction import worker", () => {
     ], "automatic", { amazon: "actual-checking", paypal: "actual-card" });
     const importGroups = vi.fn(async (_userId, groups, dryRun) => actualResult(groups, dryRun));
     const invalidateAfterCommit = vi.fn().mockResolvedValue(undefined);
-    const worker = createTransactionImportWorker({ store, importGroups, invalidateAfterCommit, createId });
+    const worker = createWorker({ store, importGroups, invalidateAfterCommit, createId });
 
     await worker.processNextItemBatch();
     let detail = await readImportRun(db, store, "owner-1", arrival.runId!);
@@ -384,8 +400,8 @@ describe("transaction import worker", () => {
 
   it("retries an uncertain post-call failure with the same imported ID", async () => {
     const { store } = setup();
-    const arrival = await seedLegacyItems(store);
-    const previewWorker = createTransactionImportWorker({
+    const arrival = await seedAuthorizedItems(store);
+    const previewWorker = createWorker({
       store,
       importGroups: vi.fn(async (_userId, groups, dryRun) => actualResult(groups, dryRun)),
       invalidateAfterCommit: vi.fn(),
@@ -394,7 +410,7 @@ describe("transaction import worker", () => {
     await previewWorker.processNextItemBatch();
 
     let uncertainImportedId: string | null = null;
-    const uncertainWorker = createTransactionImportWorker({
+    const uncertainWorker = createWorker({
       store,
       importGroups: vi.fn(async (_userId, groups) => {
         uncertainImportedId = groups[0]!.transactions[0]!.importedId;
@@ -407,7 +423,7 @@ describe("transaction import worker", () => {
     await uncertainWorker.processNextItemBatch();
     expect((await readImportRun(db, store, "owner-1", arrival.runId!))!.items[0]).toMatchObject({ status: "ready" });
 
-    const retryWorker = createTransactionImportWorker({
+    const retryWorker = createWorker({
       store,
       importGroups: vi.fn(async (_userId: string, groups: ActualImportAccountGroup[], dryRun: boolean) => actualResult(groups, dryRun, "already_present")),
       invalidateAfterCommit: vi.fn(),
@@ -425,8 +441,8 @@ describe("transaction import worker", () => {
     "ACTUAL_WORKER_TIMEOUT",
   ])("reconciles after an uncertain Actual commit (%s)", async (errorCode) => {
     const { store } = setup();
-    const arrival = await seedLegacyItems(store);
-    const previewWorker = createTransactionImportWorker({
+    const arrival = await seedAuthorizedItems(store);
+    const previewWorker = createWorker({
       store,
       importGroups: vi.fn(async (_userId, groups, dryRun) => actualResult(groups, dryRun)),
       invalidateAfterCommit: vi.fn(),
@@ -438,7 +454,7 @@ describe("transaction import worker", () => {
       args: [arrival.runId!],
     });
 
-    const uncertainWorker = createTransactionImportWorker({
+    const uncertainWorker = createWorker({
       store,
       importGroups: vi.fn().mockRejectedValue(Object.assign(
         new Error("out-of-sync after import"),
@@ -463,9 +479,9 @@ describe("transaction import worker", () => {
 
   it("reconciles safely when persistence fails after Actual success", async () => {
     const { store } = setup();
-    const arrival = await seedLegacyItems(store);
+    const arrival = await seedAuthorizedItems(store);
     const importGroups = vi.fn(async (_userId, groups, dryRun) => actualResult(groups, dryRun));
-    const previewWorker = createTransactionImportWorker({ store, importGroups, invalidateAfterCommit: vi.fn(), createId });
+    const previewWorker = createWorker({ store, importGroups, invalidateAfterCommit: vi.fn(), createId });
     await previewWorker.processNextItemBatch();
 
     let failFinalization = true;
@@ -479,7 +495,7 @@ describe("transaction import worker", () => {
         return store.settleItem(...args);
       },
     };
-    const commitWorker = createTransactionImportWorker({
+    const commitWorker = createWorker({
       store: interruptedStore,
       importGroups,
       invalidateAfterCommit: vi.fn(),
@@ -490,7 +506,7 @@ describe("transaction import worker", () => {
     expect((await readImportRun(db, store, "owner-1", arrival.runId!))!.items[0]).toMatchObject({ status: "ready" });
 
     await db.execute(`UPDATE ea_transaction_import_items SET next_attempt_at = 0 WHERE run_id = '${arrival.runId}'`);
-    const retryWorker = createTransactionImportWorker({
+    const retryWorker = createWorker({
       store,
       importGroups: vi.fn(async (_userId: string, groups: ActualImportAccountGroup[], dryRun: boolean) => actualResult(groups, dryRun, "already_present")),
       invalidateAfterCommit: vi.fn(),
@@ -506,7 +522,7 @@ describe("transaction import worker", () => {
 
   it("keeps unsafe automatic candidates in review after Actual preview", async () => {
     const { store } = setup();
-    const arrival = await seedLegacyItems(store, [emailFixture({
+    const arrival = await seedAuthorizedItems(store, [emailFixture({
       uid: "gmail-personal-paypal-cad",
       gmailMessageId: "paypal-cad",
       from: "service@paypal.com",
@@ -514,7 +530,7 @@ describe("transaction import worker", () => {
       text: "Transaction ID: 1AB23456CD789012E",
     })]);
     const importGroups = vi.fn(async (_userId, groups, dryRun) => actualResult(groups, dryRun));
-    const worker = createTransactionImportWorker({ store, importGroups, invalidateAfterCommit: vi.fn(), createId });
+    const worker = createWorker({ store, importGroups, invalidateAfterCommit: vi.fn(), createId });
 
     await worker.processNextItemBatch();
     const item = (await readImportRun(db, store, "owner-1", arrival.runId!))!.items[0]!;
@@ -525,9 +541,9 @@ describe("transaction import worker", () => {
 
   it("pauses incompatibility errors without changing the canonical imported ID", async () => {
     const { store } = setup();
-    const arrival = await seedLegacyItems(store);
+    const arrival = await seedAuthorizedItems(store);
     const importGroups = vi.fn().mockRejectedValue(Object.assign(new Error("unsupported import"), { code: "ACTUAL_IMPORT_INCOMPATIBLE" }));
-    const worker = createTransactionImportWorker({ store, importGroups, createId });
+    const worker = createWorker({ store, importGroups, createId });
 
     await worker.processNextItemBatch();
     expect((await readImportRun(db, store, "owner-1", arrival.runId!))!.items[0]).toMatchObject({
@@ -537,16 +553,18 @@ describe("transaction import worker", () => {
     });
   });
 
-  it("dry-runs owner-confirmed corrections and uses the legacy raw Gmail ID fallback", async () => {
+  it("honors owner confirmation without a profile and uses the legacy raw Gmail ID fallback", async () => {
     const { store, service } = setup();
-    const arrival = await seedLegacyItems(store, [emailFixture({
+    const arrival = await seedAuthorizedItems(store, [emailFixture({
       gmailMessageId: "raw-gmail-message-id",
       uid: "gmail-personal-raw-gmail-message-id",
       subject: "Order confirmation",
       text: "Order Total: $12.00",
     })], "observe");
+    await db.execute({ sql: "UPDATE ea_transaction_import_items SET financial_email_plan_json = NULL WHERE run_id = ?", args: [arrival.runId] });
+    await db.execute("UPDATE ea_settings SET financial_profiles_json = '[]', financial_profiles_revision = 2 WHERE user_id = 'owner-1'");
     const importGroups = vi.fn(async (_userId, groups, dryRun) => actualResult(groups, dryRun));
-    const worker = createTransactionImportWorker({ store, importGroups, invalidateAfterCommit: vi.fn(), createId });
+    const worker = createWorker({ store, importGroups, invalidateAfterCommit: vi.fn(), createId });
 
     await worker.processNextItemBatch();
     let item = (await readImportRun(db, store, "owner-1", arrival.runId!))!.items[0]!;

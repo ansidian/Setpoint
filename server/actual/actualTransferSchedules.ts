@@ -90,6 +90,12 @@ async function reconcileTransferScheduleOperation(
   const ruleMap = new Map((rules.data as Array<{ id: string; conditions: ActualScheduleCondition[]; conditions_op: string; actions: Array<{ op: string; value: string }>; tombstone: boolean }>).map((r) => [r.id, r]));
   const ownSchedule = schedules.find((s) => s.id === scheduleId);
   if (ownSchedule?.tombstone) return review("The previously created payment schedule was deleted. It will not be recreated.");
+  const requestedSchedule = input.allowUpdate && input.scheduleId
+    ? schedules.find(schedule => schedule.id === input.scheduleId) : undefined;
+  if (input.allowUpdate && input.scheduleId && !requestedSchedule && input.scheduleId !== scheduleId) {
+    return review("The selected transfer schedule is unavailable. Choose its current schedule in Actual.");
+  }
+  if (requestedSchedule?.tombstone) return review("The selected transfer schedule was deleted. It will not be recreated.");
 
   const transactions = (transactionData.data as TransactionRow[]).filter((t) => {
     const other = transfers.get(t.payee || "");
@@ -113,7 +119,9 @@ async function reconcileTransferScheduleOperation(
   const exact: ScheduleRow[] = [];
   const updates: Array<{ schedule: ScheduleRow; conditions: ActualScheduleCondition[]; rule: unknown }> = [];
   let conflict = false;
-  for (const schedule of schedules) {
+  // A managed profile or prepared update names its exact existing target. A new
+  // deterministic ID pinned by preview still needs the full ambiguity check.
+  for (const schedule of requestedSchedule ? [requestedSchedule] : schedules) {
     const rule = ruleMap.get(schedule.rule);
     const conditions = (rule?.conditions || []).map((c) => ({ ...c, field: c.field === "acct" ? "account" : c.field === "description" ? "payee" : c.field }));
     const account = conditions.find((c) => c.field === "account")?.value;
@@ -124,7 +132,7 @@ async function reconcileTransferScheduleOperation(
     const date = conditions.find((c) => c.field === "date")?.value;
     const onDate = schedule.next_date === input.date || date === input.date;
     const involvesCard = account === input.toAccountId || other === input.toAccountId;
-    if (schedule.id !== scheduleId) {
+    if (schedule.id !== scheduleId && schedule.id !== requestedSchedule?.id) {
       if (!samePair && !(involvesCard && onDate)) continue;
       const reusableCompleted = input.allowUpdate && schedule.completed && !schedule.tombstone
         && schedule.next_date && schedule.next_date < input.date && normalizeName(schedule.name) === normalizeName(input.name);
@@ -136,7 +144,7 @@ async function reconcileTransferScheduleOperation(
       && rule.actions.some((a) => a.op === "link-schedule" && a.value === schedule.id)
       && ["account", "payee", "amount", "date"].every((field) => conditions.filter((c) => c.field === field).length === 1)
       && conditions.length === 4
-      && conditions.every((c) => c.op === "is");
+      && conditions.every((c) => c.op === "is" || (input.allowUpdate && c.field === "date" && c.op === "isapprox"));
     const dateMatches = schedule.next_date === input.date
       && (typeof date === "string" ? date === input.date : date != null && typeof date === "object" && !!date.frequency);
     if (samePair && supported && amount?.value === expected && dateMatches && !schedule.completed && !schedule.tombstone) exact.push(schedule);
@@ -165,7 +173,8 @@ async function reconcileTransferScheduleOperation(
   if (transferPayees.length !== 1) return review("The funding account does not have a unique Actual transfer payee.");
   const update = candidates[0];
   const scheduleFingerprint = update ? createHash("sha256").update(JSON.stringify([update.schedule, update.rule])).digest("hex") : undefined;
-  const desiredDate = update ? buildDateCondition(update.conditions, input.date) : { field: "date", op: "is", value: input.date };
+  const desiredDate = update ? { ...buildDateCondition(update.conditions, input.date), op: update.conditions.find(c => c.field === "date")!.op }
+    : { field: "date", op: "is", value: input.date };
   if (update && typeof desiredDate.value === "object" && desiredDate.value?.frequency
     && (desiredDate.value.interval ?? 0) > 1 && update.schedule.next_date !== input.date) {
     return review("The transfer schedule has a recurrence that cannot be moved to this payment date.");

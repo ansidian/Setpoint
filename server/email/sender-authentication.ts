@@ -79,11 +79,146 @@ export function evaluateGmailSenderAuthentication(
   const fromDomain = fromHeaders.length === 1 ? addressDomain(fromHeaders[0]?.value) : null;
   const authenticationHeaders = headers.filter((header) => header.name.toLowerCase() === "authentication-results");
   const first = authenticationHeaders[0]?.value?.trim() || "";
-  if (!claimedDomain || fromDomain !== claimedDomain || !/^mx\.google\.com\s*;/i.test(first)) {
+  const googleResults = authenticationHeaders.filter((header) => /\bmx\.google\.com\b/i.test((header.value || "").split(";")[0] || ""));
+  if (!claimedDomain || fromDomain !== claimedDomain || !/^mx\.google\.com\s*;/i.test(first) || googleResults.length !== 1) {
     return unavailableEmailAuthentication("gmail", claimedFrom, now);
   }
 
-  return evaluateAuthenticationResults("gmail", first, claimedDomain, now);
+  const results = parseGmailAuthenticationResults(first);
+  if (!results || results.filter((entry) => entry.method === "dmarc").length > 1
+    || results.filter((entry) => entry.method === "spf").length > 1) return unavailableEmailAuthentication("gmail", claimedFrom, now);
+  const dkimResults = results.filter((entry) => entry.method === "dkim");
+  if (dkimResults.length > 16 || dkimResults.some((entry, index) => dkimResults.slice(index + 1).some((other) => sameDkimResultIdentity(entry, other)))) {
+    return unavailableEmailAuthentication("gmail", claimedFrom, now);
+  }
+  const dkim = dkimResults.map((entry) => {
+    const domain = gmailDkimSigningDomain(entry.properties, headers);
+    return { result: entry.result, domain, aligned: domain === claimedDomain };
+  });
+  const spfResult = results.find((entry) => entry.method === "spf");
+  const spfDomain = spfResult ? normalizedDomain(spfResult.properties["smtp.mailfrom"] || spfResult.properties["smtp.helo"]) : null;
+  const spf = spfResult ? { result: spfResult.result, domain: spfDomain, aligned: spfDomain === claimedDomain } : null;
+  const dmarcResult = results.find((entry) => entry.method === "dmarc");
+  const headerFromDomain = dmarcResult ? strictSigningDomain(dmarcResult.properties["header.from"]) : claimedDomain;
+  const dmarc = dmarcResult ? { result: dmarcResult.result, domain: headerFromDomain, aligned: headerFromDomain === claimedDomain } : null;
+  // Exact DKIM d= alignment authenticates the Author Domain (RFC 9989 §4.4.1).
+  // This is sender authority, not an invented DMARC evaluation. An explicit
+  // DMARC result of any kind always controls; SPF alone is never this fallback.
+  const status: EmailAuthenticationStatus = dmarc
+    ? ["pass", "fail", "none"].includes(dmarc.result)
+      ? !dmarc.aligned || dmarc.result === "fail" ? "fail" : dmarc.result === "pass" ? "pass" : "none"
+      : "unavailable"
+    : dkim.some((entry) => entry.result === "pass" && entry.aligned) ? "pass" : "unavailable";
+  return projection("gmail", "gmail_authentication_results", status, headerFromDomain, now.toISOString(), { dkim, spf, dmarc });
+}
+
+interface GmailAuthenticationResult {
+  method: string;
+  result: string;
+  properties: Record<string, string>;
+}
+
+/** Parse the observed Auth-Results grammar without accepting properties from comments/reasons. */
+function parseGmailAuthenticationResults(input: string): GmailAuthenticationResult[] | null {
+  if (input.length > 65_536) return null;
+  const segments: string[] = [];
+  let text = "";
+  let depth = 0;
+  let quoted = false;
+  let escaped = false;
+  for (const character of input.replace(/\r?\n[ \t]+/g, " ")) {
+    if (escaped) { if (!depth) text += character; escaped = false; continue; }
+    if ((depth || quoted) && character === "\\") { if (quoted) text += character; escaped = true; continue; }
+    if (character === '"' && !depth) { quoted = !quoted; text += character; continue; }
+    if (!quoted && character === "(") { depth++; text += " "; continue; }
+    if (!quoted && character === ")") { if (!depth) return null; depth--; continue; }
+    if (depth) continue;
+    if (/[\r\n]/.test(character)) return null;
+    if (!quoted && character === ";") { segments.push(text.trim()); text = ""; }
+    else text += character;
+  }
+  if (depth || quoted || escaped) return null;
+  segments.push(text.trim());
+  const entries: GmailAuthenticationResult[] = [];
+  const methods = segments.slice(1).filter(Boolean);
+  if (methods.length > 1 && methods.some((entry) => entry.toLowerCase() === "none")) return null;
+  for (const segment of methods) {
+    if (segment.toLowerCase() === "none") continue;
+    const match = segment.match(/^([a-z][a-z0-9_-]*)\s*=\s*([a-z]+)(?=\s|$)/i);
+    if (!match) return null;
+    const properties: Record<string, string> = {};
+    let remaining = segment.slice(match[0].length).trim();
+    while (remaining) {
+      const property = remaining.match(/^([a-z][a-z0-9_.-]*)\s*=\s*(?:"((?:[^"\\]|\\.)*)"|([^\s";]+))(?=\s|$)/i);
+      if (!property) return null;
+      const name = property[1]!.toLowerCase();
+      if (Object.hasOwn(properties, name)) return null;
+      properties[name] = property[2] !== undefined ? property[2].replace(/\\(.)/g, "$1") : property[3]!;
+      remaining = remaining.slice(property[0].length).trim();
+    }
+    entries.push({ method: match[1]!.toLowerCase(), result: match[2]!.toLowerCase(), properties });
+  }
+  return entries;
+}
+
+function strictSigningDomain(value: string | undefined): string | null {
+  return value && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/i.test(value)
+    ? value.toLowerCase() : null;
+}
+
+function dkimIdentity(value: string | undefined): { value: string; domain: string } | null {
+  const match = value?.match(/^([^@\s<>"\\]*)@([^@\s]+)$/);
+  const domain = strictSigningDomain(match?.[2]);
+  return match && domain ? { value: `${match[1]}@${domain}`, domain } : null;
+}
+
+function sameDkimResultIdentity(left: GmailAuthenticationResult, right: GmailAuthenticationResult): boolean {
+  const leftPrefix = left.properties["header.b"];
+  const rightPrefix = right.properties["header.b"];
+  if (leftPrefix && rightPrefix) return leftPrefix.startsWith(rightPrefix) || rightPrefix.startsWith(leftPrefix);
+  const leftDomain = strictSigningDomain(left.properties["header.d"]) || dkimIdentity(left.properties["header.i"])?.domain;
+  const rightDomain = strictSigningDomain(right.properties["header.d"]) || dkimIdentity(right.properties["header.i"])?.domain;
+  return Boolean(leftDomain && rightDomain
+    && (leftDomain === rightDomain || leftDomain.endsWith(`.${rightDomain}`) || rightDomain.endsWith(`.${leftDomain}`))
+    && (!left.properties["header.s"] || !right.properties["header.s"] || left.properties["header.s"] === right.properties["header.s"]));
+}
+
+function gmailDkimSigningDomain(properties: Record<string, string>, headers: AuthenticationHeader[]): string | null {
+  const identity = dkimIdentity(properties["header.i"]);
+  const reportedDomain = strictSigningDomain(properties["header.d"]);
+  if (Object.hasOwn(properties, "header.d")) {
+    // i= may name d= or one of its subdomains, but never establishes d= itself
+    // (RFC 6376 §3.5). It cannot override a different reported signing domain.
+    if (!reportedDomain || (properties["header.i"] && (!identity || (identity.domain !== reportedDomain && !identity.domain.endsWith(`.${reportedDomain}`))))) return null;
+    return reportedDomain;
+  }
+  const prefix = properties["header.b"];
+  if (!identity || !prefix || !/^[A-Za-z0-9+/]{8,}={0,2}$/.test(prefix)) return null;
+  const signatures: Record<string, string>[] = [];
+  const signatureHeaders = headers.filter((header) => header.name.toLowerCase() === "dkim-signature");
+  if (signatureHeaders.length > 16) return null;
+  for (const header of signatureHeaders) {
+    const tags: Record<string, string> = {};
+    for (const item of (header.value || "").replace(/\r?\n[ \t]+/g, " ").split(";").map((item) => item.trim()).filter(Boolean)) {
+      const tag = item.match(/^([a-z][a-z0-9]*)\s*=\s*([\s\S]*)$/i);
+      if (!tag || Object.hasOwn(tags, tag[1]!.toLowerCase())) return null;
+      tags[tag[1]!.toLowerCase()] = tag[2]!.trim();
+    }
+    signatures.push(tags);
+  }
+  // RFC 6008 §4: header.b is a case-sensitive, >=8-character signature prefix.
+  // Require one original signature; adding a colliding copy cannot select an
+  // arbitrary unverified d=. The selector and AUID must also agree when given.
+  const matched = signatures.filter((signature) => signature.b?.replace(/\s/g, "").startsWith(prefix));
+  if (matched.length !== 1) return null;
+  const signature = matched[0]!;
+  const domain = strictSigningDomain(signature.d);
+  const signatureIdentity = dkimIdentity(signature.i || (domain ? `@${domain}` : undefined));
+  if (signature.v !== "1" || !/^[A-Za-z0-9+/]+={0,2}$/.test(signature.b?.replace(/\s/g, "") || "") || !domain || signatureIdentity?.value !== identity.value
+    || (properties["header.s"] && signature.s !== properties["header.s"])
+    || (identity.domain !== domain && !identity.domain.endsWith(`.${domain}`))
+    || Object.hasOwn(signature, "l")) return null;
+  return domain;
 }
 
 function evaluateAuthenticationResults(
@@ -96,7 +231,7 @@ function evaluateAuthenticationResults(
   const dkim = segments.flatMap((segment) => {
     const result = resultValue(segment, "dkim");
     if (!result) return [];
-    const domain = propertyDomain(segment, ["header.i", "header.d"]);
+    const domain = propertyDomain(segment, ["header.d", "header.i"]);
     return [{ result, domain, aligned: domain === claimedDomain }];
   });
   const spfSegment = segments.find((segment) => resultValue(segment, "spf"));

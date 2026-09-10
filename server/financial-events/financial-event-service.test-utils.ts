@@ -1,3 +1,4 @@
+import type { Client } from "@libsql/client";
 import type { BillCandidate } from "../../shared/types/bills.ts";
 
 export const day = "2026-09-06";
@@ -48,3 +49,13 @@ export function authentication(source: Source) {
   };
 }
 
+
+/** Explicit fictional owner authority for receipt-worker scenarios. */
+export async function saveReceiptProfile(db: Client, enabled = true): Promise<void> {
+  const profiles = enabled ? [{ id: "merchant", name: "Example Merchant", enabled: true, budgetId: "budget-1",
+    senderAddresses: ["receipt@merchant.example", "payment@processor.example"],
+    merchantName: "Example Merchant Inc.", target: { kind: "expense", accountId: "card", payeeId: "payee-0" } }] : [];
+  await db.execute({ sql: `INSERT INTO ea_settings (user_id, actual_budget_sync_id, financial_profiles_json, financial_profiles_revision)
+    VALUES ('owner', 'budget-1', ?, 1) ON CONFLICT(user_id) DO UPDATE SET financial_profiles_json = excluded.financial_profiles_json,
+    financial_profiles_revision = financial_profiles_revision + 1`, args: [JSON.stringify(profiles)] });
+}

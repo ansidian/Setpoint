@@ -26,6 +26,10 @@ import {
   type FinancialTargetBundleRanker,
 } from "./financialEmailTargetInference.ts";
 import { resolveStatementActualStatus } from "./statementActualStatusModel.ts";
+import { readFinancialProfiles } from "./financial-profiles.ts";
+import { matchFinancialProfile, resolveFinancialProfileTargets, financialProfileReason } from "./financialProfilePlanning.ts";
+import { suggestFinancialProfile } from "./financialProfileSuggestion.ts";
+import { isIgnoredFinancialNotice } from "./financialEmailClassificationPolicy.ts";
 import type { ActualMetadata } from "../../shared/types/actual.ts";
 import type {
   BillCandidate,
@@ -42,9 +46,10 @@ import type {
 import type { TransactionQueryResult, TransactionRecord } from "../../shared/types/transactions.ts";
 
 export { financialEmailSourceIdentity } from "./financialEmailSourceIdentity.ts";
+export { financialProfileCycleKey } from "./financialProfilePlanning.ts";
 export { selectSemanticBillAmount } from "./billSemanticAmountPolicy.ts";
 export { financialEmailAutomationEnabled } from "./financialEmailAutomationPolicy.ts";
-export { hasFinancialSemanticConflict, hasStrongFinancialType, hasVerbatimFinancialEvidence } from "./financialEmailClassificationPolicy.ts";
+export { hasFinancialSemanticConflict, hasStrongFinancialType, hasVerbatimFinancialEvidence, isIgnoredFinancialNotice } from "./financialEmailClassificationPolicy.ts";
 export { namedAccountEvidence, trustedAccountSuffix, accountSuffix } from "./financialEmailAccountEvidence.ts";
 export { hasExplicitDateForYmd } from "./billEventVerifier.ts";
 
@@ -72,6 +77,7 @@ interface CandidateResolution {
 }
 
 export interface FinancialEmailPlannerDependencies {
+  profileReader?: typeof readFinancialProfiles;
   candidateExtractor?: typeof extractBillCandidate;
   candidateVerification?: Pick<
     ReturnType<typeof createBillCandidateVerificationService>,
@@ -369,6 +375,7 @@ async function resolveCandidate(
     }
   }
   const candidate = { ...input.candidate };
+  if (isIgnoredFinancialNotice(candidate)) return { candidate, providerUnavailable: false };
   const missingType = shouldAttemptFinancialEmailTypeVerification(candidate);
   const content = trimBillBody({
     subject: String(input.email?.subject || ""),
@@ -405,6 +412,7 @@ async function resolveCandidate(
 }
 
 export function createFinancialEmailPlanner({
+  profileReader = readFinancialProfiles,
   candidateExtractor = extractBillCandidate,
   candidateVerification: suppliedCandidateVerification,
   targetRanker,
@@ -431,6 +439,8 @@ export function createFinancialEmailPlanner({
       emailId: input.providerMessageId,
     }, async () => {
       validateInput(userId, input);
+      const configuration = input.candidate && isIgnoredFinancialNotice(input.candidate)
+        ? { budgetId: null, revision: 0, profiles: [] } : await profileReader(userId);
       const resolved = await resolveCandidate(userId, input, {
         candidateExtractor,
         candidateVerification,
@@ -445,6 +455,11 @@ export function createFinancialEmailPlanner({
         ? await metadataReader(userId).catch(() => unavailableMetadata())
         : { ...unavailableMetadata(), syncHealth: { state: "current", lastSuccessAt: null } };
       const metadataAvailable = metadata.syncHealth.state === "current";
+      const match = matchFinancialProfile(configuration, input, candidate);
+      const mapped = match.profile && metadataAvailable
+        ? resolveFinancialProfileTargets(match.profile, match.resolution, candidate, metadata,
+          `${input.email?.subject || ""}\n${input.email?.body || input.email?.body_snippet || ""}`)
+        : { resolution: match.resolution, inference: null };
       const today = todayYmd(now());
       const historyResult: TransactionQueryResult = needsActualEvidence && metadataAvailable
         ? await transactionReader(userId, {
@@ -474,7 +489,7 @@ export function createFinancialEmailPlanner({
             }
           }
         : undefined;
-      const inference = await inferFinancialEmailTargets({
+      const inference = mapped.inference || await inferFinancialEmailTargets({
         candidate,
         classification: policy.classification,
         intended: policy.intended,
@@ -487,6 +502,8 @@ export function createFinancialEmailPlanner({
       const targets = inference.targets;
       const evidence = evidenceReasons(inference.candidate, policy, resolved.providerUnavailable);
       const unresolved = targetReasons(targets, inference.reasons, metadataAvailable);
+      const profileReason = policy.intended !== "no_write" ? financialProfileReason(mapped.resolution) : null;
+      if (profileReason) unresolved.unshift(profileReason);
       const reconciled = await reconcileCandidate(userId, inference.candidate, metadata, history, historyAvailable, {
         occurrenceReader,
         now,
@@ -509,6 +526,11 @@ export function createFinancialEmailPlanner({
           ? [...evidence, ...completedPaymentReview]
           : [...evidence, ...unresolved, ...reconciliationReview];
       return {
+        profile: mapped.resolution,
+        profileSuggestion: suggestFinancialProfile({
+          input, candidate, intended: policy.intended, targets, resolution: mapped.resolution,
+          metadata: metadataAvailable ? metadata : null, reasons: inference.reasons,
+        }),
         version: 1,
         candidateSemanticsVersion: FINANCIAL_CANDIDATE_SEMANTICS_VERSION,
         targetInferenceVersion: FINANCIAL_TARGET_INFERENCE_VERSION,
@@ -520,6 +542,7 @@ export function createFinancialEmailPlanner({
         reconciliation,
         reviewReasons,
         automation: financialEmailAutomationEligibility({
+          profile: mapped.resolution,
           input,
           candidate: inference.candidate,
           evidence,

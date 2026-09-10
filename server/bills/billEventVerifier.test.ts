@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { shouldVerifyBillEvent, verifyBillEvent } from "./billEventVerifier.ts";
+import { hasExplicitDateForYmd, shouldVerifyBillEvent, verifyBillEvent } from "./billEventVerifier.ts";
 import { classifyFinancialEmail, hasFinancialSemanticConflict, shouldVerifyFinancialEmailType } from "./financialEmailClassificationPolicy.ts";
 import type { BillCandidate } from "../../shared/types/bills.ts";
 
@@ -54,14 +54,14 @@ describe("bill event verifier", () => {
     });
   });
 
-  it("repairs a missing operation date that is explicit in the email", async () => {
-    const content = "You redeemed $19.32 cash back. Order date 09/04/2026.";
+  it.each(["09/04/2026", "09/04/26"])("repairs a missing operation date that is explicit in the email as %s", async (sourceDate) => {
+    const content = `You redeemed $19.32 cash back. Order date ${sourceDate}.`;
     const provider = {
       extract: vi.fn(async () => ({
         fields: {
           event_kind: "reward" as const,
           event_confidence: 0.99,
-          event_evidence: "Order date 09/04/2026",
+          event_evidence: `Order date ${sourceDate}`,
           due_date: "2026-09-04",
           type: "income" as const,
           type_confidence: 0.99,
@@ -266,12 +266,12 @@ describe("bill event verifier", () => {
     });
   });
 
-  it("repairs a confident card-funded purchase misclassified as a card repayment", async () => {
+  it("repairs a confident card-funded purchase misclassified as a refund", async () => {
     const content = "You paid Example Shop $30.00 on September 6, 2026. Payment method: Example Rewards Mastercard.";
     const result = await verifyBillEvent({
       content,
       candidate: {
-        event_kind: "card_payment_completed", event_confidence: 0.99,
+        event_kind: "refund", event_confidence: 0.99,
         event_evidence: "You paid Example Shop $30.00 on September 6, 2026",
         type: "expense", type_confidence: 0.99, type_evidence: "You paid Example Shop $30.00",
         due_date: "2026-09-10", amount: 30, amount_kind: "transaction_amount",
@@ -296,11 +296,11 @@ describe("bill event verifier", () => {
 
   it.each([false, true])("blocks an unrepaired semantic contradiction when the audit fails: %s", async (unavailable) => {
     const candidate: BillCandidate = {
-      event_kind: "card_payment_completed", event_confidence: 0.99, event_evidence: "Payment to Example Shop",
-      type: "expense", type_confidence: 0.99, type_evidence: "Payment to Example Shop", due_date: "2026-09-06",
+      event_kind: "refund", event_confidence: 0.99, event_evidence: "Refund from Example Shop",
+      type: "expense", type_confidence: 0.99, type_evidence: "Refund from Example Shop", due_date: "2026-09-06",
     };
     const result = await verifyBillEvent({
-      content: "Payment to Example Shop",
+      content: "Refund from Example Shop",
       candidate,
       provider: { extract: async () => {
         if (unavailable) throw new Error("provider unavailable");
@@ -332,10 +332,34 @@ describe("bill event verifier", () => {
   });
 });
 
+describe("explicit financial date evidence", () => {
+  it.each([
+    ["09/04/26", "2026-09-04"], ["9/4/26", "2026-09-04"],
+    ["02/29/00", "2000-02-29"], ["12/31/99", "2099-12-31"],
+    ["09/04/1999", "1999-09-04"], ["September 4, 2026", "2026-09-04"],
+    ["2026-09-04", "2026-09-04"], ["4 Sep 2026", "2026-09-04"],
+  ])("accepts a complete supported date %s for %s", (source, ymd) => {
+    expect(hasExplicitDateForYmd(`Order date: ${source}.`, ymd)).toBe(true);
+  });
+
+  it.each([
+    ["09/04/26", "1926-09-04"], ["09/04/26", "2126-09-04"],
+    ["09/04/99", "1999-09-04"], ["09/04/2026", "2020-09-04"],
+    ["02/29/25", "2025-02-29"], ["04/31/26", "2026-04-31"],
+    ["13/04/26", "2026-13-04"], ["09/04", "2026-09-04"],
+    ["09/04/26", "2026-04-09"], ["109/04/26", "2026-09-04"],
+    ["09/04/260", "2026-09-04"], ["09/04/26/99", "2026-09-04"],
+    ["99/09/04/26", "2026-09-04"], ["id09/04/26", "2026-09-04"],
+    ["09/04/26ref", "2026-09-04"],
+  ])("rejects unsupported or partial date evidence %s for %s", (source, ymd) => {
+    expect(hasExplicitDateForYmd(`Order date: ${source}.`, ymd)).toBe(false);
+  });
+});
+
 describe("financial event and ledger meaning", () => {
   it.each([0.1, 0.99])("rejects explicit contradictions independently of confidence %s", (confidence) => {
     for (const [event_kind, type] of [
-      ["card_payment_completed", "expense"], ["purchase", "transfer"], ["refund", "expense"], ["payment_due", "income"],
+      ["bill_issued", "income"], ["purchase", "transfer"], ["refund", "expense"], ["reward", "bill"],
     ] as const) {
       const candidate = { event_kind, type, event_confidence: confidence, type_confidence: confidence, type_evidence: "source evidence", due_date: "2026-09-06" };
       expect(hasFinancialSemanticConflict(candidate)).toBe(true);
@@ -345,10 +369,11 @@ describe("financial event and ledger meaning", () => {
     }
   });
 
-  it.each(["card_payment_completed", "account_transfer_completed"] as const)("plans %s as a transfer only with supported type semantics", (event_kind) => {
-    expect(classifyFinancialEmail({ event_kind, type: "transfer", type_confidence: 0.99, type_evidence: "Transfer completed" }).intended).toBe("create_transfer");
+  it("plans a scheduled card payment only with supported type semantics", () => {
+    const event_kind = "payment_scheduled";
+    expect(classifyFinancialEmail({ event_kind, type: "transfer", type_confidence: 0.99, type_evidence: "Credit card payment scheduled" }).intended).toBe("create_transfer_schedule");
     for (const type of [null, "transfer"]) {
-      const candidate = { event_kind, type };
+      const candidate: BillCandidate = { event_kind, type };
       expect(classifyFinancialEmail(candidate).intended).toBeNull();
       expect(shouldVerifyFinancialEmailType(candidate)).toBe(true);
       expect(candidate.type).toBe(type);

@@ -8,9 +8,10 @@ function eligibility(
   intended: FinancialIntendedOperationKind = "create_transaction",
 ) {
   return financialEmailAutomationEligibility({
+    profile: { status: "matched", revision: 1, budgetId: "budget-1", profileId: "confirmed-profile", reason: "Owner-confirmed targets" },
     input: {
       providerMessageId: "message-1",
-      sourceIdentity: { senderAuthentication: "pass" },
+      sourceIdentity: { senderAddress: "receipts@example.test", senderAuthentication: "pass" },
       actualPreflight: { status: "passed" },
       ...input,
     },
@@ -56,7 +57,7 @@ describe("financial email automation policy", () => {
   });
 
   it.each([
-    { intended: "create_transfer" as const, operationClass: "completed_transfer", type: "transfer", event_kind: "card_payment_completed" as const },
+    { intended: "create_transfer_schedule" as const, operationClass: "transfer_schedule", type: "transfer", event_kind: "payment_scheduled" as const },
     { intended: "create_schedule" as const, operationClass: "utility_schedule", type: "bill", event_kind: "bill_issued" as const },
   ])("enables $operationClass after all runtime gates pass", ({ intended, operationClass, ...candidate }) => {
     expect(eligibility({}, { ...candidate, currency: "USD" }, intended)).toMatchObject({
@@ -64,6 +65,13 @@ describe("financial email automation policy", () => {
     });
     expect(eligibility({}, { ...candidate, currency: null }, intended)).toMatchObject({
       eligible: false, reasons: expect.arrayContaining(["blocking_warning"]),
+    });
+  });
+
+  it("keeps completed transfers outside automatic writes even with confirmed targets", () => {
+    expect(eligibility({}, { type: "transfer", event_kind: "card_payment_completed", currency: "USD" }, "create_transfer")).toMatchObject({
+      eligible: false, operationClass: "completed_transfer", rollout: "observe_only",
+      reasons: expect.arrayContaining(["automation_class_observe_only"]),
     });
   });
 
@@ -77,7 +85,7 @@ describe("financial email automation policy", () => {
   });
 
   it("blocks contradictory event/type semantics even when upstream evidence gates are empty", () => {
-    const result = eligibility({}, { type: "expense", event_kind: "card_payment_completed", event_confidence: 0.99, type_confidence: 0.99, currency: "USD" }, "create_transfer");
+    const result = eligibility({}, { type: "expense", event_kind: "payment_scheduled", event_confidence: 0.99, type_confidence: 0.99, currency: "USD" }, "create_transfer_schedule");
     expect(result.eligible).toBe(false);
     expect(result.gates).toContainEqual({ gate: "semantic", status: "fail", reasons: ["semantic_event_ambiguous"] });
   });

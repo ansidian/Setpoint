@@ -11,6 +11,7 @@ import { createAnthropicProvider } from "./bill-extractors/anthropic.ts";
 import { createOpenAiProvider } from "./bill-extractors/openai.ts";
 import { verifyBillAmounts } from "./billAmountVerifier.ts";
 import { verifyBillEvent } from "./billEventVerifier.ts";
+import { isIgnoredFinancialNotice } from "./financialEmailClassificationPolicy.ts";
 import {
   rankFinancialTargetBundles,
   type FinancialTargetRankingOption,
@@ -51,6 +52,7 @@ export function createBillCandidateVerificationService({
     model: string;
     runProviderRequest?: BillProviderRequestRunner;
   }): Promise<BillCandidate> {
+    if (isIgnoredFinancialNotice(candidate)) return candidate;
     if (providerId !== "openai" && providerId !== "anthropic") return candidate;
     const content = trimBillBody({
       subject: String(email.subject || ""),

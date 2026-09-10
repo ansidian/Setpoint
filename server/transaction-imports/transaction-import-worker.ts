@@ -6,6 +6,7 @@ import { importTransactionGroups } from "../actual/actual.ts";
 import { invalidateActualAfterTransactionImport } from "../bills/bills-service.ts";
 import { applyFinancialEmailPreflightOutcome } from "./financial-email-preflight.ts";
 import { financialEmailAutomationEnabled } from "../bills/financial-email-planner.ts";
+import { readFinancialProfiles } from "../bills/financial-profiles.ts";
 import type {
   ActualImportAccountGroup,
   ActualImportBatchResult,
@@ -55,12 +56,14 @@ export function createTransactionImportWorker({
   invalidateAfterCommit = invalidateActualAfterTransactionImport,
   createId = randomUUID,
   now = Date.now,
+  profileReader = readFinancialProfiles,
 }: {
   store?: TransactionImportStore;
   importGroups?: typeof importTransactionGroups;
   invalidateAfterCommit?: typeof invalidateActualAfterTransactionImport;
   createId?: () => string;
   now?: () => number;
+  profileReader?: typeof readFinancialProfiles;
 } = {}) {
   async function claimItemBatch(): Promise<ClaimedItem[]> {
     const items: ClaimedItem[] = [];
@@ -161,8 +164,26 @@ export function createTransactionImportWorker({
   }
 
   async function processNextItemBatch(): Promise<boolean> {
-    const batch = await claimItemBatch();
-    if (!batch.length) return false;
+    const claimedBatch = await claimItemBatch();
+    if (!claimedBatch.length) return false;
+    const configurations = new Map<string, Awaited<ReturnType<typeof readFinancialProfiles>> | null>();
+    const batch: ClaimedItem[] = [];
+    for (const item of claimedBatch) {
+      if (item.confirmedAt == null && item.originalAttemptedAt == null && !item.financialPlan?.transferExecution?.attemptedAt) {
+        if (!configurations.has(item.userId)) configurations.set(item.userId, await profileReader(item.userId).catch(() => null));
+        const config = configurations.get(item.userId);
+        const authorization = item.financialPlan?.profile;
+        const current = config && authorization?.status === "matched" && authorization.budgetId === config.budgetId
+          && authorization.revision === config.revision
+          && config.profiles.some(profile => profile.enabled && profile.id === authorization.profileId && profile.budgetId === config.budgetId);
+        if (!current) {
+          await store.settleItem(item.userId, item.id, item.claimToken, { status: "needs_review", automaticSafe: false,
+            lastError: "Review this entry; its automatic profile is missing or has changed." });
+          continue;
+        }
+      }
+      batch.push(item);
+    }
     for (const item of batch.filter(isTransferImport)) {
       if (await processTransferImportItem(item, { store, now })) {
         await invalidateAfterCommit(item.userId).catch((error) => console.error("[Transaction Imports] Transfer invalidation failed:", conciseError(error)));
@@ -171,7 +192,7 @@ export function createTransactionImportWorker({
     const claimed = batch.filter((item) => !isTransferImport(item));
     const invalid = claimed.filter((item) => !item.actualAccountId || !item.importedId || !item.date || item.amountCents == null || !item.payee || item.currency !== "USD"
       || ((item.source === "generic" || item.financialPlan?.candidate.transaction_import?.executionOwner === "planner")
-        && item.status === "importing" && item.confirmedAt == null
+        && item.status === "importing" && item.confirmedAt == null && item.originalAttemptedAt == null
         && (item.automationMode !== "automatic" || !item.automaticSafe
           || !item.financialPlan?.automation.eligible
           || !financialEmailAutomationEnabled(item.financialPlan.automation.operationClass))));
@@ -215,7 +236,8 @@ export function createTransactionImportWorker({
               if (await store.admitOriginalImport(item, outcome.evidence)) {
                 item.preparedEvidence = outcome.evidence;
                 admitted.push(item);
-              }
+              } else await store.settleItem(item.userId, item.id, item.claimToken, { status: "needs_review",
+                lastError: "The source or financial profile changed before saving. Review this entry." });
             } else {
               await store.settleItem(item.userId, item.id, item.claimToken, { status: 'needs_review',
                 lastError: 'Actual did not provide exact preparation evidence; no original write was admitted.' });

@@ -98,10 +98,11 @@ export function isBillsMirrorMaintenanceDue(syncHealth: BillsMirrorHealth | null
 }
 
 export function occurrenceFromRow(row: Record<string, unknown>): ActualBillOccurrence {
-  let paymentTransactionIds: string[] = [];
+  let paymentTransactionIds: string[] | undefined = [];
   try {
     const raw = JSON.parse(String(row.raw_json || '{}'));
     if (Array.isArray(raw.paymentTransactionIds)) paymentTransactionIds = raw.paymentTransactionIds.filter((id: unknown): id is string => typeof id === 'string');
+    else if (!Object.hasOwn(raw, 'paymentTransactionIds')) paymentTransactionIds = undefined;
   } catch { /* Older mirrors may not retain payment identity. */ }
   return {
     paymentTransactionIds,

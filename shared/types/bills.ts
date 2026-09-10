@@ -6,6 +6,7 @@ import type {
   ActualMetadata,
 } from "./actual.ts";
 import type { TransactionRecord } from "./transactions.ts";
+import type { FinancialProfileDraft, FinancialProfileResolution } from "./financial-profiles.ts";
 
 export type BillType = "expense" | "income" | "bill" | "transfer";
 export type BillPaySource = "triage" | "pasted_text" | "extract" | string;
@@ -251,7 +252,7 @@ export type FinancialTargetStatus = "resolved" | "unresolved" | "not_applicable"
 export type FinancialTargetConfidence = "exact" | "high" | "medium" | "low" | "unknown";
 
 export interface FinancialTargetProvenance {
-  source: "persisted_candidate" | "source_adapter" | "actual_metadata" | "actual_history" | "model_ranking" | "deterministic_policy";
+  source: "persisted_candidate" | "source_adapter" | "actual_metadata" | "actual_history" | "model_ranking" | "deterministic_policy" | "owner_profile";
   confidence: FinancialTargetConfidence;
   reason: string;
   evidence?: string | null;
@@ -283,6 +284,8 @@ export interface FinancialPlanTargets {
 }
 
 export const FINANCIAL_PLAN_REASON_CODES = [
+  "profile_required",
+  "profile_conflict",
   "semantic_event_missing",
   "semantic_event_ambiguous",
   "provider_unavailable",
@@ -348,6 +351,7 @@ export interface FinancialEmailReconciliation {
 }
 
 export type FinancialAutomationGateKind =
+  | "profile"
   | "semantic"
   | "canonical_amount"
   | "date"
@@ -444,6 +448,8 @@ export interface FinancialEmailObserveReport {
 }
 
 export interface FinancialEmailPlan {
+  profile?: FinancialProfileResolution;
+  profileSuggestion?: FinancialProfileDraft;
   version: 1;
   candidateSemanticsVersion?: number;
   targetInferenceVersion?: number;

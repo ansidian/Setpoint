@@ -13,13 +13,15 @@ export function buildFinancialEventOperation(eventId: string, plan: FinancialEma
   const cents = Math.round(Number(selectSemanticBillAmount(candidate)?.amount) * 100);
   if (!Number.isSafeInteger(cents) || cents <= 0 || !candidate.due_date || candidate.currency !== "USD") return null;
   const identityKey = `financial-event:${eventId}`;
+  const budgetId = plan.profile?.status === "matched" ? plan.profile.budgetId || undefined : undefined;
   const date = candidate.due_date;
   const fromAccountId = plan.targets.fromAccount.id;
   const toAccountId = plan.targets.toAccount.id;
   if (plan.operation.intended === "create_transfer_schedule") {
     return fromAccountId && toAccountId && fromAccountId !== toAccountId
-      ? { executor: "transfer_schedule", input: { identityKey, fromAccountId, toAccountId, amountCents: cents, date,
-          allowUpdate: true, name: plan.targets.toAccount.label ? `${plan.targets.toAccount.label} Payment` : "" } } : null;
+      ? { executor: "transfer_schedule", input: { identityKey, budgetId, fromAccountId, toAccountId, amountCents: cents, date,
+          ...(plan.targets.schedule.id ? { scheduleId: plan.targets.schedule.id } : {}),
+          allowUpdate: true, name: candidate.schedule_name || (plan.targets.toAccount.label ? `${plan.targets.toAccount.label} Payment` : "") } } : null;
   }
   if (plan.operation.intended === "create_transfer") {
     return fromAccountId && toAccountId && fromAccountId !== toAccountId
@@ -29,7 +31,7 @@ export function buildFinancialEventOperation(eventId: string, plan: FinancialEma
   const accountId = plan.targets.account.id;
   const payee = plan.targets.payee.label;
   if (!accountId || !payee) return null;
-  const base = { identityKey, accountId, payee, payeeId: plan.targets.payee.id,
+  const base = { identityKey, budgetId, accountId, payee, payeeId: plan.targets.payee.id,
     categoryId: plan.targets.category.status === "resolved" ? plan.targets.category.id : null, date };
   if (plan.operation.intended === "create_schedule") {
     return { executor: "financial", input: { ...base, kind: "utility_schedule", amountCents: -cents,

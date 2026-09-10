@@ -3,15 +3,17 @@ import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { BillCandidate } from "../../shared/types/bills.ts";
 import type { ActualPayee } from "../../shared/types/actual.ts";
+import type { EmailAuthenticationProjection } from "../../shared/types/email.ts";
 import type { ActualFinancialOperationInput, ActualFinancialOperationResult } from "../../shared/types/financial-operations.ts";
 import type { ActualTransferScheduleInput } from "../../shared/types/transaction-imports.ts";
 import { createBillCandidateVerificationService } from "../bills/bill-candidate-verification-service.ts";
+import { readFinancialProfiles } from "../bills/financial-profiles.ts";
 import { createFinancialEmailPlanner } from "../bills/financial-email-planner.ts";
 import { createFinancialEventExecutor } from "./financial-event-operation.ts";
 import { createFinancialEventStore } from "./financial-event-store.ts";
 import { createFinancialEventWorker } from "./financial-event-service.ts";
 
-import { day, arrival, receipt, authentication, type Source } from "./financial-event-service.test-utils.ts";
+import { day, arrival, receipt, authentication, type Source, saveReceiptProfile } from "./financial-event-service.test-utils.ts";
 const accounts = [
   { id: "card", name: "Example Rewards Mastercard (3234)", type: "credit" },
   { id: "checking", name: "Everyday Checking (0001)", type: "checking" },
@@ -72,6 +74,7 @@ describe("autonomous financial event processing", () => {
     });
     const planner = createFinancialEmailPlanner({
       candidateVerification: verification,
+      profileReader: userId => readFinancialProfiles(userId, { dbClient: db }),
       modelChoiceReader: async () => ({ provider: "openai", model: "fixture" }),
       metadataReader: async () => ({ accounts: currentAccounts, payees, payeeMap: Object.fromEntries(payees.map((payee) => [payee.id, payee.name])),
         categories: [], schedules: [], recentTransactions: [], syncHealth: { state: "current", lastSuccessAt: new Date(clock).toISOString() } }),
@@ -128,6 +131,13 @@ describe("autonomous financial event processing", () => {
       },
     });
     return createFinancialEventWorker({ store, planner, execute, now: () => clock,
+      profileReader: userId => readFinancialProfiles(userId, { dbClient: db }),
+      sourceAcquirer: async (_userId, uid) => {
+        const source = sources.get(uid)!;
+        return { body: source.body, fromName: "Sender", fromAddress: source.from, subject: "Receipt or payment notice",
+          emailDate: new Date(arrival + (source.receivedOffset || 0)).toISOString(), threadId: null, messageId: null,
+          attachments: [], senderAuthentication: authentication(source) as EmailAuthenticationProjection };
+      },
       assessDocument: async (_userId, email) => {
         assessmentCredits--;
         if (assessmentOffline) throw new Error("Assessment returned invalid output");
@@ -143,14 +153,15 @@ describe("autonomous financial event processing", () => {
     db = createClient({ url: "file::memory:" });
     await db.execute("PRAGMA foreign_keys = ON");
     for (const file of ["001_ea_tables.sql", "013_email_index_normalized_date.sql", "025_email_thread_identity.sql",
-      "054_email_sender_authentication.sql", "062_financial_events.sql", "068_financial_candidate_dismissal.sql", "067_financial_event_ai_requests.sql"]) {
+      "054_email_sender_authentication.sql", "062_financial_events.sql", "068_financial_candidate_dismissal.sql", "067_financial_event_ai_requests.sql", "069_financial_profiles.sql", "070_financial_document_sources.sql"]) {
       await db.executeMultiple(readFileSync(new URL("../db/migrations/" + file, import.meta.url), "utf8"));
     }
     await addFinancialCorrectionSchema(db);
+    await saveReceiptProfile(db);
     await db.execute({ sql: "UPDATE ea_financial_workflow_state SET cutover_at = ?", args: [new Date(arrival - 60_000).toISOString()] });
     clock = arrival;
     store = createFinancialEventStore(db, () => clock);
-    sources = new Map(); assessments = new Map(); ledger = []; payees = []; schedules = []; admitted = new Map();
+    sources = new Map(); assessments = new Map(); ledger = []; payees = [{ id: "payee-0", name: "Example Merchant Inc." }]; schedules = []; admitted = new Map();
     activeBudget = "budget-1"; loseWriteResponse = false; duringPreview = null;
     providerCredits = 10; providerReply = null; providerOffline = false;
     matchingOffline = false; assessmentCredits = 10; assessmentOffline = false; aiEnabled = true; currentAccounts = [...accounts];
@@ -208,7 +219,8 @@ describe("autonomous financial event processing", () => {
     expect(ledger.map((entry) => entry.amountCents)).toEqual([-4000]);
   });
 
-  it("reuses a completed verification through ranking failures and reconsiders new Actual targets", async () => {
+  it("retains inferred suggestions for review across restarts, then uses a newly saved profile", async () => {
+    await saveReceiptProfile(db, false);
     const source = receipt("new-account");
     providerReply = source.candidate;
     matchingOffline = true;
@@ -226,12 +238,13 @@ describe("autonomous financial event processing", () => {
       worker = newWorker();
       await worker.processNextEvent();
     }
-    expect(providerCredits).toBe(6); // Verification once, ranking at most three times.
+    expect(providerCredits).toBe(8); // Unmapped review does not repeatedly buy inference.
     expect(ledger).toEqual([]);
     currentAccounts = [...accounts];
+    await saveReceiptProfile(db);
     clock += 16 * 60_000;
     await worker.processNextEvent();
-    expect(providerCredits).toBe(6);
+    expect(providerCredits).toBe(8);
     expect(ledger.map((entry) => entry.amountCents)).toEqual([-3000]);
     expect(await store.getEventForEmail("owner", source.uid)).toMatchObject({ status: "settled", revision: 1 });
   });
@@ -309,7 +322,7 @@ describe("autonomous financial event processing", () => {
     expect(ledger).toHaveLength(1);
   });
 
-  it("combines complementary merchant and processor receipts into one signed entry and a new payee", async () => {
+  it("combines complementary merchant and processor receipts into one signed entry using the saved payee", async () => {
     await arrive(receipt("merchant", { role: "merchant_receipt", funding: false }));
     await arrive(receipt("processor", { receivedOffset: 13_000 }));
     await assessArrivals();
@@ -350,7 +363,7 @@ describe("autonomous financial event processing", () => {
     await processEvents();
 
     expect(await store.getEventForEmail("owner", "copy")).toMatchObject({ id: original!.id, status: "settled",
-      operation: original!.operation, outcome: { outcome: "already_present" } });
+      operation: original!.operation, outcome: original!.outcome });
     expect(ledger).toHaveLength(1);
     expect((await store.getDocumentForEmail("owner", "copy"))?.status).toBe("associated");
   });
@@ -358,7 +371,7 @@ describe("autonomous financial event processing", () => {
   it.each(["contradiction", "failed amount audit", "missing date", "unsupported year"])("reassesses %s before assigning a purchase identity", async (failure) => {
     const source = receipt("reassessment");
     const initial: BillCandidate = { ...source.candidate,
-      ...(failure === "contradiction" ? { event_kind: "card_payment_completed" } : {}),
+      ...(failure === "contradiction" ? { event_kind: "refund" } : {}),
       ...(failure === "failed amount audit" ? { amount_verification: {
         status: "failed", source_value_count: 2, initial_covered_count: 1,
       } } : {}),
@@ -411,44 +424,15 @@ describe("autonomous financial event processing", () => {
     expect(ledger.map((entry) => entry.amountCents)).toEqual([-3000]);
   });
 
-  it.each(["card_payment_completed", "account_transfer_completed", "payment_scheduled", "bill_issued"] as const)(
-    "records the correct transaction or schedule for %s", async (eventKind) => {
-      const utility = eventKind === "bill_issued";
-      const destination = eventKind === "account_transfer_completed" ? "Rainy Day Savings" : "Example Rewards Mastercard";
-      const eventEvidence = (utility ? "Example Utility bill due" : eventKind === "payment_scheduled" ? "Payment scheduled" : "Payment completed")
-        + " on " + day + ": $75.00 from Everyday Checking" + (utility ? "." : " to " + destination + ".");
-      const amountKind = utility ? "total_due" : "payment_amount";
-      await arrive({ uid: eventKind, from: "notices@bank.example", body: eventEvidence,
-        candidate: {
-          type: utility ? "bill" : "transfer", type_confidence: 0.99, type_evidence: eventEvidence,
-          event_kind: eventKind, event_confidence: 0.99, event_evidence: eventEvidence,
-          event_verification: { status: "kept_initial", provider: "openai", model: "fixture" },
-          document_role: utility ? "statement" : "payment_notice", due_date: day, currency: "USD",
-          amount: 75, amount_kind: amountKind, amount_candidates: [{ kind: amountKind, value: 75, evidence: "$75.00", confidence: 0.99 }],
-          payee: utility ? "Example Utility" : destination, payee_hint: utility ? "Example Utility" : destination,
-          ...(utility ? { account_hint: "Everyday Checking", account_hint_confidence: 0.99 }
-            : { from_account_hint: "Everyday Checking", from_account_hint_confidence: 0.99,
-              to_account_hint: destination, to_account_hint_confidence: 0.99 }),
-        } });
-      await assessArrivals();
-      await processEvents();
-
-      const event = await store.getEventForEmail("owner", eventKind);
-      expect(event).toMatchObject({ status: "settled", outcome: { outcome: "added" } });
-      if (utility || eventKind === "payment_scheduled") {
-        expect(ledger).toEqual([]);
-        expect(schedules).toHaveLength(1);
-        expect(schedules[0]!.input).toMatchObject({ budgetId: "budget-1", date: day,
-          ...(utility ? { kind: "utility_schedule", accountId: "checking", amountCents: -7500 }
-            : { fromAccountId: "checking", toAccountId: "card", amountCents: 7500 }) });
-      } else {
-        const toAccountId = eventKind === "account_transfer_completed" ? "savings" : "card";
-        expect(schedules).toEqual([]);
-        expect(ledger.map((entry) => [entry.accountId, entry.amountCents, entry.transferAccountId]))
-          .toEqual([["checking", -7500, toAccountId], [toAccountId, 7500, "checking"]]);
-        expect(event!.operation).toMatchObject({ executor: "financial", input: { kind: "completed_transfer", budgetId: "budget-1" } });
-      }
-    });
+  it.each(["card_payment_completed", "account_transfer_completed"] as const)("ignores %s without creating transfers", async event_kind => {
+    const source = receipt(event_kind);
+    await arrive({ ...source, candidate: { ...source.candidate, type: "transfer", event_kind } });
+    await assessArrivals(); await processEvents();
+    expect(await store.getEventForEmail("owner", source.uid)).toBeNull();
+    expect(await store.getDocumentForEmail("owner", source.uid)).toMatchObject({ status: "ignored" });
+    expect(ledger).toEqual([]);
+    expect(schedules).toEqual([]);
+  });
 
   it.each(["date", "authentication"])("waits for missing %s and automatically processes corrected source evidence", async (missing) => {
     const source = receipt("incomplete");
@@ -485,12 +469,12 @@ describe("autonomous financial event processing", () => {
     expect(ledger.map((entry) => entry.amountCents)).toEqual([-3000]);
   });
 
-  it("wakes a waiting merchant event when a supporting receipt gains verified authentication", async () => {
+  it("records a mapped merchant receipt and joins a supporting receipt once its authentication is verified", async () => {
     await arrive(receipt("merchant", { role: "merchant_receipt", funding: false }));
     await arrive(receipt("support", { authenticated: false, receivedOffset: 13_000 }));
     await assessArrivals();
     await processEvents();
-    expect(ledger).toEqual([]);
+    expect(ledger).toHaveLength(1);
 
     await revise(receipt("support", { authenticated: true, receivedOffset: 13_000 }));
     await assessArrivals();

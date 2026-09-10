@@ -46,7 +46,7 @@ function applyTransferResult(plan: FinancialEmailPlan, result: ActualTransferSch
   const gates = plan.automation.gates.map((gate) => ["actual_preflight", "reconciliation"].includes(gate.gate)
     ? { ...gate, status: review ? "fail" as const : "pass" as const, reasons: review ? ["reconciliation_conflict" as const] : [] }
     : gate);
-  const required: FinancialAutomationGateKind[] = ["semantic", "canonical_amount", "date", "targets", "authenticity", "stable_identity", "warnings", "reconciliation", "actual_preflight", "rollout"];
+  const required: FinancialAutomationGateKind[] = ["profile", "semantic", "canonical_amount", "date", "targets", "authenticity", "stable_identity", "warnings", "reconciliation", "actual_preflight", "rollout"];
   const eligible = result.outcome === "would_create" && plan.automation.rollout === "enabled"
     && financialEmailAutomationEnabled("transfer_schedule")
     && required.every((name) => gates.some((gate) => gate.gate === name && gate.status === "pass"));

@@ -7,7 +7,8 @@
       "bills-service.ts",
       "bill-candidate-verification-service.ts",
       "bill-semantic-prompt.ts",
-      "financial-email-planner.ts"
+      "financial-email-planner.ts",
+      "financial-profiles.ts"
     ],
     "calendar": [
       "calendar.ts",

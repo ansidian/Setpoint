@@ -3,9 +3,10 @@ import { createFinancialEmailPlanner } from "./financial-email-planner.ts";
 
 describe("financial email planner optional categories", () => {
   it.each(["triage", "pasted_text", "extract", "transaction_import", "financial_event"])(
-    "does not require missing or mixed categories for utility planning from %s", async (source) => {
+    "keeps missing or mixed categories optional in utility suggestions from %s", async (source) => {
       for (const category of ["missing", "mixed"]) {
         const plan = createFinancialEmailPlanner({
+          profileReader: async () => ({ budgetId: null, revision: 0, profiles: [] }),
           metadataReader: async () => ({
             accounts: [{ id: "checking", name: "Checking", type: "checking" }],
             payees: [{ id: "power", name: "Power Co" }], payeeMap: { power: "Power Co" },
@@ -37,7 +38,8 @@ describe("financial email planner optional categories", () => {
           account: { status: "resolved", id: "checking" }, payee: { status: "resolved", id: "power" },
           category: { status: "unresolved" }, schedule: { status: "resolved", label: "Power Co" },
         });
-        expect(result.automation.gates.find((gate) => gate.gate === "targets")?.status).toBe("pass");
+        expect(result.automation.gates.find((gate) => gate.gate === "targets")).toEqual({ gate: "targets", status: "fail", reasons: ["profile_required"] });
+        expect(result.operation).toMatchObject({ intended: "create_schedule", kind: "review", reasons: ["profile_required"] });
         expect(result.reviewReasons.map((reason) => reason.code)).not.toContain("category_target_unresolved");
         expect(result.reviewReasons.map((reason) => reason.code)).not.toContain("target_evidence_conflict");
         expect(result.reviewReasons.map((reason) => reason.code)).not.toContain("target_ranking_unresolved");

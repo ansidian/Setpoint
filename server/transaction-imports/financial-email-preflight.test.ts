@@ -8,6 +8,7 @@ import {
 function exactPlan(): FinancialEmailPlan {
   return {
     version: 1,
+    profile: { status: "matched", revision: 1, budgetId: "fixture-budget", profileId: "market-profile", reason: "Owner configured the receipt target." },
     identity: { version: 1, status: "resolved", key: "financial-email:v1:opaque" },
     candidate: {
       payee: "Example Market",
@@ -35,7 +36,7 @@ function exactPlan(): FinancialEmailPlan {
       operationClass: "one_time_expense",
       rollout: "observe_only",
       gates: [
-        "semantic", "canonical_amount", "date", "targets", "authenticity", "stable_identity", "warnings",
+        "profile", "semantic", "canonical_amount", "date", "targets", "authenticity", "stable_identity", "warnings",
       ].map((gate) => ({ gate, status: "pass", reasons: [] })) as FinancialEmailPlan["automation"]["gates"],
       reasons: ["actual_preflight_not_run", "automation_class_observe_only"],
     },
@@ -108,10 +109,10 @@ describe("generic financial email preflight staging", () => {
     });
   });
 
-  it("refuses staging when any locked prerequisite gate has not passed", () => {
+  it.each(["authenticity", "profile"] as const)("refuses staging when the %s gate has not passed", (blockedGate) => {
     const plan = exactPlan();
     plan.automation.gates = plan.automation.gates.map((gate) => (
-      gate.gate === "authenticity" ? { ...gate, status: "fail" } : gate
+      gate.gate === blockedGate ? { ...gate, status: "fail" } : gate
     ));
     expect(financialEmailPreflightItem(
       "user-1", "run-1", "item-1",

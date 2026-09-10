@@ -98,6 +98,12 @@ describe("isBillsMirrorMaintenanceDue", () => {
 });
 
 describe("occurrenceFromRow", () => {
+  it('distinguishes missing legacy identities from empty or invalid retained identities', () => {
+    expect(occurrenceFromRow({ raw_json:'{}' }).paymentTransactionIds).toBeUndefined();
+    for (const raw_json of ['{"paymentTransactionIds":[]}', '{"paymentTransactionIds":null}', 'invalid']) {
+      expect(occurrenceFromRow({ raw_json }).paymentTransactionIds).toEqual([]);
+    }
+  });
   it("projects a mirror row with name/payee fallbacks and bool coercion", () => {
     expect(occurrenceFromRow({
       occurrence_id: "s1:2026-05-20",
@@ -110,7 +116,7 @@ describe("occurrenceFromRow", () => {
       type: "bill",
       open_action_disabled: 0,
     })).toEqual({
-      paymentTransactionIds: [],
+      paymentTransactionIds: undefined,
       id: "s1:2026-05-20",
       scheduleId: "s1",
       name: "Power",

@@ -59,7 +59,7 @@ describe("semantic bill amount verifier", () => {
     )).toBe(true);
   });
 
-  it("repairs an invalid selection from complete semantic candidates", async () => {
+  it("clears a scheduled payment selection when only minimum and statement obligations are evidenced", async () => {
     const result = await verifyBillAmounts({
       content: "Minimum payment $40.00. Statement balance $391.20.",
       candidate: {
@@ -77,10 +77,11 @@ describe("semantic bill amount verifier", () => {
     });
 
     expect(result.candidate).toMatchObject({
-      amount: 391.2,
-      amount_kind: "statement_balance",
+      amount: null,
+      amount_kind: null,
       amount_verification: { status: "corrected" },
     });
+    expect(selectSemanticBillAmount(result.candidate)).toBeNull();
   });
 
   it("preserves an explicit completed payment amount alongside an informational statement balance", async () => {
@@ -140,6 +141,62 @@ describe("semantic bill amount verifier", () => {
       amount_verification: { status: "corrected", source_value_count: 1 },
     });
   });
+
+  it.each([60, null])("audits an unsupported runtime candidate role instead of clearing cashback from %s", async (amount) => {
+    const candidate = {
+      event_kind: "reward", amount, amount_kind: amount == null ? null : "refund_amount",
+      amount_candidates: [
+        { kind: "reward", value: 60, evidence: "Cash amount $60.00" },
+        { kind: "other", value: 6000, evidence: "Points redeeming 6,000 Points" },
+      ],
+    } as unknown as BillCandidate;
+    const result = await verifyBillAmounts({
+      content: "Cash amount $60.00. Points redeeming 6,000 Points.", candidate,
+      provider: providerWith({ amount: 60, amount_kind: "transaction_amount", amount_candidates: [{ kind: "transaction_amount", value: 60, evidence: "Cash amount $60.00" }] }),
+      providerId: "openai", model: "test-model",
+    });
+    expect(result.candidate).toMatchObject({ amount: 60, amount_kind: "transaction_amount", amount_verification: { status: "corrected" } });
+    expect(result.usage).toEqual({ input_tokens: 10 });
+  });
+
+  it("audits an unsupported runtime scalar role instead of selecting a supported candidate locally", async () => {
+    const result = await verifyBillAmounts({
+      content: "Cash amount $60.00.",
+      candidate: { event_kind: "reward", amount: 60, amount_kind: "reward", amount_candidates: [{ kind: "transaction_amount", value: 60, evidence: "Cash amount $60.00" }] } as unknown as BillCandidate,
+      provider: providerWith({ amount: 60, amount_kind: "refund_amount", amount_candidates: [{ kind: "refund_amount", value: 60, evidence: "Cash amount $60.00" }] }),
+      providerId: "openai", model: "test-model",
+    });
+    expect(result.candidate).toMatchObject({ amount: 60, amount_kind: "refund_amount", amount_verification: { status: "corrected" } });
+    expect(result.usage).toEqual({ input_tokens: 10 });
+  });
+
+  it.each([
+    { amount: null, amount_kind: null, amount_candidates: [{ kind: "reward", value: 60, evidence: "Cash amount $60.00" }] },
+    { amount: 60, amount_kind: "transaction_amount", amount_candidates: [{ kind: "transaction_amount", value: 60, evidence: "Cash amount $60.00" }, { kind: "reward", value: 60, evidence: "Cash amount $60.00" }] },
+    { amount: 60, amount_kind: "reward", amount_candidates: [{ kind: "transaction_amount", value: 60, evidence: "Cash amount $60.00" }] },
+  ])("rejects verified runtime roles outside the schema: $amount_kind / $amount_candidates", async (fields) => {
+    const result = await verifyBillAmounts({
+      content: "Cash amount $60.00.", candidate: { event_kind: "reward", amount: null, amount_kind: null, amount_candidates: [] },
+      provider: providerWith(fields), providerId: "openai", model: "test-model",
+    });
+    expect(result.candidate.amount_verification?.status).toBe("failed");
+    expect(selectSemanticBillAmount(result.candidate)).toBeNull();
+  });
+
+  it.each(["No numeric currency amount.", Array.from({ length: 9 }, (_, index) => `$${60 + index}.00`).join(" ")])(
+    "keeps unknown roles failed when currency coverage is outside the bounded audit window: %s", async (content) => {
+      const candidate = { event_kind: "reward", amount: 60, amount_kind: "reward", amount_candidates: [{ kind: "reward", value: 60, evidence: "Cash amount $60.00" }] } as unknown as BillCandidate;
+      expect(shouldVerifyBillAmounts(content, candidate)).toBe(true);
+      const result = await verifyBillAmounts({
+        content, candidate,
+        provider: providerWith({ amount: 60, amount_kind: "transaction_amount", amount_candidates: [{ kind: "transaction_amount", value: 60, evidence: "Cash amount $60.00" }] }),
+        providerId: "openai", model: "test-model",
+      });
+      expect(result.candidate).toMatchObject({ ...candidate, amount_verification: { status: "failed" } });
+      expect(result.usage).toEqual({});
+      expect(selectSemanticBillAmount(result.candidate)).toBeNull();
+    },
+  );
 
   it("accepts a verifier that recovers a missing statement balance", async () => {
     const result = await verifyBillAmounts({
@@ -425,6 +482,31 @@ describe("canonical financial amount roles", () => {
   it.each(["statement_issued", "payment_due"] as const)("uses the statement balance for %s obligations", (event_kind) => {
     expect(selectSemanticBillAmount({ event_kind, amount_kind: "payment_amount", amount: 40, amount_candidates: amounts }))
       .toMatchObject({ amount: 391.2, kind: "statement_balance" });
+  });
+
+  it.each(["statement_balance", "total_due", "order_total", "transaction_amount", "refund_amount", "subtotal", "other"] as const)(
+    "does not treat %s as the arranged amount of a scheduled payment, including a scalar fallback", (kind) => {
+      const candidate: BillCandidate = { event_kind: "payment_scheduled", amount: 391.2, amount_kind: kind };
+      expect(selectSemanticBillAmount(candidate)).toBeNull();
+      expect(selectSemanticBillAmount({ ...candidate, amount_candidates: [{ kind, value: 391.2, confidence: 0.99 }] })).toBeNull();
+    },
+  );
+
+  it("accepts an explicitly arranged minimum as a payment amount without selecting a minimum obligation", async () => {
+    const candidate: BillCandidate = {
+      event_kind: "payment_scheduled", amount: 40, amount_kind: "payment_amount",
+      amount_candidates: [
+        { kind: "minimum_due", value: 40, evidence: "Minimum payment due $40.00" },
+        { kind: "payment_amount", value: 40, evidence: "Your minimum payment of $40.00 is scheduled for September 10, 2026" },
+      ],
+    };
+    const result = await verifyBillAmounts({
+      content: "Minimum payment due $40.00. Your minimum payment of $40.00 is scheduled for September 10, 2026.",
+      candidate, provider: providerWith({}), providerId: "openai", model: "test-model",
+    });
+    expect(selectSemanticBillAmount(result.candidate)).toMatchObject({ amount: 40, kind: "payment_amount" });
+    expect(selectSemanticBillAmount({ event_kind: "payment_scheduled", amount: 40, amount_kind: "payment_amount" }))
+      .toMatchObject({ amount: 40, kind: "payment_amount" });
   });
 
   it.each(["payment_completed", "card_payment_completed", "account_transfer_completed"] as const)("does not borrow a statement balance for %s with no paid amount", (event_kind) => {

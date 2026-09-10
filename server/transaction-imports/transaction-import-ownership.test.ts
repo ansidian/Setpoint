@@ -6,6 +6,7 @@ import { fileURLToPath } from "url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ActualImportAccountGroup, ActualImportBatchResult } from "../../shared/types/transaction-imports.ts";
 import { createFinancialEmailPlanner } from "../bills/financial-email-planner.ts";
+import { readFinancialProfiles } from "../bills/financial-profiles.ts";
 import { emailFixture } from "./parsers/fixtures.ts";
 import { planTransactionImportItems } from "./transaction-import-planner-adapter.ts";
 import { createTransactionImportService } from "./transaction-import-service.ts";
@@ -23,7 +24,7 @@ describe("transaction import planner ownership", () => {
     sequence = 0;
     db = createClient({ url: "file::memory:" });
     await db.execute("PRAGMA foreign_keys = ON");
-    for (const file of ["001_ea_tables.sql", "013_email_index_normalized_date.sql", "025_email_thread_identity.sql", "030_owner_bootstrap.sql", "041_email_transaction_imports.sql", "042_transaction_import_item_subject.sql", "052_financial_email_plans.sql", "053_transaction_import_financial_plans.sql", "054_email_sender_authentication.sql", "055_generic_financial_email_imports.sql", "056_generic_financial_email_automation.sql", "058_generic_financial_email_income_automation.sql", "062_financial_events.sql", "068_financial_candidate_dismissal.sql", "063_financial_activity.sql", "064_financial_corrections.sql"]) {
+    for (const file of ["001_ea_tables.sql", "013_email_index_normalized_date.sql", "025_email_thread_identity.sql", "030_owner_bootstrap.sql", "041_email_transaction_imports.sql", "042_transaction_import_item_subject.sql", "052_financial_email_plans.sql", "053_transaction_import_financial_plans.sql", "054_email_sender_authentication.sql", "055_generic_financial_email_imports.sql", "056_generic_financial_email_automation.sql", "058_generic_financial_email_income_automation.sql", "062_financial_events.sql", "068_financial_candidate_dismissal.sql", "063_financial_activity.sql", "064_financial_corrections.sql", "069_financial_profiles.sql"]) {
       await db.executeMultiple(readFileSync(join(migrationsDir, file), "utf8"));
     }
     await db.execute(`INSERT INTO ea_owner (singleton_id, user_id, password_hash, claimed_at)
@@ -55,12 +56,17 @@ describe("transaction import planner ownership", () => {
     };
   }
 
-  it("imports a new source receipt using planner-owned Actual targets despite retired off configuration", async () => {
+  it.each([false, true])("retains receipt suggestions and imports only with an explicit profile (configured: %s)", async (configured) => {
     const { store } = setup();
     await db.execute(`INSERT INTO ea_transaction_import_mappings
       (user_id, source, mode, actual_account_id, actual_category_id, created_at, updated_at)
       VALUES ('owner-1', 'amazon', 'off', 'obsolete-account', 'obsolete-category', 1000, 1000)`);
+    await db.execute({
+      sql: "INSERT INTO ea_settings (user_id, actual_budget_sync_id, financial_profiles_json, financial_profiles_revision) VALUES ('owner-1', 'fixture-budget', ?, 1)",
+      args: [JSON.stringify(configured ? [{ id: "amazon-profile", name: "Amazon receipts", enabled: true, budgetId: "fixture-budget", senderAddresses: ["auto-confirm@amazon.com"], target: { kind: "expense", accountId: "current-card", payeeId: "amazon", categoryId: "shopping" } }] : [])],
+    });
     const planner = createFinancialEmailPlanner({
+      profileReader: userId => readFinancialProfiles(userId, { dbClient: db }),
       metadataReader: async () => ({
         accounts: [{ id: "current-card", name: "Everyday Card", type: "credit" }],
         payees: [{ id: "amazon", name: "Amazon" }],
@@ -84,6 +90,7 @@ describe("transaction import planner ownership", () => {
     const ledger: Array<{ accountId: string; categoryId: string | null; importedId: string; amountCents: number }> = [];
     const worker = createTransactionImportWorker({
       store, createId,
+      profileReader: userId => readFinancialProfiles(userId, { dbClient: db }),
       importGroups: async (_userId, groups, dryRun) => {
         if (!dryRun) for (const group of groups) for (const transaction of group.transactions) {
           ledger.push({
@@ -99,11 +106,17 @@ describe("transaction import planner ownership", () => {
     });
 
     expect((await readImportRun(db, store, "owner-1", arrival.runId!))!.items[0]).toMatchObject({
-      status: "queued", actualAccountId: "current-card", actualCategoryId: "shopping",
+      status: configured ? "queued" : "needs_review", actualAccountId: "current-card", actualCategoryId: "shopping",
       importedId: "amazon-111-2222222-3333333", amountCents: -2704,
       automationMode: "automatic", automaticSafe: false, confirmedAt: null,
       financialPlan: { candidate: { transaction_import: { executionOwner: "planner" } } },
     });
+    if (!configured) {
+      await expect(worker.processNextItemBatch()).resolves.toBe(false);
+      expect(ledger).toEqual([]);
+      expect((await readImportRun(db, store, "owner-1", arrival.runId!))!.items[0]?.financialPlan?.profile?.status).toBe("missing");
+      return;
+    }
     await worker.processNextItemBatch();
     expect(ledger).toEqual([]);
     expect((await readImportRun(db, store, "owner-1", arrival.runId!))!.items[0]).toMatchObject({

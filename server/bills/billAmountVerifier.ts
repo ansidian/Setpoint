@@ -1,8 +1,9 @@
-import type {
-  BillAmountCandidate,
-  BillCandidate,
-  BillExtractionProvider,
-  BillAmountVerification,
+import {
+  BILL_AMOUNT_KINDS,
+  type BillAmountCandidate,
+  type BillCandidate,
+  type BillExtractionProvider,
+  type BillAmountVerification,
 } from "../../shared/types/bills.ts";
 import { hasAmbiguousSemanticBillAmount, selectSemanticBillAmount } from "./billSemanticAmountPolicy.ts";
 
@@ -38,11 +39,19 @@ export function currencyValuesInText(content: string): number[] {
 
 function candidateValues(candidate: BillCandidate): Set<string> {
   const keys = new Set<string>();
-  for (const item of candidate.amount_candidates || []) {
-    const key = amountKey(item.value);
+  for (const item of Array.isArray(candidate.amount_candidates) ? candidate.amount_candidates : []) {
+    const key = amountKey(item?.value);
     if (key) keys.add(key);
   }
   return keys;
+}
+
+function hasUnknownAmountRoles(candidate: BillCandidate): boolean {
+  if (candidate.amount_kind != null && !BILL_AMOUNT_KINDS.includes(candidate.amount_kind)) return true;
+  if (candidate.amount_candidates == null) return false;
+  return !Array.isArray(candidate.amount_candidates) || candidate.amount_candidates.some((item) => (
+    !item || typeof item !== "object" || !BILL_AMOUNT_KINDS.includes(item.kind)
+  ));
 }
 
 export function coveredCurrencyValueCount(sourceValues: number[], candidate: BillCandidate): number {
@@ -64,6 +73,9 @@ function withoutMinimumDueSelection(candidate: BillCandidate): BillCandidate {
 }
 
 function selectionIsValid(candidate: BillCandidate): boolean {
+  // Provider JSON is runtime input. The semantic policy intentionally ignores
+  // unknown roles; that must not turn a malformed extraction into a valid null.
+  if (hasUnknownAmountRoles(candidate)) return false;
   const unverified = { ...candidate, amount_verification: undefined };
   if (hasAmbiguousSemanticBillAmount(unverified)) return false;
   const canonical = selectSemanticBillAmount(unverified);
@@ -102,6 +114,7 @@ function amountEvidenceNeedsAudit(content: string, candidate: BillCandidate): bo
 }
 
 export function shouldVerifyBillAmounts(content: string, candidate: BillCandidate): boolean {
+  if (hasUnknownAmountRoles(candidate)) return true;
   const sourceValues = currencyValuesInText(content);
   if (sourceValues.length < MIN_VERIFY_VALUES || sourceValues.length > MAX_VERIFY_VALUES) return false;
   return coveredCurrencyValueCount(sourceValues, candidate) < sourceValues.length
@@ -142,11 +155,18 @@ export async function verifyBillAmounts({
 }): Promise<BillAmountVerificationResult> {
   const canonicalCandidate = withoutMinimumDueSelection(candidate);
   const removedMinimumSelection = canonicalCandidate !== candidate;
+  const unknownRoles = hasUnknownAmountRoles(canonicalCandidate);
   const sourceValues = currencyValuesInText(content);
   const initialCovered = coveredCurrencyValueCount(sourceValues, canonicalCandidate);
-  if (!shouldVerifyBillAmounts(content, canonicalCandidate)) {
+  if (sourceValues.length < MIN_VERIFY_VALUES || sourceValues.length > MAX_VERIFY_VALUES
+    || !shouldVerifyBillAmounts(content, canonicalCandidate)) {
     return {
-      candidate: removedMinimumSelection
+      candidate: unknownRoles
+        ? {
+            ...canonicalCandidate,
+            amount_verification: verificationMetadata("failed", sourceValues.length, initialCovered, providerId, model),
+          }
+        : removedMinimumSelection
         ? {
             ...canonicalCandidate,
             amount_verification: verificationMetadata(
@@ -162,7 +182,7 @@ export async function verifyBillAmounts({
       usage: {},
     };
   }
-  const needsEvidenceAudit = sourceValues.length > 1 && amountEvidenceNeedsAudit(content, canonicalCandidate);
+  const needsEvidenceAudit = unknownRoles || (sourceValues.length > 1 && amountEvidenceNeedsAudit(content, canonicalCandidate));
   if (initialCovered === sourceValues.length && !selectionIsValid(canonicalCandidate) && !needsEvidenceAudit) {
     const repaired = repairSelectionFromSemanticCandidates(canonicalCandidate);
     if (repaired) {
@@ -186,6 +206,7 @@ export async function verifyBillAmounts({
   const prompt = `Audit a first-pass bill amount extraction against the original email evidence.
 
 Return a corrected extraction using the required schema. Focus on amount, amount_kind, and amount_candidates:
+- Use only these amount roles: ${BILL_AMOUNT_KINDS.join(", ")}. Event types such as reward are not amount roles. Resolve unsupported first-pass roles from the original evidence; do not repair them by substituting a similar role name.
 - Account for every distinct numeric currency value visible in the source, up to the schema limit.
 - Include informational, promotional, projected, and legal-footer currency values as amount_candidates with kind other and verbatim evidence of their non-operational role. They count toward coverage but must not replace or invalidate a separately evidenced payable or paid amount. For example, a receipt's payment and a statutory penalty cap are separate candidates: payment_amount for the payment and other for the cap.
 - Audit each semantic label as well as each numeric value. Complete numeric coverage does not establish correct label/value associations.
@@ -193,7 +214,8 @@ Return a corrected extraction using the required schema. Focus on amount, amount
 - For each amount_candidate, copy one short contiguous verbatim evidence excerpt (at most 320 characters) containing its currency value and supporting label. Do not paraphrase, add ellipses, or join separate source excerpts. An informational zero balance is not a statement balance unless the source explicitly labels it as such.
 - When several amounts share the same role, select one only if original labels, dates, or account relationships identify it as the relevant amount. Confidence does not distinguish two payments. If the source cannot resolve the conflict, preserve the candidates and return null amount and null amount_kind.
 - Keep minimum_due separate from statement_balance and total_due.
-- Select the canonical amount for the first-pass event. For scheduled or completed payments/transfers, an explicit payment_amount takes precedence over a statement_balance. Statement balance is canonical for statements and repayment obligations; a completed transaction must not borrow an informational statement balance as its paid amount. Preserve minimum_due only as an informational candidate and never select it. If no non-minimum canonical amount exists, return null amount and null amount_kind.
+- Select the canonical amount for the first-pass event. A scheduled payment requires payment_amount grounded in the particular arranged payment; statement_balance, total_due, order_total, and transaction_amount cannot supply its amount. AutoPay being enabled or enrollment alongside a balance or minimum due does not arrange payment of that amount. For completed payments/transfers, an explicit payment_amount takes precedence. Statement balance is canonical for statements and repayment obligations; a completed transaction must not borrow an informational statement balance as its paid amount.
+- Preserve minimum_due as an informational candidate and never select it. If the source explicitly confirms a particular scheduled payment of its numeric minimum, also preserve that arranged amount as payment_amount with the scheduling evidence. Do not relabel a minimum obligation merely because AutoPay is enabled. If no canonical amount for the event exists, return null amount and null amount_kind.
 - Use null amount and null amount_kind only when no operational amount is evidenced for the event; an email containing both an explicit payment and unrelated informational values keeps the payment as canonical.
 - Do not invent values or infer a numeric amount from phrases such as "full statement balance."
 

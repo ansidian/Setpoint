@@ -215,7 +215,6 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | Export | File |
 |--------|------|
 | `useAlfredChat` | `src/components/alfred/useAlfredChat.ts` |
-| `useBillBadgeForm` | `src/components/bills/useBillBadgeForm.ts` |
 | `useCalendarEditorHistory` | `src/components/calendar/events/useCalendarEditorHistory.ts` |
 | `useCalendarEditorPickers` | `src/components/calendar/events/useCalendarEditorPickers.ts` |
 | `useCalendarEventCreateCoordination` | `src/components/calendar/events/useCalendarEventCreateCoordination.ts` |
@@ -252,6 +251,7 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useTransactionImportStatus` | `src/components/inbox/reader/useTransactionImportStatus.ts` |
 | `useInboxActionDispatch` | `src/components/inbox/useInboxActionDispatch.ts` |
 | `useInboxController` | `src/components/inbox/useInboxController.ts` |
+| `useInboxDiscardPrompt` | `src/components/inbox/useInboxDiscardPrompt.tsx` |
 | `useInboxKeyboardCommands` | `src/components/inbox/useInboxKeyboardCommands.ts` |
 | `useInboxSessionStore` | `src/components/inbox/useInboxSessionState.ts` |
 | `useInboxUndoSlot` | `src/components/inbox/useInboxUndoSlot.ts` |
@@ -739,7 +739,7 @@ erDiagram
 | `ea_financial_correction_steps` | `064_financial_corrections.sql` |
 | `ea_financial_corrections` | `064_financial_corrections.sql` |
 | `ea_financial_document_ai_attempts` | `067_financial_event_ai_requests.sql` |
-| `ea_financial_documents` | `062_financial_events.sql`, `068_financial_candidate_dismissal.sql` |
+| `ea_financial_documents` | `062_financial_events.sql`, `068_financial_candidate_dismissal.sql`, `070_financial_document_sources.sql` |
 | `ea_financial_event_ai_requests` | `067_financial_event_ai_requests.sql` |
 | `ea_financial_event_references` | `062_financial_events.sql` |
 | `ea_financial_events` | `062_financial_events.sql`, `068_financial_candidate_dismissal.sql` |
@@ -763,7 +763,7 @@ erDiagram
 | `ea_pinned_emails` | `022_pinned_emails.sql`, `023_pinned_emails_rebuild.sql` |
 | `ea_reminders` | `010_discord_reminders.sql`, `046_time_to_leave_foundation.sql` |
 | `ea_sessions` | `001_ea_tables.sql`, `031_auth_recovery.sql`, `038_auth_security_generation.sql`, `039_password_step_up_window.sql` |
-| `ea_settings` | `001_ea_tables.sql`, `003_triage_sound_settings.sql`, `008_bill_pay_mappings.sql`, `010_discord_reminders.sql`, `020_utility_pay_links.sql`, `026_news.sql`, `028_provider_needs_reauth.sql`, `036_todoist_oauth_setup.sql`, `043_email_triage_classify_read_arrivals.sql`, `044_alfred_model_settings.sql`, `046_time_to_leave_foundation.sql` |
+| `ea_settings` | `001_ea_tables.sql`, `003_triage_sound_settings.sql`, `008_bill_pay_mappings.sql`, `010_discord_reminders.sql`, `020_utility_pay_links.sql`, `026_news.sql`, `028_provider_needs_reauth.sql`, `036_todoist_oauth_setup.sql`, `043_email_triage_classify_read_arrivals.sql`, `044_alfred_model_settings.sql`, `046_time_to_leave_foundation.sql`, `069_financial_profiles.sql` |
 | `ea_snoozed_emails` | `001_ea_tables.sql` |
 | `ea_tldraw_documents` | `050_tldraw_workspace.sql` |
 | `ea_todoist_items` | `001_ea_tables.sql` |
@@ -904,6 +904,8 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | GET | `/api/briefing/email/snoozed` | `server/routes/briefing/email.ts` |
 | GET | `/api/briefing/finances` | `server/routes/briefing/finances.ts` |
 | GET | `/api/briefing/finances/journal` | `server/routes/briefing/finances.ts` |
+| GET | `/api/briefing/finances/utility-mappings` | `server/routes/briefing/finances.ts` |
+| PUT | `/api/briefing/finances/utility-mappings/:id` | `server/routes/briefing/finances.ts` |
 | GET | `/api/briefing/financial-activity` | `server/routes/briefing/financial-activity.ts` |
 | GET | `/api/briefing/financial-activity/:owner/:id` | `server/routes/briefing/financial-activity.ts` |
 | POST | `/api/briefing/financial-activity/binding` | `server/routes/briefing/financial-activity.ts` |

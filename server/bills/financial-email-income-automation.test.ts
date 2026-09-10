@@ -57,6 +57,7 @@ const manualCashback: TransactionRecord = {
 
 function planner(history: TransactionRecord[] = []) {
   return createFinancialEmailPlanner({
+    profileReader: async () => ({ budgetId: null, revision: 0, profiles: [] }),
     metadataReader: async () => metadata,
     occurrenceReader: async () => ({ schedules: [], syncHealth: metadata.syncHealth }),
     transactionReader: async () => ({ transactions: history }),
@@ -74,7 +75,7 @@ function input(candidate = paypalCandidate(), providerMessageId = "paypal-messag
 }
 
 describe("financial email income automation", () => {
-  it("plans a grounded PayPal balance movement as automatic Cashback income", async () => {
+  it("suggests a grounded PayPal balance movement as Cashback income for review", async () => {
     const plan = await planner()("u1", input());
     expect(plan).toMatchObject({
       candidateSemanticsVersion: FINANCIAL_CANDIDATE_SEMANTICS_VERSION,
@@ -89,11 +90,12 @@ describe("financial email income automation", () => {
         transaction_import: { externalId: "TEST-TRANSFER-REF-0001", amountCents: 2225 },
       },
       classification: { documentKind: "income", eventKind: "account_transfer_pending" },
-      operation: { intended: "create_transaction", kind: "create_transaction" },
+      operation: { intended: "create_transaction", kind: "review", reasons: ["profile_required"] },
       reconciliation: { status: "not_scheduled", disposition: "create" },
       automation: { operationClass: "income", rollout: "enabled", eligible: false },
     });
     expect(plan.candidate.transaction_import?.importedId).toMatch(/^financial-email:provider:v1:/);
+    expect(plan.automation.gates).toContainEqual({ gate: "profile", status: "fail", reasons: ["profile_required"] });
   });
 
   it("converges lifecycle notices, preserves explicit provenance, and suppresses a manual duplicate", async () => {

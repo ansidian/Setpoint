@@ -29,7 +29,7 @@ function genericPlan(): FinancialEmailPlan {
     reconciliation: { status: "not_scheduled", disposition: "create" }, reviewReasons: [],
     automation: {
       eligible: false, operationClass: "one_time_expense", rollout: "enabled", reasons: ["actual_preflight_not_run"],
-      gates: ["semantic", "canonical_amount", "date", "targets", "authenticity", "stable_identity", "warnings", "reconciliation", "rollout"]
+      gates: ["semantic", "canonical_amount", "date", "targets", "profile", "authenticity", "stable_identity", "warnings", "reconciliation", "rollout"]
         .map((gate) => ({ gate, status: "pass", reasons: [] })) as FinancialEmailPlan["automation"]["gates"],
     },
   };

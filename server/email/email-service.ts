@@ -430,3 +430,5 @@ export {
 } from "./remote-content-trust.ts";
 
 export { loadSnoozedEntries } from "./snoozed-emails.ts";
+export { fetchFinancialEmailSourceForUid } from "./email-provider-adapters.ts";
+export type { FinancialEmailSource } from "./financial-email-source.ts";

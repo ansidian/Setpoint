@@ -9,9 +9,10 @@ import type {
   FinancialPlanReason,
   FinancialPlanReasonCode,
 } from "../../shared/types/bills.ts";
+import type { FinancialProfileResolution } from "../../shared/types/financial-profiles.ts";
 import { hasFinancialSemanticConflict } from "./financialEmailClassificationPolicy.ts";
 
-const ENABLED_OPERATION_CLASSES = new Set<FinancialAutomationOperationClass>(["one_time_expense", "income", "transfer_schedule", "completed_transfer", "utility_schedule"]);
+const ENABLED_OPERATION_CLASSES = new Set<FinancialAutomationOperationClass>(["one_time_expense", "income", "transfer_schedule", "utility_schedule"]);
 
 export function financialEmailAutomationEnabled(operation: FinancialAutomationOperationClass): boolean {
   return ENABLED_OPERATION_CLASSES.has(operation);
@@ -46,6 +47,7 @@ function uniqueReasonCodes(reasons: FinancialPlanReason[]): FinancialPlanReasonC
 }
 
 export function financialEmailAutomationEligibility({
+  profile,
   input,
   candidate,
   evidence,
@@ -53,6 +55,7 @@ export function financialEmailAutomationEligibility({
   reconciliation,
   intended,
 }: {
+  profile?: FinancialProfileResolution;
   input: FinancialEmailInput;
   candidate: BillCandidate;
   evidence: FinancialPlanReason[];
@@ -92,6 +95,9 @@ export function financialEmailAutomationEligibility({
   const automationClass = operationClass(candidate, intended);
   const rollout = financialEmailAutomationEnabled(automationClass) ? "enabled" : "observe_only";
   const gates: FinancialAutomationGate[] = [
+    intended === "no_write" ? gate("profile", "not_applicable")
+      : profile?.status === "matched" ? gate("profile", "pass")
+        : gate("profile", "fail", [profile?.status === "invalid" || profile?.status === "ambiguous" ? "profile_conflict" : "profile_required"]),
     gate("semantic", semanticReasons.length ? "fail" : "pass", semanticReasons),
     intended === "no_write"
       ? gate("canonical_amount", "not_applicable")

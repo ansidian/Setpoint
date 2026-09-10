@@ -25,7 +25,7 @@ Other hosts need the same bootstrap values, an always-running Node process, and 
 
 Back up **both the database and its exact `EA_ENCRYPTION_KEY`**. The app cannot recover that key, and the database alone cannot decrypt stored credentials. Back up uploaded Notes media separately from `EA_TLDRAW_ASSET_DIR` (Render: `/var/data/tldraw-assets`). Production Notes also requires a tldraw license configured in Settings → Connections.
 
-Normal provider configuration lives in Settings. Optional host-managed credentials and startup/backfill timing switches remain documented in `.env.example`.
+Normal provider configuration lives in Settings. After connecting Actual, configure Financial Profiles in Settings → Finance: choose each utility’s existing schedule, savings/card endpoints for scheduled card payments, and reusable receipt/refund destinations. Actual target names load automatically; unavailable targets show a readable status and retry instead of internal identifiers. Create profile appears for emails with a recognized financial event classification other than `other`. It seeds an unsaved, enabled draft with its sender and available context; select missing targets before saving. Migration 069 starts with no enabled profiles and does not adopt retired mappings or Utilities membership. Unmatched receipts/refunds wait for review; reminder and completed-payment notices are ignored. Review can also suggest an enabled, unsaved profile draft for explicit setup. Card profiles require explicit scheduled-payment confirmations with numeric payment amounts. Statements and AutoPay enrollment do not establish a payment amount/date. Optional host-managed credentials and startup/backfill timing switches remain documented in `.env.example`.
 
 ## Sign-in and recovery
 

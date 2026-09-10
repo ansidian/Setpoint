@@ -151,7 +151,7 @@ export interface ActualImportAccountGroup {
 }
 
 export interface ActualTransferScheduleInput {
-  /** Managed events may update a uniquely matched, durably previewed schedule. */
+  /** Managed events may update an explicitly selected or uniquely matched, durably previewed schedule. */
   allowUpdate?: boolean;
   scheduleId?: string;
   expectedScheduleFingerprint?: string;

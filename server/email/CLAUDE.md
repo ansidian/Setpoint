@@ -5,6 +5,9 @@ Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and
 ## Files
 
 - `financial-email-intake.ts` — public bounded received-Gmail capture across Inbox and archived labels; strict message fetch, explicit vanished-source counts and indexing facade without snapshot/triage insertion
+- `financial-email-source.ts` — complete source contract, typed acquisition errors, byte/time/worker budgets; parses original MIME in an isolated worker without changing the index
+- `financial-email-source-worker.ts` — bounded MIME normalization selecting reader HTML with plain-text fallback and original sender-authentication evaluation; preserves independent mixed parts and combines PDF evidence with exact part/hash provenance
+- `financial-pdf-evidence.ts` — worker-only PDF.js text extraction: page/byte/count/text limits, spatial rows/columns, complete-page validation, and conservative rejection of unsafe or unreadable documents
 
 - `snoozed-emails.ts` — owner-scoped deferred collection hydration from the index and captured snapshot; no provider fetches.
 
@@ -13,11 +16,11 @@ Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and
 - `pinned-emails.ts` — pin-state overlay store: pin/unpin upserts + hydrated pinned-entry loads (index/triage merge, email_snapshot fallback)
 - `remote-content-trust.ts` — public owner-scoped persistence API for exact sender + receiving-account remote-content trust
 - `email-fetch.ts` — cross-account email fetching for Gmail and iCloud
-- `email-provider-adapters.ts` — per-account adapters: fetch, mark-read, trash
+- `email-provider-adapters.ts` — per-account adapters: fetch, mark-read, trash, and owner-scoped complete financial source acquisition
 - `email-provider-types.ts` — provider/account normalization contracts and adapter boundary types
 - `email-mime-attachments.ts` — shared MIME attachment descriptor and bounded byte-selection helpers
 - `email-index.ts` — parses headers, truncates bodies, writes `ea_email_index`
-- `sender-authentication.ts` — provider-neutral, redacted sender-authentication projection; trusts Gmail's leading `mx.google.com` result and iCloud's anchored Apple delivery/authentication block; unknown or ambiguous iCloud layouts remain unavailable
+- `sender-authentication.ts` — provider-neutral, redacted sender-authentication projection; trusts one leading Gmail `mx.google.com` verdict or iCloud's anchored Apple delivery/authentication block. Gmail can use exact signing-domain DKIM authority only when DMARC is absent, resolving omitted `header.d` through a unique original signature reference; ambiguous evidence stays unavailable and DMARC verdicts are preserved
 - `verification-code-detector.ts` — pure conservative verification-code extraction from normalized subject/snippet/body context; returns one exact bounded token or null
 - `email-persistence-types.ts` — local index/pin database client and raw-row contracts
 - `email-backfill-worker.ts` — paginated backward-in-time index backfill worker
@@ -39,7 +42,7 @@ Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and
 - `email-arrival-timing.ts` — pure projection of provider, durable queue, sync, and snapshot-attachment timing stages
 - `icloud.ts` — iCloud Mail (IMAP) client
 - `html-to-text.ts` — HTML projection facade over the shared semantic evidence normalizer
-- `email-evidence.ts` — public pure evidence facade for AI consumers: preserves text blocks/table columns, compacts tracking URLs, marks bounded storage and rejects incomplete decision evidence
+- `email-evidence.ts` — public pure evidence facade for AI consumers: selects reader HTML with plain-text fallback, preserves text blocks/table columns, compacts tracking URLs, marks bounded storage and rejects incomplete decision evidence
 - `mime-artifacts.ts` — heuristic detector for raw-MIME body_text rows (reindex targeting)
 - `mailparser.d.ts` — owned declaration shim for the untyped `mailparser` package boundary
 - `dev-service.ts` — dev/test helper: re-index recent emails
@@ -52,6 +55,7 @@ Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and
 - All index writes go through `email-index.ts`; provider clients never write `ea_email_index` directly.
 - Verification-code detection runs locally in that shared index path; it never calls a provider/model and persists no surrounding evidence.
 - Provider differences are absorbed in `email-provider-adapters.ts`; consumers see one account-shaped interface.
+- Indexing and complete financial acquisition prefer readable HTML over an alternative plain body. Gmail/iCloud previews derive from that selected body so triage cannot reintroduce stale alternative text through a provider snippet. Independent mixed parts and attachments retain their existing boundaries.
 
 ## Related
 

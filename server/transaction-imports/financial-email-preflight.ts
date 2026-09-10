@@ -16,6 +16,7 @@ import type {
 import type { ActualImportItemOutcome } from "../../shared/types/transaction-imports.ts";
 
 const REQUIRED_GATES: FinancialAutomationGateKind[] = [
+  "profile",
   "semantic",
   "canonical_amount",
   "date",

@@ -5,6 +5,7 @@ import type { EmailAuthenticationProjection } from "../../shared/types/email.ts"
 import type { FinancialOwnerCompletion } from "./financial-event-completion-model.ts";
 import type { FinancialEventCompletionEntry } from "../../shared/types/financial-operations.ts";
 import { createFinancialEventAiStore } from "./financial-event-ai.ts";
+import { createFinancialDocumentSourceStore, projectFinancialDocumentSource, type FinancialEmailSource } from "./financial-event-source.ts";
 
 type StoreDb = Pick<Client, "execute" | "batch">;
 type DocumentStatus = "pending" | "processing" | "retry" | "ignored" | "associated";
@@ -62,6 +63,7 @@ export interface FinancialDocument {
   threadId: string | null;
   messageId: string | null;
   senderAuthentication: EmailAuthenticationProjection | null;
+  acquiredSource?: FinancialEmailSource | null; sourceInputHash?: string;
 }
 
 export interface FinancialEvent {
@@ -109,7 +111,12 @@ const DOCUMENTS_READY = `NOT EXISTS (SELECT 1 FROM ea_financial_documents d
       AND d.dismissed_at IS NULL AND d.processed_revision < d.revision)
   AND (attempted_at IS NOT NULL OR NOT EXISTS (SELECT 1 FROM ea_financial_documents arrival
     WHERE arrival.user_id = ea_financial_events.user_id AND arrival.dismissed_at IS NULL AND arrival.status IN ('pending', 'processing')))`;
-const READY_EVENT = `dismissed_at IS NULL AND status IN ('pending', 'waiting') AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
+const PROFILE_CHANGED = `attempted_at IS NULL AND owner_completion_json IS NULL AND plan_json IS NOT NULL AND EXISTS (
+  SELECT 1 FROM ea_settings settings WHERE settings.user_id = ea_financial_events.user_id
+    AND (settings.financial_profiles_revision <> COALESCE(json_extract(plan_json, '$.profile.revision'), -1)
+      OR settings.actual_budget_sync_id IS NOT json_extract(plan_json, '$.profile.budgetId')))`;
+const ACTIVE_EVENT = `(status IN ('pending', 'waiting') OR (status = 'needs_review' AND (${PROFILE_CHANGED})))`;
+const READY_EVENT = `dismissed_at IS NULL AND ${ACTIVE_EVENT} AND (next_attempt_at IS NULL OR next_attempt_at <= ? OR (${PROFILE_CHANGED}))
   AND ${INTAKE_COMPLETE} AND ${DOCUMENTS_READY}`;
 
 /** Read-only progress uses the same capture gates as admission, never a provider call. */
@@ -144,7 +151,7 @@ export function documentFromRow(row: Row): FinancialDocument {
   const result = readJson<{ resolution?: string; entry?: FinancialDocument['correctedEntry'] }>(row.correction_result_json);
   const correction = readJson<FinancialDocument['correction']>(row.correction_json) || undefined;
   const kept = result?.resolution === 'kept_actual';
-  return {
+  return projectFinancialDocumentSource({
     id: Number(row.id), userId: String(row.user_id), accountId: String(row.account_id),
     emailUid: String(row.email_uid), revision: Number(row.revision),
     dismissedAt: nullableNumber(row.dismissed_at), processedRevision: Number(row.processed_revision), status: String(row.status) as DocumentStatus,
@@ -163,7 +170,7 @@ export function documentFromRow(row: Row): FinancialDocument {
     emailDate: String(row.email_date_utc || ""), threadId: nullableString(row.thread_id),
     messageId: nullableString(row.message_id),
     senderAuthentication: readJson<EmailAuthenticationProjection>(row.sender_authentication_json),
-  };
+  }, row);
 }
 
 export function eventFromRow(row: Row, documents: FinancialDocument[]): FinancialEvent {
@@ -253,10 +260,12 @@ export function createFinancialEventStore(dbClient: StoreDb = db, now = Date.now
     contentHash: string;
     eventId: string;
     referenceKey?: string | null;
+    referenceKeys?: string[];
     nextAttemptAt?: number | null;
   }): Promise<boolean> {
     if (!input.eventId) throw new Error("A financial event identity is required");
     const timestamp = now();
+    const references = JSON.stringify([...new Set([input.referenceKey, ...(input.referenceKeys || [])].filter(Boolean))]);
     // All statements share a write transaction. The event is admitted only by
     // the current document lease, and that same lease links the document.
     const results = await dbClient.batch([
@@ -267,7 +276,7 @@ export function createFinancialEventStore(dbClient: StoreDb = db, now = Date.now
                   AND claim_token = ? AND revision = ? AND status = 'processing'
                   AND (event_id IS NULL OR event_id = ?))
                 AND NOT EXISTS (SELECT 1 FROM ea_financial_event_references
-                  WHERE user_id = ? AND reference_key = ? AND event_id <> ?)
+                  WHERE user_id = ? AND reference_key IN (SELECT value FROM json_each(?)) AND event_id <> ?)
               ON CONFLICT(id) DO UPDATE SET revision = revision + 1,
                 status = CASE WHEN status = 'processing' THEN status ELSE 'pending' END,
                 collection_deadline = CASE WHEN owner_completion_json IS NULL AND attempted_at IS NULL AND excluded.collection_deadline IS NOT NULL
@@ -277,18 +286,21 @@ export function createFinancialEventStore(dbClient: StoreDb = db, now = Date.now
               WHERE ea_financial_events.user_id = excluded.user_id`,
         args: [input.eventId, claim.userId, timestamp, timestamp, input.nextAttemptAt ?? null, input.nextAttemptAt ?? null,
           claim.userId, claim.id, claim.claimToken, claim.revision, input.eventId,
-          claim.userId, input.referenceKey ?? null, input.eventId],
+          claim.userId, references, input.eventId],
       },
       {
         sql: `INSERT INTO ea_financial_event_references (user_id, reference_key, event_id)
-              SELECT ?, ?, ? WHERE ? IS NOT NULL AND EXISTS (
+              SELECT ?, value, ? FROM json_each(?) WHERE EXISTS (
                 SELECT 1 FROM ea_financial_documents WHERE user_id = ? AND id = ?
                   AND claim_token = ? AND revision = ? AND status = 'processing'
                   AND (event_id IS NULL OR event_id = ?))
                 AND EXISTS (SELECT 1 FROM ea_financial_events WHERE user_id = ? AND id = ?)
+                AND NOT EXISTS (SELECT 1 FROM ea_financial_event_references WHERE user_id = ?
+                  AND reference_key IN (SELECT value FROM json_each(?)) AND event_id <> ?)
               ON CONFLICT(user_id, reference_key) DO NOTHING`,
-        args: [claim.userId, input.referenceKey ?? null, input.eventId, input.referenceKey ?? null,
-          claim.userId, claim.id, claim.claimToken, claim.revision, input.eventId, claim.userId, input.eventId],
+        args: [claim.userId, input.eventId, references,
+          claim.userId, claim.id, claim.claimToken, claim.revision, input.eventId, claim.userId, input.eventId,
+          claim.userId, references, input.eventId],
       },
       {
         sql: `UPDATE ea_financial_documents SET status = 'associated', candidate_json = ?, content_hash = ?,
@@ -298,11 +310,11 @@ export function createFinancialEventStore(dbClient: StoreDb = db, now = Date.now
               WHERE user_id = ? AND id = ? AND claim_token = ? AND revision = ? AND status = 'processing'
                 AND (event_id IS NULL OR event_id = ?)
                 AND EXISTS (SELECT 1 FROM ea_financial_events e WHERE e.user_id = ? AND e.id = ?)
-                AND (? IS NULL OR EXISTS (SELECT 1 FROM ea_financial_event_references
-                  WHERE user_id = ? AND reference_key = ? AND event_id = ?))`,
+                AND NOT EXISTS (SELECT 1 FROM json_each(?) reference WHERE NOT EXISTS
+                  (SELECT 1 FROM ea_financial_event_references WHERE user_id = ? AND reference_key = reference.value AND event_id = ?))`,
         args: [writeJson(input.candidate), input.contentHash, input.eventId, input.eventId, timestamp,
           claim.userId, claim.id, claim.claimToken, claim.revision, input.eventId, claim.userId, input.eventId,
-          input.referenceKey ?? null, claim.userId, input.referenceKey ?? null, input.eventId],
+          references, claim.userId, input.eventId],
       },
     ], "write");
     const linked = results[2]!.rowsAffected === 1;
@@ -468,7 +480,7 @@ export function createFinancialEventStore(dbClient: StoreDb = db, now = Date.now
       sql: `UPDATE ea_financial_events SET status = 'processing', claim_token = ?, claimed_at = ?,
               attempts = attempts + 1, updated_at = ?
             WHERE id = (SELECT id FROM ea_financial_events WHERE ${READY_EVENT} AND ${ORIGINAL_UNGUARDED}
-              ORDER BY created_at, id LIMIT 1) AND status IN ('pending', 'waiting') RETURNING *`,
+              ORDER BY created_at, id LIMIT 1) AND ${ACTIVE_EVENT} RETURNING *`,
       args: [claimToken, timestamp, timestamp, timestamp],
     });
     return result.rows[0] ? projectEvent(result.rows[0]) : null;
@@ -495,6 +507,18 @@ export function createFinancialEventStore(dbClient: StoreDb = db, now = Date.now
     return result.rowsAffected === 1;
   }
 
+  async function rememberCycle(claim: FinancialEvent, key: string): Promise<boolean> {
+    const result = await dbClient.execute({
+      sql: `INSERT INTO ea_financial_event_references (user_id, reference_key, event_id)
+        SELECT user_id, ?, id FROM ea_financial_events WHERE user_id = ? AND id = ? AND claim_token = ?
+          AND revision = ? AND status = 'processing' AND dismissed_at IS NULL AND ${ORIGINAL_UNGUARDED}
+        ON CONFLICT(user_id, reference_key) DO UPDATE SET reference_key = excluded.reference_key
+          WHERE event_id = excluded.event_id RETURNING event_id`,
+      args: [key, claim.userId, claim.id, claim.claimToken, claim.revision],
+    });
+    return result.rows[0]?.event_id === claim.id;
+  }
+
   async function admitOperation(claim: FinancialEvent, operation: unknown, plan?: FinancialEmailPlan): Promise<boolean> {
     if (operation == null) throw new Error("A financial operation payload is required");
     const timestamp = now();
@@ -503,6 +527,9 @@ export function createFinancialEventStore(dbClient: StoreDb = db, now = Date.now
               plan_json = COALESCE(?, plan_json)
             WHERE user_id = ? AND id = ? AND claim_token = ? AND revision = ? AND status = 'processing'
               AND dismissed_at IS NULL AND attempted_at IS NULL AND operation_json IS NULL AND ${ORIGINAL_UNGUARDED}
+              AND (owner_completion_json IS NOT NULL OR (? = 'matched' AND EXISTS (
+                SELECT 1 FROM ea_settings settings WHERE settings.user_id = ea_financial_events.user_id
+                  AND settings.actual_budget_sync_id = ? AND settings.financial_profiles_revision = ?)))
               AND ${INTAKE_COMPLETE}
               AND NOT EXISTS (SELECT 1 FROM ea_financial_documents d
                 WHERE d.user_id = ea_financial_events.user_id AND d.event_id = ea_financial_events.id
@@ -510,7 +537,8 @@ export function createFinancialEventStore(dbClient: StoreDb = db, now = Date.now
               AND NOT EXISTS (SELECT 1 FROM ea_financial_documents arrival
                 WHERE arrival.user_id = ea_financial_events.user_id AND arrival.dismissed_at IS NULL AND arrival.status IN ('pending', 'processing'))`,
       args: [writeJson(operation), timestamp, timestamp, plan ? writeJson(plan) : null,
-        claim.userId, claim.id, claim.claimToken, claim.revision],
+        claim.userId, claim.id, claim.claimToken, claim.revision,
+        plan?.profile?.status ?? null, plan?.profile?.budgetId ?? null, plan?.profile?.revision ?? null],
     });
     return result.rowsAffected === 1;
   }
@@ -536,7 +564,7 @@ export function createFinancialEventStore(dbClient: StoreDb = db, now = Date.now
                 WHERE next.dismissed_at IS NULL AND next.status IN ('pending', 'retry') AND NOT EXISTS (
                   SELECT 1 FROM ea_financial_documents busy WHERE busy.user_id = next.user_id AND busy.status = 'processing')
               UNION ALL SELECT MIN(COALESCE(next_attempt_at, ?)) FROM ea_financial_events
-                WHERE dismissed_at IS NULL AND status IN ('pending', 'waiting') AND ${INTAKE_COMPLETE} AND ${DOCUMENTS_READY})`,
+                WHERE dismissed_at IS NULL AND ${ACTIVE_EVENT} AND ${INTAKE_COMPLETE} AND ${DOCUMENTS_READY})`,
       args: [timestamp, timestamp],
     });
     return nullableNumber(result.rows[0]?.wake_at);
@@ -561,11 +589,11 @@ export function createFinancialEventStore(dbClient: StoreDb = db, now = Date.now
     return result.rows[0] ? projectEvent(result.rows[0]) : null;
   }
 
-  return { ...createFinancialEventAiStore(dbClient, now), async isCorrected(userId: string, id: string) {
+  return { ...createFinancialEventAiStore(dbClient, now), ...createFinancialDocumentSourceStore(dbClient, now), async isCorrected(userId: string, id: string) {
     return (await dbClient.execute({ sql: "SELECT 1 FROM ea_financial_corrected_sources WHERE user_id=? AND owner='event' AND record_id=? LIMIT 1", args: [userId, id] })).rows.length > 0;
   }, claimDocument, settleDocument, associateDocument, listDocuments, findEventsByReference, completeEvent, dismissCandidate,
     acknowledgeOwnerCompletedDocument, claimEvent, saveEvent,
-    admitOperation, recoverStaleClaims, getNextWakeAt, isManagedEmail, getDocumentForEmail, getEventForEmail };
+    rememberCycle, admitOperation, recoverStaleClaims, getNextWakeAt, isManagedEmail, getDocumentForEmail, getEventForEmail };
 }
 
 export const financialEventStore = createFinancialEventStore();

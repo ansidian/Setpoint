@@ -4,10 +4,33 @@ import { readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { FinancialEmailPlan } from "../../shared/types/bills.ts";
 import { createTransactionImportStore, type InsertItemInput } from "./transaction-import-store.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(here, "..", "db", "migrations");
+
+
+function savedPlan(): FinancialEmailPlan {
+  return {
+    version: 1 as const,
+    identity: { version: 1 as const, status: "resolved" as const, key: "financial-email:v1:test" },
+    candidate: { payee: "Amazon", amount: 25.99, event_kind: "purchase" as const },
+    classification: { documentKind: "one_time_transaction" as const, eventKind: "purchase" as const, confidence: 1, reasons: [] },
+    operation: { intended: "create_transaction" as const, kind: "review" as const, reasons: ["actual_preflight_not_run" as const] },
+    targets: {
+      account: { kind: "account" as const, status: "resolved" as const, id: "planned-account", provenance: [] },
+      payee: { kind: "payee" as const, status: "resolved" as const, id: "amazon-payee", provenance: [] },
+      category: { kind: "category" as const, status: "unresolved" as const, provenance: [] },
+      fromAccount: { kind: "from_account" as const, status: "not_applicable" as const, provenance: [] },
+      toAccount: { kind: "to_account" as const, status: "not_applicable" as const, provenance: [] },
+      schedule: { kind: "schedule" as const, status: "not_applicable" as const, provenance: [] },
+    },
+    reconciliation: { status: "not_checked" as const, disposition: "review" as const },
+    reviewReasons: [],
+    automation: { eligible: false, operationClass: "one_time_expense" as const, rollout: "observe_only" as const, gates: [], reasons: ["actual_preflight_not_run" as const] },
+  };
+}
 
 describe("transaction import store", () => {
   let db: Client;
@@ -16,7 +39,7 @@ describe("transaction import store", () => {
   beforeEach(async () => {
     db = createClient({ url: "file::memory:" });
     await db.execute("PRAGMA foreign_keys = ON");
-    for (const file of ["001_ea_tables.sql", "013_email_index_normalized_date.sql", "025_email_thread_identity.sql", "030_owner_bootstrap.sql", "041_email_transaction_imports.sql", "042_transaction_import_item_subject.sql", "053_transaction_import_financial_plans.sql", "054_email_sender_authentication.sql", "055_generic_financial_email_imports.sql", "056_generic_financial_email_automation.sql", "058_generic_financial_email_income_automation.sql", "062_financial_events.sql", "068_financial_candidate_dismissal.sql", "063_financial_activity.sql", "064_financial_corrections.sql"]) {
+    for (const file of ["001_ea_tables.sql", "013_email_index_normalized_date.sql", "025_email_thread_identity.sql", "030_owner_bootstrap.sql", "041_email_transaction_imports.sql", "042_transaction_import_item_subject.sql", "053_transaction_import_financial_plans.sql", "054_email_sender_authentication.sql", "055_generic_financial_email_imports.sql", "056_generic_financial_email_automation.sql", "058_generic_financial_email_income_automation.sql", "059_generic_financial_email_transfer_automation.sql", "062_financial_events.sql", "068_financial_candidate_dismissal.sql", "063_financial_activity.sql", "064_financial_corrections.sql", "069_financial_profiles.sql"]) {
       await db.executeMultiple(readFileSync(join(migrationsDir, file), "utf8"));
     }
     await db.execute({
@@ -71,6 +94,35 @@ describe("transaction import store", () => {
       ...overrides,
     };
   }
+
+  it.each([
+    ["create_transaction", 1, true], ["create_transaction", 2, false],
+    ["create_transfer_schedule", 1, true], ["create_transfer_schedule", 2, false],
+  ] as const)("checks the current profile revision at %s admission (saved revision: %s)", async (operation, revision, admitted) => {
+    now = 1_000;
+    await createRun();
+    const subject = store();
+    const financialPlan = savedPlan();
+    financialPlan.profile = { status: "matched", revision: 1, budgetId: "fixture-budget", profileId: "receipt-profile", reason: "Owner configured the target." };
+    financialPlan.operation = { intended: operation, kind: operation, reasons: [] };
+    financialPlan.automation = { eligible: true, rollout: "enabled", operationClass: operation === "create_transaction" ? "one_time_expense" : "transfer_schedule",
+      gates: ["profile", "semantic", "canonical_amount", "date", "targets", "authenticity", "stable_identity", "warnings", "reconciliation", "actual_preflight", "rollout"].map(gate => ({ gate, status: "pass", reasons: [] })) as FinancialEmailPlan["automation"]["gates"], reasons: [] };
+    if (operation === "create_transfer_schedule") financialPlan.transferExecution = { budgetId: "fixture-budget" };
+    const target = operation === "create_transaction" ? { kind: "expense", accountId: "actual-checking", payeeId: "amazon-payee" }
+      : { kind: "card_payment", fromAccountId: "actual-checking", toAccountId: "card" };
+    await db.execute({ sql: "INSERT INTO ea_settings (user_id, actual_budget_sync_id, financial_profiles_json, financial_profiles_revision) VALUES ('owner-1', 'fixture-budget', ?, ?)",
+      args: [JSON.stringify([{ id: "receipt-profile", name: "Receipt profile", enabled: true, budgetId: "fixture-budget", senderAddresses: ["receipts@example.test"], target }]), revision] });
+    expect(await subject.insertItem(itemInput({ source: operation === "create_transaction" ? "amazon" : "generic", status: "ready", financialPlan }))).toBe(true);
+    const claim = await subject.claimNextItem("commit-worker");
+    expect(claim?.status).toBe("importing");
+    const result = operation === "create_transaction"
+      ? await subject.admitOriginalImport(claim!, { budgetId: "fixture-budget", objects: [] })
+      : await subject.markTransferAttempt("owner-1", "item-1", "commit-worker", "2026-09-01T18:00:00.000Z");
+    expect(result).toBe(admitted);
+    const item = await subject.getItem("owner-1", "item-1");
+    if (operation === "create_transaction") expect(item?.originalAttemptedAt).toBe(admitted ? 1_000 : undefined);
+    else expect(item?.financialPlan?.transferExecution?.attemptedAt).toBe(admitted ? "2026-09-01T18:00:00.000Z" : undefined);
+  });
 
   it("executes only arrival items while retaining saved history for inspection", async () => {
     const subject = store();
@@ -236,24 +288,7 @@ describe("transaction import store", () => {
   it("persists the redacted financial plan and shadow comparison with the canonical item", async () => {
     await createRun();
     const subject = store();
-    const financialPlan = {
-      version: 1 as const,
-      identity: { version: 1 as const, status: "resolved" as const, key: "financial-email:v1:test" },
-      candidate: { payee: "Amazon", amount: 25.99, event_kind: "purchase" as const },
-      classification: { documentKind: "one_time_transaction" as const, eventKind: "purchase" as const, confidence: 1, reasons: [] },
-      operation: { intended: "create_transaction" as const, kind: "review" as const, reasons: ["actual_preflight_not_run" as const] },
-      targets: {
-        account: { kind: "account" as const, status: "resolved" as const, id: "planned-account", provenance: [] },
-        payee: { kind: "payee" as const, status: "resolved" as const, id: "amazon-payee", provenance: [] },
-        category: { kind: "category" as const, status: "unresolved" as const, provenance: [] },
-        fromAccount: { kind: "from_account" as const, status: "not_applicable" as const, provenance: [] },
-        toAccount: { kind: "to_account" as const, status: "not_applicable" as const, provenance: [] },
-        schedule: { kind: "schedule" as const, status: "not_applicable" as const, provenance: [] },
-      },
-      reconciliation: { status: "not_checked" as const, disposition: "review" as const },
-      reviewReasons: [],
-      automation: { eligible: false, operationClass: "one_time_expense" as const, rollout: "observe_only" as const, gates: [], reasons: ["actual_preflight_not_run" as const] },
-    };
+    const financialPlan = savedPlan();
     const planShadow = {
       status: "planned" as const,
       operation: "review" as const,

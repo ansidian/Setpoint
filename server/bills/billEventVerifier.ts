@@ -63,6 +63,12 @@ export function hasExplicitDateForYmd(evidence: unknown, value: unknown): boolea
     new RegExp(`\\b(?:${shortMonth}|${monthName})\\.?\\s+0?${day}(?:st|nd|rd|th)?[,]?\\s+${year}\\b`, "i"),
     new RegExp(`\\b0?${day}(?:st|nd|rd|th)?\\s+(?:${shortMonth}|${monthName})\\.?[,]?\\s+${year}\\b`, "i"),
   ];
+  // Provider MM/DD/YY dates use a fixed century, never a moving date pivot.
+  // Match the entire token so a longer year or slash-delimited ID cannot ground it.
+  if (year >= 2000 && year <= 2099) {
+    const shortYear = String(year % 100).padStart(2, "0");
+    patterns.push(new RegExp(`(?<![\\w/-])0?${month}/0?${day}/${shortYear}(?![\\w/-])`));
+  }
   return patterns.some((pattern) => pattern.test(source));
 }
 
@@ -129,7 +135,7 @@ ${BILL_SEMANTIC_EXTRACTION_INSTRUCTIONS}
 Event definitions:
 - statement_issued: a newly available credit or financial statement
 - payment_due: a due-date or payment-due reminder
-- payment_scheduled: upcoming autopay or a payment scheduled for a future date
+- payment_scheduled: a confirmation of a particular arranged payment and its scheduled date; statement availability, a due date, or AutoPay enrollment/enabled status alone does not establish this event
 - account_transfer_pending: a bank or wallet transfer that was requested, initiated, or is still processing
 - account_transfer_completed: a bank or wallet transfer confirmed complete
 - card_payment_completed: a payment posted or applied to a credit-card/account balance; this is a transfer

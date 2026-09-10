@@ -98,6 +98,12 @@ export function emailEvidenceText(input: unknown, format: "html" | "text" | "aut
     .trim();
 }
 
+/** Match the reader's HTML preference; alternatives are versions, not cumulative facts. */
+export function emailEvidenceFromMime(parsed: { html?: string | false; text?: string }): string {
+  const html = parsed.html ? emailEvidenceText(parsed.html, "html") : "";
+  return html || emailEvidenceText(parsed.text, "text");
+}
+
 /** Storage/discovery may be bounded, but consumers must know evidence is incomplete. */
 export function boundEmailEvidence(text: string, maxChars = EMAIL_EVIDENCE_CHAR_LIMIT): string {
   if (text.length <= maxChars) return text;

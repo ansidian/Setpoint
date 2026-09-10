@@ -165,8 +165,9 @@ describe("transaction import financial planner adapter", () => {
     expect(JSON.stringify(result.financialPlan)).not.toContain("history detail");
   });
 
-  it("resolves accepted source transactions from Actual history without source mappings", async () => {
+  it("suggests Actual-history targets for review when no profile authorizes the source", async () => {
     const planner = createFinancialEmailPlanner({
+      profileReader: async () => ({ budgetId: "fixture-budget", revision: 0, profiles: [] }),
       metadataReader: async () => ({
         accounts: [{ id: "card-1", name: "Everyday Card", type: "credit" }],
         payees: [{ id: "example-store", name: "Example Store" }],
@@ -195,6 +196,7 @@ describe("transaction import financial planner adapter", () => {
 
     expect(result.financialPlan).toMatchObject({
       operation: { intended: "create_transaction" },
+      profile: { status: "missing" },
       targets: {
         account: { status: "resolved", id: "card-1" },
         payee: { status: "resolved", id: "example-store" },
@@ -206,7 +208,7 @@ describe("transaction import financial planner adapter", () => {
       actualCategoryId: "shopping",
       automationMode: "automatic",
       automaticSafe: false,
-      status: "queued",
+      status: "needs_review",
       importedId: "paypal-ABC123",
       amountCents: -2599,
       financialPlan: { candidate: { transaction_import: { executionOwner: "planner" } } },
@@ -216,6 +218,7 @@ describe("transaction import financial planner adapter", () => {
 
   it("uses an exact Actual imported ID to prove targets and suppress a replayed duplicate", async () => {
     const planner = createFinancialEmailPlanner({
+      profileReader: async () => ({ budgetId: "fixture-budget", revision: 0, profiles: [] }),
       metadataReader: async () => ({
         accounts: [{ id: "mapped-account", name: "Everyday Card", type: "credit" }],
         payees: [{ id: "example-store", name: "Example Store" }],

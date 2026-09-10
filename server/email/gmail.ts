@@ -7,6 +7,7 @@ import type { ConfiguredEmailAccount, EmailAttachmentContent } from "./email-pro
 import { getAccessToken } from "./gmail-credentials.ts";
 import { evaluateGmailSenderAuthentication } from "./sender-authentication.ts";
 import { fetchWithTimeout } from "../platform/fetch-with-timeout.ts";
+import { FINANCIAL_EMAIL_SOURCE_LIMITS, FinancialEmailSourceError, parseFinancialEmailSource, readFinancialSourceResponse, type FinancialEmailSource } from "./financial-email-source.ts";
 export { getAccessToken, handleCallback } from "./gmail-credentials.ts";
 export { getAuthUrl } from "./gmail-oauth-url.ts";
 
@@ -66,35 +67,23 @@ function extractAmounts(text: string): string {
 }
 
 // Decode body text from Gmail API full-format message parts
-function extractBodyText(payload: GmailMessagePart | null | undefined): string {
-  if (!payload) return "";
+function extractBodyEvidence(payload: GmailMessagePart | null | undefined): { text: string; html: boolean } {
+  const empty = { text: "", html: false };
+  if (!payload) return empty;
   const disposition = payload.headers?.find((header) => header.name.toLowerCase() === "content-disposition")?.value || "";
-  if (payload.filename || /^attachment\b/i.test(disposition)) return "";
+  if (payload.filename || /^attachment\b/i.test(disposition)) return empty;
   const mimeType = payload.mimeType?.toLowerCase();
-  if (mimeType === "multipart/alternative") {
-    // Alternatives describe the same message. A genuine readable plain-text
-    // part usually preserves label/value pairs better than email layout HTML.
-    const parts = [...(payload.parts || [])].sort((left, right) => Number(right.mimeType === "text/plain") - Number(left.mimeType === "text/plain"));
-    let placeholder = "";
-    for (const part of parts) {
-      const text = extractBodyText(part);
-      // Some senders put only a web-message link in the plain alternative,
-      // followed by a long legal footer. Its length does not make it evidence.
-      const webMessagePlaceholder = /\b(?:visit|follow|click)\b[^\n]{0,60}\blink\b[^\n]{0,40}\b(?:view|read)\s+(?:this|your|the)\s+(?:message|email)\b/i.test(text);
-      if (part.mimeType === "text/plain" && (webMessagePlaceholder || (text.length < 300
-        && /(?:html[- ](?:capable|enabled|compatible)|(?:view|read|display)[\s\S]{0,60}\bhtml\b|requires?\s+(?:an?\s+)?html)/i.test(text)))) {
-        placeholder = text;
-        continue;
-      }
-      if (text) return text;
-    }
-    return placeholder;
-  }
   if (payload.body?.data && (mimeType === "text/plain" || mimeType === "text/html")) {
     const text = Buffer.from(payload.body.data, "base64url").toString("utf8");
-    return mimeType === "text/html" ? htmlToPlainText(text) : emailEvidenceText(text, "text");
+    return { text: mimeType === "text/html" ? htmlToPlainText(text) : emailEvidenceText(text, "text"), html: mimeType === "text/html" };
   }
-  return (payload.parts || []).map(extractBodyText).filter(Boolean).join("\n\n");
+  const parts = (payload.parts || []).map(extractBodyEvidence).filter((part) => part.text);
+  if (mimeType === "multipart/alternative") {
+    // Prefer the reader's HTML version, including HTML nested in multipart/related.
+    // Independent mixed parts are retained below; unused alternatives are not facts.
+    return parts.find((part) => part.html) || parts[0] || empty;
+  }
+  return { text: parts.map((part) => part.text).join("\n\n"), html: parts.some((part) => part.html) };
 }
 
 // --- Email fetch ---
@@ -109,8 +98,10 @@ function getHeaderValue(headers: GmailHeader[], name: string): string {
 
 function normalizeMessage(account: ConfiguredEmailAccount, msg: GmailMessage): NormalizedFetchedEmail {
   const headers = msg.payload?.headers || [];
-  const snippet = msg.snippet || "";
-  const bodyText = extractBodyText(msg.payload);
+  const bodyText = extractBodyEvidence(msg.payload).text;
+  // Triage also reads the preview. Gmail's snippet can come from the unused
+  // plain alternative, so derive it from the selected body whenever available.
+  const snippet = bodyText ? bodyText.slice(0, 600) : msg.snippet || "";
   const amounts = extractAmounts(bodyText);
   const from = getHeaderValue(headers, "From");
   const receivedAt = new Date(Number(msg.internalDate));
@@ -269,6 +260,38 @@ export async function fetchMessages(token: string, messageIds: string[], { stric
 }
 
 // --- Full email body (for detail view) ---
+
+/** One unmodified raw message supplies the body, PDF bytes, identity, and authentication. */
+export async function fetchFinancialEmailSource(account: ConfiguredEmailAccount, uid: string): Promise<FinancialEmailSource> {
+  const messageId = extractMessageId(account, uid);
+  if (!/^[a-zA-Z0-9_-]+$/.test(messageId)) throw new FinancialEmailSourceError("financial_source_invalid", "The Gmail source identity is invalid.", 400);
+  const token = await getAccessToken(account);
+  let value: unknown;
+  try {
+    const response = await fetch(`https://www.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(messageId)}?format=raw`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(FINANCIAL_EMAIL_SOURCE_LIMITS.fetchTimeoutMs),
+    });
+    if (!response.ok) throw new FinancialEmailSourceError("financial_source_unavailable", `Gmail source acquisition failed: HTTP ${response.status}.`, response.status);
+    value = await readFinancialSourceResponse(response);
+  } catch (error) {
+    if (error instanceof FinancialEmailSourceError) throw error;
+    const timedOut = error instanceof Error && ["TimeoutError", "AbortError"].includes(error.name);
+    throw new FinancialEmailSourceError(timedOut ? "financial_source_timeout" : "financial_source_unavailable", timedOut ? "Gmail source acquisition exceeded its time limit." : "Gmail source acquisition failed before returning a complete message.", 503);
+  }
+  const message = value as GmailMessage | null;
+  if (!message || message.id !== messageId || typeof message.raw !== "string" || !/^[A-Za-z0-9_-]+={0,2}$/.test(message.raw)) {
+    throw new FinancialEmailSourceError("financial_source_unavailable", "Gmail did not return the complete requested source.", 502);
+  }
+  if (message.raw.replace(/=+$/, "").length > Math.ceil(FINANCIAL_EMAIL_SOURCE_LIMITS.messageBytes * 4 / 3)) {
+    throw new FinancialEmailSourceError("financial_source_oversized", "The original Gmail message exceeds the financial evidence byte limit.", 413);
+  }
+  const date = new Date(Number(message.internalDate));
+  return parseFinancialEmailSource(Buffer.from(message.raw, "base64url"), {
+    provider: "gmail", threadId: message.threadId,
+    emailDate: message.internalDate && Number.isFinite(date.getTime()) ? date.toISOString() : undefined,
+  });
+}
 
 export async function fetchEmailBody(account: ConfiguredEmailAccount, uid: string): Promise<EmailBody> {
   const messageId = extractMessageId(account, uid);

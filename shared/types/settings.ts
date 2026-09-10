@@ -1,3 +1,5 @@
+import type { FinancialProfile } from "./financial-profiles.ts";
+
 export type StoredEmailTriageMode = "auto" | "real" | "no_model" | "paused";
 export type EffectiveEmailTriageMode = Exclude<StoredEmailTriageMode, "auto">;
 
@@ -143,6 +145,8 @@ export interface SettingsResponse {
   triage_sound_settings: TriageSoundSettings;
   triage_notification_sounds: TriageNotificationSound[];
   utility_pay_links: UtilityPayLink[];
+  financial_profiles?: FinancialProfile[];
+  financial_profiles_revision?: number;
 }
 
 export interface TodoistOAuthTokenResponse {
@@ -182,6 +186,7 @@ export interface SettingsPatchRequest {
   discord_webhook_url?: string;
   discord_user_id?: string;
   utility_pay_links?: UtilityPayLink[];
+  financial_profiles?: FinancialProfile[];
 }
 
 export interface SettingsMutationResponse {

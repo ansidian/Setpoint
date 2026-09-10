@@ -1,4 +1,4 @@
-import type { ActualBillOccurrence } from './actual.ts';
+import type { ActualBillOccurrence, ActualPayee, ActualSchedule } from './actual.ts';
 import type { FinancialActivityReference } from './financial-activity.ts';
 
 export interface JournalTransaction {
@@ -39,6 +39,18 @@ export interface UtilityIdentity {
   sourceSenders: string[];
   sourceIdentityText?: string;
 }
+export interface UtilityMappingSettings {
+  budgetId: string | null;
+  utilities: UtilityIdentity[];
+  payees: ActualPayee[];
+  schedules: ActualSchedule[];
+  metadataAvailable: boolean;
+}
+export interface UtilityMappingUpdate {
+  budgetId: string;
+  payeeId: string;
+  scheduleIds: string[];
+}
 export interface UtilityStatement {
   id: string;
   utilityId: string;
@@ -71,6 +83,8 @@ export interface FinanceUtility {
 export interface FinanceWorkspace {
   budgetId: string | null;
   actualBudgetUrl?: string | null;
+  /** Bounded Actual history independent of email statements; absent when unavailable. Preserve relatives and truncation when deriving payments. */
+  recordedHistory?: JournalRange;
   utilities: FinanceUtility[];
   recurring: ActualBillOccurrence[];
   start: string;

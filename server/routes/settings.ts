@@ -7,6 +7,7 @@ import { settingsCredentialContext } from "../platform/credential-encryption-con
 import { geocodeLocation } from "../platform/weather.ts";
 import { initScheduler } from "../scheduler.ts";
 import { requestEmailTriageDrainAt } from "../scheduler-email-triage-drain.ts";
+import { requestTransactionImportDrain } from "../transaction-imports/transaction-import-runtime.ts";
 import {
   billExtractAvailability,
   isAllowedBillExtractModel,
@@ -41,6 +42,8 @@ import { storeTodoistOAuthTokenResponse } from "../tasks/todoist-token.ts";
 import { clearTodoistNeedsReauth } from "../platform/provider-reauth.ts";
 import { requireRecentPasswordAuth } from "../middleware/auth.ts";
 import { scheduleTimeToLeaveRefreshForUser } from "../reminders/reminder-service.ts";
+import { readActualMetadataProjection } from "../actual/actual.ts";
+import { financialProfilesFromSettingsRow, readFinancialProfiles, validateFinancialProfiles } from "../bills/financial-profiles.ts";
 import {
   validateDiscordWebhookUrl,
   validateEmailInterests,
@@ -197,6 +200,9 @@ router.get<Record<string, never>, SettingsResponse | ErrorResponse>("/settings",
     safe.triage_sound_settings = parseTriageSoundSettingsJson(triage_sound_settings_json);
     safe.triage_notification_sounds = TRIAGE_NOTIFICATION_SOUNDS;
     safe.utility_pay_links = utility_pay_links_json ? JSON.parse(String(utility_pay_links_json)) : [];
+    const financialProfiles = financialProfilesFromSettingsRow(row);
+    safe.financial_profiles = financialProfiles.profiles;
+    safe.financial_profiles_revision = financialProfiles.revision;
 
     res.json(safe as unknown as SettingsResponse);
   } catch (err) {
@@ -235,7 +241,7 @@ router.get("/email-search/usage", async (_req, res) => {
 
 router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, SettingsPatchRequest>("/settings", requireRecentAuthForSecretSettings, async (req, res) => {
   const userId = process.env.EA_USER_ID!;
-  const { schedules_json, email_lookback_hours, home_location_label, home_location_address, home_location_place_id, home_location_lat, home_location_lng, weather_lat, weather_lng, weather_location, actual_budget_url, actual_budget_password, actual_budget_sync_id, email_ai_provider, email_ai_model, alfred_provider, alfred_model, email_interests_json, todoist_api_token, todoist_oauth_token_response, bill_extract_provider, bill_extract_model, email_triage_mode, email_triage_classify_read_arrivals, triage_sound_settings, discord_webhook_url, discord_user_id, utility_pay_links } = req.body;
+  const { schedules_json, email_lookback_hours, home_location_label, home_location_address, home_location_place_id, home_location_lat, home_location_lng, weather_lat, weather_lng, weather_location, actual_budget_url, actual_budget_password, actual_budget_sync_id, email_ai_provider, email_ai_model, alfred_provider, alfred_model, email_interests_json, todoist_api_token, todoist_oauth_token_response, bill_extract_provider, bill_extract_model, email_triage_mode, email_triage_classify_read_arrivals, triage_sound_settings, discord_webhook_url, discord_user_id, utility_pay_links, financial_profiles } = req.body;
 
   try {
     if (actual_budget_url !== undefined || actual_budget_password !== undefined || actual_budget_sync_id !== undefined) {
@@ -248,6 +254,8 @@ router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, Sett
     const updates: string[] = [];
     const args: Value[] = [];
     let homeMutationAvailable: boolean | null = null;
+    let financialProfilesBudgetId: string | null = null;
+    let financialProfilesRevision = 0;
 
     if (schedules_json !== undefined) {
       const validation = validateSchedules(schedules_json);
@@ -377,6 +385,21 @@ router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, Sett
       updates.push("utility_pay_links_json = ?");
       args.push(JSON.stringify(validation.value));
     }
+    if (financial_profiles !== undefined) {
+      const configuration = await readFinancialProfiles(userId);
+      const projected = Array.isArray(financial_profiles) && financial_profiles.some((profile) => profile?.enabled === true)
+        ? await readActualMetadataProjection(userId).catch(() => null) : null;
+      const validation = validateFinancialProfiles(financial_profiles, {
+        budgetId: configuration.budgetId,
+        metadata: projected?.syncHealth.state === "current" ? projected : null,
+        existingProfiles: configuration.profiles,
+      });
+      if (!validation.valid) return res.status(400).json({ message: validation.message });
+      financialProfilesBudgetId = configuration.budgetId;
+      financialProfilesRevision = configuration.revision;
+      updates.push("financial_profiles_json = ?", "financial_profiles_revision = financial_profiles_revision + 1");
+      args.push(JSON.stringify(validation.value));
+    }
     if (discord_webhook_url !== undefined) {
       const validation = validateDiscordWebhookUrl(discord_webhook_url);
       if (!validation.valid) {
@@ -407,7 +430,13 @@ router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, Sett
 
     if (updates.length > 0) {
       args.push(userId);
-      await db.execute({ sql: `UPDATE ea_settings SET ${updates.join(", ")} WHERE user_id = ?`, args });
+      const budgetGuard = financial_profiles !== undefined ? " AND actual_budget_sync_id IS ? AND financial_profiles_revision = ?" : "";
+      if (financial_profiles !== undefined) args.push(financialProfilesBudgetId, financialProfilesRevision);
+      const result = await db.execute({ sql: `UPDATE ea_settings SET ${updates.join(", ")} WHERE user_id = ?${budgetGuard}`, args });
+      if (financial_profiles !== undefined && result.rowsAffected !== 1) {
+        return res.status(409).json({ message: "Financial profiles or the Actual budget changed while saving. Refresh Settings and try again." });
+      }
+      if (financial_profiles !== undefined) requestTransactionImportDrain();
     }
     if (homeMutationAvailable !== null) {
       await scheduleTimeToLeaveRefreshForUser({

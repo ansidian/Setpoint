@@ -41,6 +41,15 @@ const MULTIPART_SOURCE = Buffer.from([
   "--XYZBOUNDARY--",
 ].join("\r\n"));
 
+const MIME_ALTERNATIVES = [
+  { name: "SoFi scheduled full-balance notice", text: "You've cancelled autopay for your SoFi Credit Card.",
+    html: "<p>Your autopay is scheduled for 08/05/2026.</p><p>Payment amount: Full statement balance</p>",
+    expected: "Your autopay is scheduled for 08/05/2026.\n\nPayment amount: Full statement balance" },
+  { name: "genuine HTML cancellation", text: "Your autopay is scheduled for 08/05/2026. Payment amount: $238.80",
+    html: "<p>You've cancelled autopay for your SoFi Credit Card.</p>", expected: "You've cancelled autopay for your SoFi Credit Card." },
+  { name: "empty HTML fallback", text: "Payment amount: $238.80", html: "<html><body> </body></html>", expected: "Payment amount: $238.80" },
+];
+
 class FakeImapFlow {
   usable: boolean;
   connect: MockFunction;
@@ -131,7 +140,13 @@ class FakeImapFlowEvidence extends FakeImapFlowMime {
         "<table><tr><td>Plan adjusted balance</td><td>Remaining statement balance</td></tr><tr><td>$0.00</td><td>$472.32</td></tr></table>",
       ].join("\r\n");
       const cappedSource = ["Content-Type: text/plain; charset=utf-8", "", "Statement balance $472.32"].join("\r\n").padEnd(262144, " ");
-      for (const [index, source] of [htmlSource, cappedSource].entries()) {
+      const alternatives = MIME_ALTERNATIVES.map(({ text, html }) => [
+        'Content-Type: multipart/alternative; boundary="EVIDENCE-ALTERNATIVE"', "",
+        "--EVIDENCE-ALTERNATIVE", "Content-Type: text/plain; charset=utf-8", "", text,
+        "--EVIDENCE-ALTERNATIVE", "Content-Type: text/html; charset=utf-8", "", html,
+        "--EVIDENCE-ALTERNATIVE--",
+      ].join("\r\n"));
+      for (const [index, source] of [htmlSource, cappedSource, ...alternatives].entries()) {
         yield {
           uid: 31 + index,
           envelope: { date: new Date("2026-05-01T15:00:00Z"), subject: "Statement" },
@@ -355,6 +370,13 @@ describe("iCloud ingestion evidence", () => {
       start: "2026-05-01", end: "2026-05-02",
     });
     expect(result.emails[1]!.body_text).toBe(`Statement balance $472.32\n\n${EMAIL_EVIDENCE_TRUNCATED}`);
+  });
+
+  it.each(MIME_ALTERNATIVES.map((example, index) => ({ ...example, uid: `icloud-${33 + index}` })))("indexes only the reader-aligned alternative for $name", async ({ uid, expected }) => {
+    const result = await fetchEmailsInRange(account, "password", { start: "2026-05-01", end: "2026-05-02" });
+    const email = result.emails.find((item) => item.uid === uid)!;
+    expect(email.body_text).toBe(expected);
+    expect(email.body_preview).toContain(expected);
   });
 });
 

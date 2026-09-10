@@ -3,7 +3,7 @@ import { readActualMetadataProjection } from '../actual/actual.ts';
 import { readJournalRange } from '../actual/actual.ts';
 import { readBillsMirrorRange } from '../bills/bills-service.ts';
 import { financialActivityReader } from '../financial-activity/financial-activity.ts';
-import { projectStatement, linkStatementPayment } from './finance-statement-model.ts';
+import { projectStatement, linkStatementPayment, hydrateLegacyOccurrencePayments } from './finance-statement-model.ts';
 import type { BillCandidate } from '../../shared/types/bills.ts';
 import type { FinanceWorkspace, UtilityIdentity, UtilityStatement } from '../../shared/types/finances.ts';
 
@@ -24,8 +24,9 @@ export async function readFinanceWorkspace(userId: string): Promise<FinanceWorks
     readJournalRange(userId, { ...range, limit: 2000 }), financialActivityReader.forWorkspace(userId, range.start),
   ]);
   const meta = metadata.status === 'fulfilled' ? metadata.value : null;
-  const occurrences = mirror.status === 'fulfilled' ? mirror.value.schedules : [];
   const transactions = journal.status === 'fulfilled' ? journal.value.transactions : [];
+  const occurrences = hydrateLegacyOccurrencePayments(mirror.status === 'fulfilled' ? mirror.value.schedules : [], transactions);
+  if (journal.status === 'fulfilled') result.recordedHistory = journal.value;
   const records = activities.status === 'fulfilled' ? activities.value : [];
   result.actualBudgetUrl = mirror.status === "fulfilled" ? mirror.value.actualBudgetUrl : null;
   result.updatedAt = meta?.syncHealth.lastSuccessAt || null;

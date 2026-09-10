@@ -141,7 +141,14 @@ export function shouldAttemptFinancialEmailTypeVerification(candidate: BillCandi
 
 function hasRecurringEvidence(candidate: BillCandidate): boolean {
   return Boolean(candidate.schedule_name)
-    || (candidate.type === "bill" && Boolean(candidate.due_date));
+    || candidate.type === "bill";
+}
+
+/** Only original bill details and scheduled card payments create schedule work. */
+export function isIgnoredFinancialNotice(candidate: BillCandidate): boolean {
+  return candidate.event_kind === "payment_due" || candidate.event_kind === "card_payment_completed"
+    || (candidate.type === "bill" && ["payment_completed", "payment_scheduled"].includes(String(candidate.event_kind)))
+    || (candidate.type === "transfer" && ["statement_issued", "account_transfer_completed", "account_transfer_pending"].includes(String(candidate.event_kind)));
 }
 
 function hasApprovedExternalIncome(candidate: BillCandidate): boolean {
@@ -158,6 +165,9 @@ export function classifyFinancialEmail(candidate: BillCandidate): FinancialEmail
       : null,
     ...(candidate.event_evidence ? { evidence: candidate.event_evidence } : {}),
   };
+  if (isIgnoredFinancialNotice(candidate)) {
+    return { classification: { ...base, documentKind: "informational", reasons: ["informational_event"] }, intended: "no_write" };
+  }
   if (hasFinancialSemanticConflict(candidate)) {
     return {
       classification: { ...base, documentKind: "informational", reasons: ["semantic_event_ambiguous"] },

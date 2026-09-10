@@ -2,12 +2,30 @@ import { createClient, type Client } from "@libsql/client";
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createFinancialEventStore, type FinancialDocument } from "./financial-event-store.ts";
-import type { BillCandidate, BillExtractionProviderResult, BillExtractionRequest } from "../../shared/types/bills.ts";
+import type { BillCandidate, BillExtractionProviderResult, BillExtractionRequest, FinancialEmailPlan } from "../../shared/types/bills.ts";
 
 const CUTOVER = "2026-09-06T12:00:00Z";
 const ARRIVAL = "2026-09-06T12:01:00Z";
 const candidate: BillCandidate = { type: "expense", payee: "Example Market", amount: 12, due_date: "2026-09-06", currency: "USD" };
 const auth = { version: 1, status: "none", provider: "gmail", source: "gmail_authentication_results", evaluatedAt: ARRIVAL };
+const profile = { id: "market", name: "Market receipts", enabled: true, budgetId: "budget",
+  senderAddresses: ["receipt@example.test"], target: { kind: "expense", accountId: "card", payeeId: "market" } };
+const authorizedPlan: FinancialEmailPlan = {
+  version: 1, identity: { version: 1, status: "resolved", key: "financial-email:fixture" }, candidate,
+  profile: { status: "matched", revision: 1, budgetId: "budget", profileId: "market", reason: "Confirmed market profile" },
+  classification: { documentKind: "one_time_transaction", eventKind: "purchase", confidence: 0.99, reasons: [] },
+  operation: { intended: "create_transaction", kind: "create_transaction", reasons: [] },
+  targets: {
+    account: { kind: "account", status: "resolved", id: "card", provenance: [] },
+    payee: { kind: "payee", status: "resolved", id: "market", provenance: [] },
+    category: { kind: "category", status: "not_applicable", provenance: [] },
+    fromAccount: { kind: "from_account", status: "not_applicable", provenance: [] },
+    toAccount: { kind: "to_account", status: "not_applicable", provenance: [] },
+    schedule: { kind: "schedule", status: "not_applicable", provenance: [] },
+  },
+  reconciliation: { status: "not_scheduled", disposition: "create" }, reviewReasons: [],
+  automation: { eligible: true, operationClass: "one_time_expense", rollout: "enabled", gates: [], reasons: [] },
+};
 
 function migration(file: string): string {
   return readFileSync(new URL(`../db/migrations/${file}`, import.meta.url), "utf8");
@@ -16,9 +34,13 @@ function migration(file: string): string {
 async function database(includeWorkflow = true): Promise<Client> {
   const client = createClient({ url: "file::memory:" });
   await client.execute("PRAGMA foreign_keys = ON");
-  for (const file of ["001_ea_tables.sql", "013_email_index_normalized_date.sql", "025_email_thread_identity.sql", "054_email_sender_authentication.sql"]) {
+  for (const file of ["001_ea_tables.sql", "013_email_index_normalized_date.sql", "025_email_thread_identity.sql", "054_email_sender_authentication.sql", "069_financial_profiles.sql"]) {
     await client.executeMultiple(migration(file));
   }
+  await client.execute({
+    sql: "INSERT INTO ea_settings (user_id, actual_budget_sync_id, financial_profiles_json, financial_profiles_revision) VALUES (?, ?, ?, ?)",
+    args: ["owner", "budget", JSON.stringify([profile]), 1],
+  });
   if (includeWorkflow) {
     await client.executeMultiple(migration("062_financial_events.sql"));
     await client.executeMultiple(migration("068_financial_candidate_dismissal.sql"));
@@ -103,7 +125,7 @@ describe("financial event persistence", () => {
     complete({ fields: candidate, usage: { tokens: 10 } });
     await first;
     expect(await store().createAiRequestRunner(current)("openai", request, send)).toEqual({ fields: candidate, usage: {} });
-    expect(await store().admitOperation(event, { invalid: true })).toBe(false);
+    expect(await store().admitOperation(event, { invalid: true }, authorizedPlan)).toBe(false);
     expect(credits).toBe(9);
     expect(await store().getEventForEmail("owner", "arrival")).toMatchObject({ operation: null, attemptedAt: null });
   });
@@ -230,28 +252,43 @@ describe("financial event persistence", () => {
     expect(event).toMatchObject({ id: "purchase", revision: 2, documents: [{ emailUid: "receipt" }, { emailUid: "confirmation" }] });
     expect(await store().getEventForEmail("other-owner", "receipt")).toBeNull();
     await insertEmail("possible-cancellation");
-    expect(await store().admitOperation(event!, { amountCents: -1200 })).toBe(false);
+    expect(await store().admitOperation(event!, { amountCents: -1200 }, authorizedPlan)).toBe(false);
   });
 
-  it("preserves the admitted operation through interruptions, re-evaluation, and related reminders", async () => {
+  it("requires current profile authority for automatic admission without consuming a rejected attempt", async () => {
+    await associate("receipt");
+    const event = (await store().claimEvent("automatic"))!;
+    const operation = { kind: "transaction", budgetId: "budget", amountCents: -1200 };
+    expect(await store().admitOperation(event, operation)).toBe(false);
+    for (const profile of [
+      { ...authorizedPlan.profile!, status: "missing" as const },
+      { ...authorizedPlan.profile!, revision: 0 },
+      { ...authorizedPlan.profile!, budgetId: "old-budget" },
+    ]) expect(await store().admitOperation(event, operation, { ...authorizedPlan, profile })).toBe(false);
+    expect(await store().getEventForEmail("owner", "receipt")).toMatchObject({ operation: null, attemptedAt: null });
+    expect(await store().admitOperation(event, operation, authorizedPlan)).toBe(true);
+    expect(await store().getEventForEmail("owner", "receipt")).toMatchObject({ operation, attemptedAt: now, plan: authorizedPlan });
+  });
+
+  it("preserves the admitted operation through interruptions, re-evaluation, and related evidence", async () => {
     await associate("receipt");
     const event = await store().claimEvent("first-event");
     const operation = { kind: "transaction", budgetId: "budget", importedId: "event-1", amountCents: -1200 };
-    expect(await store().admitOperation(event!, operation)).toBe(true);
-    expect(await store().admitOperation(event!, operation)).toBe(false);
+    expect(await store().admitOperation(event!, operation, authorizedPlan)).toBe(true);
+    expect(await store().admitOperation(event!, operation, authorizedPlan)).toBe(false);
     const attemptedAt = now;
     now += 15 * 60_000;
     expect(await store().recoverStaleClaims()).toEqual({ documents: 0, events: 1 });
     const recovered = await store().claimEvent("recovered");
     expect(recovered).toMatchObject({ operation, attemptedAt });
-    expect(await store().admitOperation(recovered!, { ...operation, amountCents: -1500 })).toBe(false);
+    expect(await store().admitOperation(recovered!, { ...operation, amountCents: -1500 }, authorizedPlan)).toBe(false);
     expect(await store().saveEvent(event!, { plan: null, status: "settled" })).toBe(false);
     await store().saveEvent(recovered!, { plan: null, status: "settled", outcome: { status: "already_present", transactionId: "actual-1" } });
 
     await associate("reminder");
     const reminder = await store().claimEvent("reminder-event");
     expect(reminder).toMatchObject({ id: "event-1", operation, attemptedAt, outcome: { status: "already_present" } });
-    expect(await store().admitOperation(reminder!, operation)).toBe(false);
+    expect(await store().admitOperation(reminder!, operation, authorizedPlan)).toBe(false);
     await expect(db.execute("UPDATE ea_financial_events SET operation_json = '{}', attempted_at = 1 WHERE id = 'event-1'")).rejects.toThrow(/immutable/);
     await expect(db.execute("DELETE FROM ea_financial_events WHERE id = 'event-1'")).rejects.toThrow(/retained/);
     expect((await db.execute("PRAGMA foreign_key_check")).rows).toEqual([]);
@@ -261,7 +298,7 @@ describe("financial event persistence", () => {
     await associate("receipt");
     const event = await store().claimEvent("event");
     await db.execute("UPDATE ea_email_index SET body_text = 'Payment cancelled' WHERE uid = 'receipt'");
-    expect(await store().admitOperation(event!, { amountCents: -1200 })).toBe(false);
+    expect(await store().admitOperation(event!, { amountCents: -1200 }, authorizedPlan)).toBe(false);
     expect(await store().saveEvent(event!, { plan: null, status: "settled", outcome: { status: "added" } })).toBe(false);
     expect(await store().claimEvent("still-dirty")).toBeNull();
     const document = await store().claimDocument("cancelled");
@@ -342,7 +379,7 @@ describe("financial event persistence", () => {
     const retried = await store().claimEvent("stable-deadline");
     expect(retried?.collectionDeadline).toBe(event?.collectionDeadline);
     const operation = { kind: "transaction", id: "purchase" };
-    expect(await store().admitOperation(retried!, operation)).toBe(true);
+    expect(await store().admitOperation(retried!, operation, authorizedPlan)).toBe(true);
     await store().saveEvent(retried!, { plan: null, status: "waiting", nextAttemptAt: now });
     await db.execute("UPDATE ea_financial_intake_state SET status = 'retry'");
     await insertEmail("unrelated-arrival");

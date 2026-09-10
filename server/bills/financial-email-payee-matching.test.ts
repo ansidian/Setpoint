@@ -23,6 +23,7 @@ async function planMerchant({
     return { fields, usage: {} };
   } } as BillExtractionProvider;
   return createFinancialEmailPlanner({
+    profileReader: async () => ({ budgetId: null, revision: 0, profiles: [] }),
     metadataReader: async () => ({ accounts: [{ id: "card", name: "Card (1234)" }], payees,
       payeeMap: Object.fromEntries(payees.map(payee => [payee.id, payee.name])),
       categories: [], schedules: [], recentTransactions: [], syncHealth: { state: "current", lastSuccessAt: null } }),

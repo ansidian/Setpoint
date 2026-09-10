@@ -2,13 +2,16 @@ import { resolveManagedFinancialPlan } from "./financial-event-status.ts";
 import { createClient, type Client } from "@libsql/client";
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { BillCandidate } from "../../shared/types/bills.ts";
+import type { BillCandidate, FinancialEmailPlan } from "../../shared/types/bills.ts";
 import type { FinancialEventCompletionEntry, FinancialEventCompletionRequest } from "../../shared/types/financial-operations.ts";
 import { createFinancialEventCompletion } from "./financial-event-completion.ts";
 import { createFinancialEventStore } from "./financial-event-store.ts";
 import { createFinancialEventWorker } from "./financial-event-service.ts";
 import { createFinancialEventExecutor, type FinancialEventOperation } from "./financial-event-operation.ts";
 import { projectManagedFinancialPlan } from "./financial-event-status.ts";
+import { readFinancialProfiles } from "../bills/financial-profiles.ts";
+import type { FinancialEmailSource } from "../email/financial-email-source.ts";
+import type { EmailAuthenticationProjection } from "../../shared/types/email.ts";
 
 const DATE = "2026-09-06";
 const ARRIVAL = Date.parse(`${DATE}T12:00:00Z`);
@@ -25,16 +28,17 @@ describe("owner completion of managed financial events", () => {
   let blockPreview: boolean;
   let assessmentPaused: boolean;
   let metadataUnavailable: boolean;
+  let providerSources: Map<string, FinancialEmailSource>;
 
   beforeEach(async () => {
     db = createClient({ url: "file::memory:" });
     await db.execute("PRAGMA foreign_keys = ON");
-    for (const file of ["001_ea_tables.sql", "013_email_index_normalized_date.sql", "025_email_thread_identity.sql", "054_email_sender_authentication.sql", "062_financial_events.sql", "068_financial_candidate_dismissal.sql", "067_financial_event_ai_requests.sql"]) {
+    for (const file of ["001_ea_tables.sql", "013_email_index_normalized_date.sql", "025_email_thread_identity.sql", "054_email_sender_authentication.sql", "062_financial_events.sql", "068_financial_candidate_dismissal.sql", "067_financial_event_ai_requests.sql", "069_financial_profiles.sql", "070_financial_document_sources.sql"]) {
       await db.executeMultiple(readFileSync(new URL(`../db/migrations/${file}`, import.meta.url), "utf8"));
     }
     await addFinancialCorrectionSchema(db);
     await db.execute({ sql: "UPDATE ea_financial_workflow_state SET cutover_at = ?", args: [new Date(ARRIVAL - 60_000).toISOString()] });
-    now = ARRIVAL; candidates = new Map(); ledger = new Map(); loseResponse = false; blockPreview = false;
+    now = ARRIVAL; candidates = new Map(); providerSources = new Map(); ledger = new Map(); loseResponse = false; blockPreview = false;
     assessmentPaused = false; metadataUnavailable = false;
     store = createFinancialEventStore(db, () => now);
   });
@@ -44,6 +48,9 @@ describe("owner completion of managed financial events", () => {
     body = "Your purchase total is $12.00.", sender = "receipt@merchant.example", authenticated = false, date = ARRIVAL,
   }: { body?: string; sender?: string; authenticated?: boolean; date?: number } = {}) {
     candidates.set(uid, candidate);
+    providerSources.set(uid, { body, fromName: "Example Market", fromAddress: sender, subject: "Receipt",
+      emailDate: new Date(date).toISOString(), threadId: null, messageId: null, attachments: [],
+      senderAuthentication: { status: authenticated ? "pass" : "unavailable" } as EmailAuthenticationProjection });
     await db.execute({
       sql: `INSERT INTO ea_email_index (uid, user_id, account_id, account_label, account_email,
               from_name, from_address, subject, body_text, email_date, email_date_utc, indexed_at, sender_authentication_json)
@@ -59,8 +66,33 @@ describe("owner completion of managed financial events", () => {
     return { emailUid, documentRevision: document!.revision, eventRevision: event?.revision ?? null, entry: value };
   }
   function completion() { return createFinancialEventCompletion({ store, now: () => now }); }
+  async function authorizeAutomaticEntry(): Promise<FinancialEmailPlan> {
+    await db.execute({
+      sql: "INSERT INTO ea_settings (user_id, actual_budget_sync_id, financial_profiles_json, financial_profiles_revision) VALUES (?, ?, ?, ?)",
+      args: ["owner", "budget", JSON.stringify([{ id: "market", name: "Market receipts", enabled: true, budgetId: "budget",
+        senderAddresses: ["receipt@merchant.example"], target: { kind: "expense", accountId: "card", payeeId: "market" } }]), 1],
+    });
+    return {
+      version: 1, identity: { version: 1, status: "resolved", key: "financial-email:fixture" }, candidate: partial,
+      profile: { status: "matched", revision: 1, budgetId: "budget", profileId: "market", reason: "Confirmed market profile" },
+      classification: { documentKind: "one_time_transaction", eventKind: "purchase", confidence: 0.99, reasons: [] },
+      operation: { intended: "create_transaction", kind: "create_transaction", reasons: [] },
+      targets: {
+        account: { kind: "account", status: "resolved", id: "card", provenance: [] },
+        payee: { kind: "payee", status: "resolved", id: "market", provenance: [] },
+        category: { kind: "category", status: "not_applicable", provenance: [] },
+        fromAccount: { kind: "from_account", status: "not_applicable", provenance: [] },
+        toAccount: { kind: "to_account", status: "not_applicable", provenance: [] },
+        schedule: { kind: "schedule", status: "not_applicable", provenance: [] },
+      },
+      reconciliation: { status: "not_scheduled", disposition: "create" }, reviewReasons: [],
+      automation: { eligible: true, operationClass: "one_time_expense", rollout: "enabled", gates: [], reasons: [] },
+    };
+  }
   function worker() {
     return createFinancialEventWorker({ store, now: () => now, canRun: async () => !assessmentPaused,
+      profileReader: (userId) => readFinancialProfiles(userId, { dbClient: db }),
+      sourceAcquirer: async (_userId, uid) => structuredClone(providerSources.get(uid)!),
       assessDocument: async (_owner, email) => {
         if (assessmentPaused) throw new Error("Financial document assessment is unavailable while email AI is paused or disabled.");
         return candidates.get(email.email_id) || null;
@@ -112,6 +144,7 @@ describe("owner completion of managed financial events", () => {
   });
 
   it("dismisses every linked source and invalidates a concurrent automatic preview", async () => {
+    const plan = await authorizeAutomaticEntry();
     await arrive(); await arrive("related");
     for (const token of ["one", "two"]) {
       const document = await store.claimDocument(token);
@@ -119,7 +152,7 @@ describe("owner completion of managed financial events", () => {
     }
     const claim = await store.claimEvent("automatic");
     await completion().dismiss("owner", await request());
-    expect(await store.admitOperation(claim!, { test: true })).toBe(false);
+    expect(await store.admitOperation(claim!, { test: true }, plan)).toBe(false);
     const event = await store.getEventForEmail("owner", "receipt");
     expect(event?.dismissedAt).toBe(now);
     expect(event?.documents.map(doc => doc.dismissedAt)).toEqual([now, now]);
@@ -245,13 +278,14 @@ describe("owner completion of managed financial events", () => {
   });
 
   it("invalidates an automatic preview claim and refuses confirmation after automatic attempt admission", async () => {
+    const plan = await authorizeAutomaticEntry();
     await arrive();
     const document = await store.claimDocument("assessment");
     await store.associateDocument(document!, { candidate: partial, contentHash: "source", eventId: "existing" });
     const automatic = await store.claimEvent("automatic-preview");
     const queued = await completion().complete("owner", await request());
     expect(queued.workflow?.id).toBe("existing");
-    expect(await store.admitOperation(automatic!, { automatic: true })).toBe(false);
+    expect(await store.admitOperation(automatic!, { automatic: true }, plan)).toBe(false);
     await drainEvent();
     expect(ledger.size).toBe(1);
 
@@ -259,7 +293,7 @@ describe("owner completion of managed financial events", () => {
     const second = await store.claimDocument("second");
     await store.associateDocument(second!, { candidate: partial, contentHash: "second", eventId: "automatic-won" });
     const winner = await store.claimEvent("automatic-won");
-    expect(await store.admitOperation(winner!, { automatic: true })).toBe(true);
+    expect(await store.admitOperation(winner!, { automatic: true }, plan)).toBe(true);
     await expect(completion().complete("owner", await request("second"))).rejects.toMatchObject({ status: 409 });
   });
 
@@ -419,24 +453,30 @@ describe("owner completion of managed financial events", () => {
   });
 
   it.each([
-    { kind: "expense", eventKind: "payment_completed" },
-    { kind: "bill", eventKind: "payment_due" },
-    { kind: "bill", eventKind: "statement_issued" },
-    { kind: "transfer", eventKind: "card_payment_completed" },
-    { kind: "income", eventKind: "account_transfer_completed" },
-  ] as const)("retains a confirmed $kind when a repeat describes the compatible $eventKind subtype", async ({ kind, eventKind }) => {
+    { kind: "expense", eventKind: "payment_completed", ignored: false },
+    { kind: "bill", eventKind: "payment_due", ignored: true },
+    { kind: "bill", eventKind: "statement_issued", ignored: false },
+    { kind: "transfer", eventKind: "card_payment_completed", ignored: true },
+    { kind: "income", eventKind: "account_transfer_completed", ignored: false },
+  ] as const)("retains a confirmed $kind when a repeat describes the $eventKind subtype", async ({ kind, eventKind, ignored }) => {
     const candidate: BillCandidate = { ...partial, type: kind, event_kind: eventKind,
       amount_kind: kind === "bill" ? "total_due" : kind === "transfer" ? "payment_amount" : "transaction_amount",
       provider_reference: "PAYMENT-123", provider_reference_confidence: 0.99, provider_reference_evidence: "PAYMENT-123" };
     await arrive("receipt", candidate, { body: "$12.00. Reference PAYMENT-123.", authenticated: true });
     const original = await completion().complete("owner", await request("receipt", { ...entry, kind, fromAccountId: "checking", toAccountId: "card" }));
     await drainEvent();
+    const recorded = [...ledger.values()];
     now += 86_400_000;
     await arrive("repeat", { ...candidate, due_date: DATE }, { body: `$12.00 on ${DATE}. Reference PAYMENT-123.`, authenticated: true, date: now });
     await worker().processNextDocument();
     await drainEvent();
-    expect(await store.getEventForEmail("owner", "repeat")).toMatchObject({ id: original.workflow?.id, status: "settled" });
-    expect(ledger.size).toBe(1);
+    if (ignored) {
+      expect(await store.getDocumentForEmail("owner", "repeat")).toMatchObject({ status: "ignored", eventId: null });
+      expect(await store.getEventForEmail("owner", "repeat")).toBeNull();
+    } else expect(await store.getEventForEmail("owner", "repeat")).toMatchObject({ id: original.workflow?.id, status: "settled" });
+    expect(await store.getEventForEmail("owner", "receipt")).toMatchObject({ id: original.workflow?.id, status: "settled" });
+    expect(recorded).toHaveLength(1);
+    expect([...ledger.values()]).toEqual(recorded);
   });
 
   it("projects a corrected schedule as a recorded ledger entry while retaining the original managed outcome", async () => {

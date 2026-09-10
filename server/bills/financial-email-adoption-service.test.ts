@@ -7,10 +7,12 @@ import { FINANCIAL_TARGET_INFERENCE_VERSION } from "./financialEmailTargetInfere
 import { createFinancialEmailPlanner } from "./financial-email-planner.ts";
 import { createTransactionImportStore } from "../transaction-imports/transaction-import-store.ts";
 import { stageFinancialEmailPreflight } from "../transaction-imports/financial-email-preflight.ts";
+import { readFinancialProfiles } from "./financial-profiles.ts";
 
 function reviewPlan(candidate: BillCandidate): FinancialEmailPlan {
   return {
     version: 1,
+    profile: { status: "missing", budgetId: null, revision: 0, reason: "Review this entry and configure a profile." },
     candidateSemanticsVersion: FINANCIAL_CANDIDATE_SEMANTICS_VERSION,
     targetInferenceVersion: FINANCIAL_TARGET_INFERENCE_VERSION,
     identity: { version: 1, status: "resolved", key: "financial-email:v1:test" },
@@ -170,6 +172,7 @@ describe("resolveFinancialEmailSeed", () => {
     });
     let metadataUnavailable = false;
     const planner = createFinancialEmailPlanner({
+      profileReader: (userId) => readFinancialProfiles(userId, { dbClient }),
       metadataReader: async () => {
         if (metadataUnavailable) throw new Error("Actual metadata is temporarily unavailable");
         return {
@@ -198,7 +201,8 @@ describe("resolveFinancialEmailSeed", () => {
       account: { status: "resolved", id: "checking" }, payee: { status: "resolved", id: "power" },
       category: { status: "unresolved" },
     });
-    expect(first.automation.gates.find((gate) => gate.gate === "targets")?.status).toBe("pass");
+    expect(first.automation.gates.find((gate) => gate.gate === "targets")).toEqual({ gate: "targets", status: "fail", reasons: ["profile_required"] });
+    expect(first.operation).toMatchObject({ intended: "create_schedule", kind: "review", reasons: ["profile_required"] });
     expect(first.reviewReasons.map((reason) => reason.code)).not.toContain("category_target_unresolved");
     metadataUnavailable = true;
     expect(await resolveFinancialEmailSeed("user-1", payload, dependencies)).toEqual(first);

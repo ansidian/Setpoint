@@ -22,6 +22,7 @@ function candidate(event_kind: BillCandidate["event_kind"], overrides: BillCandi
 
 function planner() {
   return createFinancialEmailPlanner({
+    profileReader: async () => ({ budgetId: null, revision: 0, profiles: [] }),
     metadataReader: async () => ({
       accounts: [],
       payees: [],
@@ -80,7 +81,7 @@ describe("financial email planner contract", () => {
     });
   });
 
-  it("requires corroborating credit-account evidence for a credit-card statement", async () => {
+  it("ignores credit-card statements regardless of corroborating account evidence", async () => {
     const plan = planner();
     const corroborated = await plan("u1", {
       candidate: candidate("statement_issued", {
@@ -95,15 +96,17 @@ describe("financial email planner contract", () => {
     });
 
     expect(corroborated).toMatchObject({
-      classification: { documentKind: "credit_card_statement", reasons: [] },
-      operation: { intended: "create_transfer_schedule", kind: "review" },
+      classification: { documentKind: "informational", reasons: ["informational_event"] },
+      operation: { intended: "no_write", kind: "no_write" },
+      reviewReasons: [],
     });
     expect(uncorroborated).toMatchObject({
       classification: {
         documentKind: "informational",
-        reasons: ["credit_account_evidence_missing"],
+        reasons: ["informational_event"],
       },
-      operation: { intended: null, kind: "review" },
+      operation: { intended: "no_write", kind: "no_write" },
+      reviewReasons: [],
     });
   });
 
@@ -135,7 +138,7 @@ describe("financial email planner contract", () => {
 
   it("never selects a minimum-due-only amount", async () => {
     const result = await planner()("u1", {
-      candidate: candidate("payment_due", {
+      candidate: candidate("bill_issued", {
         type: "bill", type_confidence: 0.99, type_evidence: "Utility payment due",
         amount: 25,
         amount_kind: "minimum_due",
@@ -180,6 +183,7 @@ describe("financial email planner contract", () => {
 
   it("does not call extraction or verification for a persisted complete candidate", async () => {
     const plan = createFinancialEmailPlanner({
+      profileReader: async () => ({ budgetId: null, revision: 0, profiles: [] }),
       candidateExtractor: async () => {
         throw new Error("unexpected first-pass extraction");
       },
@@ -205,6 +209,7 @@ describe("financial email planner contract", () => {
 
   it("converts verification failure into a reviewable plan", async () => {
     const plan = createFinancialEmailPlanner({
+      profileReader: async () => ({ budgetId: null, revision: 0, profiles: [] }),
       candidateVerification: {
         verifyEmailCandidate: async () => {
           throw new Error("provider down");
@@ -233,6 +238,7 @@ describe("financial email planner contract", () => {
 
   it("does not silently no-write a low-confidence cancellation when verification fails", async () => {
     const plan = createFinancialEmailPlanner({
+      profileReader: async () => ({ budgetId: null, revision: 0, profiles: [] }),
       candidateVerification: {
         verifyEmailCandidate: async () => {
           throw new Error("provider down");
@@ -264,6 +270,7 @@ describe("financial email planner contract", () => {
 
   it("maps an exact existing schedule to no-write with its Actual targets resolved", async () => {
     const plan = createFinancialEmailPlanner({
+      profileReader: async () => ({ budgetId: null, revision: 0, profiles: [] }),
       metadataReader: async () => ({
         accounts: [{ id: "acct-1", name: "Checking" }],
         payees: [{ id: "payee-1", name: "Power Co" }],
@@ -321,6 +328,7 @@ describe("financial email planner contract", () => {
 
   it.each(["payment_completed", "purchase"] as const)("maps an exact %s transaction to no-write", async (eventKind) => {
     const plan = createFinancialEmailPlanner({
+      profileReader: async () => ({ budgetId: null, revision: 0, profiles: [] }),
       metadataReader: async () => ({
         accounts: [{ id: "acct-1", name: "Checking" }],
         payees: [{ id: "payee-1", name: "Power Co" }],
@@ -367,20 +375,21 @@ describe("financial email planner contract", () => {
     expect(result.reviewReasons).toEqual([]);
   });
 
-  it("keeps a completed card payment without grounded type evidence in review", async () => {
+  it("ignores a completed card payment without asking for more type evidence", async () => {
     const result = await planner()("u1", {
       candidate: candidate("card_payment_completed", { type: "transfer" }),
     });
 
     expect(result).toMatchObject({
-      classification: { documentKind: "credit_card_statement" },
-      operation: { intended: null, kind: "review" },
+      classification: { documentKind: "informational" },
+      operation: { intended: "no_write", kind: "no_write" },
     });
-    expect(result.reviewReasons.map((item) => item.code)).toContain("semantic_event_ambiguous");
+    expect(result.reviewReasons).toEqual([]);
   });
 
-  it("creates a utility schedule from Actual metadata and stable history", async () => {
+  it("suggests a utility schedule from Actual metadata and stable history for review", async () => {
     const plan = createFinancialEmailPlanner({
+      profileReader: async () => ({ budgetId: null, revision: 0, profiles: [] }),
       metadataReader: async () => ({
         accounts: [{ id: "checking", name: "Household Checking 1111", type: "checking" }],
         payees: [{ id: "power", name: "Power Co" }],
@@ -403,7 +412,7 @@ describe("financial email planner contract", () => {
       candidate: candidate("bill_issued", { type: "bill", payee: "Power Co" }),
     });
 
-    expect(result.operation).toEqual({ intended: "create_schedule", kind: "create_schedule", reasons: [] });
+    expect(result.operation).toEqual({ intended: "create_schedule", kind: "review", reasons: ["profile_required"] });
     expect(result.targets).toMatchObject({
       account: { status: "resolved", id: "checking" },
       payee: { status: "resolved", id: "power" },
@@ -414,8 +423,9 @@ describe("financial email planner contract", () => {
     expect(result.automation.eligible).toBe(false);
   });
 
-  it("creates a merchant transaction from stable direction-aware history", async () => {
+  it("suggests a merchant transaction from stable direction-aware history for review", async () => {
     const plan = createFinancialEmailPlanner({
+      profileReader: async () => ({ budgetId: null, revision: 0, profiles: [] }),
       metadataReader: async () => ({
         accounts: [{ id: "card", name: "Everyday Card 4242", type: "credit" }],
         payees: [{ id: "acme", name: "Acme" }],
@@ -436,7 +446,7 @@ describe("financial email planner contract", () => {
     });
 
     const result = await plan("u1", { candidate: candidate("purchase", { payee: "Acme" }) });
-    expect(result.operation).toEqual({ intended: "create_transaction", kind: "create_transaction", reasons: [] });
+    expect(result.operation).toEqual({ intended: "create_transaction", kind: "review", reasons: ["profile_required"] });
     expect(result.targets).toMatchObject({
       account: { status: "resolved", id: "card" },
       payee: { status: "resolved", id: "acme" },
@@ -444,8 +454,12 @@ describe("financial email planner contract", () => {
     });
   });
 
-  it("creates a transfer schedule only when both Actual account sides resolve", async () => {
+  it("plans a scheduled card payment using the confirmed funding and card accounts", async () => {
     const plan = createFinancialEmailPlanner({
+      profileReader: async () => ({ budgetId: "budget-1", revision: 1, profiles: [{
+        id: "card-payment", name: "Everyday Card", enabled: true, budgetId: "budget-1", senderAddresses: ["payments@card.example"],
+        target: { kind: "card_payment", fromAccountId: "checking", toAccountId: "card" },
+      }] }),
       metadataReader: async () => ({
         accounts: [
           { id: "checking", name: "Household Checking 1111", type: "checking" },
@@ -468,26 +482,35 @@ describe("financial email planner contract", () => {
       now: fixedNow,
     });
     const result = await plan("u1", {
-      candidate: candidate("statement_issued", {
+      candidate: candidate("payment_scheduled", {
         type: "transfer",
         payee: "Everyday Card",
+        amount_kind: "payment_amount",
+        amount_candidates: [{ kind: "payment_amount", value: 42.25, confidence: 0.99,
+          evidence: "Your payment of $42.25 is scheduled for September 10, 2026" }],
         account_last4: "4242",
         account_last4_confidence: 0.99,
         account_last4_evidence: "Card ending in 4242",
       }),
+      sourceIdentity: { senderAddress: "payments@card.example", senderAuthentication: "pass" },
     });
 
     expect(result.operation).toEqual({ intended: "create_transfer_schedule", kind: "create_transfer_schedule", reasons: [] });
     expect(result.targets).toMatchObject({
       fromAccount: { status: "resolved", id: "checking" },
       toAccount: { status: "resolved", id: "card" },
-      schedule: { status: "resolved", label: "Everyday Card 4242 Payment" },
+      schedule: { status: "not_applicable" },
       category: { status: "not_applicable" },
     });
+    expect(result.candidate.schedule_name).toBe("Everyday Card 4242 Payment");
   });
 
   it("represents a safe same-schedule amount change as update_existing without adding an operation kind", async () => {
     const plan = createFinancialEmailPlanner({
+      profileReader: async () => ({ budgetId: "budget-1", revision: 1, profiles: [{
+        id: "power", name: "Power Co", enabled: true, budgetId: "budget-1", senderAddresses: ["bills@power.example"],
+        target: { kind: "utility", scheduleId: "power-schedule" },
+      }] }),
       metadataReader: async () => ({
         accounts: [{ id: "checking", name: "Checking" }],
         payees: [{ id: "power", name: "Power Co" }],
@@ -521,6 +544,7 @@ describe("financial email planner contract", () => {
     });
     const result = await plan("u1", {
       candidate: candidate("bill_issued", { type: "bill", payee: "Power Co" }),
+      sourceIdentity: { senderAddress: "bills@power.example", senderAuthentication: "pass" },
     });
 
     expect(result.reconciliation).toMatchObject({
@@ -535,6 +559,7 @@ describe("financial email planner contract", () => {
 
   it("keeps target conflicts and degraded Actual metadata in review", async () => {
     const conflicted = createFinancialEmailPlanner({
+      profileReader: async () => ({ budgetId: null, revision: 0, profiles: [] }),
       metadataReader: async () => ({
         accounts: [{ id: "checking", name: "Checking 1111" }, { id: "card", name: "Card 4242" }],
         payees: [{ id: "acme", name: "Acme" }],
@@ -552,6 +577,7 @@ describe("financial email planner contract", () => {
     expect(conflictResult.reviewReasons.map((item) => item.code)).toContain("target_evidence_conflict");
 
     const degraded = createFinancialEmailPlanner({
+      profileReader: async () => ({ budgetId: null, revision: 0, profiles: [] }),
       metadataReader: async () => ({
         accounts: [], payees: [], payeeMap: {}, categories: [], schedules: [], recentTransactions: [],
         syncHealth: { state: "unavailable", lastSuccessAt: null },

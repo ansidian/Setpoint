@@ -4,6 +4,7 @@ import { accountCredentialContext } from "../platform/credential-encryption-cont
 import {
   fetchEmailBody as fetchGmailBody,
   fetchEmailAttachment as fetchGmailAttachment,
+  fetchFinancialEmailSource as fetchGmailFinancialSource,
   markAsRead as gmailMarkAsRead,
   markAsUnread as gmailMarkAsUnread,
   trashMessage as gmailTrash,
@@ -11,12 +12,15 @@ import {
 import {
   fetchEmailBody as fetchIcloudBody,
   fetchEmailAttachment as fetchIcloudAttachment,
+  fetchFinancialEmailSource as fetchIcloudFinancialSource,
   markAsRead as icloudMarkAsRead,
   markAsUnread as icloudMarkAsUnread,
   trashMessage as icloudTrash,
 } from "./icloud.ts";
 import { canonicalizeConfiguredAccounts, normalizeEmailAddress } from "../platform/account-canonical.ts";
 import type { EmailBody } from "../../shared/types/email.ts";
+import type { FinancialEmailSource } from "./financial-email-source.ts";
+export type { FinancialEmailSource } from "./financial-email-source.ts";
 import type {
   ConfiguredEmailAccount,
   EmailHttpError,
@@ -170,6 +174,14 @@ export async function fetchEmailBodyForUid(userId: string, uid: string): Promise
 export async function fetchEmailAttachmentForUid(userId: string, uid: string, attachmentId: string) {
   const adapter = await resolveProviderAdapter(userId, uid, { notFoundError: unknownUidError });
   return adapter.fetchAttachment(attachmentId);
+}
+
+export async function fetchFinancialEmailSourceForUid(userId: string, uid: string): Promise<FinancialEmailSource> {
+  const found = await findAccountByUid(userId, uid);
+  if (!found?.account) throw unknownUidError(uid);
+  if (found.type === "gmail") return fetchGmailFinancialSource(found.account, uid);
+  const password = decrypt(found.account.credentials_encrypted, accountCredentialContext(found.account.id));
+  return fetchIcloudFinancialSource(found.account.email, password, uid);
 }
 
 export async function markEmailReadWithProvider(userId: string, uid: string): Promise<EmailProviderAdapter> {

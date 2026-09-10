@@ -6,7 +6,7 @@ Actual Budget engine integration: write paths, the forked SDK worker, and the lo
 
 - `actual.ts` — facade routing writes to lightweight/worker/SDK path by mode; exposes SDK-free local transaction reads
 - `actual-core.ts` — in-process Actual SDK ops: session lifecycle (lock/cache singletons), metadata/bill reads, transaction writes/imports, and orchestration over the schedule-write module; loads only an existing or bounded-validator-hydrated local budget
-- `actualTransferSchedules.ts` — synced transfer schedule execution; managed events bind exact preview fingerprints before updating or reactivating compatible schedules, while retained imports stay create-only; exact paired-transaction reconciliation, stable schedule IDs, tombstone checks, and recovery without writes
+- `actualTransferSchedules.ts` — synced transfer schedule execution; managed events bind exact preview fingerprints before updating or reactivating compatible schedules, with explicit existing IDs selecting only that schedule even when accounts have other schedules; retained imports stay create-only; exact paired-transaction reconciliation, stable schedule IDs, tombstone checks, and recovery without writes
 - `actualFinancialOperations.ts` — budget-bound expense/income import through the existing grouped importer, exact completed-transfer posting, and utility schedule create/update, including compatible completed prior cycles; preview binds the budget and existing schedule fingerprint, the durable event outbox admits one write, and recovery only verifies synced results
 - `actualSdkScheduleWrites.ts` — SDK schedule-write module over an injected Actual SDK port: schedule/rule hydration, payee/account resolution, bill/transfer matching and upsert, past-date posting, and one-off bill transaction projection
 - `actualCoreModel.ts` — pure derivation for the SDK path: schedule classification/matching (including transfer-account projection), condition building, date helpers, and the metadata/upcoming-bill projections
@@ -43,6 +43,8 @@ Actual Budget engine integration: write paths, the forked SDK worker, and the lo
 
 - Runtime paths must use the in-process `@actual-app/api` singleton via `actual.ts`; the `npm run actual` CLI is for ad-hoc debugging only.
 - Categories are optional across financial-event and retained bill writes. Unavailable category IDs are omitted; schedule updates preserve existing categories when no replacement is supplied.
+- Managed utility and transfer updates preserve Actual's `is`/`isapprox` date-matching operator while verifying the requested schedule date exactly.
+- Managed utility updates retain complex recurrence calendars and finite occurrence limits, using Actual's recurrence engine to verify and select an upcoming occurrence.
 - `actual-worker.ts` forks `actual-worker-child.ts` by CWD-relative path; keep both files in this directory.
 
 ## Related

@@ -178,7 +178,7 @@ describe("fetchEmailsInRange", () => {
     vi.resetAllMocks();
   });
 
-  it("indexes one readable MIME alternative without flattening its labels or including text attachments", async () => {
+  it("indexes reader HTML with its table labels and independent mixed parts, excluding text attachments", async () => {
     const plain = "Minimum payment: $40.00\nRemaining statement balance: $472.32\nAutopay: September 10, 2026";
     fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ messages: [{ id: "msg-1" }] }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({
@@ -187,12 +187,44 @@ describe("fetchEmailsInRange", () => {
             { mimeType: "text/html", body: { data: Buffer.from('<table><tr><td>Plan balance</td><td>Statement balance</td></tr><tr><td>$0.00</td><td>$472.32</td></tr></table>').toString("base64url") } },
             { mimeType: "text/plain", body: { data: Buffer.from(plain).toString("base64url") } },
           ] },
+          { mimeType: "text/plain", body: { data: Buffer.from("Separate payment reference: ABC123").toString("base64url") } },
           { mimeType: "text/plain", filename: "old-statement.txt", body: { data: Buffer.from("Unrelated balance $999.00").toString("base64url") } },
         ] },
       }) });
     const result = await fetchEmailsInRange(fakeAccount, { start: "2026-09-01", end: "2026-09-06" });
-    expect(result.emails[0]!.body_text).toBe(plain);
+    expect(result.emails[0]!.body_text).toMatch(/Plan balance {2,}Statement balance\n\$0\.00 {2,}\$472\.32/);
+    expect(result.emails[0]!.body_text).toContain("Separate payment reference: ABC123");
+    expect(result.emails[0]!.body_text).not.toContain("Minimum payment");
+    expect(result.emails[0]!.body_text).not.toContain("$999.00");
     expect(result.emails[0]!.body_preview).not.toContain("$999.00");
+  });
+
+  it.each([
+    { name: "SoFi scheduled full-balance notice", plain: "You've cancelled autopay for your SoFi Credit Card.",
+      html: "<p>Your credit card autopay is scheduled for 08/05/2026.</p><p>Payment amount: Full statement balance</p>",
+      expected: "Your credit card autopay is scheduled for 08/05/2026.\n\nPayment amount: Full statement balance" },
+    { name: "numeric scheduled payment", plain: "You've cancelled autopay for your SoFi Credit Card.",
+      html: "<p>Your credit card autopay is scheduled for 08/05/2026.</p><p>Payment amount: $238.80</p>",
+      expected: "Your credit card autopay is scheduled for 08/05/2026.\n\nPayment amount: $238.80" },
+    { name: "genuine HTML cancellation", plain: "Your payment is scheduled for 08/05/2026. Payment amount: $238.80",
+      html: "<p>You've cancelled autopay for your SoFi Credit Card.</p>", expected: "You've cancelled autopay for your SoFi Credit Card." },
+    { name: "empty HTML fallback", plain: "Your payment is scheduled for 08/05/2026. Payment amount: $238.80",
+      html: "<html><body> </body></html>", expected: "Your payment is scheduled for 08/05/2026. Payment amount: $238.80" },
+  ])("indexes only the reader-aligned alternative for $name, including nested related HTML", async ({ plain, html, expected }) => {
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ messages: [{ id: "msg-1" }] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({
+        id: "msg-1", snippet: plain, payload: { mimeType: "multipart/alternative", parts: [
+          { mimeType: "text/plain", body: { data: Buffer.from(plain).toString("base64url") } },
+          { mimeType: "multipart/related", parts: [
+            { mimeType: "text/html", body: { data: Buffer.from(html).toString("base64url") } },
+            { mimeType: "image/png", filename: "logo.png", body: { data: Buffer.from("logo").toString("base64url") } },
+          ] },
+        ] },
+      }) });
+    const result = await fetchEmailsInRange(fakeAccount, { start: "2026-08-01", end: "2026-08-06" });
+    expect(result.emails[0]!.body_text).toBe(expected);
+    expect(result.emails[0]!.body_preview).toContain(expected);
+    if (!expected.includes(plain)) expect(result.emails[0]!.body_preview).not.toContain(plain);
   });
 
   it.each(["  ", "This message requires an HTML-capable email client."])("uses structured HTML when the plain-text alternative is empty or only a display placeholder (%s)", async (plain) => {
@@ -283,7 +315,7 @@ describe("fetchEmailsInRange", () => {
           account_email: "work@example.com",
           from: "Sender <sender@example.com>",
           subject: "Range message",
-          body_preview: "Short preview [amounts: $12.34]",
+          body_preview: "Full body $12.34 [amounts: $12.34]",
           body_text: "Full body $12.34",
           date: "Fri, 01 May 2026 10:00:00 -0700",
           read: false,

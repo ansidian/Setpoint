@@ -254,7 +254,7 @@ function supportedBillRule(schedule: ScheduleRow, rule: RuleRow | undefined, acc
     && condition(rule, "account")?.op === "is" && condition(rule, "account")?.value === accountId
     && condition(rule, "payee")?.op === "is" && condition(rule, "payee")?.value === payeeId
     && condition(rule, "amount")?.op === "is" && Number(condition(rule, "amount")?.value) < 0
-    && condition(rule, "date")?.op === "is";
+    && ["is", "isapprox"].includes(condition(rule, "date")?.op || "");
 }
 
 async function utilitySchedule(
@@ -324,10 +324,19 @@ async function utilitySchedule(
     const current = await readOriginalResult(sdk, budgetId, { scheduleId: selected?.id || deterministicId });
     if (JSON.stringify(current) !== JSON.stringify(input.preparedEvidence)) return review("The exact utility schedule graph changed after its durable preparation.");
   }
-  const desiredDate = rule ? buildDateCondition(rule.conditions, input.date) : { field: "date", op: "is", value: input.date };
+  const desiredDate = rule ? { ...buildDateCondition(rule.conditions, input.date), op: condition(rule, "date")!.op }
+    : { field: "date", op: "is", value: input.date };
+  let recurringDateOffset: number | undefined;
   if (rule && typeof desiredDate.value === "object" && desiredDate.value?.frequency
-    && (desiredDate.value.interval ?? 0) > 1 && selected?.next_date !== input.date) {
-    return review("The utility schedule has a recurrence that cannot be moved to this statement date.");
+    && (desiredDate.value.interval ?? 0) > 1) {
+    // Preserve the recurrence's anchor, calendar patterns, and finite count.
+    // Actual validates its upcoming occurrences; bound both the query and cursor advances.
+    const upcoming = await sdk.internal.send("schedule/get-upcoming-dates", { config: desiredDate.value, count: 120 });
+    recurringDateOffset = Array.isArray(upcoming) && upcoming.every(validDate)
+      ? [...new Set(upcoming)].indexOf(input.date) : -1;
+    if (recurringDateOffset < 0) {
+      return review("The statement date could not be verified as an upcoming occurrence of the saved utility schedule.");
+    }
   }
   if (mode === "preview") return result(selected ? "would_update" : "would_add",
     selected ? "The exact utility schedule can be updated." : "A utility schedule can be created.",
@@ -340,7 +349,11 @@ async function utilitySchedule(
         { field: "account", op: "is", value: input.accountId }, { field: "payee", op: "is", value: payeeId }];
   const scheduleId = selected?.id || deterministicId;
   if (selected) {
-    await sdk.internal.send("schedule/update", { schedule: { id: scheduleId, completed: false }, conditions });
+    await sdk.internal.send("schedule/update", { schedule: { id: scheduleId, completed: false }, conditions,
+      ...(recurringDateOffset !== undefined ? { resetNextDate: true } : {}) });
+    for (let offset = 0; offset < (recurringDateOffset ?? 0); offset++) {
+      await sdk.internal.send("schedule/skip-next-date", { id: scheduleId });
+    }
   } else {
     const usedNames = new Set(state.schedules.filter((schedule) => !schedule.tombstone).map((schedule) => schedule.name));
     const name = usedNames.has(input.name.trim()) ? `${input.name.trim()} (${input.date}, ${deterministicId.slice(0, 8)})` : input.name.trim();

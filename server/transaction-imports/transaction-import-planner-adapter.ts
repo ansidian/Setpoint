@@ -251,7 +251,7 @@ export async function planTransactionImportItems(
     const noWrite = plan?.operation.kind === "no_write" || plan?.reconciliation.disposition === "no_write";
     const readyForPreview = plan && item.importedId && accountId && item.currency === "USD"
       && item.amountCents != null && item.amountCents < 0
-      && ["semantic", "canonical_amount", "date", "targets", "authenticity", "stable_identity", "warnings"].every((required) => (
+      && ["profile", "semantic", "canonical_amount", "date", "targets", "authenticity", "stable_identity", "warnings"].every((required) => (
         plan.automation.gates.some((gate) => gate.gate === required && gate.status === "pass")
       ))
       && !plan.automation.gates.some((gate) => gate.gate === "reconciliation" && gate.status === "fail");

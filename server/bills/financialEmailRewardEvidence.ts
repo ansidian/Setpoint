@@ -75,18 +75,6 @@ export function applyOwnerFinancialEmailPolicy(candidate: BillCandidate): BillCa
     next.settlement_evidence = next.settlement_evidence || next.from_account_hint || null;
   }
 
-  const chaseEvidence = normalizeIdentity([next.payee, next.payee_hint, next.account_hint].filter(Boolean).join(" "));
-  if (next.event_kind === "reward"
-    && chaseEvidence.includes("chase")
-    && Number(next.provider_reference_confidence) >= 0.8) {
-    const reference = String(next.provider_reference || "").trim().toUpperCase();
-    if (reference.startsWith("SC")) next.settlement_kind = "statement_credit";
-    if (reference.startsWith("CB")) next.settlement_kind = "bank_deposit";
-    if (next.settlement_kind) {
-      next.settlement_confidence = Math.max(Number(next.settlement_confidence) || 0, 0.99);
-      next.settlement_evidence = next.provider_reference_evidence || next.provider_reference || null;
-    }
-  }
   return next;
 }
 

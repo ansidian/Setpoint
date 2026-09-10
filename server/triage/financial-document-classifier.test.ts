@@ -101,10 +101,10 @@ describe("independent financial document assessment", () => {
   it("uses the active strong model for verification as well as the initial assessment", async () => {
     const assessor = createFinancialDocumentClassifier({
       dbClient: db as unknown as TriageDb,
-      fetchImpl: async () => response({ bill_candidate: { ...candidate, event_kind: "card_payment_completed" } }),
+      fetchImpl: async () => response({ bill_candidate: { ...candidate, event_kind: "refund" } }),
       credentialResolver: async () => "test-key",
       billExtractionProviders: { openai: { extract: async ({ model }) => ({
-        fields: model === "gpt-5.4" ? candidate : { ...candidate, event_kind: "card_payment_completed" }, usage: {},
+        fields: model === "gpt-5.4" ? candidate : { ...candidate, event_kind: "refund" }, usage: {},
       }) } },
     });
 

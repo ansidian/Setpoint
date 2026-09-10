@@ -225,6 +225,7 @@ export async function resolveFinancialEmailSeed(
     const refreshCandidateSemantics = Boolean(stored?.plan && shouldRefreshCandidateSemantics(stored.plan));
     if (
       stored?.plan
+      && stored.plan.profile
       && !missingType
       && !refreshCandidateSemantics
       && !shouldRefreshAuthentication(stored.plan, stored.sourceIdentity)
