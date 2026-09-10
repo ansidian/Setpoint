@@ -122,6 +122,7 @@ function NeedsYouBandInner({ snapshotLanes, liveDeadlines, railThreshold = 5, is
   }, [isMobile, useDesktopRail]);
 
   const allClear = model.countN === 0;
+  const singleItem = model.countN === 1;
 
   const allClearBlock = (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -160,7 +161,8 @@ function NeedsYouBandInner({ snapshotLanes, liveDeadlines, railThreshold = 5, is
     <div
       data-dashboard-detail-region="true"
       data-testid="needs-you-band"
-      style={{ flex: "none", display: "flex", flexDirection: allClear ? "column" : "row", gap: allClear ? 0 : 20, alignItems: "stretch", padding: allClear ? "12px 20px" : "18px 20px", borderRadius: 16,
+      className={singleItem ? "needs-you-band--single" : undefined}
+      style={{ flex: "none", display: "flex", flexDirection: allClear ? "column" : "row", gap: allClear ? 0 : 20, alignItems: singleItem ? "center" : "stretch", padding: allClear || singleItem ? "12px 20px" : "18px 20px", borderRadius: 16,
         background: "var(--sp-card, rgba(36,36,58,0.4))",
         border: "1px solid var(--color-border, rgba(255,255,255,0.08))" }}
     >
@@ -192,7 +194,7 @@ function NeedsYouBandInner({ snapshotLanes, liveDeadlines, railThreshold = 5, is
             else if (target.right + 4 > bounds.right) row.scrollLeft += target.right + 4 - bounds.right;
           }}
           style={{
-            flex: 1, minWidth: 0, display: "flex", gap: 10, alignItems: "stretch",
+            flex: 1, minWidth: 0, display: singleItem ? "none" : "flex", gap: 10, alignItems: "stretch",
             overflowX: useDesktopRail ? "auto" : "visible", overflowY: "visible",
             overscrollBehaviorX: "contain", scrollSnapType: "none",
             scrollbarColor: "color-mix(in srgb, var(--sp-accent) 32%, transparent) transparent",

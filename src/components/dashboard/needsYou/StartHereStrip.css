@@ -10,6 +10,15 @@
   background: rgba(255, 255, 255, 0.025);
 }
 
+.needs-you-band--single .start-here-strip {
+  border-color: transparent;
+  background: transparent;
+}
+
+.needs-you-band--single .start-here-strip__cue-label {
+  display: none;
+}
+
 .start-here-strip__open {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;

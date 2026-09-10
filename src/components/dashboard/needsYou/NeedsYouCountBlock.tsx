@@ -19,10 +19,10 @@ export function NeedsYouCountBlock({ countN, countColor, breakdown = [], isMobil
         <StatusDot tone="var(--sp-rose)" state="solid" />
         Needs you now
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 11, marginTop: 10 }}>
+      {countN !== 1 && <div style={{ display: "flex", alignItems: "center", gap: 11, marginTop: 10 }}>
         <span style={{ fontFamily: "var(--font-sans)", fontSize: 28, fontWeight: 600, lineHeight: 1.12, color: countColor, fontVariantNumeric: "tabular-nums" }}>{countN}</span>
         <span style={{ fontSize: 12, color: "var(--color-text-secondary, #a6adc8)", lineHeight: 1.4 }}>items want<br />your call</span>
-      </div>
+      </div>}
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, marginTop: 12, fontSize: 11, lineHeight: 1.5 }}>
         {breakdown.map((seg, i) => (
           <span key={i} style={{ display: "contents" }}>
