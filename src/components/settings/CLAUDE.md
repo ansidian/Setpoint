@@ -45,6 +45,7 @@ The settings surface: a Connections directory plus Automation, Finance, and Syst
 - `cards/GoogleWorkspaceAccountsPanel.tsx` — Gmail/Calendar account add, reconnect, edit, reorder, and removal
 - `cards/ICloudMailAccountsPanel.tsx` — iCloud IMAP account add, reconnect, edit, reorder, and removal
 - `cards/TodoistCard.tsx` — personal-token default plus advanced Todoist app migration, OAuth, callback, and webhook setup
+- `cards/useTodoistSetup.ts` — Todoist credential workflow: write-only candidates, password-step-up retries, pending application lifecycle, and confirmation-gated disconnect; tested through hook state independently of presentation
 - `cards/DiscordRemindersCard.tsx` — Discord webhook URL + user ID for private reminder delivery, with test-send
 - `cards/WeatherLocationCard.tsx` — city geocode → lat/lng patch for dashboard weather snapshots
 - `cards/HomeLocationCard.tsx` — Places-backed atomic Home selection/removal for driving Time-to-Leave estimates

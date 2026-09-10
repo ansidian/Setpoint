@@ -260,6 +260,7 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useSnapshotOptimisticOverlay` | `src/components/inbox/useSnapshotOptimisticOverlay.ts` |
 | `useSnoozedEmails` | `src/components/inbox/useSnoozedEmails.ts` |
 | `useTldrawAutosave` | `src/components/notes/useTldrawAutosave.ts` |
+| `useTodoistSetup` | `src/components/settings/cards/useTodoistSetup.ts` |
 | `useAddTaskPanelController` | `src/components/todoist/add-task-panel/useAddTaskPanelController.ts` |
 | `useAddTaskPanelPlacement` | `src/components/todoist/add-task-panel/useAddTaskPanelPlacement.ts` |
 | `useDirtyCloseConfirmation` | `src/components/todoist/add-task-panel/useDirtyCloseConfirmation.ts` |
