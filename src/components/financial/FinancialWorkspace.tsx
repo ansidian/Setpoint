@@ -119,8 +119,9 @@ export default function FinancialWorkspace({ search,onNavigate,onClose,onRepair,
     {displayError && <div className="financial-toolbar financial-error" role="alert">{displayError} Saved details and entered drafts are retained.<button className="financial-button" disabled={loading} onClick={refresh}>Try again</button></div>}
     <div className="financial-body" data-selected={showDetail}>
       {list && <div className="financial-list" ref={listRef} onScroll={event => scrolls.current.set(queryKey,event.currentTarget.scrollTop)} aria-label="Financial activity list" aria-busy={loading}>
+        <AnimatedHeight hold={loading}>
         {loading && !page && <p role="status" className="financial-note">Loading financial activity…</p>}
-        <AnimatedHeight><div className="space-y-4 p-1">{groups.filter(group => group.items.length).map(group => <section key={group.label || 'activity'} aria-label={group.label || 'Activity'}>
+        <div className="space-y-4 p-1">{groups.filter(group => group.items.length).map(group => <section key={group.label || 'activity'} aria-label={group.label || 'Activity'}>
           {group.label && <h3 className="financial-note px-3 pt-2 pb-1 text-xs font-semibold">{group.label}</h3>}
           <div className="space-y-1">{group.items.map(item => <button key={item.id} className="financial-row" aria-current={selected?.id === item.id} onClick={() => onNavigate(financialHref(query,item.reference,true))}>
           <span className="financial-row-title"><strong>{item.payee || item.subject || 'Financial record'}</strong><ChevronRight size={14} aria-hidden="true" /></span>
@@ -128,15 +129,18 @@ export default function FinancialWorkspace({ search,onNavigate,onClose,onRepair,
           <span className="financial-note">{activityFacts(item).label}</span>
           {item.emailUids.length > 1 && <span className="financial-note">{item.emailUids.length} related emails · one record</span>}
           {item.status !== 'completed' && <span className="financial-note">{activityReviewReason(item)}</span>}
-        </button>)}</div></section>)}</div></AnimatedHeight>
+        </button>)}</div></section>)}</div>
         {list && view === 'needs_attention' && selected?.status === 'completed' && <div className="financial-note p-3 space-y-3"><p>This record has moved to Completed.</p><button className="financial-button" onClick={() => changeQuery({ view:'completed' })}>View completed activity</button></div>}
         {page?.total === 0 && !(view === 'needs_attention' && selected?.status === 'completed') && <p className="financial-note p-3">{query.source || query.runId ? 'No records match these filters.' : view === 'completed' ? 'No completed financial activity yet.' : view === 'all' ? 'No financial activity yet.' : 'No financial records need your attention.'}</p>}
         {page && page.total > 20 && <div className="flex flex-wrap gap-2 mt-4"><button className="financial-button" disabled={loading || !page.offset} onClick={() => changeQuery({ offset:Math.max(0,page.offset - 20) })}>Previous</button><button className="financial-button" disabled={loading || page.offset + 20 >= page.total} onClick={() => changeQuery({ offset:page.offset + 20 })}>Next</button><p>{page.offset + 1}–{Math.min(page.offset + 20,page.total)} of {page.total}</p></div>}
+        </AnimatedHeight>
       </div>}
       <div className="financial-detail">
+        <AnimatedHeight hold={Boolean(reference) && !selected && !displayError}>
         {!list && reference && <button type="button" className="financial-button financial-back mb-4" onClick={() => onNavigate(financialHref(query))}><ArrowLeft size={14} />{view === 'needs_attention' ? 'Back to review' : 'Back to activity'}</button>}
         {list && reference && <button className="financial-button financial-back financial-mobile-back mb-4" onClick={() => onNavigate(`${financialHref(query,reference,true)}&showList=1`)}><ArrowLeft size={14} />Back to list</button>}
         {selected ? <FinancialRecord key={referenceKey} recordScope={referenceKey} activity={selected} open={showDetail} onDirty={onDirty} onChanged={recordChanged} onRepair={onRepair} registerBack={registerBack} requestDiscard={requestDiscard} /> : <p role="status" className="financial-empty financial-note"><Inbox size={24} aria-hidden="true" />{reference ? 'Loading the selected record…' : 'Select a record to inspect its result and source evidence.'}</p>}
+        </AnimatedHeight>
       </div>
     </div>
   </div>;

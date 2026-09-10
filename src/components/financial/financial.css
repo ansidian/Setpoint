@@ -31,7 +31,7 @@
 .financial-body { display:flex; flex:1 1 auto; min-height:0; overflow:hidden; }
 .financial-list { width:clamp(300px,22vw,400px); flex-shrink:0; overflow:auto; overscroll-behavior:contain; padding:12px; border-right:1px solid #ffffff18; }
 .financial-detail { flex:1; min-width:0; overflow:auto; overscroll-behavior:contain; padding:clamp(24px,2vw,40px); }
-.financial-detail > article { width:100%; max-width:960px; margin-inline:auto; }
+.financial-detail > article, .financial-detail > .sp-animated-height > div > article { width:100%; max-width:960px; margin-inline:auto; }
 .financial-row { display:flex; flex-direction:column; text-align:left; width:100%; gap:6px; padding:12px; border-radius:8px; border:1px solid transparent; }
 .financial-row[aria-current=true] { background:color-mix(in srgb,var(--primary) 8%,transparent); border-color:color-mix(in srgb,var(--primary) 40%,transparent); }
 .financial-surface button, .financial-action { transition:background-color 160ms,transform 160ms; }

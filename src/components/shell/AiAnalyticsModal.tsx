@@ -173,8 +173,9 @@ export default function AiAnalyticsModal({ open, onClose }: { open: boolean; onC
           })}
         </div>
 
-        <AnimatedHeight>
-          <div role="tabpanel" className="p-5">
+        <AnimatedHeight hold={slice.loading}>
+          <div role="tabpanel" aria-busy={Boolean(slice.loading)} className="p-5">
+            {slice.loading ? <p role="status" className="sr-only">Loading analytics…</p> : null}
             {slice.loading ? <SectionSkeleton /> : null}
             {slice.error ? <SectionError onRetry={() => retry(active)} /> : null}
             {slice.data ? <Section stats={slice.data as never} /> : null}
