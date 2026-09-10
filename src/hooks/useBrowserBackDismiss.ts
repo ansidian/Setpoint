@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef } from "react";
 
 interface UseBrowserBackDismissOptions {
   enabled: boolean;
+  /** A foreground route owns history temporarily; retain this surface’s entry. */
+  suspended?: boolean;
   historyKey: string;
   /** Return false when the surface remains open (for example, a dirty form). */
   onDismiss?: () => boolean | void;
@@ -13,6 +15,7 @@ function createToken(prefix: string): string {
 
 export default function useBrowserBackDismiss({
   enabled,
+  suspended = false,
   historyKey,
   onDismiss,
 }: UseBrowserBackDismissOptions): () => void {
@@ -27,7 +30,7 @@ export default function useBrowserBackDismiss({
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
-    if (!enabled) return undefined;
+    if (!enabled || suspended) return undefined;
 
     function handlePopState(event: PopStateEvent) {
       const token = entryTokenRef.current;
@@ -45,10 +48,11 @@ export default function useBrowserBackDismiss({
 
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [enabled, historyKey]);
+  }, [enabled, historyKey, suspended]);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
+    if (suspended) return undefined;
 
     if (enabled) {
       if (entryTokenRef.current) return undefined;
@@ -75,7 +79,7 @@ export default function useBrowserBackDismiss({
     }
 
     return undefined;
-  }, [enabled, historyKey]);
+  }, [enabled, historyKey, suspended]);
 
   // Mount-style consumers (rendered conditionally by a parent, e.g.
   // AnchoredFloatingPanel) unmount instead of flipping `enabled` false, so the
@@ -102,6 +106,7 @@ export default function useBrowserBackDismiss({
   }, []);
 
   return useCallback(() => {
+    if (suspended) return;
     if (typeof window === "undefined") {
       onDismissRef.current?.();
       return;
@@ -115,5 +120,5 @@ export default function useBrowserBackDismiss({
 
     entryTokenRef.current = null;
     onDismissRef.current?.();
-  }, [historyKey]);
+  }, [historyKey, suspended]);
 }

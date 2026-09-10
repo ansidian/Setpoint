@@ -18,7 +18,8 @@ import MobileSnapshotHeader from "./MobileSnapshotHeader";
 import { LANE } from "../../../lib/shell-helpers";
 import "./MobileInbox.css";
 import type { InboxPaneProps } from "../inboxViewTypes";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import useInboxDiscardPrompt from "../useInboxDiscardPrompt";
 
 function MobileLiveSkeletonRows({ count = 4, compact = false }: { count?: number; compact?: boolean }) {
   return (
@@ -73,6 +74,7 @@ export default function MobileInboxView({
   mobileShellActions,
   mobileScrollTopRequestId,
   onMobileReaderBack,
+  onMobileReaderBeforeCloseChange,
   mobileReaderBackLabel,
   nowTick,
   emailAccounts,
@@ -89,9 +91,6 @@ export default function MobileInboxView({
   closeSelectedEmail,
   mobileFiltersOpen,
   setMobileFiltersOpen,
-  billOpen,
-  setBillOpen,
-  onOpenRecordedBill,
   rowAccountsById,
   indexedSearchActive,
   indexedSearchLoading,
@@ -152,16 +151,29 @@ export default function MobileInboxView({
     if (listRef.current) listRef.current.scrollTop = 0;
   }, [collection, accountId, lane, search, mobileUnreadOnly, snapshotNavigation?.snapshot?.id, mobileScrollTopRequestId]);
 
-  const allowWorkspaceExit = () => !workspaceDirty || window.confirm("Discard your unsaved changes?");
+  const { requestDiscard, cancelDiscard, confirming, dialog: discardDialog } = useInboxDiscardPrompt(`${selectedEmail?.account_id || selectedEmail?.accountId || ""}:${selectedEmail?.uid || selectedEmail?.email_id || selectedEmail?.id || ""}`);
+  const guardWorkspaceExit = (action: () => void) => {
+    const proceed = () => { setWorkspaceDirty(false); action(); };
+    if (requestDiscard(workspaceDirty, proceed)) proceed();
+  };
+  const beforeReaderClose = useCallback((proceed: () => void) => {
+    // Browser Back dismisses an open prompt first. Returning false keeps the
+    // reader history entry armed and the unsaved editor in place.
+    if (confirming) { cancelDiscard(); return false; }
+    return requestDiscard(workspaceDirty, () => { setWorkspaceDirty(false); proceed(); });
+  }, [cancelDiscard, confirming, requestDiscard, workspaceDirty]);
+  useLayoutEffect(() => {
+    onMobileReaderBeforeCloseChange?.(beforeReaderClose);
+    return () => onMobileReaderBeforeCloseChange?.(null);
+  }, [beforeReaderClose, onMobileReaderBeforeCloseChange]);
   const guardedOpen: typeof onOpen = (...args) => {
-    if (!allowWorkspaceExit()) return;
-    setWorkspaceDirty(false);
-    onOpen(...args);
+    guardWorkspaceExit(() => onOpen(...args));
   };
   const guardedClose = () => {
-    if (!allowWorkspaceExit()) return;
-    setWorkspaceDirty(false);
-    (onMobileReaderBack || closeSelectedEmail)();
+    // The shell's history owner invokes beforeReaderClose after its pop. A
+    // standalone Inbox still guards its direct close here.
+    if (onMobileReaderBack && onMobileReaderBeforeCloseChange) onMobileReaderBack();
+    else guardWorkspaceExit(onMobileReaderBack || closeSelectedEmail);
   };
   // visibleEmails arrives pinned-first (selectVisibleEmails sorts pinned rows
   // ahead of everything else, newest pin first), so splitting off the pinned
@@ -187,15 +199,13 @@ export default function MobileInboxView({
           email={selectedEmail}
           account={selectedAccount}
           accent={accent}
-          onAction={(kind, payload) => { if (kind === "unsnooze" && !allowWorkspaceExit()) return; onAction(kind, payload); }}
+          onAction={(kind, payload) => { if (kind === "unsnooze") guardWorkspaceExit(() => { onAction(kind, payload); }); else onAction(kind, payload); }}
           onClose={guardedClose}
           backLabel={mobileReaderBackLabel}
           onWorkspaceDirtyChange={setWorkspaceDirty}
+          onRequestDiscard={requestDiscard}
           showTriage={showTriage}
           showDraft={showDraft}
-          billOpen={billOpen}
-          setBillOpen={setBillOpen}
-          onOpenRecordedBill={onOpenRecordedBill}
           isMobile
           readOnly={readOnly}
         />
@@ -421,6 +431,7 @@ export default function MobileInboxView({
         onClose={() => setMobileFiltersOpen(false)}
       />
       <InboxUndoToast undo={undo} onUndo={onUndo} accent={accent} />
+      {discardDialog}
       <span role="status" aria-live="polite" className="sr-only">{announcement}</span>
     </div>
   );

@@ -112,9 +112,8 @@ interface BillResolutionCache {
   promise: Promise<BillResolutionValue> | null;
 }
 
-export default function useBillPayResolver({ email, billOpen, bodyState }: {
+export default function useBillPayResolver({ email, bodyState }: {
   email: InboxEmailLike | null;
-  billOpen: boolean;
   bodyState: EmailBodyStateInput;
 }): BillResolutionState {
   const emailId = emailKey(email);
@@ -131,7 +130,7 @@ export default function useBillPayResolver({ email, billOpen, bodyState }: {
   const [settingsVersion, setSettingsVersion] = useState(0);
   const extractionBody = resolveBillExtractionBody(bodyState);
   const shouldResolve = !!(
-    billOpen || email?.hasBill || email?.bill_candidate || email?.extractedBill
+    email?.hasBill || email?.bill_candidate || email?.extractedBill
   );
 
   const retry = useCallback(() => {

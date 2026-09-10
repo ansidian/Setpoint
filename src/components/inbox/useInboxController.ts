@@ -114,7 +114,6 @@ export default function useInboxController({
   );
   const [nowTick, setNowTick] = useState(() => Date.now());
   const [liveTrashedUids, setLiveTrashedUids] = useState<Set<string>>(() => new Set());
-  const [billOpen, setBillOpen] = useState(false);
   const {
     indexedSearch,
     indexedSearchActive,
@@ -360,11 +359,6 @@ export default function useInboxController({
     setSelectedId(null);
   }, [selectedEmail, selectedId, setSelectedId]);
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- close the bill drawer when the selected email changes
-    setBillOpen(false);
-  }, [selectedId]);
-
   const markAllVisibleRead = useCallback(() => {
     if (readOnly) return;
     const { unread, overrideUids, allUids } = planMarkAllVisibleRead(visibleEmails);
@@ -487,8 +481,6 @@ export default function useInboxController({
     setMobileFiltersOpen,
     mobileUnreadOnly,
     setMobileUnreadOnly,
-    billOpen,
-    setBillOpen,
     accountsById,
     rowAccountsById,
     indexedSearchAccountsById: indexedSearch.accountsById,

@@ -1,3 +1,4 @@
+import { MemoryRouter } from "react-router";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
@@ -69,7 +70,7 @@ function inboxTree(options: RenderInboxOptions) {
     ...rest
   } = options;
   return (
-    <DashboardProvider briefing={{ emails: { accounts: [] } }} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
+    <MemoryRouter><DashboardProvider briefing={{ emails: { accounts: [] } }} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
       <InboxView
         accent="#cba6da"
         emailAccounts={emailAccounts}
@@ -81,7 +82,7 @@ function inboxTree(options: RenderInboxOptions) {
         isMobile={isMobile}
         {...rest}
       />
-    </DashboardProvider>
+    </DashboardProvider></MemoryRouter>
   );
 }
 

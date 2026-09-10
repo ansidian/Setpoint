@@ -1,8 +1,9 @@
 import type { DemoSeed } from './store';
-import type { FinanceWorkspace, JournalRange, JournalTransaction, UtilityStatement } from '../../shared/types/finances';
+import type { FinanceWorkspace, JournalRange, JournalTransaction, UtilityStatement, UtilityMappingUpdate } from '../../shared/types/finances';
 import { getDemoFinancialActivities } from './financialActivity';
 import { NO_DEMO_API_RESPONSE } from './apiHandler';
 
+const mappingOverrides = new Map<string, UtilityMappingUpdate>();
 const prior = (date:string) => {const value=new Date(`${date.slice(0,7)}-01T12:00:00Z`);value.setUTCMonth(value.getUTCMonth()-1);return value.toISOString().slice(0,10);};
 export function demoFinances(seed:DemoSeed):FinanceWorkspace {
   const previous=prior(seed.dateKey);
@@ -37,10 +38,14 @@ export function demoFinances(seed:DemoSeed):FinanceWorkspace {
       }
     }
     for(const statement of statements){const payment=seed.transactions.find(row=>row.scheduleId===scheduleId&&row.date===statement.dueDate);if(payment){statement.paymentRecorded=true;statement.paymentTransactionIds=[payment.id];statement.paymentDate=payment.date;statement.recordedTotalCents=Math.round(payment.amount*100);}}
-    return {identity:{id:id!,label:label!,provider,budgetId:'demo-budget',payeeId:scheduleId!,scheduleIds:[scheduleId!],sourceSenders:[`billing@${id}.example.test`]},statements,occurrences:occurrence?[{...occurrence,type:occurrence.type as "bill"|"transfer"|"income"}]:[]};
+    const override = mappingOverrides.get(id!);
+    const mappedOccurrences = override ? seed.bills.filter(row => override.scheduleIds.includes(row.scheduleId)) : occurrence ? [occurrence] : [];
+    return {identity:{id:id!,label:label!,provider,budgetId:'demo-budget',payeeId:override?.payeeId || scheduleId!,scheduleIds:override?.scheduleIds || [scheduleId!],sourceSenders:[`billing@${id}.example.test`]},statements,occurrences:mappedOccurrences.map(row => ({...row,type:row.type as "bill"|"transfer"|"income"}))};
   });
-  const ids=new Set(definitions.map(row=>row[2]));
-  return {budgetId:'demo-budget',utilities,recurring:seed.bills.filter(row=>!ids.has(row.scheduleId)).map(row=>({...row,type:row.type as "bill"|"transfer"|"income"})),start:`${Number(seed.dateKey.slice(0,4))-1}${seed.dateKey.slice(4)}`,end:seed.dateKey,updatedAt:new Date().toISOString(),issues:[],truncated:false};
+  const ids=new Set(utilities.flatMap(row=>row.identity.scheduleIds));
+  const start=`${Number(seed.dateKey.slice(0,4))-1}${seed.dateKey.slice(4)}`;
+  const recordedHistory=demoJournal(seed,new URL(`https://demo.invalid/api/briefing/finances/journal?start=${start}&end=${seed.dateKey}`));
+  return {budgetId:'demo-budget',utilities,recurring:seed.bills.filter(row=>!ids.has(row.scheduleId)).map(row=>({...row,type:row.type as "bill"|"transfer"|"income"})),start,end:seed.dateKey,recordedHistory,updatedAt:new Date().toISOString(),issues:[],truncated:recordedHistory.truncated};
 }
 export function demoJournal(seed:DemoSeed,url:URL):JournalRange {
   const start=url.searchParams.get('start') || seed.dateKey,end=url.searchParams.get('end') || seed.dateKey;
@@ -55,7 +60,22 @@ export function demoJournal(seed:DemoSeed,url:URL):JournalRange {
   const visibleIds=new Set(visible.map(row=>row.id));
   return {start,end,transactions:visible,relatives:[...all.values()].filter(row=>!visibleIds.has(row.id)),truncated:selected.length>500};
 }
-export function handleDemoFinances(url:URL,method:string,seed:DemoSeed):unknown {
+export function handleDemoFinances(url:URL,method:string,seed:DemoSeed,body:Record<string,unknown>={}):unknown {
+  if (url.pathname.startsWith('/api/briefing/finances/utility-mappings')) {
+    const utilities = demoFinances(seed).utilities.map(row => row.identity);
+    const schedules = seed.bills.filter(row => row.type === 'bill').map(row => ({id:row.scheduleId,name:row.name,type:'bill' as const,completed:false,conditions:[{field:'payee',op:'is',value:row.scheduleId}]}));
+    const payees = schedules.map(row => ({id:row.id,name:row.name}));
+    if (url.pathname === '/api/briefing/finances/utility-mappings' && method === 'GET') return {budgetId:'demo-budget',metadataAvailable:true,utilities,payees,schedules};
+    const id = decodeURIComponent(url.pathname.slice('/api/briefing/finances/utility-mappings/'.length));
+    if (method === 'PUT') {
+      const utility = utilities.find(row => row.id === id);
+      const scheduleIds = Array.isArray(body.scheduleIds) ? body.scheduleIds.filter((value):value is string => typeof value === 'string') : [];
+      if (!utility || body.budgetId !== 'demo-budget' || !payees.some(row => row.id === body.payeeId) || scheduleIds.length !== 1 || utilities.some(row => row.id !== id && row.scheduleIds.some(scheduleId => scheduleIds.includes(scheduleId))) || scheduleIds.some(scheduleId => !schedules.some(row => row.id === scheduleId && row.conditions[0]?.value === body.payeeId))) throw new Error('Choose an available payee and one bill schedule.');
+      const update = {budgetId:'demo-budget',payeeId:String(body.payeeId),scheduleIds:[...new Set(scheduleIds)]};
+      mappingOverrides.set(id,update);
+      return {...utility,...update};
+    }
+  }
   if(url.pathname==='/api/briefing/finances'&&method==='GET')return demoFinances(seed);
   if(url.pathname==='/api/briefing/finances/journal'&&method==='GET')return demoJournal(seed,url);
   return NO_DEMO_API_RESPONSE;

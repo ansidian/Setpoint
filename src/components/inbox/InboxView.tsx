@@ -1,4 +1,3 @@
-import type { FinanceDestination } from "../finances/financesNavigation";
 import WorkspaceLoading from "../shared/WorkspaceLoading";
 import InboxDesktopPane from "./InboxDesktopPane";
 import MobileInboxView from "./mobile/MobileInboxView";
@@ -14,7 +13,7 @@ import type { InboxAccount, InboxEmailLike, InboxReadOverrides, InboxSelectionId
 import type { InboxActiveSnapshotLike, ResurfacedEntry } from "./inboxWorkItems";
 import type { SnoozedEntry } from "./useInboxController";
 import type { AlfredEmailContextSource } from "../../../shared/types/alfred";
-import type { InboxSnapshotNavigation } from "./inboxViewTypes";
+import type { InboxReaderBeforeClose, InboxSnapshotNavigation } from "./inboxViewTypes";
 
 export interface InboxActiveSnapshotController {
   snapshot: InboxActiveSnapshotLike | null;
@@ -32,6 +31,7 @@ export interface InboxViewProps {
   mobileShellActions?: ReactNode;
   mobileScrollTopRequestId?: number;
   onMobileReaderBack?: () => void;
+  onMobileReaderBeforeCloseChange?: (guard: InboxReaderBeforeClose | null) => void;
   mobileReaderBackLabel?: string;
   liveEmails?: InboxEmailLike[];
   liveEmailsLoading?: boolean;
@@ -41,7 +41,6 @@ export interface InboxViewProps {
   onLiveReadOverrideChange?: (uid: string, read: boolean) => void;
   snoozedEntries?: SnoozedEntry[];
   resurfacedEntries?: Array<ResurfacedEntry & { uid: string }>;
-  onOpenRecordedBill?: (target: FinanceDestination) => void;
   onRefresh?: () => unknown | Promise<unknown>;
   seedSelectedId?: InboxSelectionId;
   sessionState?: Partial<InboxSessionState>;
@@ -69,6 +68,7 @@ export default function InboxView({
   mobileShellActions,
   mobileScrollTopRequestId,
   onMobileReaderBack,
+  onMobileReaderBeforeCloseChange,
   mobileReaderBackLabel,
   liveEmails = [],
   liveEmailsLoading = false,
@@ -78,7 +78,6 @@ export default function InboxView({
   onLiveReadOverrideChange,
   snoozedEntries = [],
   resurfacedEntries = [],
-  onOpenRecordedBill,
   onRefresh = () => {},
   seedSelectedId,
   sessionState,
@@ -191,13 +190,13 @@ export default function InboxView({
     mobileShellActions,
     mobileScrollTopRequestId,
     onMobileReaderBack,
+    onMobileReaderBeforeCloseChange,
     mobileReaderBackLabel,
     liveEmailsLoading: snapshotInboxMode
       ? triageActivity.syncing
       : liveEmailsLoading || triageActivity.syncing,
     processingCount,
     activeSnapshotError: activeSnapshot.error,
-    onOpenRecordedBill,
     onRefresh: handleRefresh,
     readOnly,
     snapshotNavigation,

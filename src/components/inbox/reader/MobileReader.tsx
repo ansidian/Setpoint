@@ -7,7 +7,7 @@ import {
   ShieldCheck,
   Trash2,
   Check,
-  CreditCard,
+  SlidersHorizontal,
   FileText,
   Mail,
   MailOpen,
@@ -24,13 +24,11 @@ import DraftReply from "./DraftReply";
 import AnimatedCollapse from "../../shared/AnimatedCollapse";
 import MobileActionRow from "./MobileActionRow";
 import { resolveReaderActions } from "./readerActionsModel";
-import MobileBillDrawer from "./MobileBillDrawer";
 import MobileReaderHeader from "./MobileReaderHeader";
 import "./MobileReader.css";
 import type { SnapshotTriageLane } from "../../../../shared/types/snapshots";
 import type { InboxActionKind } from "../useInboxActionDispatch";
 import type { ReaderSurfaceProps } from "./readerTypes";
-import { IDLE_BILL_RESOLUTION } from "./readerTypes";
 import EmailActualStatus from "./EmailActualStatus";
 import VerificationCodeCallout from "./VerificationCodeCallout";
 
@@ -42,10 +40,7 @@ export default function MobileReader({
   onClose,
   backLabel = "Back to inbox",
   showTriage,
-  billOpen,
-  billMounted = billOpen,
-  setBillOpen,
-  onOpenRecordedBill,
+  onCreateProfile,
   snoozeOpen,
   setSnoozeOpen,
   bodyState,
@@ -56,7 +51,6 @@ export default function MobileReader({
   onRemind,
   readOnly = false,
 }: ReaderSurfaceProps) {
-  const resolvedBillResolution = billResolution || IDLE_BILL_RESOLUTION;
   const actions = resolveReaderActions(email, { readOnly });
   const {
     catchUp,
@@ -64,7 +58,7 @@ export default function MobileReader({
     isUntriagedReadSnapshot,
     showMutableActions,
     showDestructiveActions,
-    canOpenActualRecord,
+    canCreateProfile,
     canReopen,
     canDismiss,
     canMoveToNeeds,
@@ -74,7 +68,6 @@ export default function MobileReader({
   const snapshotPending = !!email._optimisticSnapshotPending;
   const triageSummary = showTriage ? email.claude?.summary || email.aiSummary || email.summary || null : null;
   const [actionsOpen, setActionsOpen] = useState(false);
-  const [billExpanded, setBillExpanded] = useState(false);
   const [trustSaving, setTrustSaving] = useState(false);
   const [trustError, setTrustError] = useState<string | null>(null);
   const remoteTrust = useRemoteContentTrust(
@@ -93,7 +86,7 @@ export default function MobileReader({
   };
   const hasTriageActions = actions.canHandle || canReopen || canPin || showMutableActions
     || actions.canMoveToFyi || actions.canMoveToNoise || canMoveToNeeds || canDismiss;
-  const hasFollowUpActions = showDestructiveActions || !!onRemind || canOpenActualRecord
+  const hasFollowUpActions = showDestructiveActions || !!onRemind || canCreateProfile
     || (!catchUp && !!email.claude?.draftReply);
   const hasMessageActions = !!remoteTrust.trustSender;
 
@@ -178,19 +171,6 @@ export default function MobileReader({
         <EmailContentSection key={`source-${email.uid || email.email_id || email.id || ""}`} email={email} bodyState={bodyState} isMobile />
       </div>
 
-      {billMounted && (
-        <MobileBillDrawer
-          email={email}
-          open={billOpen}
-          billExpanded={billExpanded}
-          setBillExpanded={setBillExpanded}
-          bodyState={bodyState}
-          billResolution={resolvedBillResolution}
-          onClose={() => setBillOpen(false)}
-          onOpenRecordedBill={onOpenRecordedBill}
-        />
-      )}
-
       {actionsOpen && (
         <AnchoredFloatingPanel
           anchorRef={actionsBtnRef}
@@ -271,15 +251,14 @@ export default function MobileReader({
                       }}
                     />
                   )}
-                  {canOpenActualRecord && (
+                  {canCreateProfile && (
                     <MobileActionRow
-                      icon={CreditCard}
+                      icon={SlidersHorizontal}
                       iconColor="var(--sp-green)"
-                      label="Actual record"
-                      active={billOpen}
+                      label="Create profile"
                       onClick={() => {
                         setActionsOpen(false);
-                        setBillOpen((value) => !value);
+                        onCreateProfile();
                       }}
                     />
                   )}

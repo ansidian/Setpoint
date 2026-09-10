@@ -4,7 +4,7 @@ The email triage and reading surface, desktop and mobile: active snapshots (tria
 
 ## Sub-maps
 
-- `reader/` — desktop/mobile detail pane, bodies, triage, bill and transaction-import actions (see `reader/CLAUDE.md`)
+- `reader/` — desktop/mobile detail pane, bodies, triage, financial profile creation and saved financial status (see `reader/CLAUDE.md`)
 
 ## Files
 
@@ -22,6 +22,7 @@ The email triage and reading surface, desktop and mobile: active snapshots (tria
 - `useInboxSessionState.ts` — external session store surviving unmount/tab switches
 - `useSnapshotOptimisticOverlay.ts` — reconciles optimistic overlays against snapshot refreshes
 - `useInboxUndoSlot.ts` — undo slot lifecycle: timer, pending, commit/settle
+- `useInboxDiscardPrompt.tsx` — shared in-app reminder/reply discard choice; pending actions stay scoped to the selected email and clear on Activity hide or unmount
 
 ### List + rows
 - `InboxList.tsx` — bounded desktop list, lane headings, read controls, skeletons and search results

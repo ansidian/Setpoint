@@ -1,24 +1,29 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import useBrowserBackDismiss from "../../hooks/useBrowserBackDismiss";
-import { setInboxSession, useInboxSelectedId } from "../inbox/useInboxSessionState";
+import { getInboxSession, setInboxSession, useInboxSelectedId } from "../inbox/useInboxSessionState";
 import type { InboxSelectionId } from "../inbox/inboxTypes";
 import type { DashboardTab } from "./dashboardShellModel";
+import type { InboxReaderBeforeClose } from "../inbox/inboxViewTypes";
 
 /** Owns mobile Inbox history; the Inbox selection-history hook stays disabled. */
-export default function useMobileInboxNavigation({ isMobile, tab, setTab }: {
+export default function useMobileInboxNavigation({ isMobile, tab, setTab, foregroundOpen = false }: {
   isMobile: boolean;
   tab: DashboardTab;
   setTab: Dispatch<SetStateAction<DashboardTab>>;
+  foregroundOpen?: boolean;
 }) {
   const selectedId = useInboxSelectedId();
   const [readerOrigin, setReaderOrigin] = useState<"dashboard" | "inbox">("inbox");
   const homeRequestedRef = useRef(false);
+  const beforeReaderCloseRef = useRef<InboxReaderBeforeClose | null>(null);
+  const allowedCloseRef = useRef<InboxSelectionId>(null);
   const readerOpen = isMobile && tab === "inbox" && !!selectedId;
   const dismissInbox = useBrowserBackDismiss({
     // A dashboard email is one navigation step. Its reader sits directly above
     // Dashboard rather than introducing an Inbox list the owner never visited.
     enabled: isMobile && tab === "inbox" && readerOrigin === "inbox",
+    suspended: foregroundOpen,
     historyKey: "eaDashboardMobileTab",
     onDismiss: () => {
       homeRequestedRef.current = false;
@@ -27,8 +32,25 @@ export default function useMobileInboxNavigation({ isMobile, tab, setTab }: {
   });
   const dismissReader = useBrowserBackDismiss({
     enabled: readerOpen,
+    suspended: foregroundOpen,
     historyKey: "eaMobileReader",
     onDismiss: () => {
+      if (allowedCloseRef.current !== selectedId && beforeReaderCloseRef.current) {
+        const returnHomeRequested = homeRequestedRef.current;
+        const proceed = () => {
+          if (getInboxSession().selectedId !== selectedId) return;
+          homeRequestedRef.current = returnHomeRequested;
+          allowedCloseRef.current = selectedId;
+          dismissReader();
+        };
+        if (beforeReaderCloseRef.current(proceed) === false) {
+          // useBrowserBackDismiss re-arms this entry. A pending in-app choice
+          // is synchronous rejection, never a truthy promise or lost draft.
+          homeRequestedRef.current = false;
+          return false;
+        }
+      }
+      allowedCloseRef.current = null;
       setInboxSession((previous) => ({ ...previous, selectedId: null }));
       if (readerOrigin === "dashboard") {
         homeRequestedRef.current = false;
@@ -41,6 +63,11 @@ export default function useMobileInboxNavigation({ isMobile, tab, setTab }: {
       }
     },
   });
+  const registerReaderBeforeClose = useCallback((guard: InboxReaderBeforeClose | null) => {
+    beforeReaderCloseRef.current = guard;
+  }, []);
+
+  useEffect(() => { allowedCloseRef.current = null; }, [selectedId, foregroundOpen]);
 
   useEffect(() => {
     if (!isMobile || tab !== "inbox" || selectedId || readerOrigin !== "dashboard") return;
@@ -68,6 +95,7 @@ export default function useMobileInboxNavigation({ isMobile, tab, setTab }: {
     readerOpen,
     prepareEmailOpen,
     dismissReader,
+    registerReaderBeforeClose,
     returnHome,
     readerBackLabel: readerOrigin === "dashboard" ? "Back to dashboard" : "Back to inbox",
   };

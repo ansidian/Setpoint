@@ -2,7 +2,9 @@ import { buildDemoNews } from "./newsData.ts";
 import { buildDemoTransactions } from "./financeData.ts";
 import { buildDemoWeather } from "./weatherData.ts";
 import { buildDemoInboxSeed } from "./inboxData.ts";
+import { demoFinancialProfiles } from "./financialProfiles.ts";
 import type { Reminder } from "../../shared/types/reminders.ts";
+import type { ActualPayee } from "../../shared/types/actual.ts";
 const WORK_COLOR = "#89b4fa";
 const PERSONAL_COLOR = "#cba6f7";
 const CAREER_COLOR = "#f5c2e7";
@@ -311,8 +313,11 @@ function makeDemoSeed(now = new Date()) {
     discord_reminder_webhook_url: "",
     discord_webhook_configured: true,
     actual_budget_url: "https://actual.example.invalid/demo",
+    actual_budget_sync_id: "demo-budget",
     actual_configured: true,
     actual_budget_configured: true,
+    financial_profiles: demoFinancialProfiles(),
+    financial_profiles_revision: 1,
     home_location_label: null,
     home_location_address: null,
     home_location_place_id: null,
@@ -362,7 +367,21 @@ function makeDemoSeed(now = new Date()) {
         { id: "demo-savings", name: "Emergency Fund", offbudget: false, closed: false },
         { id: "demo-credit", name: "Everyday Card", offbudget: false, closed: false },
       ],
-      payees: bills.map((entry) => ({ id: entry.scheduleId, name: entry.payee })),
+      payees: [...bills.map<ActualPayee>((entry) => ({ id: entry.scheduleId, name: entry.payee, transfer_acct: entry.type === "transfer" ? "demo-credit" : null })),
+        { id: "demo-market", name: "Fictional Market", transfer_acct: null }],
+      payeeMap,
+      schedules: bills.map(entry => ({
+        id: entry.scheduleId,
+        name: entry.name,
+        type: entry.type,
+        next_date: entry.next_date,
+        completed: false,
+        transferAccountId: entry.type === "transfer" ? "demo-credit" : null,
+        conditions: [
+          { field: "payee", op: "is", value: entry.scheduleId },
+          { field: "account", op: "is", value: entry.type === "transfer" ? "demo-savings" : "demo-checking" },
+        ],
+      })),
       categories: [
         { group_name: "Demo Housing", categories: [{ id: "demo-rent-category", name: "Rent" }] },
         { group_name: "Demo Bills", categories: [{ id: "demo-utilities", name: "Utilities" }, { id: "demo-cloud-services", name: "Cloud Services" }] },

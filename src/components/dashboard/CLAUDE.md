@@ -19,7 +19,7 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 - `useDashboardShellHotkeys.ts` — global shortcuts: command palette, Analytics, snapshots, and Alfred; selected Inbox email reserves A for triage, and open panels suspend shell single-key commands
 - `useCalendarWorkspaceState.ts` — calendar workspace state slice: view/focus/overlay deep-link state, one-shot typed event-create request ownership/acknowledgement consumption, `openCalendar`/`changeCalendarView`, and the leave-clear + workspace-change-notify effects
 - `useDashboardItemSheet.ts` — dashboard glance-sheet selection/toggle state, tab-leave cleanup, direct item routing, and kind-aware "Open in calendar" handoff
-- `useMobileInboxNavigation.ts` — owns mobile email origin/history: Dashboard opens return directly home, list opens return to Inbox, overlays dismiss first
+- `useMobileInboxNavigation.ts` — owns mobile email origin/history: Dashboard opens return directly home, list opens return to Inbox, overlays dismiss first, and dirty-reader exits re-arm history until the in-app discard choice resolves; Settings/financial foreground routes suspend background history pushes and dismissal
 - `useMobileDashboardScrollRestoration.ts` — captures the mobile dashboard's shared-scroll offset and restores it immediately plus on the next frame after returning to the tab
 - `useSnapshotNavigation.ts` — loads ordered snapshot history while Inbox is active, resolves adjacent frozen/current transitions, and cancels pending navigation when returning directly to Current
 - `snapshotNavigationModel.ts` — pure older/newer adjacency resolver over newest-first snapshot history

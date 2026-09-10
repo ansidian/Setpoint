@@ -1,7 +1,9 @@
+import { DEMO_RECEIPT_UID } from "./financialReceipt";
 import { demoTaskFields } from "./taskFields";
 import { handleDemoFinances } from './financesWorkspace';
 import { completeDemoFinancialEvent, dismissDemoFinancialEvent, demoCompletionPlan } from "./financialCompletion";
 import type { FinancialEventCompletionRequest } from "../../shared/types/financial-operations";
+import { updateDemoSettings } from "./financialProfiles";
 import { createDemoApiError } from "./config.ts";
 import {
   NO_DEMO_API_RESPONSE,
@@ -289,12 +291,12 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
   const pathname = url.pathname;
   const method = String(options.method || "GET").toUpperCase();
   const body = parseBody(options);
-  if (pathname.startsWith("/api/briefing/finances")) { const result=handleDemoFinances(url,method,getDemoSeed()); if(result!==NO_DEMO_API_RESPONSE)return result; }
+  if (pathname.startsWith("/api/briefing/finances")) { const result=handleDemoFinances(url,method,getDemoSeed(),body); if(result!==NO_DEMO_API_RESPONSE)return result; }
   const targetedRefresh = pathname === "/api/dashboard/current/refresh" && method === "POST" && body.source != null;
   const readOnlyPost = !targetedRefresh && (pathname === "/api/dashboard/current/refresh" || pathname === "/api/dashboard/current/sync");
   const seed = method === "GET" || readOnlyPost ? getDemoSeed() : forkDemoSeedForMutation();
   if (pathname.startsWith("/api/briefing/financial-corrections/") || pathname === "/api/briefing/financial-activity" || pathname.startsWith("/api/briefing/financial-activity/")) return handleDemoFinancialActivity(url, method, body);
-  if (pathname === "/api/briefing/bills/resolve" && method === "POST" && body.emailId === "demo-email-budget") return demoCompletionPlan();
+  if (pathname === "/api/briefing/bills/resolve" && method === "POST" && body.emailId === DEMO_RECEIPT_UID) return demoCompletionPlan();
   if (pathname === "/api/briefing/financial-events/dismiss" && method === "POST") return dismissDemoFinancialEvent(body as unknown as FinancialEventCompletionRequest);
   if (pathname === "/api/briefing/financial-events/complete" && method === "POST") return completeDemoFinancialEvent(body as unknown as FinancialEventCompletionRequest);
   const referenceResponse = getDemoReferenceResponse({ pathname, method, seed });
@@ -426,8 +428,7 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
   }
 
   if (pathname === "/api/ea/settings" && method === "PUT") {
-    Object.assign(seed.settings, body);
-    return { success: true };
+    return updateDemoSettings(seed.settings, body);
   }
 
   if (pathname === "/api/ea/important-senders" && method === "PUT") {

@@ -1,4 +1,3 @@
-import type { FinanceDestination } from "../finances/financesNavigation";
 import type { ReactNode } from "react";
 import type { InboxControllerState } from "./useInboxController";
 import type { InboxAccount } from "./inboxTypes";
@@ -6,6 +5,7 @@ import type { AlfredEmailContextSource } from "../../../shared/types/alfred";
 import type { SnapshotRecord } from "../../../shared/types/snapshots";
 
 export type InboxSnapshotNavigationDirection = "older" | "newer";
+export type InboxReaderBeforeClose = (proceed: () => void) => boolean;
 
 export interface InboxSnapshotNavigation {
   snapshot: SnapshotRecord | null;
@@ -24,13 +24,13 @@ export type InboxPaneProps = InboxControllerState & {
   mobileShellActions?: ReactNode;
   mobileScrollTopRequestId?: number;
   onMobileReaderBack?: () => void;
+  onMobileReaderBeforeCloseChange?: (guard: InboxReaderBeforeClose | null) => void;
   mobileReaderBackLabel?: string;
   briefingSummary?: ReactNode;
   emailAccounts: InboxAccount[];
   liveEmailsLoading?: boolean;
   processingCount?: number;
   activeSnapshotError?: string | null;
-  onOpenRecordedBill?: (target: FinanceDestination) => void;
   onRefresh: () => void | Promise<void>;
   readOnly?: boolean;
   snapshotNavigation?: InboxSnapshotNavigation | null;

@@ -1,3 +1,4 @@
+import { MemoryRouter } from "react-router";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useCallback, useState } from "react";
@@ -109,7 +110,7 @@ function renderInbox(options: RenderInboxOptions = {}) {
     ...rest
   } = options;
   return render(
-    <DashboardProvider briefing={{ emails: { accounts: [] } }} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
+    <MemoryRouter><DashboardProvider briefing={{ emails: { accounts: [] } }} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
       <InboxView
         accent="#cba6da"
         emailAccounts={emailAccounts}
@@ -126,7 +127,7 @@ function renderInbox(options: RenderInboxOptions = {}) {
         isMobile={isMobile}
         {...rest}
       />
-    </DashboardProvider>,
+    </DashboardProvider></MemoryRouter>,
   );
 }
 
@@ -288,9 +289,9 @@ describe("InboxView action workflows", () => {
     }
 
     render(
-      <DashboardProvider briefing={{ emails: { accounts: [] } }} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
+      <MemoryRouter><DashboardProvider briefing={{ emails: { accounts: [] } }} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
         <ReadHarness />
-      </DashboardProvider>,
+      </DashboardProvider></MemoryRouter>,
     );
 
     fireEvent.click(screen.getByText("Read failure row"));

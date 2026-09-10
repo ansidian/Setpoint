@@ -6,12 +6,6 @@ export function formatAmount(amount?: unknown): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(numericAmount);
 }
 
-export function formatDate(dateStr?: string | null): string {
-  if (!dateStr) return "";
-  const d = new Date(dateStr + "T00:00:00");
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
 export function daysUntil(dateStr?: string | null): number | null {
   if (!dateStr) return null;
   // Anchor "today" and the target to the Pacific day boundary (not the host's

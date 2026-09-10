@@ -10,6 +10,7 @@ import Reader from "./reader/Reader";
 import InboxUndoToast from "./InboxUndoToast";
 import type { InboxPaneProps } from "./inboxViewTypes";
 import { isDemoMode } from "../../demo/config";
+import useInboxDiscardPrompt from "./useInboxDiscardPrompt";
 
 function InboxDesktopPane({
   accent,
@@ -32,9 +33,6 @@ function InboxDesktopPane({
   selectedAccount,
   onOpen,
   closeSelectedEmail,
-  billOpen,
-  setBillOpen,
-  onOpenRecordedBill,
   rowAccountsById,
   indexedSearchActive,
   indexedSearchLoading,
@@ -67,32 +65,27 @@ function InboxDesktopPane({
   const alfredWorkspace = useAlfredWorkspace();
   const discussing = !!alfredWorkspace?.open;
   const [workspaceDirty, setWorkspaceDirty] = useState(false);
-  const allowWorkspaceExit = () => !workspaceDirty || window.confirm("Discard your unsaved changes?");
+  const { requestDiscard, dialog: discardDialog } = useInboxDiscardPrompt(`${selectedEmail?.account_id || selectedEmail?.accountId || ""}:${selectedEmail?.uid || selectedEmail?.email_id || selectedEmail?.id || ""}`);
+  const guardWorkspaceExit = (action: () => void) => {
+    const proceed = () => { setWorkspaceDirty(false); action(); };
+    if (requestDiscard(workspaceDirty, proceed)) proceed();
+  };
   const guardedOpen: typeof onOpen = (...args) => {
-    if (!allowWorkspaceExit()) return;
-    setWorkspaceDirty(false);
-    onOpen(...args);
+    guardWorkspaceExit(() => onOpen(...args));
   };
   const guardedCollection = (value: "inbox" | "snoozed") => {
-    if (!allowWorkspaceExit()) return;
-    setWorkspaceDirty(false); closeSelectedEmail(); setCollection(value);
+    guardWorkspaceExit(() => { closeSelectedEmail(); setCollection(value); });
   };
   const guardedClose = () => {
-    if (!allowWorkspaceExit()) return;
-    setWorkspaceDirty(false);
-    closeSelectedEmail();
+    guardWorkspaceExit(closeSelectedEmail);
   };
   const guardedSnapshotNavigation = snapshotNavigation ? {
     ...snapshotNavigation,
     onReturnToCurrent: snapshotNavigation.onReturnToCurrent ? () => {
-      if (!allowWorkspaceExit()) return;
-      setWorkspaceDirty(false);
-      snapshotNavigation.onReturnToCurrent?.();
+      guardWorkspaceExit(() => snapshotNavigation.onReturnToCurrent?.());
     } : undefined,
-    onNavigate: async (direction: "older" | "newer") => {
-      if (!allowWorkspaceExit()) return;
-      setWorkspaceDirty(false);
-      await snapshotNavigation.onNavigate(direction);
+    onNavigate: (direction: "older" | "newer") => {
+      guardWorkspaceExit(() => { void snapshotNavigation.onNavigate(direction); });
     },
   } : null;
   const selectedIndex = selectedEmail ? visibleEmails.findIndex((email) => (email.id || email.uid) === (selectedEmail.id || selectedEmail.uid)) : -1;
@@ -168,7 +161,7 @@ function InboxDesktopPane({
           accent={accent}
           lane={lane}
           laneCounts={chipCounts}
-          onLaneChange={(value) => { if (!allowWorkspaceExit()) return; setWorkspaceDirty(false); closeSelectedEmail(); setCollection("inbox"); setLane(value); }}
+          onLaneChange={(value) => guardWorkspaceExit(() => { closeSelectedEmail(); setCollection("inbox"); setLane(value); })}
           collection={collection} onCollectionChange={guardedCollection} snoozedCount={snoozedCount}
           searchActive={indexedSearchActive}
           selectedEmail={selectedEmail}
@@ -190,7 +183,7 @@ function InboxDesktopPane({
               showPreview={showPreview}
               searchQuery={search}
               onClearSearch={() => { setSearch(""); searchRef?.current?.focus(); }}
-              onShowAllMail={() => { if (!allowWorkspaceExit()) return; setWorkspaceDirty(false); closeSelectedEmail(); setCollection("inbox"); setLane("__all"); }}
+              onShowAllMail={() => guardWorkspaceExit(() => { closeSelectedEmail(); setCollection("inbox"); setLane("__all"); })}
               onMarkAllRead={markAllVisibleRead}
               onRefresh={collection === "snoozed" ? refreshSnoozed : onRefresh}
               readOnly={readOnly}
@@ -215,16 +208,14 @@ function InboxDesktopPane({
               email={selectedEmail}
               account={selectedAccount}
               accent={accent}
-              onAction={(kind, payload) => { if (kind === "unsnooze" && !allowWorkspaceExit()) return; onAction(kind, payload); }}
+              onAction={(kind, payload) => { if (kind === "unsnooze") guardWorkspaceExit(() => { onAction(kind, payload); }); else onAction(kind, payload); }}
               onClose={guardedClose}
               onPrevious={previousEmail ? () => guardedOpen(previousEmail) : undefined}
               onNext={nextEmail ? () => guardedOpen(nextEmail) : undefined}
               onWorkspaceDirtyChange={setWorkspaceDirty}
+              onRequestDiscard={requestDiscard}
               showTriage={showTriage}
               showDraft={showDraft}
-              billOpen={billOpen}
-              setBillOpen={setBillOpen}
-              onOpenRecordedBill={onOpenRecordedBill}
               onAskAlfred={attachSelectedEmail}
               isMobile={false}
               readOnly={readOnly}
@@ -234,6 +225,7 @@ function InboxDesktopPane({
         <div ref={alfredWorkspace?.setDockTarget} className="inbox-a-alfred-dock" aria-hidden="true" />
       </div>
       <InboxUndoToast undo={undo} onUndo={onUndo} accent={accent} />
+      {discardDialog}
       <span role="status" aria-live="polite" className="sr-only">{announcement}</span>
     </div>
   );

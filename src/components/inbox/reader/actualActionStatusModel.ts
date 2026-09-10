@@ -1,4 +1,3 @@
-import type { FinanceDestination } from "../../finances/financesNavigation";
 import type {
   FinancialEmailReconciliation,
   FinancialPlanReasonCode,
@@ -7,8 +6,6 @@ import type {
 import type { BillResolutionState } from "./readerTypes";
 
 export type ActualResolutionLike = Pick<BillResolutionState, "status"> & Partial<BillResolutionState>;
-
-const ACTIONED_STATUSES = new Set<FinancialEmailReconciliation["status"]>(["already_scheduled", "already_recorded"]);
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -66,22 +63,6 @@ function reviewDetail(reason: string | undefined): string {
     return "The due date in Actual differs from this statement.";
   }
   return "More than one Actual item could match this statement.";
-}
-
-export function isActualActioned(actualStatus: FinancialEmailReconciliation | null | undefined): boolean {
-  return actualStatus ? ACTIONED_STATUSES.has(actualStatus.status) : false;
-}
-
-export function resolveActualFinanceTarget(
-  actualStatus: FinancialEmailReconciliation | null | undefined,
-): FinanceDestination | null {
-  if (!actualStatus || !ACTIONED_STATUSES.has(actualStatus.status)) return null;
-  const date = actualStatus.evidence?.dueDate;
-  const itemId = actualStatus.status === "already_scheduled"
-    ? actualStatus.evidence?.scheduleId
-    : actualStatus.evidence?.transactionId;
-  if (!date || !itemId) return null;
-  return actualStatus.status === "already_scheduled" ? { view:"schedule",date,scheduleId:itemId } : { view:"journal",date,transactionId:itemId };
 }
 
 export type ActualActionStatusTone = "success" | "warning" | "neutral" | "checking" | "unavailable";

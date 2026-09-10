@@ -1,4 +1,4 @@
-export { getFinances, getFinanceJournal } from './lib/financesApi';
+export { getFinances, getFinanceJournal, getUtilityMappings, updateUtilityMapping } from './lib/financesApi';
 export { previewKeepFinancialResult, confirmKeepFinancialResult, recheckFinancialCorrection, inspectFinancialCorrection, previewFinancialCorrection, confirmFinancialCorrection, getFinancialCorrection } from './lib/financialCorrectionApi';
 import type { SnoozedEmailEntry } from "../shared/types/email";
 export { listFinancialActivity, getFinancialActivity, inspectFinancialActivityBinding } from "./lib/financialActivityApi";

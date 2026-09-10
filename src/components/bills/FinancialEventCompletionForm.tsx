@@ -1,4 +1,5 @@
 import { ArrowDownLeft, ArrowLeft, ArrowUpRight, Landmark, Trash2, Wallet } from "lucide-react";
+import { Link } from "react-router";
 import PaymentConfirmation from '../financial/PaymentConfirmation';
 import Dropdown from "../shared/Dropdown";
 import DateField from "../shared/pickers/DateField";
@@ -46,6 +47,7 @@ export default function FinancialEventCompletionForm({ plan, onCancel, onQueued,
   // Capture the displayed revision once. A poll must not silently authorize an
   // entry against source changes the owner has not reviewed.
   const [revision] = useState(plan.workflow!.completion!);
+  const [profileSuggestion] = useState(plan.profileSuggestion);
   const [kind, setKind] = useState<EntryKind>(() => initialKind(plan));
   const [amount, setAmount] = useState(plan.candidate.amount == null ? "" : String(plan.candidate.amount));
   const [date, setDate] = useState(plan.candidate.due_date || "");
@@ -172,6 +174,14 @@ export default function FinancialEventCompletionForm({ plan, onCancel, onQueued,
       </>}
       {scheduled && <Field name="Schedule name (optional)"><Input className={inputClass} value={effectiveScheduleName} maxLength={200} onChange={(event) => setScheduleName(event.target.value)} disabled={sending || dismissing} placeholder={transfer ? "Account name + Payment" : payee || "Bill name"} /></Field>}
       <Field name="Notes (optional)"><Input className={inputClass} value={notes} maxLength={1000} onChange={(event) => setNotes(event.target.value)} disabled={sending || dismissing} /></Field>
+      {profileSuggestion && !sending && !stale && !dismissing ? (
+        values === baseline ? (
+          <Link to="/settings?tab=finance" state={{ financialProfileDraft: profileSuggestion }}
+            className={`inline-flex min-h-9 max-[600px]:min-h-11 items-center rounded-md px-2 text-xs font-medium text-primary underline decoration-primary/40 underline-offset-4 outline-none hover:bg-primary/10 hover:decoration-primary active:bg-primary/15 ${actionClass}`}>
+            Create profile from these suggestions
+          </Link>
+        ) : <p className="text-[11px] leading-relaxed text-foreground/75">Profile suggestions use the original details. Restore those details to create a profile.</p>
+      ) : null}
       </>}
       {!metadata && <p role="status" className="text-xs text-foreground/80">Loading Actual accounts…</p>}
       {metadata && !accounts.length && <div className="flex flex-wrap items-center gap-2 text-xs text-foreground/85">

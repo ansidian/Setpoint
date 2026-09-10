@@ -25,7 +25,7 @@ describe("demo mode API network guard", () => {
   it("dismisses a managed candidate in memory without changing fictional Actual transactions", async () => {
     const api = await importApiWithDemoMode("1");
     const before = await api.listFinancialActivity({ view: 'completed' });
-    const request = { emailUid: 'demo-email-budget', documentRevision: 1, eventRevision: 1 };
+    const request = { emailUid: 'demo-email-market-receipt', documentRevision: 1, eventRevision: 1 };
     expect(await api.dismissFinancialEvent(request)).toMatchObject({ workflow: { dismissed: true, completion: { canComplete: false, canDismiss: false } } });
     expect((await api.listFinancialActivity({ view: 'all' })).items.some(item => item.reference.id === 'demo-event-review')).toBe(false);
     expect((await api.listFinancialActivity({ view: 'completed' })).items).toEqual(before.items);
@@ -115,7 +115,7 @@ describe("demo mode API network guard", () => {
     const reference = { owner: "event" as const, id: "demo-event-review" };
     const before = await api.getFinancialActivity(reference);
     expect(before.actions.complete).toBe(true);
-    const request = { emailUid: "demo-email-budget", documentRevision: 1, eventRevision: 1,
+    const request = { emailUid: "demo-email-market-receipt", documentRevision: 1, eventRevision: 1,
       entry: { kind: "expense" as const, amount: 46.75, date: "2026-09-06", accountId: "demo-checking", payee: "Fictional Market" } };
     const plan = await api.completeFinancialEvent(request);
     expect(plan.workflow?.state).toBe("settled");

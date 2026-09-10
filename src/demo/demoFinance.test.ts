@@ -22,7 +22,7 @@ describe('shared fictional financial settlement', () => {
     const api = await demo();
     const before = await api.getDashboardFinance();
     const entry: FinancialEventCompletionEntry = { kind, amount: 23, date, accountId: 'demo-checking', fromAccountId: 'demo-checking', toAccountId: 'demo-savings', payee: 'Fictional Market', categoryId: 'demo-utilities' };
-    await api.completeFinancialEvent({ emailUid: 'demo-email-budget', documentRevision: 1, eventRevision: 1, entry });
+    await api.completeFinancialEvent({ emailUid: 'demo-email-market-receipt', documentRevision: 1, eventRevision: 1, entry });
     const original = await api.getFinancialActivity(managed);
     expect(original.actions.correct).toBe(true);
     const inspection = await api.inspectFinancialCorrection(managed);
@@ -33,13 +33,17 @@ describe('shared fictional financial settlement', () => {
     expect((await api.getDashboardFinance()).spending.current?.total).toBeCloseTo(before.spending.current!.total! + (kind === 'expense' ? 23 : 0));
     const preview = await api.previewFinancialCorrection(managed, { type: kind === 'expense' ? 'payment' : kind, amountCents: 2900, date, accountId: 'demo-checking', fromAccountId: 'demo-checking', toAccountId: 'demo-savings', categoryId: 'demo-utilities' });
     await api.confirmFinancialCorrection(preview.id, 'same-key');
-    expect((await api.resolveFinancialEmailPlan({ emailId: 'demo-email-budget' })).candidate).toMatchObject({ amount: 29, type: kind });
+    expect((await api.resolveFinancialEmailPlan({ emailId: 'demo-email-market-receipt' })).candidate).toMatchObject({ amount: 29, type: kind });
     expect((await api.getFinancialActivity(managed)).amountCents).toBe(kind === 'income' ? 2900 : -2900);
+    const workspace = await api.getFinances();
+    const recorded = workspace.recordedHistory?.transactions.filter(row => row.id.startsWith('demo-completed-'));
+    expect(recorded).toHaveLength(kind === 'bill' ? 0 : kind === 'transfer' ? 2 : 1);
+    if (kind === 'expense' || kind === 'income') expect(recorded?.[0]).toMatchObject({ date, amountCents: kind === 'income' ? 2900 : -2900 });
     const settled = await api.getCalendarBillsRange(date, date);
     await api.confirmFinancialCorrection(preview.id, 'same-key');
     expect(await api.getCalendarBillsRange(date, date)).toEqual(settled);
     expect((await api.getFinancialActivity(managed)).originalReceipts).toEqual(original.originalReceipts);
-    expect((await api.getTransactionImportEmailStatus('demo-email-budget')).financialEvent?.workflow?.correction?.state).toBe('completed');
+    expect((await api.getTransactionImportEmailStatus('demo-email-market-receipt')).financialEvent?.workflow?.correction?.state).toBe('completed');
     expect((await api.getDashboardFinance()).spending.current?.total).toBeCloseTo(before.spending.current!.total! + (kind === 'expense' ? 29 : 0));
     if (kind === 'bill') expect((await api.getCurrentDashboard()).bills).toEqual(expect.arrayContaining([expect.objectContaining({ scheduleId: 'demo-completed-schedule', amount: 29 })]));
   });
@@ -48,7 +52,7 @@ describe('shared fictional financial settlement', () => {
     const api = await demo();
     const before = await api.getDashboardFinance();
     const entry: FinancialEventCompletionEntry = { kind: 'transfer_schedule', amount: 250, date: '2026-09-14', fromAccountId: 'demo-checking', toAccountId: 'demo-savings', scheduleName: 'Savings transfer' };
-    const plan = await api.completeFinancialEvent({ emailUid: 'demo-email-budget', documentRevision: 1, eventRevision: 1, entry });
+    const plan = await api.completeFinancialEvent({ emailUid: 'demo-email-market-receipt', documentRevision: 1, eventRevision: 1, entry });
     expect(plan).toMatchObject({ candidate: { type: 'transfer', event_kind: 'payment_scheduled', amount: 250 }, operation: { intended: 'create_transfer_schedule' }, reconciliation: { status: 'already_scheduled' }, targets: { fromAccount: { id: 'demo-checking' }, toAccount: { id: 'demo-savings' }, schedule: { id: 'demo-completed-schedule' } } });
     const activity = await api.getFinancialActivity(managed);
     expect(activity).toMatchObject({ status: 'completed', originalReceipts: [{ input: entry, result: { scheduleId: 'demo-completed-schedule' } }] });
@@ -68,7 +72,7 @@ describe('shared fictional financial settlement', () => {
   it.each([1, -1])('edits an exact scheduled transfer while preserving its %s direction and recurrence', async sign => {
     const api = await demo();
     const entry: FinancialEventCompletionEntry = { kind: 'transfer_schedule', amount: 250, date: '2026-09-14', fromAccountId: 'demo-checking', toAccountId: 'demo-savings', scheduleName: 'Savings transfer' };
-    await api.completeFinancialEvent({ emailUid: 'demo-email-budget', documentRevision: 1, eventRevision: 1, entry });
+    await api.completeFinancialEvent({ emailUid: 'demo-email-market-receipt', documentRevision: 1, eventRevision: 1, entry });
     const original = await api.getFinancialActivity(managed);
     const before = await api.inspectFinancialCorrection(managed);
     const recurring = structuredClone(before.snapshot);
@@ -91,13 +95,13 @@ describe('shared fictional financial settlement', () => {
     const transferPayee = after.snapshot.payees.find(payee => payee.id === nextConditions.find(condition => condition.field === 'payee')!.value);
     expect(transferPayee).toMatchObject({ transfer_acct: sign > 0 ? 'demo-savings' : 'demo-credit' });
     expect((await api.getCalendarBillsRange(date, '2026-09-30')).schedules).toEqual(expect.arrayContaining([expect.objectContaining({ scheduleId: 'demo-completed-schedule', amount: 310, type: 'transfer', next_date: '2026-09-21' })]));
-    expect((await api.resolveFinancialEmailPlan({ emailId: 'demo-email-budget' })).candidate).toMatchObject({ type: 'transfer', event_kind: 'payment_scheduled', amount: 310 });
+    expect((await api.resolveFinancialEmailPlan({ emailId: 'demo-email-market-receipt' })).candidate).toMatchObject({ type: 'transfer', event_kind: 'payment_scheduled', amount: 310 });
     expect((await api.getFinancialActivity(managed)).originalReceipts).toEqual(original.originalReceipts);
   });
 
   it('preserves linked historical payments when editing a transfer schedule and keeps schedule-only result identity', async () => {
     const api = await demo();
-    await api.completeFinancialEvent({ emailUid: 'demo-email-budget', documentRevision: 1, eventRevision: 1, entry: { kind: 'transfer_schedule', amount: 250, date: '2026-09-14', fromAccountId: 'demo-checking', toAccountId: 'demo-savings', scheduleName: 'Savings transfer' } });
+    await api.completeFinancialEvent({ emailUid: 'demo-email-market-receipt', documentRevision: 1, eventRevision: 1, entry: { kind: 'transfer_schedule', amount: 250, date: '2026-09-14', fromAccountId: 'demo-checking', toAccountId: 'demo-savings', scheduleName: 'Savings transfer' } });
     const before = await api.inspectFinancialCorrection(managed);
     const history = structuredClone(before.snapshot);
     history.transactions = [
@@ -126,7 +130,7 @@ describe('shared fictional financial settlement', () => {
     const api = await demo();
     const draft = { type: 'transfer_schedule' as const, amountCents: 25000, date: '2026-09-14', fromAccountId: 'demo-checking', toAccountId: 'demo-savings' };
     await expect(api.previewFinancialCorrection(imported, draft)).rejects.toThrow('exact existing transfer schedule');
-    await api.completeFinancialEvent({ emailUid: 'demo-email-budget', documentRevision: 1, eventRevision: 1, entry: { ...draft, kind: 'transfer_schedule', amount: 250 } });
+    await api.completeFinancialEvent({ emailUid: 'demo-email-market-receipt', documentRevision: 1, eventRevision: 1, entry: { ...draft, kind: 'transfer_schedule', amount: 250 } });
     await expect(api.previewFinancialCorrection(managed, { ...draft, date })).rejects.toThrow('future date');
     await expect(api.previewFinancialCorrection(managed, { ...draft, categoryId: 'demo-utilities' })).rejects.toThrow('transfer accounts');
     await expect(api.previewFinancialCorrection(managed, { ...draft, targetScheduleId: 'some-other-schedule' })).rejects.toThrow('exact bound schedule');
@@ -134,7 +138,7 @@ describe('shared fictional financial settlement', () => {
 
   it('does not turn an arrived transfer notice into a recorded payment', async () => {
     const api = await demo();
-    await expect(api.completeFinancialEvent({ emailUid: 'demo-email-budget', documentRevision: 1, eventRevision: 1, entry: { kind: 'transfer_schedule', amount: 250, date, fromAccountId: 'demo-checking', toAccountId: 'demo-savings' } })).rejects.toThrow('does not confirm a completed transfer');
+    await expect(api.completeFinancialEvent({ emailUid: 'demo-email-market-receipt', documentRevision: 1, eventRevision: 1, entry: { kind: 'transfer_schedule', amount: 250, date, fromAccountId: 'demo-checking', toAccountId: 'demo-savings' } })).rejects.toThrow('does not confirm a completed transfer');
     expect((await api.getFinancialActivity(managed)).status).toBe('needs_attention');
     expect((await api.getCalendarBillsRange(date, date)).schedules.some(row => row.scheduleId === 'demo-completed-schedule')).toBe(false);
   });
@@ -288,4 +292,20 @@ describe('shared fictional financial settlement', () => {
     expect(left.snapshot.rules).toEqual(right.snapshot.rules);
     expect(left.snapshot.dates).toEqual(right.snapshot.dates);
   });
+});
+
+it('keeps utility mapping edits in memory and preserves source matching', async () => {
+  const api = await demo();
+  const before = await api.getUtilityMappings();
+  const utility = before.utilities[0]!;
+  const used = new Set(before.utilities.flatMap(row => row.scheduleIds));
+  const schedule = before.schedules.find(row => row.id && !used.has(row.id))!;
+  expect(schedule).toBeDefined();
+  const payeeId = String(schedule.conditions?.find(condition => condition.field === 'payee')?.value);
+  await expect(api.updateUtilityMapping(utility.id, { budgetId: before.budgetId!, payeeId, scheduleIds: [schedule.id!, schedule.id!] })).rejects.toThrow('one bill schedule');
+  expect((await api.getUtilityMappings()).utilities).toEqual(before.utilities);
+  const saved = await api.updateUtilityMapping(utility.id, { budgetId: before.budgetId!, payeeId, scheduleIds: [schedule.id!] });
+  expect(saved).toMatchObject({ ...utility, payeeId, scheduleIds: [schedule.id!] });
+  expect((await api.getFinances()).utilities.find(row => row.identity.id === utility.id)?.identity).toEqual(saved);
+  expect((await api.getUtilityMappings()).utilities.find(row => row.id === utility.id)).toEqual(saved);
 });

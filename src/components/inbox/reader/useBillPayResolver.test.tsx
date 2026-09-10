@@ -46,19 +46,17 @@ function plan(candidate: BillCandidate, status: FinancialReconciliationStatus = 
 }
 
 describe("useBillPayResolver", () => {
-  it("resolves a bill candidate on selection before Actual record is opened and caches it", async () => {
+  it("resolves a bill candidate on selection and reuses it across ordinary rerenders", async () => {
     vi.mocked(resolveFinancialEmailPlan).mockResolvedValueOnce(plan(
       { payee: "Power", amount: 42 },
       "already_scheduled",
     ));
 
     const { result, rerender } = renderHook(
-      ({ billOpen }) => useBillPayResolver({
+      () => useBillPayResolver({
         email,
-        billOpen,
         bodyState: { loading: false, body: "Statement balance: $42" },
       }),
-      { initialProps: { billOpen: false } },
     );
 
     await waitFor(() => {
@@ -77,8 +75,8 @@ describe("useBillPayResolver", () => {
       source: "triage",
     });
 
-    rerender({ billOpen: true });
-    rerender({ billOpen: false });
+    rerender();
+    expect(result.current.actualStatus).toEqual({ status: "already_scheduled" });
   });
 
   it("reuses a resolved seed when returning to the same email", async () => {
@@ -95,7 +93,6 @@ describe("useBillPayResolver", () => {
     const { result, rerender } = renderHook(
       ({ selectedEmail }) => useBillPayResolver({
         email: selectedEmail,
-        billOpen: false,
         bodyState: { loading: false, body: "Statement balance" },
       }),
       { initialProps: { selectedEmail: email } },
@@ -127,7 +124,6 @@ describe("useBillPayResolver", () => {
 
     const { result } = renderHook(() => useBillPayResolver({
       email,
-      billOpen: true,
       bodyState: { loading: false, body: "Statement balance: $42" },
     }));
 
@@ -150,7 +146,7 @@ describe("useBillPayResolver", () => {
     } };
     const recorded = { ...plan({ payee: "Power" }, "already_recorded"), workflow: { ...waiting.workflow, state: "settled" as const, reason: "Recorded." } };
     vi.mocked(resolveFinancialEmailPlan).mockResolvedValueOnce(waiting).mockResolvedValueOnce(recorded);
-    const useRecord = () => useBillPayResolver({ email, billOpen: true, bodyState: { loading: false, body: "Statement balance" } });
+    const useRecord = () => useBillPayResolver({ email, bodyState: { loading: false, body: "Statement balance" } });
     const first = renderHook(useRecord);
     await waitFor(() => expect(first.result.current.plan?.workflow?.state).toBe("needs_review"));
     first.unmount();
@@ -167,7 +163,6 @@ describe("useBillPayResolver", () => {
 
     const { result } = renderHook(() => useBillPayResolver({
       email,
-      billOpen: false,
       bodyState: { loading: false, body: "Statement balance: $42" },
     }));
 

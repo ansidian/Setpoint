@@ -1,3 +1,4 @@
+import { BILL_EVENT_KINDS } from "../../../../shared/types/bills";
 import {
   canDismissSnapshotEmail,
   canHandleSnapshotEmail,
@@ -28,9 +29,9 @@ export function resolveReaderActions(
 
   const showMutableActions = !readOnly && !email?._snoozedUnavailable;
   const showDestructiveActions = showMutableActions && !catchUp && !email?._snoozed;
-  // Actual records belong to the source email, independently of its triage or
-  // snapshot lifecycle. The workspace resolves ownership before allowing edits.
-  const canOpenActualRecord = !!email;
+  // Triage must identify a financial event; lifecycle alone is not evidence.
+  const eventKind = (email?.bill_candidate || email?.extractedBill)?.event_kind;
+  const canCreateProfile = eventKind !== "other" && BILL_EVENT_KINDS.some(kind => kind === eventKind);
 
   // Eligible for the full triage workflow (move/handle), used to size the mobile
   // actions menu. Dismiss-only rows (e.g. queued) are intentionally excluded, matching
@@ -51,7 +52,7 @@ export function resolveReaderActions(
     isUntriagedReadSnapshot,
     showMutableActions,
     showDestructiveActions,
-    canOpenActualRecord,
+    canCreateProfile,
     showSnapshotWorkflowActions,
     canReopen: snapshotEligible && canReopenSnapshotEmail(email, readOnly),
     canHandle: snapshotEligible && canHandleSnapshotEmail(email, readOnly),

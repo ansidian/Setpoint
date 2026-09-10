@@ -2270,42 +2270,6 @@ body {
   background: rgba(255,255,255,0.035) !important;
   transform: scale(0.975);
 }
-.bill-drawer-close,
-.mobile-bill-drawer-toggle,
-.mobile-bill-drawer-handle {
-  transition:
-    color var(--sp-motion-fast) var(--sp-ease-out),
-    background-color var(--sp-motion-fast) var(--sp-ease-out),
-    border-color var(--sp-motion-fast) var(--sp-ease-out),
-    transform var(--sp-motion-fast) var(--sp-ease-out);
-}
-.mobile-bill-drawer-handle-indicator {
-  transition: background-color var(--sp-motion-fast) var(--sp-ease-out);
-}
-.bill-drawer-close:hover,
-.bill-drawer-close:focus-visible:where([data-sp-keyboard-focus="true"] *),
-.mobile-bill-drawer-toggle:hover,
-.mobile-bill-drawer-toggle:focus-visible:where([data-sp-keyboard-focus="true"] *) {
-  color: var(--sp-text) !important;
-  background: rgba(255,255,255,0.07) !important;
-  border-color: rgba(255,255,255,0.14) !important;
-  transform: translateY(-1px);
-}
-.bill-drawer-close:focus-visible:where([data-sp-keyboard-focus="true"] *),
-.mobile-bill-drawer-toggle:focus-visible:where([data-sp-keyboard-focus="true"] *),
-.mobile-bill-drawer-handle:focus-visible:where([data-sp-keyboard-focus="true"] *) {
-  outline: 2px solid color-mix(in srgb, var(--sp-accent) 68%, transparent);
-  outline-offset: 2px;
-}
-.bill-drawer-close:active,
-.mobile-bill-drawer-toggle:active,
-.mobile-bill-drawer-handle:active {
-  transform: translateY(0) scale(0.97);
-}
-.mobile-bill-drawer-handle:hover .mobile-bill-drawer-handle-indicator,
-.mobile-bill-drawer-handle:focus-visible:where([data-sp-keyboard-focus="true"] *) .mobile-bill-drawer-handle-indicator {
-  background: rgba(255,255,255,0.26) !important;
-}
 .inbox-email-row:active {
   filter: brightness(1.08);
 }
@@ -2580,12 +2544,7 @@ body {
   .inbox-mobile-triage-button:focus-visible:where([data-sp-keyboard-focus="true"] *) {
     transform: translateY(0) !important;
   }
-  .mobile-bottom-nav-button:active,
-  .bill-drawer-close:hover,
-  .bill-drawer-close:active,
-  .mobile-bill-drawer-toggle:hover,
-  .mobile-bill-drawer-toggle:active,
-  .mobile-bill-drawer-handle:active {
+  .mobile-bottom-nav-button:active {
     transform: none !important;
   }
   .toast-undo-button:active:not(:disabled) {
@@ -2595,8 +2554,6 @@ body {
   .anchored-floating-panel-close:active {
     transform: none !important;
   }
-  /* Note: the AI-shimmer gradient (BillBadgeHeader) is already held static for reduced-motion by
-     the global `*, *::before, *::after { animation-duration: 0.01ms }` reset further below. */
 }
 
 /* Clickable summary badges */

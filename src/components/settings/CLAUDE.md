@@ -21,7 +21,7 @@ The settings surface: a Connections directory plus Automation, Finance, and Syst
 
 ### Sections (one per tab)
 - `sections/ConnectionsSettingsSection.tsx` — directory shell that binds projected service rows, onboarding progress, and advanced deep links to connection panels
-- `sections/ActualBudgetSettingsSection.tsx` — Finance preferences: browser alerts and utility pay links, with lazy Actual metadata
+- `sections/ActualBudgetSettingsSection.tsx` — Finance preferences: saved financial profiles, browser alerts and utility pay links, with automatic budget-scoped Actual metadata, explicit failure retry, and one-time unsaved review-draft or partial email-seed navigation
 - `sections/EmailAutomationSettingsSection.tsx` — triage mode, sounds, AI models, extraction, lookback
 - `sections/SystemSettingsSection.tsx` — passkeys and API tokens
 
@@ -34,8 +34,12 @@ The settings surface: a Connections directory plus Automation, Finance, and Syst
 - `cards/ImportantSendersCard.tsx` — auto-learned and manual important sender lists
 - `cards/TrustedRemoteContentCard.tsx` — persisted exact-sender + receiving-account remote-image trust list and removal
 
-### Cards: utility links
-- `cards/UtilityPayLinksCard.tsx` — per-schedule bill-pay website URLs; source for the calendar "Pay Online" button
+### Cards: financial preferences
+- `cards/FinancialProfilesCard.tsx` — compact profile list and explicit editor for exact sender identity, named Actual destinations; classified email seeds start enabled and leave unknown targets unset, and explicitly disabled profiles remain editable offline
+- `cards/financialProfileModel.ts` — profile form defaults, navigation-draft projection, validation, target options and destination summaries; internal target IDs never become display labels
+
+- `cards/UtilityMappingsCard.tsx` — compact budget-bound utility rows with one Actual Schedule, its derived read-only payee and inline pay URL, preserving source matching
+- `cards/UtilityPayLinksCard.tsx` — inline utility pay URL field and additional schedule links within Utility mappings; source for the calendar "Pay Online" button
 
 ### Cards: connections + security
 - `cards/GoogleWorkspaceAccountsPanel.tsx` — Gmail/Calendar account add, reconnect, edit, reorder, and removal

@@ -1,9 +1,10 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import BillBadge from "./BillBadge";
+import FinancialRecord from "../financial/FinancialRecord";
 import { invalidateActualMetadata } from "../../lib/actualMetadata";
 import type { FinancialEmailPlan, FinancialTargetKind } from "../../../shared/types/bills";
 import type { FinancialEventCompletionRequest } from "../../../shared/types/financial-operations";
+import type { FinancialActivity } from "../../../shared/types/financial-activity";
 
 const target = (kind: FinancialTargetKind) => ({ kind, status: "not_applicable" as const, provenance: [] });
 function waitingPlan(revision = 1): FinancialEmailPlan {
@@ -19,6 +20,16 @@ function waitingPlan(revision = 1): FinancialEmailPlan {
     workflow: { id: "event-one", state: "waiting", reason: "Waiting for the transaction date and account.", relatedEmails: 1, nextAttemptAt: null,
       completion: { emailUid: "receipt-one", documentRevision: revision, eventRevision: revision, canComplete: true } },
   };
+}
+
+function record(plan: FinancialEmailPlan) {
+  const activity: FinancialActivity = {
+    id: "event-one", reference: { owner: "event", id: "event-one" }, occurrences: [], source: "managed", contexts: ["arrival"],
+    emailUids: [], subject: "Receipt", payee: "Example Merchant", amountCents: -3000, currency: "USD", createdAt: 1, updatedAt: 1,
+    status: "needs_attention", reason: "Confirm details", actions: { complete: true, retry: false, inspect: true, correct: false },
+    originalReceipts: [], sourceEvidence: [], targetBindings: [], liveState: "not_checked", effectiveResult: null, completionPlan: plan, importItem: null, runs: [],
+  };
+  return <FinancialRecord activity={activity} onDirty={() => {}} onChanged={() => {}} onRepair={() => {}} registerBack={() => {}} requestDiscard={action => action()} />;
 }
 
 let currentRevision: number;
@@ -56,7 +67,7 @@ async function fillMissingFields() {
 
 describe("owner completion of a managed financial record", () => {
   it("confirms missing context without an inferred category and distinguishes queuing from a recorded entry", async () => {
-    render(<BillBadge bill={{}} plan={waitingPlan()} />);
+    render(record(waitingPlan()));
     expect(screen.getByRole<HTMLButtonElement>("button", { name: "Review before sending" }).disabled).toBe(true);
     await fillMissingFields();
     expect(screen.getByRole("button", { name:"Category (optional)" }).textContent).toBe("No category");
@@ -64,7 +75,7 @@ describe("owner completion of a managed financial record", () => {
     fireEvent.submit(screen.getByRole("form", { name: "Complete financial record" }));
     expect(confirmed).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Record in Actual' }));
-    expect(await screen.findByText("Your confirmed record is queued for Actual.")).toBeTruthy();
+    expect(await screen.findByText("Confirmation received")).toBeTruthy();
     expect(screen.queryByText("Recorded in Actual")).toBeNull();
     expect(screen.queryByRole("button", { name: "Review before sending" })).toBeNull();
     expect(confirmed).toEqual({ emailUid: "receipt-one", documentRevision: 1, eventRevision: 1,
@@ -72,11 +83,11 @@ describe("owner completion of a managed financial record", () => {
   });
 
   it("preserves owner edits and the reviewed revision when a newer source arrives during editing", async () => {
-    const view = render(<BillBadge bill={{}} plan={waitingPlan()} />);
+    const view = render(record(waitingPlan()));
     await fillMissingFields();
     fireEvent.change(screen.getByLabelText("Outflow amount (USD)"), { target: { value: "45" } });
     currentRevision = 2;
-    view.rerender(<BillBadge bill={{}} plan={waitingPlan(2)} />);
+    view.rerender(record(waitingPlan(2)));
     expect(screen.getByRole<HTMLButtonElement>("button", { name: "Review before sending" }).disabled).toBe(false);
     fireEvent.submit(screen.getByRole("form", { name: "Complete financial record" }));
     expect(confirmed).toBeNull();

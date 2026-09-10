@@ -1,3 +1,4 @@
+import { DEMO_RECEIPT_UID } from "./financialReceipt";
 import { getDemoCorrection } from './financialCorrections';
 import type { FinancialEmailPlan, FinancialPlanTarget } from '../../shared/types/bills';
 import type { FinancialEventCompletionRequest, FinancialEventDismissalRequest } from '../../shared/types/financial-operations';
@@ -6,6 +7,7 @@ import { publishDemoFinanceSnapshot, announceDemoFinanceChange } from './finance
 import type { FinancialActivity, FinancialWriteEvidence } from '../../shared/types/financial-activity';
 import { getDemoSeed } from './store';
 import { demoNotFound } from './apiHandler';
+import { demoFinancialProfileSuggestion } from './financialProfiles';
 
 const createdAt = Date.now();
 let dismissed = false;
@@ -21,18 +23,24 @@ export function demoCompletionPlan(): FinancialEmailPlan {
   const scheduled = entry?.kind === 'bill' || entry?.kind === 'transfer_schedule';
   const eventKind = entry?.kind === 'bill' ? 'bill_issued' : entry?.kind === 'transfer_schedule' ? 'payment_scheduled' : entry?.kind === 'transfer' ? 'account_transfer_completed' : entry?.kind === 'income' ? 'payment_completed' : 'purchase';
   const payee = transfer ? undefined : entry?.payee || 'Fictional Market';
+  const payeeId = transfer ? undefined : effective?.payeeId
+    || getDemoSeed().actualMetadata.payees.find(item => !item.transfer_acct && item.name === payee)?.id;
   return { version: 1, identity: { version: 1, status: 'resolved', key: 'demo-event-review' },
+    ...(!entry && !dismissed ? {
+      profile: { status: 'missing' as const, budgetId: 'demo-budget', revision: getDemoSeed().settings.financial_profiles_revision, reason: 'Review this entry and configure a profile for similar receipts.' },
+      profileSuggestion: demoFinancialProfileSuggestion(),
+    } : {}),
     candidate: { type: entry?.kind === 'transfer_schedule' ? 'transfer' : entry?.kind || 'expense', payee, event_kind: eventKind, amount_kind: entry?.kind === 'bill' ? 'total_due' : transfer ? 'payment_amount' : 'transaction_amount', amount: entry?.amount || 46.75, due_date: entry?.date || getDemoSeed().dateKey, currency: 'USD' },
     classification: { documentKind: entry?.kind === 'bill' ? 'utility_statement' : entry?.kind === 'income' ? 'income' : 'one_time_transaction', eventKind, confidence: 1, reasons: [] },
     operation: { kind: completed || dismissed ? 'no_write' : 'review', intended: entry?.kind === 'bill' ? 'create_schedule' : entry?.kind === 'transfer' ? 'create_transfer' : entry?.kind === 'transfer_schedule' ? 'create_transfer_schedule' : 'create_transaction', reasons: [] },
-    targets: { account: target('account', transfer ? undefined : entry?.accountId || 'demo-checking'), payee: { ...target('payee', transfer ? undefined : effective?.payeeId || (completed ? 'demo-payee-completed-review' : undefined)), label: payee }, category: target('category', entry?.categoryId || undefined), fromAccount: target('from_account', entry?.fromAccountId), toAccount: target('to_account', entry?.toAccountId), schedule: target('schedule', result?.scheduleId || (scheduled ? 'demo-completed-schedule' : undefined)) },
+    targets: { account: target('account', transfer ? undefined : entry?.accountId || 'demo-checking'), payee: { ...target('payee', payeeId), label: payee }, category: target('category', entry?.categoryId || undefined), fromAccount: target('from_account', entry?.fromAccountId), toAccount: target('to_account', entry?.toAccountId), schedule: target('schedule', result?.scheduleId || (scheduled ? 'demo-completed-schedule' : undefined)) },
     reconciliation: { status: completed ? scheduled ? 'already_scheduled' : 'already_recorded' : 'needs_review', reason: effective ? 'Correction verified in the fictional budget.' : completed ? scheduled ? 'Scheduled in the fictional budget.' : 'Recorded in the fictional budget.' : 'Confirm the payment details.' },
     automation: { eligible: false, operationClass: entry?.kind === 'bill' ? 'utility_schedule' : entry?.kind === 'transfer_schedule' ? 'transfer_schedule' : entry?.kind === 'transfer' ? 'completed_transfer' : entry?.kind === 'income' ? 'income' : 'one_time_expense', rollout: 'observe_only', gates: [], reasons: [] }, reviewReasons: [],
     workflow: { ...(correction ? { correction: { id:correction.id, state:correction.state, revision:correction.revision } } : {}), id: 'demo-event-review', dismissed, state: completed || dismissed ? 'settled' : 'needs_review', relatedEmails: 1, reason: null, nextAttemptAt: null,
-      completion: { emailUid: 'demo-email-budget', documentRevision: completed || dismissed ? 2 : 1, eventRevision: completed || dismissed ? 2 : 1, canComplete: !completed && !dismissed, canDismiss: !completed && !dismissed } } };
+      completion: { emailUid: DEMO_RECEIPT_UID, documentRevision: completed || dismissed ? 2 : 1, eventRevision: completed || dismissed ? 2 : 1, canComplete: !completed && !dismissed, canDismiss: !completed && !dismissed } } };
 }
 export function dismissDemoFinancialEvent(request: FinancialEventDismissalRequest): FinancialEmailPlan {
-  if (request.emailUid !== 'demo-email-budget') return demoNotFound(request.emailUid);
+  if (request.emailUid !== DEMO_RECEIPT_UID) return demoNotFound(request.emailUid);
   if (dismissed) return demoCompletionPlan();
   if (completed || request.documentRevision !== 1 || request.eventRevision !== 1) throw Object.assign(new Error('This fictional record changed. Refresh its current status.'), { status: 409 });
   dismissed = true;
@@ -40,7 +48,7 @@ export function dismissDemoFinancialEvent(request: FinancialEventDismissalReques
   return demoCompletionPlan();
 }
 export function completeDemoFinancialEvent(request: FinancialEventCompletionRequest): FinancialEmailPlan {
-  if (request.emailUid !== 'demo-email-budget') return demoNotFound(request.emailUid);
+  if (request.emailUid !== DEMO_RECEIPT_UID) return demoNotFound(request.emailUid);
   if (completed || dismissed || request.documentRevision !== 1 || request.eventRevision !== 1) throw Object.assign(new Error('This fictional record changed. Refresh its current status.'), { status: 409 });
   if (!(request.entry.amount > 0) || !request.entry.date) throw new Error('Enter an amount and date.');
   const entry = request.entry;
@@ -48,7 +56,8 @@ export function completeDemoFinancialEvent(request: FinancialEventCompletionRequ
   const seed = getDemoSeed();
   if (transfer ? !entry.fromAccountId || !entry.toAccountId || entry.fromAccountId === entry.toAccountId : !entry.accountId) throw new Error('Choose the accounts for this record.');
   if (entry.kind === 'transfer_schedule' && entry.date <= seed.dateKey) throw new Error('The payment date has arrived or passed. This notice does not confirm a completed transfer.');
-  const payeeId = entry.kind === 'transfer_schedule' ? `demo-transfer-payee-${entry.fromAccountId}` : 'demo-payee-completed-review';
+  const payeeId = entry.kind === 'transfer_schedule' ? `demo-transfer-payee-${entry.fromAccountId}`
+    : seed.actualMetadata.payees.find(item => !item.transfer_acct && item.name === (entry.payee || 'Fictional Market'))?.id || 'demo-payee-completed-review';
   const completionPayee = entry.kind === 'transfer_schedule'
     ? { id: payeeId, name: seed.actualMetadata.accounts.find(account => account.id === entry.fromAccountId)?.name || 'Demo account', transfer_acct: entry.fromAccountId }
     : { id: payeeId, name: entry.payee || 'Fictional Market' };
@@ -77,7 +86,7 @@ export function demoReviewActivity(base: FinancialActivity): FinancialActivity {
   const reference = { owner: 'event' as const, id: 'demo-event-review' };
   const entry = completed?.entry;
   return { ...base, id: JSON.stringify(['event', reference.id]), reference, occurrences: [reference], source: 'managed', contexts: ['arrival'],
-    emailUids: ['demo-email-budget'], subject: 'Your Fictional Market receipt', payee: entry?.payee || 'Fictional Market', amountCents: entry ? Math.round(entry.amount * 100) * (entry.kind === 'income' ? 1 : -1) : -4675,
+    emailUids: [DEMO_RECEIPT_UID], subject: 'Your Fictional Market receipt', payee: entry?.payee || 'Fictional Market', amountCents: entry ? Math.round(entry.amount * 100) * (entry.kind === 'income' ? 1 : -1) : -4675,
     status: dismissed ? 'dismissed' : completed ? 'completed' : 'needs_attention', reason: plan.reconciliation.reason || '', actions: { complete: !completed && !dismissed, correct: !!completed, retry: false, inspect: true },
     completionPlan: plan, importItem: null, runs: [], targetBindings: [], sourceEvidence: [{ label: 'Fictional receipt', text: 'Fictional Market payment: $46.75. Confirm the account.' }],
     originalReceipts: completed ? [{ reference, revision: 2, capturedAt: createdAt, captureKind: 'settlement', outcome: 'added', input: entry, result: entry?.kind === 'bill' || entry?.kind === 'transfer_schedule' ? { scheduleId: 'demo-completed-schedule' } : { transactionId: 'demo-completed-review' }, evidence: structuredClone(completionEvidence) }] : [], effectiveResult: null };

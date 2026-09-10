@@ -136,11 +136,12 @@ export function DashboardShell({
   useWarmImport(importNewsTab, { enabled: !isMobile });
   const {
     readerOpen: mobileReaderOpen, prepareEmailOpen, dismissReader,
-    returnHome, readerBackLabel,
-  } = useMobileInboxNavigation({ isMobile, tab, setTab });
+    returnHome, readerBackLabel, registerReaderBeforeClose,
+  } = useMobileInboxNavigation({ isMobile, tab, setTab, foregroundOpen: settingsOpen || financialOpen });
   // Declared before setShellTab so the calendar mount-on-first-visit setter is in
   // scope; the calendar tab stays mounted (Activity-frozen) once first visited.
   const [calendarMounted, setCalendarMounted] = useState(false);
+  const [financesScrollTopRequestId, setFinancesScrollTopRequestId] = useState(0);
   const [inboxScrollTopRequestId, setInboxScrollTopRequestId] = useState(0);
   // Same mount-on-first-visit treatment for news: it fetches on mount, so avoid
   // eagerly hitting the news API before the owner ever opens the tab.
@@ -478,6 +479,7 @@ export function DashboardShell({
               activeSnapshot={inboxActiveSnapshot}
               snapshotNavigation={snapshotNavigation}
               onMobileReaderBack={dismissReader}
+              onMobileReaderBeforeCloseChange={registerReaderBeforeClose}
               mobileReaderBackLabel={readerBackLabel}
               mobileScrollTopRequestId={inboxScrollTopRequestId}
               mobileShellActions={isMobile ? (
@@ -493,7 +495,6 @@ export function DashboardShell({
               onLiveReadOverrideChange={handleLiveReadOverrideChange}
               snoozedEntries={liveData.snoozedEntries}
               resurfacedEntries={liveData.resurfacedEntries}
-              onOpenRecordedBill={handleInboxOpenRecordedBill}
               onRefresh={onQuickRefresh}
               commitPendingUndoSignal={calendarOpenRequestId}
               isMobile={isMobile}
@@ -511,9 +512,10 @@ export function DashboardShell({
             </Suspense>
           ) : null}
         </DashboardTabPanel>
-        <DashboardTabPanel tab="finances" active={tab === "finances"} isMobile={isMobile}>
-          {financesRoute.mounted && <Suspense fallback={<WorkspaceLoading surface="finances" />}><FinancesWorkspace search={financesRoute.search} active={tab === 'finances'} /></Suspense>}
-        </DashboardTabPanel>
+        {/* Finance details portal outside Activity; unmount this surface when leaving. */}
+        {tab === "finances" && !settingsOpen && !financialOpen && <DashboardTabPanel tab="finances" active isMobile={isMobile}>
+          {financesRoute.mounted && <Suspense fallback={<WorkspaceLoading surface="finances" />}><FinancesWorkspace search={financesRoute.search} active scrollTopRequestId={financesScrollTopRequestId}/></Suspense>}
+        </DashboardTabPanel>}
         <DashboardTabPanel tab="notes" active={tab === "notes"} isMobile={isMobile}>
           {notesMounted && !isMobile && !demoMode ? (
             <Suspense fallback={<div className="notes-canvas-loading" aria-label="Loading notes canvas" />}>
@@ -535,6 +537,7 @@ export function DashboardShell({
           tab={tab}
           onTab={setShellTab}
           onRetap={(t: DashboardTab) => {
+            if (t === "finances") setFinancesScrollTopRequestId((id) => id + 1);
             if (t === "calendar") jumpCalendarToToday();
             if (t === "dashboard") scrollDashboardToTop();
             if (t === "inbox") setInboxScrollTopRequestId((id) => id + 1);

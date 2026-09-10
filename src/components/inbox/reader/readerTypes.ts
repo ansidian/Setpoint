@@ -1,4 +1,3 @@
-import type { FinanceDestination } from "../../finances/financesNavigation";
 import type {
   BillCandidate,
   FinancialEmailPlan,
@@ -59,10 +58,7 @@ export interface ReaderSurfaceProps {
   onAskAlfred?: () => void;
   showTriage: boolean;
   showDraft?: boolean;
-  billOpen: boolean;
-  billMounted?: boolean;
-  setBillOpen: Dispatch<SetStateAction<boolean>>;
-  onOpenRecordedBill?: (target: FinanceDestination) => void;
+  onCreateProfile: () => void;
   snoozeBtnRef?: RefObject<HTMLButtonElement | null>;
   snoozeOpen: boolean;
   setSnoozeOpen: Dispatch<SetStateAction<boolean>>;
@@ -75,15 +71,6 @@ export interface ReaderSurfaceProps {
   taskOpen?: boolean;
   setDraftDirty?: (dirty: boolean) => void;
 }
-
-export const IDLE_BILL_RESOLUTION: BillResolutionState = {
-  key: null,
-  status: "idle",
-  plan: null,
-  resolvedBill: null,
-  actualStatus: null,
-  error: null,
-};
 
 export function asBillCandidate(value: Record<string, unknown> | null | undefined): BillCandidate | null {
   return value as BillCandidate | null | undefined || null;

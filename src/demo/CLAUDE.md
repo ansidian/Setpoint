@@ -18,7 +18,7 @@ Build-time fictional walkthrough (`VITE_EA_DEMO=1`). `src/api.ts` routes demo re
 - `todoistSetupAdapter.ts` — demo-safe Todoist setup/status responses.
 
 ### Mail and finance
-- `inboxData.ts` — fictional email accounts, snapshot lanes, and email bodies.
+- `inboxData.ts` — fictional email accounts, snapshot lanes, and email bodies; the Market receipt has its own UID/body, separate from the approval/PDF fixture.
 - `snapshotRows.ts` — snapshot row collection and lookup helpers.
 - `snapshotAdapter.ts` — in-memory snapshot history, mail actions, read state, and body/search responses.
 - `emailAttachments.ts` — local fictional attachment descriptors and content.
@@ -27,7 +27,9 @@ Build-time fictional walkthrough (`VITE_EA_DEMO=1`). `src/api.ts` routes demo re
 - `financialActivity.ts` — shared fictional imported history plus managed completed, processing and uncertain examples; old-target binding stays inert.
 - `financeProjection.ts` — exact-ID fictional Actual objects and settled in-memory ledger/bill projections shared by correction, Calendar and spending consumers; emits the demo-only financial-change event after owner settlement.
 - `financialCorrections.ts` — in-memory fictional inspection, exact previews, confirmation and effective result projection; no SDK or network.
-- `financialCompletion.ts` — fictional managed review plan, owner-completion and candidate-dismissal mutations.
+- `financialCompletion.ts` — fictional managed review plan with an unsaved mapping suggestion, owner-completion and candidate-dismissal mutations.
+- `financialProfiles.ts` — fictional owner-approved profiles, review suggestions and metadata destinations; profile Settings mutations remain in memory
+- `financialReceipt.ts` — one fictional Market receipt UID, sender, source row and body shared by Inbox, managed review and profile suggestion fixtures
 - `financeData.ts` — shared fictional transactions, confirmed-import mutation, and calendar Bills range projection.
 - `dashboardFinance.ts` — spending comparisons and category totals derived from the shared seed plus import activity.
 - `transactionImports.ts` — fictional import runs/items, shared pending-review predicate, paginated pending runs, safe receipt bodies, and in-memory confirmation/retry/dismiss actions.
@@ -46,4 +48,4 @@ Tests are not listed here; follow `AGENTS.md` behavior-ownership guidance.
 - Demo connection flags describe simulated state only. Keep real passwords, tokens, provider operations, and persistent settings out of this directory.
 - Canonical product behavior and provider writes remain in their production domains; this directory supplies only the walkthrough contract.
 
-- `financesWorkspace.ts` — Utilities/Journal from preserved fictional statement evidence and exact shared ledger relationships
+- `financesWorkspace.ts` — Utilities/Journal from preserved fictional statement evidence and exact shared ledger relationships; utility mapping reads and edits stay in memory

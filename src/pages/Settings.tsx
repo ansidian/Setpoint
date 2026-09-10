@@ -99,7 +99,7 @@ export default function Settings() {
         window.addEventListener("scrollend", finishScroll, { once: true });
         document.addEventListener("scrollend", finishScroll, { once: true });
       }
-      target.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
+      target.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: target.id === "utility-mappings" ? "start" : "center" });
       target.focus({ preventScroll: true });
       if (reduceMotion) finishScroll();
       else scrollFallbackTimer = window.setTimeout(finishScroll, 700);

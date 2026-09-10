@@ -38,9 +38,7 @@ function renderReader(overrides: ReaderOverrides = {}) {
       onClose={() => {}}
       showTriage={false}
       showDraft={overrides.showDraft ?? false}
-      billOpen={false}
-      billMounted={false}
-      setBillOpen={() => {}}
+      onCreateProfile={() => {}}
       snoozeOpen={snoozeOpen}
       setSnoozeOpen={updateSnooze}
       bodyState={{ loading: false, error: null, body: "", source: "loaded" }}

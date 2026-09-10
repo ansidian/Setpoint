@@ -1,26 +1,10 @@
 import { financialHref } from "../financial/financialNavigation";
 import { Link } from "react-router";
 import { CheckCircle2, Clock3, Loader2 } from "lucide-react";
-import { useId, useRef, useState, type CSSProperties } from "react";
+import type { CSSProperties } from "react";
 import type { FinancialEmailPlan } from "../../../shared/types/bills";
-import { Button } from "../ui/button";
-import FinancialEventCompletionForm from "./FinancialEventCompletionForm";
 
-type FinancialEventStatusProps = { plan: FinancialEmailPlan; style?: CSSProperties; allowCompletion?: boolean };
-
-export default function FinancialEventStatus(props: FinancialEventStatusProps) {
-  return <FinancialEventStatusPanel key={props.plan.workflow?.completion?.emailUid || props.plan.workflow?.id} {...props} />;
-}
-
-function FinancialEventStatusPanel({ plan: currentPlan, style, allowCompletion = false }: FinancialEventStatusProps) {
-  const [editing, setEditing] = useState(allowCompletion);
-  const [queued, setQueued] = useState<FinancialEmailPlan | null>(null);
-  const trigger = useRef<HTMLButtonElement>(null);
-  const editorId = useId();
-  // Keep the accepted response visible while a previously cached read catches
-  // up. Subsequent worker states at the same/newer revision are authoritative.
-  const plan = queued && (currentPlan.workflow?.completion?.eventRevision ?? -1) < (queued.workflow?.completion?.eventRevision ?? -1)
-    ? queued : currentPlan;
+export default function FinancialEventStatus({ plan, style }: { plan: FinancialEmailPlan; style?: CSSProperties }) {
   const workflow = plan.workflow;
   if (!workflow) return null;
   const correction = workflow.correction;
@@ -55,16 +39,6 @@ function FinancialEventStatusPanel({ plan: currentPlan, style, allowCompletion =
       </div>
       {correction && <Link to={financialHref({ view: correcting ? 'needs_attention' : 'completed' }, { owner: 'event', id: workflow.id })}
         className="mt-2 inline-flex rounded-lg border border-white/10 px-3 py-2 text-xs transition-transform hover:-translate-y-px focus-visible:-translate-y-px focus-visible:outline-2 focus-visible:outline-primary active:translate-y-0 motion-reduce:transform-none motion-reduce:transition-none">View record</Link>}
-      {allowCompletion && !editing && workflow.completion?.canComplete && <Button ref={trigger} type="button" variant="ghost" size="sm"
-        aria-expanded={editing} aria-controls={editorId}
-        className="mt-2 h-8 text-xs transition-transform hover:-translate-y-px focus-visible:-translate-y-px focus-visible:ring-2 focus-visible:ring-primary active:translate-y-0 motion-reduce:transform-none motion-reduce:transition-none"
-        onClick={(event) => { event.stopPropagation(); setEditing(true); }}>
-        Complete details
-      </Button>}
-      {allowCompletion && editing && workflow.completion?.canComplete && <div id={editorId}><FinancialEventCompletionForm plan={plan}
-        onCancel={() => { setEditing(false); requestAnimationFrame(() => trigger.current?.focus()); }}
-        onQueued={(result) => { setQueued(result); setEditing(false); }}
-      /></div>}
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { MemoryRouter } from "react-router";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
@@ -135,7 +136,7 @@ function InboxSessionHarness({ initialSelectedId = null, activeSnapshotRefresh =
   };
 
   return (
-    <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
+    <MemoryRouter><DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
       <button type="button" onClick={() => setShowInbox((prev) => !prev)}>
         Toggle inbox mount
       </button>
@@ -175,11 +176,24 @@ function InboxSessionHarness({ initialSelectedId = null, activeSnapshotRefresh =
       ) : (
         <div data-testid="dashboard-placeholder">Dashboard</div>
       )}
-    </DashboardProvider>
+    </DashboardProvider></MemoryRouter>
   );
 }
 
 describe("InboxView session state", () => {
+  it("keeps an edited reminder through a cancelled reader close and discards only for the requested next email", async () => {
+    render(<InboxSessionHarness initialSelectedId="email-action" isMobile={false} />);
+    fireEvent.click(screen.getByRole("button", { name: "Remind me" }));
+    fireEvent.change(screen.getByLabelText("Task title"), { target: { value: "Do not lose this draft" } });
+    fireEvent.click(screen.getByRole("button", { name: "Close reader" }));
+    fireEvent.click(screen.getByRole("button", { name: "Keep editing" }));
+    expect((screen.getByLabelText("Task title") as HTMLInputElement).value).toBe("Do not lose this draft");
+    fireEvent.click(screen.getByRole("button", { name: "Next email" }));
+    fireEvent.click(screen.getByRole("button", { name: "Discard changes" }));
+    await waitFor(() => expect(screen.queryByLabelText("Task title")).toBeNull());
+    expect(screen.getByRole("heading", { name: "Budget dinner plans" })).toBeTruthy();
+  });
+
   it("preserves an edited reminder while search loads, returns no matches, and clears", async () => {
     let finishSearch!: (value: Awaited<ReturnType<typeof searchEmails>>) => void;
     vi.mocked(searchEmails).mockReturnValueOnce(new Promise((resolve) => { finishSearch = resolve; }));
@@ -259,7 +273,7 @@ describe("InboxView session state", () => {
     };
 
     render(
-      <DashboardProvider
+      <MemoryRouter><DashboardProvider
         briefing={{ emails: { accounts: [] } }}
         setBriefing={() => {}}
         setCalendarDeadlines={() => {}}
@@ -289,7 +303,7 @@ describe("InboxView session state", () => {
           }}
           onSessionStateChange={() => {}}
         />
-      </DashboardProvider>,
+      </DashboardProvider></MemoryRouter>,
     );
 
     fireEvent.click(screen.getByRole("button", { name: /more email actions/i }));
@@ -317,7 +331,7 @@ describe("InboxView session state", () => {
     };
 
     render(
-      <DashboardProvider
+      <MemoryRouter><DashboardProvider
         briefing={{ emails: { accounts: [] } }}
         setBriefing={() => {}}
         setCalendarDeadlines={() => {}}
@@ -347,7 +361,7 @@ describe("InboxView session state", () => {
           }}
           onSessionStateChange={() => {}}
         />
-      </DashboardProvider>,
+      </DashboardProvider></MemoryRouter>,
     );
 
     expect(screen.queryByText("Project budget sign-off")).toBeNull();
@@ -400,7 +414,7 @@ describe("InboxView session state", () => {
     };
 
     render(
-      <DashboardProvider
+      <MemoryRouter><DashboardProvider
         briefing={{ emails: { accounts: [] } }}
         setBriefing={() => {}}
         setCalendarDeadlines={() => {}}
@@ -430,7 +444,7 @@ describe("InboxView session state", () => {
           }}
           onSessionStateChange={() => {}}
         />
-      </DashboardProvider>,
+      </DashboardProvider></MemoryRouter>,
     );
 
     await act(async () => {

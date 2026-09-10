@@ -7,14 +7,12 @@ import {
   Reply,
   Sparkles,
   BellPlus,
-  CreditCard,
+  SlidersHorizontal,
   ExternalLink,
-  X,
 } from "lucide-react";
 import { getGmailUrl } from "../../../lib/email-links";
 import { timeClock } from "../helpers";
 import { LANE } from "../../../lib/shell-helpers";
-import ActualRecordWorkspace from "./ActualRecordWorkspace";
 import TriagePanel from "./TriagePanel";
 import EmailContentSection from "./EmailContentSection";
 import DraftReply from "./DraftReply";
@@ -23,112 +21,9 @@ import EmailActualStatus from "./EmailActualStatus";
 import VerificationCodeCallout from "./VerificationCodeCallout";
 import { resolveReaderActionGroups } from "./readerActionsModel";
 import DesktopReaderActionBar, { ToolbarButton } from "./DesktopReaderActionBar";
-import type { Dispatch, ReactNode, SetStateAction } from "react";
-import type { InboxEmailLike } from "../inboxTypes";
-import type { BillResolutionState, EmailBodyState, ReaderSurfaceProps } from "./readerTypes";
-import { IDLE_BILL_RESOLUTION } from "./readerTypes";
+import type { ReactNode } from "react";
+import type { ReaderSurfaceProps } from "./readerTypes";
 import { motionDuration, motionTransition } from "../../../lib/motion";
-
-function BillDrawer({ billOpen, billMounted, setBillOpen, email, bodyState, billResolution, onOpenRecordedBill }: {
-  billOpen: boolean;
-  billMounted: boolean;
-  setBillOpen: Dispatch<SetStateAction<boolean>>;
-  email: InboxEmailLike;
-  bodyState: EmailBodyState;
-  billResolution: BillResolutionState;
-  onOpenRecordedBill: ReaderSurfaceProps["onOpenRecordedBill"];
-}) {
-  const reduceMotion = useReducedMotion() ?? false;
-
-  return (
-    <Motion.div
-      className="inbox-reader-workspace"
-      data-open={billOpen}
-      initial={false}
-      animate={{ width: billOpen ? 360 : 0 }}
-      transition={motionTransition(reduceMotion, billOpen ? motionDuration.panel : motionDuration.exit)}
-      aria-hidden={!billOpen}
-      style={{
-        flexShrink: 0,
-        overflow: "hidden",
-      }}
-    >
-      {billMounted && (
-        <Motion.aside
-          initial={reduceMotion ? false : { opacity: 0, x: 14 }}
-          animate={{ opacity: billOpen ? 1 : 0, x: reduceMotion || billOpen ? 0 : 14 }}
-          transition={motionTransition(reduceMotion, billOpen ? motionDuration.panel : motionDuration.exit)}
-          aria-hidden={!billOpen}
-          aria-label="Actual record"
-          inert={!billOpen ? true : undefined}
-          data-state={billOpen ? "open" : "closed"}
-          style={{
-            width: 360,
-            height: "100%",
-            display: "flex",
-            flexDirection: "column",
-            borderLeft: "1px solid color-mix(in srgb, var(--sp-accent) 12%, transparent)",
-            background: "color-mix(in srgb, var(--sp-panel) 55%, transparent)",
-            overflowY: "auto",
-            overscrollBehavior: "contain",
-            isolation: "isolate",
-            pointerEvents: billOpen ? "auto" : "none",
-          }}
-        >
-          <div
-            style={{
-              padding: "11px 16px",
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              borderBottom: "1px solid rgba(255,255,255,0.04)",
-              flexShrink: 0,
-            }}
-          >
-            <span
-              style={{
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: 2,
-                textTransform: "uppercase",
-                color: "var(--sp-accent)",
-              }}
-            >
-              Actual record
-            </span>
-            <span style={{ flex: 1 }} />
-            <button
-              type="button"
-              onClick={() => setBillOpen(false)}
-              aria-label="Close Actual record"
-              className="bill-drawer-close inbox-a-control sp-focus-ring"
-              style={{
-                background: "transparent",
-                border: "1px solid transparent",
-                cursor: "pointer",
-                color: "rgba(205,214,244,0.5)",
-                padding: 4,
-                borderRadius: 4,
-                display: "inline-flex",
-                fontFamily: "inherit",
-              }}
-            >
-              <X size={12} />
-            </button>
-          </div>
-          <div style={{ padding: "14px 16px 18px" }}>
-            <ActualRecordWorkspace
-              email={email}
-              bodyState={bodyState}
-              billResolution={billResolution}
-              onOpenRecordedBill={onOpenRecordedBill}
-            />
-          </div>
-        </Motion.aside>
-      )}
-    </Motion.div>
-  );
-}
 
 function ReminderDrawer({ open, workspace }: { open: boolean; workspace: ReactNode }) {
   const reduceMotion = useReducedMotion() ?? false;
@@ -181,10 +76,7 @@ export default function DesktopReader({
   onNext,
   showTriage,
   showDraft,
-  billOpen,
-  billMounted,
-  setBillOpen,
-  onOpenRecordedBill,
+  onCreateProfile,
   snoozeBtnRef,
   snoozeOpen,
   setSnoozeOpen,
@@ -198,10 +90,9 @@ export default function DesktopReader({
   taskWorkspace,
   taskOpen = false,
   setDraftDirty,
-}: ReaderSurfaceProps & { billMounted: boolean }) {
+}: ReaderSurfaceProps) {
   const alfredWorkspace = useAlfredWorkspace();
   const alfredOpen = alfredWorkspace?.open ?? false;
-  const resolvedBillResolution = billResolution || IDLE_BILL_RESOLUTION;
   const internalSnoozeBtnRef = useRef<HTMLButtonElement>(null);
   const resolvedSnoozeBtnRef = snoozeBtnRef || internalSnoozeBtnRef;
   const gmailUrl = getGmailUrl(email);
@@ -209,7 +100,7 @@ export default function DesktopReader({
   const {
     catchUp,
     showDestructiveActions,
-    canOpenActualRecord,
+    canCreateProfile,
     moveDestinations,
     moveDisabled,
     triageItems,
@@ -264,7 +155,7 @@ export default function DesktopReader({
               </div>
             </div>
             <div className="inbox-a-reader-utilities" role="group" aria-label="Email tools">
-              {canOpenActualRecord && <ToolbarButton icon={CreditCard} label="Actual record" expanded={billOpen} onClick={() => setBillOpen((value) => !value)} />}
+              {canCreateProfile && <ToolbarButton icon={SlidersHorizontal} label="Create profile" onClick={onCreateProfile} />}
               {onRemind && <ToolbarButton icon={BellPlus} label={taskOpen ? "Hide reminder" : "Remind me"} expanded={taskOpen} onClick={onRemind} />}
               {onAskAlfred && <ToolbarButton icon={Sparkles} label="Ask Alfred" expanded={alfredOpen} onClick={() => { if (alfredWorkspace?.open) alfredWorkspace.close(); else onAskAlfred(); }} />}
               {gmailUrl && <span className="inbox-a-reader-external"><ToolbarButton icon={ExternalLink} label="Open in Gmail" onClick={() => window.open(gmailUrl, "_blank", "noopener,noreferrer")} /></span>}
@@ -287,7 +178,6 @@ export default function DesktopReader({
           </div>
         </div>
       </div>
-      <BillDrawer billOpen={billOpen} billMounted={billMounted} setBillOpen={setBillOpen} email={email} bodyState={bodyState} billResolution={resolvedBillResolution} onOpenRecordedBill={onOpenRecordedBill} />
       <ReminderDrawer open={taskOpen} workspace={taskWorkspace} />
     </div>
   );

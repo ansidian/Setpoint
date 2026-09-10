@@ -1,5 +1,7 @@
 import type { SnapshotVerificationCode } from "../../shared/types/snapshots.ts";
+import type { BillCandidate } from "../../shared/types/bills.ts";
 import { getDemoEmailAttachmentDescriptors } from "./emailAttachments.ts";
+import { DEMO_RECEIPT_UID, demoReceiptBody, demoReceiptEmail } from "./financialReceipt";
 
 const WORK_COLOR = "#89b4fa";
 const PERSONAL_COLOR = "#cba6f7";
@@ -50,6 +52,7 @@ interface DemoSnapshotEmailInput {
   receivedHour?: number | null;
   receivedMinute?: number | null;
   verificationCode?: SnapshotVerificationCode | null;
+  billCandidate?: BillCandidate;
 }
 
 function snapshotEmail({
@@ -74,6 +77,7 @@ function snapshotEmail({
   receivedHour = null,
   receivedMinute = null,
   verificationCode = null,
+  billCandidate,
 }: DemoSnapshotEmailInput) {
   const numericItemId = Number(itemId) || 0;
   const hour = receivedHour ?? (8 + (numericItemId % 10));
@@ -100,6 +104,7 @@ function snapshotEmail({
     handled_at: handledAt,
     escalation_badge: escalationBadge,
     verification_code: verificationCode,
+    ...(billCandidate ? { hasBill: true, bill_candidate: billCandidate } : {}),
     _activeSnapshot: true,
   };
 }
@@ -170,7 +175,9 @@ function makeEmailBodies(lanes: DemoLanes, carryover: DemoSnapshotEmail[]) {
     row.uid,
     {
       uid: row.uid,
-      body: row.uid === "demo-email-budget" ? DEMO_BUDGET_BODY : `This is a fictional demo email body for "${row.subject}". ${row.summary} The content is representative sample data only.`,
+      body: row.uid === "demo-email-budget" ? DEMO_BUDGET_BODY : row.uid === DEMO_RECEIPT_UID
+        ? demoReceiptBody(row.date.slice(0, 10))
+        : `This is a fictional demo email body for "${row.subject}". ${row.summary} The content is representative sample data only.`,
       attachments: getDemoEmailAttachmentDescriptors(row.uid),
     },
   ]));
@@ -228,6 +235,7 @@ export function buildDemoInboxSeed(now: Date) {
         day: today,
         category: "finance",
       }),
+      snapshotEmail(demoReceiptEmail(today)),
       snapshotEmail({
         itemId: 24,
         uid: "demo-email-verification-code",
@@ -261,6 +269,7 @@ export function buildDemoInboxSeed(now: Date) {
       action: "Review renewal warning",
         day: today,
         category: "engineering",
+        urgency: "normal",
         escalationBadge: "Prod",
         receivedHour: 8,
         receivedMinute: 42,
@@ -277,6 +286,7 @@ export function buildDemoInboxSeed(now: Date) {
       action: "Review retry copy",
         day: today,
         category: "engineering",
+        urgency: "normal",
         receivedHour: 10,
         receivedMinute: 12,
       }),
@@ -510,8 +520,6 @@ export function buildDemoInboxSeed(now: Date) {
       }),
     ],
   };
-  lanes.needs_attention[2]!.urgency = "normal";
-  lanes.needs_attention[3]!.urgency = "normal";
   const carryover = [
     snapshotEmail({
       itemId: 4,

@@ -1,3 +1,4 @@
+import { BILL_EVENT_KINDS } from "../../../../shared/types/bills";
 import { describe, expect, it } from "vitest";
 
 import { resolveReaderActions, resolveReaderActionGroups } from "./readerActionsModel";
@@ -93,23 +94,20 @@ describe("resolveReaderActions pin toggle", () => {
   });
 });
 
-describe("resolveReaderActions Actual record", () => {
-  it("is available regardless of triage, financial classification, or historical/snoozed state", () => {
-    for (const email of [
-      { hasBill: true }, { _untriaged: true },
-      snapshotEmail({ _lane: "queued" }), snapshotEmail({ _lane: "untriaged_read" }),
-      snapshotEmail({ _lane: "needs_attention", hasBill: false }),
-      snapshotEmail({ _lane: "catch_up" }),
-      { _snoozed: true, _snoozedUnavailable: true },
-    ]) {
-      expect(resolveReaderActions(email).canOpenActualRecord).toBe(true);
-      expect(resolveReaderActions(email, { readOnly: true }).canOpenActualRecord).toBe(true);
+describe("resolveReaderActions Create profile", () => {
+  it("requires a recognized financial event classification", () => {
+    for (const email of [{ hasBill: true }, { _untriaged: true }, { bill_candidate: { event_kind: "other" } }, { bill_candidate: { event_kind: "unknown" } }]) {
+      expect(resolveReaderActions(email).canCreateProfile).toBe(false);
+    }
+    for (const event_kind of BILL_EVENT_KINDS.filter(kind => kind !== "other")) {
+      expect(resolveReaderActions({ bill_candidate: { event_kind } }).canCreateProfile).toBe(true);
+      expect(resolveReaderActions({ extractedBill: { event_kind }, _lane: "catch_up" }, { readOnly: true }).canCreateProfile).toBe(true);
     }
   });
 
   it("requires a selected email", () => {
-    expect(resolveReaderActions(null).canOpenActualRecord).toBe(false);
-    expect(resolveReaderActions(undefined).canOpenActualRecord).toBe(false);
+    expect(resolveReaderActions(null).canCreateProfile).toBe(false);
+    expect(resolveReaderActions(undefined).canCreateProfile).toBe(false);
   });
 });
 

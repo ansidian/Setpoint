@@ -1,3 +1,4 @@
+import { DEMO_RECEIPT_UID } from "./financialReceipt";
 import { demoCompletionPlan } from './financialCompletion';
 import { getDemoCorrection } from './financialCorrections';
 import { announceDemoFinanceChange } from './financeProjection';
@@ -171,7 +172,7 @@ export function handleDemoTransactionImportRequest({
   }
   if (pathname.endsWith("/email-status") && method === "GET") {
     const emailUid = url.searchParams.get("emailUid") || "";
-    if (emailUid === "demo-email-budget") return { emailUid, items: [], financialEvent: demoCompletionPlan() };
+    if (emailUid === DEMO_RECEIPT_UID) return { emailUid, items: [], financialEvent: demoCompletionPlan() };
     return { emailUid, items: clone(runs.flatMap((run) => run.items).filter((candidate) => candidate.emailUid === emailUid).map(projectCorrection)) };
   }
   return NO_DEMO_TRANSACTION_IMPORT_RESPONSE;

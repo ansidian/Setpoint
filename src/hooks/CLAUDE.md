@@ -20,7 +20,7 @@ Cross-cutting frontend hooks: dashboard data fetching/streaming, snapshot sync, 
 
 ### Browser interactions
 - `useKeyboardFocusIndicators.ts` — app-wide focus appearance: Tab/Enter/Space enable indicators; pointer and command shortcuts suppress them without changing actual focus or key handling
-- `useBrowserBackDismiss.ts` — dismissal callback on browser back navigation; a false result rearms history while a guarded surface stays open
+- `useBrowserBackDismiss.ts` — dismissal callback on browser back navigation; a false result rearms history while a guarded surface stays open, and foreground-route suspension preserves background entries
 - `email/useInboxSelectionHistory.ts` — browser history state for inbox selection
 - `useIsMobile.ts` — mobile viewport detection
 - `useMediaQuery.ts` — reactive media query matching

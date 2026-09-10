@@ -1,5 +1,6 @@
-import type { FinanceDestination } from "../../finances/financesNavigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router";
+import { buildEmailFinancialProfileSeed } from "../../../lib/financialProfileSeed";
 import { motion as Motion, useReducedMotion } from "motion/react";
 import AddTaskPanel from "../../todoist/AddTaskPanel";
 import { useOptionalDashboard } from "../../../context/DashboardContext";
@@ -15,6 +16,8 @@ import type { InboxAccount, InboxEmailLike } from "../inboxTypes";
 import type { InboxActionDispatcher } from "../useInboxActionDispatch";
 import { motionDuration, motionTransition } from "../../../lib/motion";
 import useMotionPresence from "../../../hooks/useMotionPresence";
+import useInboxDiscardPrompt from "../useInboxDiscardPrompt";
+import type { InboxDiscardRequest } from "../useInboxDiscardPrompt";
 
 export default function Reader({
   email,
@@ -29,12 +32,10 @@ export default function Reader({
   onAskAlfred,
   showTriage,
   showDraft,
-  billOpen,
-  setBillOpen,
-  onOpenRecordedBill,
   isMobile = false,
   readOnly = false,
   onWorkspaceDirtyChange,
+  onRequestDiscard,
 }: {
   email: InboxEmailLike | null;
   account?: InboxAccount | null;
@@ -48,18 +49,16 @@ export default function Reader({
   onAskAlfred?: () => void;
   showTriage: boolean;
   showDraft: boolean;
-  billOpen: boolean;
-  setBillOpen: Dispatch<SetStateAction<boolean>>;
-  onOpenRecordedBill?: (target: FinanceDestination) => void;
   isMobile?: boolean;
   readOnly?: boolean;
   onWorkspaceDirtyChange?: (dirty: boolean) => void;
+  onRequestDiscard?: InboxDiscardRequest;
 }) {
+  const navigate = useNavigate();
   const reduceMotion = useReducedMotion() ?? false;
   const snoozeBtnRef = useRef<HTMLButtonElement>(null);
   const [snoozeOpen, setSnoozeOpen] = useState(false);
   const [drafting, setDrafting] = useState(isMobile ? false : showDraft);
-  const [billMounted, setBillMounted] = useState(billOpen);
   const [taskOpen, setTaskOpen] = useState(false);
   const [taskDirty, setTaskDirty] = useState(false);
   const [draftDirty, setDraftDirty] = useState(false);
@@ -70,12 +69,9 @@ export default function Reader({
   const dashboard = useOptionalDashboard();
   const seed = useMemo(() => email ? buildRemindMeTaskSeed(email) : null, [email]);
   const bodyState = useEmailBody(email);
-  const billResolution = useBillPayResolver({ email, billOpen, bodyState });
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (billOpen) setBillMounted(true);
-  }, [billOpen]);
+  const billResolution = useBillPayResolver({ email, bodyState });
+  const localDiscardPrompt = useInboxDiscardPrompt(`${email?.account_id || email?.accountId || ""}:${email?.uid || email?.email_id || email?.id || ""}`);
+  const requestDiscard = onRequestDiscard || localDiscardPrompt.requestDiscard;
 
   useEffect(() => onWorkspaceDirtyChange?.(taskDirty || draftDirty), [draftDirty, onWorkspaceDirtyChange, taskDirty]);
   useEffect(() => {
@@ -92,39 +88,41 @@ export default function Reader({
 
   if (!email) return <ReaderEmptyState />;
 
-  const confirmDiscard = (dirty: boolean) => !dirty || window.confirm("Discard your unsaved changes?");
+  const afterDiscard = (dirty: boolean, action: () => void) => { if (requestDiscard(dirty, action)) action(); };
   const closeTask = () => {
     setTaskOpen(false);
     setTaskDirty(false);
   };
   const openTask = () => {
-    if (drafting && !confirmDiscard(draftDirty)) return;
-    setBillOpen(false);
-    setDrafting(false);
-    setDraftDirty(false);
-    setTaskOpen(true);
+    afterDiscard(drafting && draftDirty, () => {
+      setDrafting(false);
+      setDraftDirty(false);
+      setTaskOpen(true);
+    });
   };
   const toggleTask = () => {
     if (!taskOpen) {
       openTask();
       return;
     }
-    if (!confirmDiscard(taskDirty)) return;
-    closeTask();
+    afterDiscard(taskDirty, closeTask);
   };
-  const guardedSetBillOpen: Dispatch<SetStateAction<boolean>> = (update) => {
-    const next = typeof update === "function" ? update(billOpen) : update;
-    if (next && taskOpen && !confirmDiscard(taskDirty)) return;
-    if (next && drafting && !confirmDiscard(draftDirty)) return;
-    if (next) { setTaskOpen(false); setTaskDirty(false); setDrafting(false); setDraftDirty(false); }
-    setBillOpen(next);
+  const createProfile = () => {
+    afterDiscard(taskDirty || draftDirty, () => {
+      closeTask();
+      setDrafting(false);
+      setDraftDirty(false);
+      const financialProfileSeed = buildEmailFinancialProfileSeed(email, { body: bodyState.body, resolution: billResolution });
+      void navigate("/settings?tab=finance", { state: { financialProfileSeed } });
+    });
   };
   const guardedSetDrafting: Dispatch<SetStateAction<boolean>> = (update) => {
     const next = typeof update === "function" ? update(drafting) : update;
-    if (next && taskOpen && !confirmDiscard(taskDirty)) return;
-    if (!next && drafting && draftDirty && !confirmDiscard(true)) return;
-    if (next) { setTaskOpen(false); setTaskDirty(false); setBillOpen(false); }
-    setDrafting(next);
+    afterDiscard(next ? taskOpen && taskDirty : drafting && draftDirty, () => {
+      if (next) { setTaskOpen(false); setTaskDirty(false); }
+      if (!next) setDraftDirty(false);
+      setDrafting(next);
+    });
   };
   const taskPanel = taskMounted ? (
     <AddTaskPanel
@@ -162,10 +160,7 @@ export default function Reader({
     onAskAlfred,
     showTriage,
     showDraft: false,
-    billOpen,
-    billMounted,
-    setBillOpen: guardedSetBillOpen,
-    onOpenRecordedBill,
+    onCreateProfile: createProfile,
     snoozeBtnRef,
     snoozeOpen,
     setSnoozeOpen,
@@ -180,8 +175,9 @@ export default function Reader({
   };
 
   return <>
-    {isMobile ? <MobileReader {...sharedProps} /> : <DesktopReader {...sharedProps} billMounted={billMounted} />}
+    {isMobile ? <MobileReader {...sharedProps} /> : <DesktopReader {...sharedProps} />}
     {isMobile && taskOpen ? taskPanel : null}
+    {localDiscardPrompt.dialog}
       {toastRendered && (
         <Motion.div
           key="reminder-toast"
