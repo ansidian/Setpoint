@@ -1,3 +1,4 @@
+import Metadata from "../../shared/Metadata";
 import { formatSnoozeTime } from "../inboxSnoozedModel";
 import "./DesktopReader.css";
 import { useAlfredWorkspace } from "../../dashboard/AlfredWorkspaceContext";
@@ -172,7 +173,7 @@ export default function DesktopReader({
               <AnimatedCollapse open={!!((drafting || showDraft) && !catchUp && email.claude?.draftReply)}>
                 <DraftReply key={email.id} email={email} accent={accent} onDiscard={() => setDrafting(false)} onDirtyChange={setDraftDirty} />
               </AnimatedCollapse>
-              {email._snoozedUntil && <p className="inbox-a-reader-snooze-note">Snoozed · returns {formatSnoozeTime(email._snoozedUntil)}{email._snoozedUnavailable && " · Source unavailable; deferred state is kept."}</p>}
+              {email._snoozedUntil && <div className="inbox-a-reader-snooze-note"><Metadata items={[<strong>Snoozed</strong>, <>Returns <time dateTime={new Date(email._snoozedUntil).toISOString()}>{formatSnoozeTime(email._snoozedUntil)}</time></>]}/>{email._snoozedUnavailable && <p style={{ margin: "6px 0 0" }}>Source unavailable; deferred state is kept.</p>}</div>}
               <EmailContentSection key={`source-${email.uid || email.email_id || email.id || ""}`} email={email} bodyState={bodyState} />
             </div>
           </div>

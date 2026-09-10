@@ -1,0 +1,5 @@
+.sp-metadata { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 12px; min-width:0; font-size:11px; line-height:1.5; color:var(--color-text-secondary,#a6adc8); }
+.sp-metadata > .sp-metadata-item { display:inline-flex; flex-wrap:wrap; align-items:baseline; gap:4px; min-width:0; max-width:100%; overflow-wrap:anywhere; }
+.sp-metadata strong { color:var(--sp-text,#cdd6f4); font-weight:500; font-variant-numeric:tabular-nums; }
+.sp-metadata time { font-variant-numeric:tabular-nums; }
+.sp-metadata svg { flex-shrink:0; align-self:center; }

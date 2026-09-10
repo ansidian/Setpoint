@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import AnimatedHeight from "@/components/shared/AnimatedHeight";
+import Metadata from "../shared/Metadata";
 import type { ReactNode } from "react";
 import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, Circle, CircleDashed } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router";
@@ -36,15 +37,15 @@ function readableMode(mode: string | null) {
 }
 
 function rowMetadata(row: ConnectionRowView) {
-  const parts: string[] = [];
+  const parts: ReactNode[] = [];
   const mode = readableMode(row.mode);
   if (mode) parts.push(mode);
   if (row.source && row.source !== "absent") {
     parts.push(row.source === "stored" || row.source === "settings" ? "Saved in Setpoint" : row.source);
   }
-  if (row.identities.length === 1) parts.push(row.identities[0]!);
-  if (row.identities.length > 1) parts.push(`${row.identities.length} connected accounts`);
-  return parts.join(" · ");
+  if (row.identities.length === 1) parts.push(<strong key="identity">{row.identities[0]!}</strong>);
+  if (row.identities.length > 1) parts.push(<strong key="identities">{row.identities.length} connected accounts</strong>);
+  return parts;
 }
 
 export default function ConnectionsDirectory({ groups, rows, onboardingProgress, renderPanel }: {
@@ -155,7 +156,7 @@ export default function ConnectionsDirectory({ groups, rows, onboardingProgress,
                           <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">
                             {row.description}
                           </span>
-                          {metadata ? <span className="mt-1 block text-[10px] capitalize text-muted-foreground/75">{metadata}</span> : null}
+                          {metadata.length ? <Metadata className="mt-1 text-[11px] text-muted-foreground" items={metadata} /> : null}
                         </span>
                         <span className="hidden shrink-0 text-[11px] font-medium text-muted-foreground transition-colors group-hover:text-foreground sm:inline">
                           {connectionActionLabel(row.state)}

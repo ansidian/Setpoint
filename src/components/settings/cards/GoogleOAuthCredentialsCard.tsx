@@ -286,13 +286,11 @@ export default function GoogleOAuthCredentialsCard({
             </div>
           ) : null}
           {lastTestedAt || lastSucceededAt || lastFailedAt ? (
-            <FieldHint>
-              {[
-                lastTestedAt ? `Tested ${formatCredentialTimestamp(lastTestedAt)}` : null,
-                lastSucceededAt ? `Last success ${formatCredentialTimestamp(lastSucceededAt)}` : null,
-                lastFailedAt ? `Last failure ${formatCredentialTimestamp(lastFailedAt)}` : null,
-              ].filter(Boolean).join(" · ")}
-            </FieldHint>
+            <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-[11px] leading-relaxed sm:grid-cols-3">
+              {lastTestedAt ? <div className="min-w-0"><dt className="text-muted-foreground">Tested</dt><dd className="break-words text-foreground tabular-nums">{formatCredentialTimestamp(lastTestedAt)}</dd></div> : null}
+              {lastSucceededAt ? <div className="min-w-0"><dt className="text-muted-foreground">Last success</dt><dd className="break-words text-foreground tabular-nums">{formatCredentialTimestamp(lastSucceededAt)}</dd></div> : null}
+              {lastFailedAt ? <div className="min-w-0"><dt className="text-muted-foreground">Last failure</dt><dd className="break-words text-foreground tabular-nums">{formatCredentialTimestamp(lastFailedAt)}</dd></div> : null}
+            </dl>
           ) : null}
           {message ? <div role="status"><FieldHint className="text-[var(--sp-green)]">{message}</FieldHint></div> : null}
           {visibleError ? <div role="alert"><FieldHint className="text-danger">{visibleError}</FieldHint></div> : null}

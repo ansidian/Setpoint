@@ -1,3 +1,4 @@
+import Metadata from "../shared/Metadata";
 import { timeAgo } from "../dashboard/rails/railModel";
 import { displayExcerpt } from "./newsPageModel";
 import type { NewsItem } from "../../../shared/types/news.ts";
@@ -48,10 +49,7 @@ export default function NewsItemRow({ item, variant = "compact" }: NewsItemRowPr
               onError={(ev) => { ev.currentTarget.style.display = "none"; }}
             />
           ) : null}
-          <span className="news-row-source">
-            {item.sourceTitle}
-            {item.publishedAt ? ` · ${timeAgo(item.publishedAt)}` : ""}
-          </span>
+          <Metadata items={[<span className="news-row-source">{item.sourceTitle}</span>, item.publishedAt && <time dateTime={item.publishedAt}>{timeAgo(item.publishedAt)}</time>]}/>
         </span>
       </span>
       {lead && item.thumbnailUrl ? (

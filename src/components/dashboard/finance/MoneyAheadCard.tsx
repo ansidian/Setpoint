@@ -1,6 +1,7 @@
+import { moneyAhead } from "./moneyAheadModel";
 import { useState } from "react";
 import { ChevronDown, Wallet } from "lucide-react";
-import { daysUntil, formatAmount } from "../../../lib/bill-utils";
+import { formatAmount } from "../../../lib/bill-utils";
 import AnimatedCollapse from "../../shared/AnimatedCollapse";
 import type { NeedsYouBill } from "../needsYou/needsYouModel";
 import type { BillsMirrorHealth } from "../../../../shared/types/bills";
@@ -13,18 +14,7 @@ export default function MoneyAheadCard({ bills, loading, configured, health, onO
   onOpen: (bill: NeedsYouBill, anchor: HTMLElement) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const upcoming = (() => {
-    const seen = new Set<string>();
-    return bills.filter((bill) => {
-      const days = daysUntil(bill.next_date);
-      const key = `${bill.scheduleId || bill.id}:${bill.next_date}`;
-      if (bill.type === "transfer" || bill.type === "income" || bill.paid || days == null || days < 0 || days > 7 || seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    }).sort((a, b) => String(a.next_date).localeCompare(String(b.next_date)));
-  })();
-  const amountsKnown = upcoming.every((bill) => typeof bill.amount === "number" && Number.isFinite(bill.amount));
-  const total = upcoming.reduce((sum, bill) => sum + Math.round(Math.abs(bill.amount || 0) * 100), 0) / 100;
+  const { upcoming, amountsKnown, total } = moneyAhead(bills);
   const unavailable = !health?.lastSuccessAt && health?.state !== "current";
   const renderBill = (bill: NeedsYouBill) => (
     <button type="button" className="dashboard-finance-row" data-dashboard-detail-trigger="true" key={`${bill.scheduleId || bill.id}:${bill.next_date}`} onClick={(event) => onOpen(bill, event.currentTarget)}>
@@ -39,7 +29,8 @@ export default function MoneyAheadCard({ bills, loading, configured, health, onO
       : unavailable && !upcoming.length ? <p className="dashboard-finance-note">Scheduled obligations are unavailable until Actual syncs.</p>
       : <>
         <div className="dashboard-finance-value">{amountsKnown ? formatAmount(total) : "Amount incomplete"}</div>
-        <p className="dashboard-finance-note">{upcoming.length} upcoming {upcoming.length === 1 ? "obligation" : "obligations"} · Excludes transfers</p>
+        <div className="dashboard-finance-period"><strong>{upcoming.length}</strong>{" "}<span>upcoming {upcoming.length === 1 ? "obligation" : "obligations"}</span></div>
+        <p className="dashboard-finance-scope">Excludes transfers</p>
         {health?.state !== "current" && <p className="dashboard-finance-note">Showing the last available schedule data.</p>}
         {upcoming.slice(0, 3).map(renderBill)}
         <AnimatedCollapse open={expanded}>{upcoming.slice(3).map(renderBill)}</AnimatedCollapse>

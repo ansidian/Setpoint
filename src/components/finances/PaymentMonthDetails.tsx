@@ -1,3 +1,4 @@
+import Metadata from "../shared/Metadata";
 import { useCallback, useEffect, useRef, useState } from 'react';
 import AnchoredFloatingPanel from '../shared/pickers/AnchoredFloatingPanel';
 import AnimatedHeight from '../shared/AnimatedHeight';
@@ -40,14 +41,15 @@ export default function PaymentMonthDetails({ selected, mobile, contentId, ancho
       {selected.payments.length || selected.statements.length ? <ul>
         {selected.payments.map(payment => <li key={payment.id}>
           <div className="fin-month-record-facts"><strong><time dateTime={payment.date} title={financeDate(payment.date)}>{financeDate(payment.date)}</time></strong><strong>{payment.amountCents === null ? 'Amount unavailable' : financeMoney(payment.amountCents)}</strong></div>
-          <p>Payment recorded{payment.account && ` · ${payment.account}`} · {payment.reconciled ? 'Reconciled' : payment.cleared ? 'Cleared' : 'Uncleared'}</p>
+          <Metadata items={[<strong>Payment recorded</strong>, payment.reconciled ? 'Reconciled' : payment.cleared ? 'Cleared' : 'Uncleared']}/>
+          {payment.account && <dl className="fin-payment-account"><dt>Account</dt><dd>{payment.account}</dd></dl>}
           {payment.notes && <p className="fin-month-note" title={payment.notes}>{payment.notes}</p>}
           <button className="fin-month-journal" onClick={() => onNavigate(payment.target)}>View in Journal <ArrowRight size={14}/></button>
           {payment.statements.map(statement => <UtilityDetail key={statement.id} statement={statement} onForeground={onForeground} onPreviewEmail={previewEmail}/>)}
         </li>)}
         {selected.statements.map(statement => <li key={statement.id}>
           <div className="fin-month-record-facts"><strong>{statement.nothingDue ? 'No payment required' : statement.paymentDate ? `Recorded ${financeDate(statement.paymentDate)}` : statement.dueDate ? `Due ${financeDate(statement.dueDate)}` : 'Bill received'}</strong><strong>{financeMoney(statement.amountCents)}</strong></div>
-          <p>{statement.nothingDue ? 'Statement balance' : statement.paymentRecorded || statement.paymentTransactionIds.length ? 'Linked payment details are unavailable in the loaded history.' : 'Statement amount · No linked payment'}</p>
+          <p>{statement.nothingDue ? 'Statement balance' : statement.paymentRecorded || statement.paymentTransactionIds.length ? 'Linked payment details are unavailable in the loaded history.' : <Metadata items={['Statement amount', 'No linked payment']}/>}</p>
           <UtilityDetail statement={statement} onForeground={onForeground} onPreviewEmail={previewEmail}/>
         </li>)}
       </ul> : <p>No recorded payments or original bills are available for this month.</p>}

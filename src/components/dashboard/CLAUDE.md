@@ -64,7 +64,8 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 ### Financial context and schedule notices
 - `finance/DashboardFinance.tsx` — unified Finance review before Money Ahead / Spending Snapshot, with exact shared financial foreground handoffs
 - `finance/useDashboardFinance.ts` — spending and canonical all-source review/completed reads, shared refresh/invalidation, and independent last-success/error retention
-- `finance/MoneyAheadCard.tsx` — unpaid scheduled bills from today through seven days ahead, excluding transfers and income, with total and bounded expandable rows
+- `finance/MoneyAheadCard.tsx` — Money Ahead presentation with total and bounded expandable rows
+- `finance/moneyAheadModel.ts` — unpaid scheduled expense eligibility, occurrence deduplication, date ordering, and amount completeness/totals for today through seven days ahead
 - `finance/SpendingSnapshotCard.tsx` — month-to-date comparison, matching prior dates, top categories and sync freshness
 - `finance/FinancialActivityCard.tsx` — one canonical review count and three direct records, with all-source completed activity in a quiet disclosure; source evidence lives inside the record
 - `finance/finance-cards.css` — financial grid, typography, controls and responsive/motion states

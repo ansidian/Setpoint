@@ -1,3 +1,4 @@
+import Metadata from "../../shared/Metadata";
 import { AnimatePresence } from "motion/react";
 import { useState } from "react";
 import { CalendarClock, ChevronDown } from "lucide-react";
@@ -75,7 +76,7 @@ export default function ComingUpCard({ items = [], isMobile = false, onJump, onC
                         <div className="dashboard-ahead-row">
                           <button type="button" className="dashboard-ahead-open" data-dashboard-detail-trigger={onJump ? "true" : undefined} onClick={(event) => onJump?.(row, event.currentTarget)}>
                             <span className="dashboard-ahead-title">{row.title}</span>
-                            <span className="dashboard-ahead-meta">{row.time ? `${row.time} · ` : ""}{row.meta}</span>
+                            <Metadata className="dashboard-ahead-meta" items={[row.time && <strong>{row.time}</strong>, row.meta]}/>
                           </button>
                           {handleComplete && <MarkDoneAction onComplete={() => void handleComplete(row)} itemTitle={row.title} compact isMobile={isMobile} alwaysVisible />}
                         </div>

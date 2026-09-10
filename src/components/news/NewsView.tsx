@@ -1,3 +1,4 @@
+import Metadata from "../shared/Metadata";
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, MouseEventHandler, ReactNode } from "react";
 import { RefreshCw, Settings2 } from "lucide-react";
@@ -170,9 +171,7 @@ export default function NewsView({
         <div className="news-toolbar-title-group">
           <h2>News</h2>
           {news ? (
-            <span className="news-toolbar-summary">
-              {totalNew} new · {topicIndex.length} {topicIndex.length === 1 ? "topic" : "topics"}
-            </span>
+            <Metadata className="news-toolbar-summary" items={[<strong>{totalNew} new</strong>, `${topicIndex.length} ${topicIndex.length === 1 ? "topic" : "topics"}`]}/>
           ) : null}
           <span className="news-toolbar-updated" aria-live="polite">
             {news ? checkedLabel(news.lastUpdatedAt) : "checking headlines…"}

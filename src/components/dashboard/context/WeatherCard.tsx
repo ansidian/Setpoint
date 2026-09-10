@@ -1,3 +1,4 @@
+import Metadata from "../../shared/Metadata";
 import { useState } from "react";
 import AnimatedCollapse from "../../shared/AnimatedCollapse";
 import { useReducedMotion } from "motion/react";
@@ -26,7 +27,7 @@ export default function WeatherCard({ weather }: { weather?: DashboardWeather | 
   const hi = weather?.high != null ? `H ${Math.round(weather.high)}°` : null;
   const lo = weather?.low != null ? `L ${Math.round(weather.low)}°` : null;
   const day = new Date().toLocaleDateString("en-US", { weekday: "long", timeZone: "America/Los_Angeles" });
-  const meta = [hi, lo, day].filter(Boolean).join(" · ");
+  const meta = [hi, lo, day];
 
   const hours = buildForecastHours(weather);
   const days = buildForecastDays(weather);
@@ -72,7 +73,7 @@ export default function WeatherCard({ weather }: { weather?: DashboardWeather | 
             {condition && <span style={{ fontSize: 12, color: "var(--color-text-secondary, #a6adc8)" }}>{condition}</span>}
           </div>
           {meta && (
-            <div style={{ fontSize: 11, color: "var(--color-text-secondary, #a6adc8)", marginTop: 6, fontVariantNumeric: "tabular-nums" }}>{meta}</div>
+            <div style={{ marginTop: 6, fontVariantNumeric: "tabular-nums" }}><Metadata items={meta}/></div>
           )}
         </div>
         <Icon name={weather?.icon || "Sun"} size={30} strokeWidth={1.8} color="var(--sp-cream, #f9e2af)" style={{ flexShrink: 0 }} />

@@ -329,3 +329,8 @@
 .fin-journal-date-picker button:enabled:active{transform:scale(.97)}
 .fin-journal-date-picker button:disabled{opacity:.4;cursor:default !important}
 @media(prefers-reduced-motion:reduce){.fin-journal-date-picker button{transition:none !important;transform:none !important}}
+.fin-payment-account { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 12px; margin:6px 0 0; font-size:11px; }
+.fin-payment-account dt { color:#a6adc8; }
+.fin-payment-account dd { margin:0; color:var(--sp-text); overflow-wrap:anywhere; }
+.fin-payment-date { display:block; }
+.fin-record-status { flex-wrap:wrap; }

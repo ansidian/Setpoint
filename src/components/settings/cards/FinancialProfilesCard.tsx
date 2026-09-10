@@ -183,7 +183,13 @@ export default function FinancialProfilesCard({ settings, setSettings, patch, me
                     {profile.budgetId !== budgetId ? <span className="text-[11px] text-warning">Different budget · inactive</span> : null}
                   </div>
                   <p className="mt-1 break-words text-[12px] leading-relaxed text-muted-foreground">{targetSummary(profile)}</p>
-                  <p className="mt-1 break-words text-[11px] leading-relaxed text-muted-foreground">{profile.senderAddresses.join(", ")}{profile.merchantName ? ` · ${profile.merchantName}` : ""}{profile.accountLast4 ? ` · Card ending ${profile.accountLast4}` : ""}</p>
+                  <p className="mt-1 break-words text-[11px] leading-relaxed text-muted-foreground">{profile.senderAddresses.join(", ")}</p>
+                  {profile.merchantName || profile.accountLast4 ? (
+                    <dl className="mt-2 grid grid-cols-1 gap-x-6 gap-y-2 text-[11px] leading-relaxed sm:grid-cols-2">
+                      {profile.merchantName ? <div className="min-w-0"><dt className="text-muted-foreground">Merchant</dt><dd className="break-words text-foreground">{profile.merchantName}</dd></div> : null}
+                      {profile.accountLast4 ? <div className="min-w-0"><dt className="text-muted-foreground">Card ending</dt><dd className="text-foreground tabular-nums">{profile.accountLast4}</dd></div> : null}
+                    </dl>
+                  ) : null}
                 </div>
                 <button type="button" disabled={!!editor} aria-label={`Edit ${profile.name}`} onClick={event => openEditor(profile, event.currentTarget)} className={cn(BUTTON, SETTINGS_SECONDARY_BUTTON_CLASS, "shrink-0")}><Pencil size={12} /> Edit</button>
               </li>

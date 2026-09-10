@@ -1,3 +1,4 @@
+import Metadata from '../../shared/Metadata';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { ChevronDown, Wallet } from 'lucide-react';
@@ -16,14 +17,14 @@ export default function FinancialActivityCard({ review, completed, loading, revi
   const [showCompleted,setShowCompleted] = useState(false);
   const row = (item: FinancialActivity) => <Link key={item.id} className="dashboard-finance-row dashboard-finance-review-row" to={financialHref({ view:item.status === 'completed' ? 'completed' : 'needs_attention' },item.reference)}>
     <span><span className="dashboard-finance-row-title">{item.payee || item.subject || 'Financial record'}</span>
-      <span className="dashboard-finance-row-detail">{item.status === 'completed' ? `${activityOutcome(item)} · ${activityFacts(item).label}` : `${item.status === 'processing' ? 'Pending · ' : ''}${activityReviewReason(item)}`}</span>
+      <Metadata className="dashboard-finance-row-detail" items={item.status === 'completed' ? [<strong>{activityOutcome(item)}</strong>, activityFacts(item).label] : [item.status === 'processing' && <strong>Pending</strong>, activityReviewReason(item)]}/>
     </span>
     <span className="dashboard-finance-row-end"><span className="dashboard-finance-amount" data-direction={(item.amountCents ?? 0) > 0 ? 'inflow' : 'outflow'}>{activityAmount(item)}</span>
       <span className="dashboard-finance-caption">{item.status === 'completed' ? 'View result' : item.status === 'processing' ? 'View progress' : item.correction ? 'Review correction' : item.actions.complete ? 'Review details' : 'Review record'}</span>
     </span>
   </Link>;
   return <section className="dashboard-finance-card dashboard-finance-review" aria-label="Finance review">
-    <div className="dashboard-finance-heading"><h3><Wallet size={15} />Finance{review ? ` · ${review.attentionTotal} to review` : ''}</h3>
+    <div className="dashboard-finance-heading"><h3><Wallet size={15} />Finance{review && <span className="dashboard-finance-review-count">{review.attentionTotal} to review</span>}</h3>
       <Link className="dashboard-finance-button" to={financialHref({ view:'needs_attention' })}>View all<span className="sr-only"> financial reviews</span></Link>
     </div>
     {reviewError && <p role="status" className="dashboard-finance-note dashboard-finance-error">Couldn’t refresh reviews.{review ? ' Showing the last available records.' : ' Try Refresh below.'}</p>}

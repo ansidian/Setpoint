@@ -333,13 +333,11 @@ function CredentialRow({
       <SensitiveActionStepUp state={stepUp} className="mt-3" />
       {pendingExpiry ? <FieldHint className="mt-2">{pendingExpiry}</FieldHint> : null}
       {lastTest || lastSuccess || lastFailure ? (
-        <FieldHint className="mt-2">
-          {[
-            lastTest ? `Tested ${lastTest}` : null,
-            lastSuccess ? `Last success ${lastSuccess}` : null,
-            lastFailure ? `Last failure ${lastFailure}` : null,
-          ].filter(Boolean).join(" · ")}
-        </FieldHint>
+        <dl className="mt-3 grid grid-cols-1 gap-x-6 gap-y-2 text-[11px] leading-relaxed sm:grid-cols-3">
+          {lastTest ? <div className="min-w-0"><dt className="text-muted-foreground">Tested</dt><dd className="break-words text-foreground tabular-nums">{lastTest}</dd></div> : null}
+          {lastSuccess ? <div className="min-w-0"><dt className="text-muted-foreground">Last success</dt><dd className="break-words text-foreground tabular-nums">{lastSuccess}</dd></div> : null}
+          {lastFailure ? <div className="min-w-0"><dt className="text-muted-foreground">Last failure</dt><dd className="break-words text-foreground tabular-nums">{lastFailure}</dd></div> : null}
+        </dl>
       ) : null}
       {message ? <div role="status"><FieldHint className="mt-2 text-[var(--sp-green)]">{message}</FieldHint></div> : null}
       {error ? <div role="alert"><FieldHint className="mt-2 text-danger">{error}</FieldHint></div> : null}

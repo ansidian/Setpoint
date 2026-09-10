@@ -1,3 +1,4 @@
+import Metadata from "../../shared/Metadata";
 import { formatSnoozeTime } from "../inboxSnoozedModel";
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
@@ -43,7 +44,7 @@ export default function MobileReaderHeader({
           {isUntriagedReadSnapshot && <MobileStatusPill color="#a6adc8" label="Read" subtle />}
         </div>
       )}
-      {email._snoozedUntil && <p className="mobile-reader-summary" style={{ color: accent }}>Returns {formatSnoozeTime(email._snoozedUntil)}{email._snoozedUnavailable && " · Source unavailable; deferred state is kept."}</p>}
+      {email._snoozedUntil && <div className="mobile-reader-summary"><Metadata items={[<>Returns <strong><time dateTime={new Date(email._snoozedUntil).toISOString()}>{formatSnoozeTime(email._snoozedUntil)}</time></strong></>]}/>{email._snoozedUnavailable && <p style={{ margin: "6px 0 0" }}>Source unavailable; deferred state is kept.</p>}</div>}
       {triageSummary && (
         <>
           <button
