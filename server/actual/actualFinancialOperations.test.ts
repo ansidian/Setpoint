@@ -368,6 +368,116 @@ describe("Actual financial operations", () => {
     expect(state.transactions).toHaveLength(1);
   });
 
+  it.each([
+    ["Southern California Edison", 165], ["Southern California Gas", 150],
+  ])("recognizes an existing %s payment with its exact configured fee during preview only", async (payee, fee) => {
+    const state = fixture();
+    state.payees.push({ id: "utility-payee", name: payee, transfer_acct: "" });
+    const input = { ...utility, payee: "Receipt merchant", payeeId: "utility-payee", categoryId: "utilities" };
+    const paid = { id: "paid-with-fee", account: input.accountId, payee: "utility-payee", amount: input.amountCents - fee,
+      date: input.date, imported_id: null, transfer_id: null, tombstone: false, category: "utilities" };
+    state.transactions.push(paid);
+    expect(await reconcileActualFinancialOperation(state.sdk, "budget", input, "preview", now))
+      .toMatchObject({ outcome: "already_present", transactionId: paid.id });
+    expect(await reconcileActualFinancialOperation(state.sdk, "budget", input, "recover", now)).toMatchObject({ outcome: "needs_review" });
+    expect(state.transactions).toEqual([paid]);
+    expect(state.schedules).toEqual([]);
+  });
+
+  it.each([["SCE", 165], ["SoCalGas", 150]])("recognizes an existing %s schedule with its exact configured fee without rewriting it", async (payee, fee) => {
+    const state = fixture();
+    const input = { ...utility, payee, name: payee, categoryId: "utilities" };
+    await reconcileActualFinancialOperation(state.sdk, "budget", { ...input, amountCents: input.amountCents - fee }, "write_once", now);
+    const original = structuredClone({ schedules: state.schedules, rules: state.rules });
+    expect(await reconcileActualFinancialOperation(state.sdk, "budget", input, "preview", now))
+      .toMatchObject({ outcome: "already_present", scheduleId: state.schedules[0]!.id });
+    expect(await reconcileActualFinancialOperation(state.sdk, "budget", input, "recover", now)).toMatchObject({ outcome: "needs_review" });
+    expect(await reconcileActualFinancialOperation(state.sdk, "budget", input, "write_once", now)).toMatchObject({ outcome: "needs_review" });
+    expect({ schedules: state.schedules, rules: state.rules }).toEqual(original);
+    expect(state.transactions).toEqual([]);
+  });
+
+  it.each([
+    ["one cent under", { amount: -8_864 }], ["one cent over", { amount: -8_866 }],
+    ["opposite direction", { amount: 8_865 }], ["different account", { account: "card" }],
+    ["different payee", { payee: "other" }], ["different date", { date: "2026-09-29" }],
+    ["transfer", { transfer_id: "transfer" }], ["deleted payment", { tombstone: true }],
+  ])("does not suppress a utility statement for a fee payment with %s", async (_label, mismatch) => {
+    const state = fixture();
+    state.payees.push({ id: "utility-payee", name: "SCE", transfer_acct: "" });
+    state.transactions.push({ id: "not-this-payment", account: utility.accountId, payee: "utility-payee", amount: -8_865,
+      date: utility.date, imported_id: null, transfer_id: null, tombstone: false, ...mismatch });
+    expect(await reconcileActualFinancialOperation(state.sdk, "budget", { ...utility, payee: "SCE" }, "preview", now))
+      .toMatchObject({ outcome: "would_add" });
+    expect(state.schedules).toEqual([]);
+  });
+
+  it("requires review for conflicting fee payment categories and competing base and fee matches", async () => {
+    const state = fixture();
+    state.payees.push({ id: "utility-payee", name: "SCE", transfer_acct: "" });
+    const input = { ...utility, payee: "SCE", categoryId: "utilities" };
+    state.transactions.push({ id: "fee-payment", account: input.accountId, payee: "utility-payee", amount: -8_865,
+      date: input.date, imported_id: null, transfer_id: null, tombstone: false, category: "different-category" });
+    expect(await reconcileActualFinancialOperation(state.sdk, "budget", input, "preview", now))
+      .toMatchObject({ outcome: "needs_review", reason: expect.stringContaining("different category") });
+    state.transactions[0]!.category = "utilities";
+    state.transactions.push({ ...state.transactions[0]!, id: "base-payment", amount: input.amountCents });
+    expect(await reconcileActualFinancialOperation(state.sdk, "budget", input, "preview", now))
+      .toMatchObject({ outcome: "needs_review", reason: "Multiple utility payments match this statement." });
+    expect(state.schedules).toEqual([]);
+    expect(state.transactions).toHaveLength(2);
+  });
+
+  it.each([
+    ["different cents", "amount", -8_866, "would_update"],
+    ["opposite direction", "amount", 8_865, "needs_review"],
+    ["different account", "account", "card", "would_add"],
+    ["different payee", "payee", "other", "would_add"],
+    ["different date", "date", "2026-09-29", "would_update"],
+  ])("does not suppress a utility statement for a fee schedule with %s", async (_label, field, value, outcome) => {
+    const state = fixture();
+    const input = { ...utility, payee: "SCE", name: "SCE" };
+    await reconcileActualFinancialOperation(state.sdk, "budget", { ...input, amountCents: -8_865 }, "write_once", now);
+    state.rules[0]!.conditions.find(item => item.field === field)!.value = value;
+    if (field === "date") state.schedules[0]!.next_date = String(value);
+    expect(await reconcileActualFinancialOperation(state.sdk, "budget", { ...input, identityKey: "another-statement" }, "preview", now))
+      .toMatchObject({ outcome });
+    expect(state.rules[0]!.conditions.find(item => item.field === field)?.value).toBe(value);
+    expect(state.schedules).toHaveLength(1);
+  });
+
+  it("preserves schedule category and unique target checks for fee-inclusive matches", async () => {
+    const state = fixture();
+    const input = { ...utility, payee: "SCE", name: "SCE", categoryId: "utilities" };
+    await reconcileActualFinancialOperation(state.sdk, "budget", { ...input, amountCents: -8_865 }, "write_once", now);
+    const category = state.rules[0]!.actions.find(action => action.field === "category")!;
+    category.value = "other-category";
+    expect(await reconcileActualFinancialOperation(state.sdk, "budget", input, "preview", now)).toMatchObject({ outcome: "would_update" });
+    category.value = "utilities";
+    const secondId = "second-schedule";
+    state.schedules.push({ ...state.schedules[0]!, id: secondId, rule: "second-rule" });
+    const secondRule = structuredClone(state.rules[0]!);
+    secondRule.id = "second-rule";
+    secondRule.conditions.find(item => item.field === "amount")!.value = input.amountCents;
+    secondRule.actions.find(action => action.op === "link-schedule")!.value = secondId;
+    state.rules.push(secondRule);
+    expect(await reconcileActualFinancialOperation(state.sdk, "budget", { ...input, identityKey: "another-statement" }, "preview", now))
+      .toMatchObject({ outcome: "needs_review", reason: "Multiple utility schedules match the account and payee." });
+    expect(state.schedules).toHaveLength(2);
+  });
+
+  it("never infers a fee from a misleading source payee or adds a fee while writing", async () => {
+    const state = fixture();
+    state.payees.push({ id: "other-utility", name: "Other Utility", transfer_acct: "" });
+    state.transactions.push({ id: "other-payment", account: utility.accountId, payee: "other-utility", amount: -8_865,
+      date: utility.date, imported_id: null, transfer_id: null, tombstone: false });
+    expect(await reconcileActualFinancialOperation(state.sdk, "budget", { ...utility, payee: "SCE", payeeId: "other-utility" }, "preview", now))
+      .toMatchObject({ outcome: "would_add" });
+    const input = { ...utility, payee: "SCE", name: "SCE" };
+    expect(await reconcileActualFinancialOperation(state.sdk, "budget", input, "write_once", now)).toMatchObject({ outcome: "added" });
+    expect(state.rules[0]!.conditions).toContainEqual({ field: "amount", op: "is", value: utility.amountCents });
+  });
+
   it("rejects changes between schedule preview and write", async () => {
     const state = fixture();
     await reconcileActualFinancialOperation(state.sdk, "budget", utility, "write_once", now);

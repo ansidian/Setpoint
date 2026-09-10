@@ -1,9 +1,10 @@
 import { financialEventStore, createFinancialEventStore, readManagedFinancialEmailUids,
   type FinancialStatusDb, type FinancialDocument, type FinancialEvent } from "./financial-event-store.ts";
-import { completionBlocker, dismissalBlocker } from "./financial-event-completion-model.ts";
+import { canReviewKnownDetails, completionBlocker, dismissalBlocker, hasPendingFinancialPlan } from "./financial-event-completion-model.ts";
 import type { FinancialEmailPlan, FinancialPlanTarget, FinancialTargetKind } from "../../shared/types/bills.ts";
 import type { Row } from "@libsql/client";
 import { documentFromRow, eventFromRow } from "./financial-event-store.ts";
+import { hasFinancialSemanticConflict, selectSemanticBillAmount } from "../bills/financial-email-planner.ts";
 export { FINANCIAL_EVENT_STATUS_SELECT } from "./financial-event-store.ts";
 
 /** Shared history hydrates a consistent saved snapshot through the managed owner. */
@@ -38,14 +39,24 @@ export async function resolveManagedFinancialPlan(userId: string, emailUid: stri
 
 export function projectManagedFinancialPlan(document: FinancialDocument, event: FinancialEvent | null): FinancialEmailPlan {
   const dismissed = document.dismissedAt != null || event?.dismissedAt != null;
-  const state = dismissed ? "settled" : event?.status === "processing" ? "pending" : event?.status
+  const completedBlocker = completionBlocker(event);
+  const sourcePending = !document.correction && !document.correctedEntry && !document.correctedResolution
+    && !completedBlocker && !event?.ownerCompletion && (event
+    ? event.documents.some(source => source.dismissedAt == null && source.processedRevision < source.revision)
+    : document.status !== "retry" && document.processedRevision < document.revision);
+  const pendingPlan = !document.correction && !document.correctedEntry && !completedBlocker
+    && (hasPendingFinancialPlan(event) || sourcePending);
+  const currentCandidate = sourcePending ? null : document.candidate;
+  const reviewingDetails = !dismissed && !document.correction && !document.correctedEntry
+    && canReviewKnownDetails(event, currentCandidate);
+  const state = dismissed ? "settled" : sourcePending ? "pending" : reviewingDetails ? "needs_review" : event?.status === "processing" ? "pending" : event?.status
     || (document.status === "ignored" ? "settled" : document.status === "retry" ? "waiting" : "pending");
-  const reason = dismissed ? "Candidate dismissed by owner." : event?.reason || document.error || (state === "settled" ? "No financial entry is needed."
-    : document.status === "associated" ? "Collecting related payment details." : "Checking this email for financial activity.");
-  const plan: FinancialEmailPlan = event?.plan ? structuredClone(event.plan) : {
+  const reason = dismissed ? "Candidate dismissed by owner." : sourcePending ? "Checking updated source details." : reviewingDetails ? "Review the details before recording in Actual." : event?.reason || document.error || (state === "settled" ? "No financial entry is needed."
+    : document.status === "associated" ? "Preparing financial details." : "Checking this email for financial activity.");
+  const plan: FinancialEmailPlan = event?.plan && !pendingPlan ? structuredClone(event.plan) : {
     version: 1, identity: { version: 1, status: "resolved", key: event?.id || `financial-document:${document.id}` },
-    candidate: document.candidate || {},
-    classification: { documentKind: "informational", eventKind: document.candidate?.event_kind || null, confidence: null, reasons: [] },
+    candidate: currentCandidate || {},
+    classification: { documentKind: "informational", eventKind: currentCandidate?.event_kind || null, confidence: null, reasons: [] },
     operation: { intended: null, kind: state === "settled" ? "no_write" : "review", reasons: [] },
     targets: { account: emptyTarget("account"), payee: emptyTarget("payee"), category: emptyTarget("category"),
       fromAccount: emptyTarget("from_account"), toAccount: emptyTarget("to_account"), schedule: emptyTarget("schedule") },
@@ -79,9 +90,19 @@ export function projectManagedFinancialPlan(document: FinancialDocument, event: 
     plan.operation = { ...plan.operation, kind: 'no_write' };
     plan.automation = { ...plan.automation, eligible: false };
   }
-  const blockedReason = dismissed ? 'This candidate was dismissed.' : document.correction || document.correctedEntry ? 'This source has an explicit correction and cannot be resubmitted.' : completionBlocker(event);
+  const blockedReason = dismissed ? 'This candidate was dismissed.' : document.correction || document.correctedEntry ? 'This source has an explicit correction and cannot be resubmitted.' : completedBlocker || (sourcePending ? "Check the updated source details after assessment finishes." : null);
+  if (!blockedReason && !event?.ownerCompletion) {
+    // Review uses the same canonical amount as automatic planning. Keep the
+    // original extraction in the document for source inspection and replanning.
+    const amount = plan.candidate.currency === "USD" ? selectSemanticBillAmount(plan.candidate)?.amount : null;
+    plan.candidate = { ...plan.candidate, amount: amount ?? null };
+    if (plan.candidate.type_verification?.status === "failed" || hasFinancialSemanticConflict(plan.candidate)) {
+      plan.candidate.type = null;
+      plan.operation = { ...plan.operation, intended: null, kind: "review" };
+    }
+  }
   return { ...plan, workflow: { ...(document.correction ? { correction:document.correction } : {}), id: event?.id || `financial-document:${document.id}`, state, ...(dismissed ? { dismissed: true } : {}),
-    ...(!dismissed && event?.progress ? { progress: event.progress } : {}),
+    ...(!dismissed && !reviewingDetails && event?.progress ? { progress: event.progress } : {}),
     relatedEmails: event?.documents.length || 1, reason, nextAttemptAt: event?.nextAttemptAt || document.nextAttemptAt,
     completion: { emailUid: document.emailUid, documentRevision: document.revision, eventRevision: event?.revision ?? null,
       canComplete: !blockedReason, canDismiss: !dismissalBlocker(document, event), ...(blockedReason ? { blockedReason } : {}) } } };

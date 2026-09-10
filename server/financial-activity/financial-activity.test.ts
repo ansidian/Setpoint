@@ -8,6 +8,8 @@ import { createTransactionImportStore } from "../transaction-imports/transaction
 import { createFinancialEventStore } from "../financial-events/financial-event-store.ts";
 import { createFinancialEventCompletion } from "../financial-events/financial-event-completion.ts";
 import { ownerCompletionPlan } from "../financial-events/financial-event-completion-model.ts";
+import { readFinancialReviewChanges } from "../financial-events/financial-event-review.ts";
+import { resolveManagedFinancialPlan } from "../financial-events/financial-event-status.ts";
 
 const migrations = ["001_ea_tables.sql", "013_email_index_normalized_date.sql", "025_email_thread_identity.sql",
   "030_owner_bootstrap.sql", "041_email_transaction_imports.sql", "042_transaction_import_item_subject.sql",
@@ -53,9 +55,34 @@ describe("shared financial activity history", () => {
     expect(document.amountCents).toBe(expected);
     expect((await reader().detail("owner", document.reference))?.amountCents).toBe(expected);
     await event("pending-event");
-    await db.execute("UPDATE ea_financial_documents SET event_id = 'pending-event', status = 'associated'");
+    await db.execute("UPDATE ea_financial_documents SET event_id = 'pending-event', status = 'associated', processed_revision = revision");
     expect((await reader().list("owner", { view: "needs_attention" })).items[0]?.amountCents).toBe(expected);
     expect((await reader().detail("owner", { owner: "event", id: "pending-event" }))?.amountCents).toBe(expected);
+  });
+  it.each(["minimum", "failed", "canonical"])("prefills only the canonical review amount for %s extraction", async (mode) => {
+    const candidate = { type: "bill", event_kind: "statement_issued", currency: "USD", amount: 35,
+      amount_kind: mode === "minimum" ? "minimum_due" : "statement_balance",
+      ...(mode === "failed" ? { amount_verification: { status: "failed" } } : {}),
+      ...(mode === "canonical" ? { amount_candidates: [{ kind: "statement_balance", value: 1229.03, confidence: 1 }] } : {}) };
+    await db.execute({ sql: `INSERT INTO ea_financial_documents
+      (user_id, account_id, email_uid, status, candidate_json, created_at, updated_at)
+      VALUES ('owner', 'mail', 'partial', 'retry', ?, 1, 1)`, args: [JSON.stringify(candidate)] });
+    const activity = (await reader().list("owner", { view: "needs_attention" })).items[0]!;
+    const detail = await reader().detail("owner", activity.reference);
+    expect(detail?.actions.complete).toBe(true);
+    expect(detail?.completionPlan?.candidate.amount).toBe(mode === "canonical" ? 1229.03 : null);
+    expect((await createFinancialEventStore(db).getDocumentForEmail("owner", "partial"))?.candidate).toEqual(candidate);
+  });
+  it.each(["failed", "conflicting"])("leaves %s source classification for the owner to choose", async (mode) => {
+    const candidate = { type: "expense", event_kind: mode === "conflicting" ? "refund" : "purchase", currency: "USD", amount: 30,
+      amount_kind: "transaction_amount", ...(mode === "failed" ? { type_verification: { status: "failed" } } : {}) };
+    await db.execute({ sql: `INSERT INTO ea_financial_documents
+      (user_id, account_id, email_uid, status, candidate_json, created_at, updated_at)
+      VALUES ('owner', 'mail', 'uncertain-type', 'retry', ?, 1, 1)`, args: [JSON.stringify(candidate)] });
+    const activity = (await reader().list("owner", { view: "needs_attention" })).items[0]!;
+    expect(await reader().detail("owner", activity.reference)).toMatchObject({ actions: { complete: true },
+      completionPlan: { candidate: { type: null }, operation: { intended: null } } });
+    expect((await createFinancialEventStore(db).getDocumentForEmail("owner", "uncertain-type"))?.candidate).toEqual(candidate);
   });
   it.each(["expense", "income"] as const)("uses owner-confirmed %s direction ahead of original source classification", async (kind) => {
     const sourceType = kind === "expense" ? "income" : "expense";
@@ -226,6 +253,100 @@ describe("shared financial activity history", () => {
       total: 2, attentionTotal: 0, items: [{ status: "processing" }, { status: "processing" }],
     });
     expect((await reader().list("owner", { view: "completed" })).total).toBe(0);
+  });
+  it("keeps revised source facts out of review until assessed and never reuses its older plan", async () => {
+    await event("revised", 1000, "owner", "needs_review");
+    const oldPlan = ownerCompletionPlan("revised", { kind: "expense", amount: 30, date: "2026-09-01", accountId: "old-card", payee: "Old Merchant" });
+    await db.execute({ sql: "UPDATE ea_financial_events SET plan_json = ? WHERE id = 'revised'", args: [JSON.stringify(oldPlan)] });
+    await db.execute(`INSERT INTO ea_email_index (uid, user_id, account_id, account_label, account_email, subject, body_text, email_date, email_date_utc)
+      VALUES ('revised-source', 'owner', 'mail', 'Mail', 'owner@example.test', 'Receipt', 'Original receipt', '2020-01-01', '2020-01-01T12:00:00Z')`);
+    await db.execute({ sql: `INSERT INTO ea_financial_documents
+      (user_id, account_id, email_uid, event_id, status, candidate_json, processed_revision, created_at, updated_at)
+      VALUES ('owner', 'mail', 'revised-source', 'revised', 'associated', ?, 1, 1000, 1000)`, args: [JSON.stringify(oldPlan.candidate)] });
+    await db.execute("UPDATE ea_email_index SET body_text = 'Corrected receipt for $45 at Corrected Merchant' WHERE uid = 'revised-source'");
+    expect(await reader().list("owner", { view: "needs_attention" })).toMatchObject({ attentionTotal: 0,
+      items: [{ status: "processing", actions: { complete: false } }] });
+    expect((await resolveManagedFinancialPlan("owner", "revised-source", { dbClient: db }))?.workflow?.completion?.canComplete).toBe(false);
+    expect((await readFinancialReviewChanges("owner", { dbClient: db })).items).toEqual([]);
+
+    const store = createFinancialEventStore(db, () => 2000);
+    const source = (await store.claimDocument("reassess"))!;
+    const candidate = { type: "expense" as const, event_kind: "purchase" as const, amount: 45,
+      amount_kind: "transaction_amount" as const, currency: "USD", due_date: "2026-09-10", payee: "Corrected Merchant" };
+    await store.associateDocument(source, { eventId: "revised", candidate, contentHash: "revised-source", nextAttemptAt: 2000 });
+    expect((await store.getEventForEmail("owner", "revised-source"))?.plan).toBeNull();
+    for (const state of ["pending", "processing"]) {
+      await db.execute({ sql: "UPDATE ea_financial_events SET status = ?, claim_token = ?, claimed_at = ? WHERE id = 'revised'",
+        args: [state, state === "processing" ? "planner" : null, state === "processing" ? 2000 : null] });
+      expect(await reader().list("owner", { view: "needs_attention" })).toMatchObject({ attentionTotal: 1,
+        items: [{ status: "needs_attention", amountCents: -4500, payee: "Corrected Merchant", actions: { complete: true } }] });
+      const detail = await reader().detail("owner", { owner: "event", id: "revised" });
+      expect(detail?.completionPlan).toMatchObject({ candidate,
+        targets: { account: { status: "not_applicable" }, payee: { status: "not_applicable" } },
+        workflow: { state: "needs_review", completion: { documentRevision: 2, eventRevision: 3, canComplete: true } } });
+      expect((await readFinancialReviewChanges("owner", { dbClient: db })).items).toHaveLength(1);
+    }
+    const planning = (await store.getEventForEmail("owner", "revised-source"))!;
+    await store.saveEvent(planning, { plan: null, status: "waiting", nextAttemptAt: 3000,
+      reason: "Financial processing is paused while email AI is disabled." });
+    expect(await reader().detail("owner", { owner: "event", id: "revised" })).toMatchObject({ status: "needs_attention",
+      amountCents: -4500, payee: "Corrected Merchant", completionPlan: { candidate, workflow: { completion: { canComplete: true } } } });
+  });
+  it("offers assessed candidates for manual review before planning and stops offering them after submission", async () => {
+    await event("collecting", 1000, "owner", "pending");
+    await db.execute(`UPDATE ea_financial_events SET reason = 'Collecting related payment details.',
+      collection_required = 1, collection_deadline = 91000, next_attempt_at = 91000 WHERE id = 'collecting'`);
+    await db.execute(`INSERT INTO ea_email_index (uid, user_id, account_id, account_label, account_email, subject, body_text, email_date, email_date_utc)
+      VALUES ('receipt', 'owner', 'mail', 'Mail', 'owner@example.test', 'Cloud credit receipt', 'Paid $10 on 2026-09-10.', '2020-01-01', '2020-01-01T12:00:00Z')`);
+    const candidate = { type: "expense", event_kind: "purchase", payee: "Cloud Hosting", amount: 10,
+      amount_kind: "transaction_amount", currency: "USD", due_date: "2026-09-10" };
+    await db.execute({ sql: `INSERT INTO ea_financial_documents
+      (user_id, account_id, email_uid, event_id, status, candidate_json, processed_revision, created_at, updated_at)
+      VALUES ('owner', 'mail', 'receipt', 'collecting', 'associated', ?, 1, 1000, 1000)`, args: [JSON.stringify(candidate)] });
+    await db.execute(`INSERT INTO ea_financial_intake_state (user_id, account_id, completed_through, status, updated_at)
+      VALUES ('owner', 'unrelated-mail', '1970-01-01T00:00:00Z', 'pending', 1000)`);
+
+    let notificationKey: string | undefined;
+    for (const state of ["pending", "processing", "waiting"]) {
+      await db.execute({ sql: `UPDATE ea_financial_events SET status = ?, claim_token = ?, claimed_at = ? WHERE id = 'collecting'`,
+        args: [state, state === "processing" ? "worker" : null, state === "processing" ? 2000 : null] });
+      expect(await reader().list("owner", { view: "needs_attention" })).toMatchObject({ total: 1, attentionTotal: 1,
+        items: [{ status: "needs_attention", actions: { complete: true }, payee: "Cloud Hosting", amountCents: -1000 }] });
+      expect(await reader().detail("owner", { owner: "event", id: "collecting" })).toMatchObject({
+        status: "needs_attention", actions: { complete: true }, reason: "Review the details before recording in Actual.",
+        completionPlan: { candidate, workflow: { state: "needs_review", completion: { canComplete: true, canDismiss: true } } } });
+      const managed = await resolveManagedFinancialPlan("owner", "receipt", { dbClient: db });
+      expect(managed?.workflow?.state).toBe("needs_review");
+      expect(managed?.workflow?.reason).toBe("Review the details before recording in Actual.");
+      expect(managed?.workflow?.progress).toBeUndefined();
+      const changes = await readFinancialReviewChanges("owner", { dbClient: db });
+      expect(changes.items).toEqual([{ emailUid: "receipt", key: notificationKey ?? expect.stringMatching(/^financial-review:/) }]);
+      notificationKey = changes.items[0]!.key;
+    }
+
+    const store = createFinancialEventStore(db, () => 3000);
+    const ready = await resolveManagedFinancialPlan("owner", "receipt", { dbClient: db });
+    await createFinancialEventCompletion({ store, now: () => 3000 }).complete("owner", {
+      ...ready!.workflow!.completion,
+      entry: { kind: "expense", amount: 10, date: "2026-09-10", payee: "Cloud Hosting", accountId: "card" },
+    });
+    expect(await reader().list("owner", { view: "needs_attention" })).toMatchObject({ total: 1, attentionTotal: 0,
+      items: [{ status: "processing", actions: { complete: false } }] });
+    expect((await readFinancialReviewChanges("owner", { dbClient: db })).items).toEqual([]);
+    expect(await store.getEventForEmail("owner", "receipt")).toMatchObject({ status: "pending", attemptedAt: null, operation: null });
+
+    for (const mode of ["automatic", "unassessed", "recovering"] as const) {
+      await db.execute({ sql: `UPDATE ea_financial_events SET owner_completion_json = NULL, plan_json = NULL,
+        collection_required = ?, attempted_at = ?, operation_json = ? WHERE id = 'collecting'`,
+        args: [mode === "automatic" ? 0 : 1, mode === "recovering" ? 4000 : null,
+          mode === "recovering" ? JSON.stringify({ executor: "financial", input: { budgetId: "budget" } }) : null] });
+      await db.execute({ sql: "UPDATE ea_financial_documents SET candidate_json = ? WHERE email_uid = 'receipt'",
+        args: [mode === "unassessed" ? null : JSON.stringify(candidate)] });
+      expect(await reader().list("owner", { view: "needs_attention" })).toMatchObject({ total: 1, attentionTotal: 0,
+        items: [{ status: "processing", actions: { complete: false } }] });
+      expect((await resolveManagedFinancialPlan("owner", "receipt", { dbClient: db }))?.workflow?.state).toBe("pending");
+      expect((await readFinancialReviewChanges("owner", { dbClient: db })).items).toEqual([]);
+    }
   });
   it("binds only the original owner-scoped identity and preserves unknown old provenance", async () => {
     await item("old", { importedId: "original-imported-id" });

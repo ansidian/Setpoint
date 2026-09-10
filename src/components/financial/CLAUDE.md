@@ -5,6 +5,7 @@ Financial activity and records live at `/finance` inside WorkspaceRoute's retain
 - `financialNavigation.ts` — exact URL-compatible list/source/run/record targets.
 - `financial.css` — adaptive list/detail and record surface; centered viewport-responsive dialogs with bounded content measures; Settings up to 1920px, activity up to 1680px, records up to 1000px, and a 960px split-list threshold.
 
+- `src/components/bills/financialCompletionDraft.ts` — known-fact prefills and same-revision enrichment for managed completion; untouched fields and clean baselines update together, while owner edits, explicit clears and confirmation drafts remain fixed.
 - `PendingFinancialRecord.tsx` — shared managed and arrival-import pending completion through their existing owner facades; drafts and inline confirmation.
 - Short option lists use `src/components/shared/Dropdown.tsx`; long/creatable lists use `src/components/shared/SearchableDropdown.tsx`. Date fields use `src/components/shared/pickers/DateField.tsx`.
 

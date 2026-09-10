@@ -66,11 +66,11 @@ async function fillMissingFields() {
 }
 
 describe("owner completion of a managed financial record", () => {
-  it("confirms missing context without an inferred category and distinguishes queuing from a recorded entry", async () => {
+  it("prefills a resolved category while confirming missing context and distinguishes queuing from a recorded entry", async () => {
     render(record(waitingPlan()));
     expect(screen.getByRole<HTMLButtonElement>("button", { name: "Review before sending" }).disabled).toBe(true);
     await fillMissingFields();
-    expect(screen.getByRole("button", { name:"Category (optional)" }).textContent).toBe("No category");
+    expect(screen.getByRole("button", { name:"Category (optional)" }).textContent).toBe("Spending / Inferred category");
     expect(screen.getByRole<HTMLButtonElement>("button", { name: "Review before sending" }).disabled).toBe(false);
     fireEvent.submit(screen.getByRole("form", { name: "Complete financial record" }));
     expect(confirmed).toBeNull();
@@ -79,7 +79,30 @@ describe("owner completion of a managed financial record", () => {
     expect(screen.queryByText("Recorded in Actual")).toBeNull();
     expect(screen.queryByRole("button", { name: "Review before sending" })).toBeNull();
     expect(confirmed).toEqual({ emailUid: "receipt-one", documentRevision: 1, eventRevision: 1,
-      entry: { kind: "expense", amount: 30, date: "2026-09-06", payee: "Example Merchant", accountId: "checking", categoryId: null, notes: "" } });
+      entry: { kind: "expense", amount: 30, date: "2026-09-06", payee: "Example Merchant", accountId: "checking", categoryId: "inferred-category", notes: "" } });
+  });
+
+  it("enriches untouched fields without changing edits, deliberate clears, or the final confirmation", async () => {
+    const view = render(record(waitingPlan()));
+    await waitFor(() => expect(screen.queryByText("Loading Actual accounts…")).toBeNull());
+    fireEvent.change(screen.getByLabelText("Outflow amount (USD)"), { target: { value: "45" } });
+    fireEvent.click(screen.getByRole("button", { name: "Category (optional)" }));
+    fireEvent.click(await screen.findByRole("option", { name: "No category" }));
+    const enriched = waitingPlan();
+    enriched.candidate = { ...enriched.candidate, amount: 99, due_date: "2026-09-10", notes: "Receipt details" };
+    enriched.targets.account = { ...target("account"), status: "resolved", id: "checking", label: "Everyday Checking" };
+    enriched.targets.payee = { ...target("payee"), status: "resolved", label: "Resolved Merchant" };
+    view.rerender(record(enriched));
+    await waitFor(() => expect(screen.getByRole<HTMLButtonElement>("button", { name: "Review before sending" }).disabled).toBe(false));
+    fireEvent.submit(screen.getByRole("form", { name: "Complete financial record" }));
+    const later = structuredClone(enriched);
+    later.targets.payee.label = "Later Merchant";
+    later.candidate.notes = "Later receipt details";
+    view.rerender(record(later));
+    fireEvent.click(screen.getByRole("button", { name: "Record in Actual" }));
+    await screen.findByText("Saving to Actual");
+    expect(confirmed).toEqual({ emailUid: "receipt-one", documentRevision: 1, eventRevision: 1,
+      entry: { kind: "expense", amount: 45, date: "2026-09-10", payee: "Resolved Merchant", accountId: "checking", categoryId: null, notes: "Receipt details" } });
   });
 
   it("preserves owner edits and the reviewed revision when a newer source arrives during editing", async () => {

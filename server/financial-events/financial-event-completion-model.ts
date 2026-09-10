@@ -64,6 +64,18 @@ export function completionBlocker(event: Pick<FinancialEvent, "attemptedAt" | "o
   return null;
 }
 
+/** The legacy collection flag identifies sources needing review before planning. */
+export function canReviewKnownDetails(event: Pick<FinancialEvent, "attemptedAt" | "operation" | "outcome" | "plan" | "ownerCompletion" | "status" | "dismissedAt" | "collectionRequired"> | null, candidate: BillCandidate | null): boolean {
+  return !!candidate && (!event || (event.collectionRequired && !event.ownerCompletion
+    && ["pending", "processing", "waiting"].includes(event.status))) && !completionBlocker(event);
+}
+
+/** A newly queued assessment has not replanned its current source facts yet. */
+export function hasPendingFinancialPlan(event: Pick<FinancialEvent, "status" | "ownerCompletion" | "attemptedAt" | "operation"> | null): boolean {
+  return !!event && !event.ownerCompletion && event.attemptedAt == null && !event.operation
+    && ["pending", "processing"].includes(event.status);
+}
+
 export function dismissalBlocker(document: FinancialDocument, event: FinancialEvent | null): string | null {
   if (document.dismissedAt != null || event?.dismissedAt != null) return "This candidate was dismissed.";
   if (document.correction || document.correctedEntry || event?.ownerCompletion) return "This entry has already been submitted and cannot be dismissed.";

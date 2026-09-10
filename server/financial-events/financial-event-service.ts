@@ -17,8 +17,7 @@ import type { FinancialEmailPlan } from "../../shared/types/bills.ts";
 import type { ActualFinancialOperationResult } from "../../shared/types/financial-operations.ts";
 import { ownerCompletionNeedsAccountEvidence, ownerCompletionOperation, ownerCompletionPlan, ownerCompletionSourceChanged } from "./financial-event-completion-model.ts";
 
-const COLLECT_EVIDENCE_MS = 90_000;
-const WAIT_FOR_EVIDENCE_MS = 15 * 60_000;
+const PROCESSING_RETRY_MS = 15 * 60_000;
 
 function retryAt(now: number, attempts: number): number {
   return now + Math.min(30_000 * 2 ** Math.min(attempts, 7), 60 * 60_000);
@@ -30,6 +29,14 @@ function actualRetryDelay(event: FinancialEvent): number {
 
 function errorText(error: unknown): string {
   return (error instanceof Error ? error.message : String(error)).slice(0, 300);
+}
+
+/** Missing automation authority must not prevent a read-only duplicate check. */
+function canCheckExistingBeforeReview(plan: FinancialEmailPlan): boolean {
+  return plan.profile?.status === "missing" && plan.automation.gates.every(gate =>
+    ["profile", "reconciliation", "actual_preflight", "rollout"].includes(gate.gate)
+    || ["pass", "not_applicable"].includes(gate.status)
+    || (gate.gate === "targets" && gate.reasons.length > 0 && gate.reasons.every(reason => reason === "profile_required")));
 }
 
 export function createFinancialEventWorker({
@@ -68,7 +75,7 @@ export function createFinancialEventWorker({
   async function assessSource(document: FinancialDocument, contentHash: string) {
     requireCompleteEmailEvidence(document.body);
     const reusable = document.contentHash === contentHash && (document.candidate || document.processedRevision > 0);
-    if (reusable) return { candidate: document.candidate, assessmentAttempt: 0 };
+    if (reusable) return document.candidate;
     if (!await canRun(document.userId)) throw new Error("Email AI is paused or disabled.");
     const assessmentAttempt = await store.reserveDocumentAssessment(document, contentHash) || 0;
     if (!assessmentAttempt) throw new Error("Assessment retry limit reached for this source, or source claim changed.");
@@ -79,7 +86,7 @@ export function createFinancialEventWorker({
         body_text: document.body, email_date: document.emailDate, email_date_utc: document.emailDate,
         thread_id: document.threadId,
       }));
-    return { candidate, assessmentAttempt };
+    return candidate;
   }
 
   async function processNextDocument(): Promise<boolean> {
@@ -96,7 +103,7 @@ export function createFinancialEventWorker({
         publish(document.userId);
         return true;
       }
-      let { candidate: assessedCandidate, assessmentAttempt } = await assessSource(document, contentHash);
+      let assessedCandidate = await assessSource(document, contentHash);
       if (assessedCandidate && !isIgnoredFinancialNotice(assessedCandidate) && !document.acquiredSource
         && (assessedCandidate.type === "bill" || assessedCandidate.type === "income" || assessedCandidate.event_kind === "payment_scheduled"
           || document.senderAuthentication?.status !== "pass")) {
@@ -113,7 +120,7 @@ export function createFinancialEventWorker({
         const previousHash = contentHash;
         document = { ...refreshed, candidate: assessedCandidate, contentHash: previousHash };
         contentHash = financialDocumentContentHash(document);
-        if (contentHash !== previousHash) ({ candidate: assessedCandidate, assessmentAttempt } = await assessSource(document, contentHash));
+        if (contentHash !== previousHash) assessedCandidate = await assessSource(document, contentHash);
       }
       const candidate = resolveFinancialDocumentDate({ ...document, candidate: assessedCandidate }, new Date(now()));
       if (!candidate || isIgnoredFinancialNotice(candidate)) {
@@ -126,18 +133,11 @@ export function createFinancialEventWorker({
         .some((verification) => verification?.status === "failed");
       const missingSourceDate = candidate.event_kind && !["payment_cancelled", "payment_failed", "other"].includes(candidate.event_kind)
         && !financialDocumentSupportsDate({ ...document, candidate }, candidate, new Date(now()));
-      // Reassess failed or incomplete extraction against the whole source before
-      // caching it or assigning an event identity. Retries remain bounded when
-      // the source itself cannot supply the missing facts.
-      if ((hasFinancialSemanticConflict(candidate) || failedVerification || missingSourceDate) && assessmentAttempt > 0 && assessmentAttempt < 3) {
-        await store.settleDocument(document, { candidate: null, contentHash: "", status: "retry",
-          error: "Reassessing incomplete or conflicting payment details.", nextAttemptAt: retryAt(now(), document.attempts) });
-        publish(document.userId);
-        return true;
-      }
+      // Missing facts belong in review. Repeating an unchanged source cannot
+      // supply them; a later source revision can trigger a new assessment.
       if (document.senderAuthentication?.status !== "pass" && !document.eventId) {
         await store.settleDocument(document, { candidate, contentHash, status: "retry",
-          error: "Waiting for verified sender authentication.", nextAttemptAt: now() + WAIT_FOR_EVIDENCE_MS });
+          error: "Waiting for verified sender authentication.", nextAttemptAt: now() + PROCESSING_RETRY_MS });
         publish(document.userId);
         return true;
       }
@@ -157,10 +157,9 @@ export function createFinancialEventWorker({
       const correlation = aliases.length > 1 ? { eventId: null, ambiguous: true }
         : aliases.length === 1 ? { eventId: aliases[0]!, ambiguous: false }
         : correlateFinancialDocument(source, previous);
-      const wasAmbiguous = document.error === "Waiting for evidence that distinguishes similar purchases.";
-      if (correlation.ambiguous || (!correlation.eventId && (wasAmbiguous || previous.length >= 200))) {
+      if (correlation.ambiguous || (!correlation.eventId && previous.length >= 200)) {
         await store.settleDocument(document, { candidate, contentHash, status: "retry",
-          error: "Waiting for evidence that distinguishes similar purchases.", nextAttemptAt: now() + WAIT_FOR_EVIDENCE_MS });
+          error: "Review this candidate alongside similar purchases.", nextAttemptAt: null });
         publish(document.userId);
         return true;
       }
@@ -171,9 +170,9 @@ export function createFinancialEventWorker({
         && candidate.currency === "USD" && !!selectSemanticBillAmount(candidate)
         && !hasFinancialSemanticConflict(candidate) && !failedVerification && !missingSourceDate;
       const associated = await store.associateDocument(document, { candidate, contentHash, eventId: correlation.eventId || randomUUID(), referenceKeys,
-        collectEvidence: !independent, nextAttemptAt: now() + (independent ? 0 : COLLECT_EVIDENCE_MS) });
+        collectEvidence: !independent, nextAttemptAt: now() });
       if (!associated) await store.settleDocument(document, { candidate, contentHash, status: "retry",
-        error: "Waiting for evidence that distinguishes similar purchases.", nextAttemptAt: now() + WAIT_FOR_EVIDENCE_MS });
+        error: "Review this candidate alongside similar purchases.", nextAttemptAt: null });
       publish(document.userId);
     } catch (error) {
       await store.settleDocument(document, { candidate: document.candidate, contentHash: document.contentHash || "", status: "retry",
@@ -183,7 +182,7 @@ export function createFinancialEventWorker({
   }
 
   async function settle(event: FinancialEvent, plan: FinancialEmailPlan | null, state: "waiting" | "settled" | "needs_review", reason: string,
-    result?: ActualFinancialOperationResult, retryDelay = WAIT_FOR_EVIDENCE_MS): Promise<void> {
+    result?: ActualFinancialOperationResult, retryDelay = PROCESSING_RETRY_MS): Promise<void> {
     const nextAttemptAt = state === "waiting" ? now() + retryDelay : null;
     const projected = plan ? { ...plan, workflow: { id: event.id, state, relatedEmails: event.documents.length, reason, nextAttemptAt } } : null;
     const saved = await store.saveEvent(event, { plan: projected, status: state, reason, nextAttemptAt, outcome: result });
@@ -262,7 +261,7 @@ export function createFinancialEventWorker({
           return true;
         }
         if (!evidence.authenticated || !evidence.candidate || evidence.conflict) {
-          await settle(event, plan, "waiting", evidence.conflict ? "Related emails contain conflicting payment details."
+          await settle(event, plan, evidence.conflict ? "needs_review" : "waiting", evidence.conflict ? "Related emails contain conflicting payment details."
             : "Waiting for verified sender authentication.");
           return true;
         }
@@ -273,10 +272,21 @@ export function createFinancialEventWorker({
             sender_authentication_json: primary.senderAuthentication }) }, store.createAiRequestRunner(event));
         const blocker = financialEventPlanBlocker(plan);
         if (blocker) {
-          // Recheck current Actual evidence without repeating unchanged AI
-          // requests. Provider retry budgets belong to exact request identities,
-          // independently of timer ticks, event attempts and worker restarts.
-          await settle(event, plan, plan.profile && plan.profile.status !== "matched" ? "needs_review" : "waiting", blocker);
+          const existingCheck = canCheckExistingBeforeReview(plan) ? buildFinancialEventOperation(event.id, plan) : null;
+          if (existingCheck && event.documents.some(document => document.senderAuthentication?.status === "pass"
+            && financialDocumentSupportsDate(document, plan!.candidate, new Date(now())))) {
+            checkingActual = true;
+            const existing = await execute(event.userId, existingCheck, "preview");
+            if (["already_present", "needs_review"].includes(existing.outcome)) {
+              await settleActualResult(event, plan, existing);
+              return true;
+            }
+          }
+          // Provider outages can recover. Missing financial facts require the
+          // owner or new source evidence, not a timer repeating the same input.
+          const unavailable = plan.reviewReasons.some(reason => reason.blocking
+            && ["provider_unavailable", "actual_metadata_unavailable"].includes(reason.code));
+          await settle(event, plan, unavailable ? "waiting" : "needs_review", blocker);
           return true;
         }
         if (plan.operation.intended === "no_write") {
@@ -285,13 +295,13 @@ export function createFinancialEventWorker({
         }
         if (!plan.candidate.due_date || !event.documents.some((document) => document.senderAuthentication?.status === "pass"
           && financialDocumentSupportsDate(document, plan!.candidate, new Date(now())))) {
-          await settle(event, plan, "waiting", "Waiting for a supported transaction or payment date.");
+          await settle(event, plan, "needs_review", "Enter the transaction or payment date.");
           return true;
         }
         operation = buildFinancialEventOperation(event.id, plan);
       }
       if (!operation) {
-        await settle(event, plan, "waiting", "Waiting for complete payment amount, currency and account details.");
+        await settle(event, plan, "needs_review", "Complete the payment amount, currency and account details.");
         return true;
       }
       if (plan.profile?.status === "matched" && plan.profile.cycleKey
@@ -307,7 +317,7 @@ export function createFinancialEventWorker({
         return true;
       }
       if (!plan.automation.eligible || !preview.budgetId) {
-        await settle(event, plan, "waiting", "The current Actual check has not established a safe operation.");
+        await settle(event, plan, "needs_review", "Review the details before recording in Actual.");
         return true;
       }
       const bound = { ...bindFinancialEventOperation(operation, preview), sourceEvidence: event.documents.map((document) => ({
@@ -321,7 +331,7 @@ export function createFinancialEventWorker({
       await settleActualResult({ ...event, attemptedAt: now(), attempts: 1 }, plan, await execute(event.userId, bound, "write_once"));
     } catch (error) {
       await settle(event, plan, "waiting", `${attempted ? "Verifying the previous Actual operation" : "Financial processing will retry"}: ${errorText(error)}`,
-        undefined, attempted || checkingActual ? actualRetryDelay(attempted && event.attemptedAt === null ? { ...event, attempts: 1 } : event) : WAIT_FOR_EVIDENCE_MS);
+        undefined, attempted || checkingActual ? actualRetryDelay(attempted && event.attemptedAt === null ? { ...event, attempts: 1 } : event) : PROCESSING_RETRY_MS);
     }
     return true;
   }

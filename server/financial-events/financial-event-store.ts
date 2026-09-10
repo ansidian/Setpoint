@@ -81,7 +81,7 @@ export interface FinancialEvent {
   attemptedAt: number | null;
   outcome: unknown | null;
   reason: string | null;
-  collectionDeadline: number | null;
+  collectionRequired: boolean; collectionDeadline: number | null;
   nextAttemptAt: number | null;
   createdAt: number;
   updatedAt: number;
@@ -102,30 +102,23 @@ const DOCUMENT_SELECT = `SELECT d.*, e.subject, e.body_text, e.from_name, e.from
   FROM ea_financial_documents d LEFT JOIN ea_email_index e
     ON e.user_id = d.user_id AND e.uid = d.email_uid
   LEFT JOIN ea_financial_events owner_event ON owner_event.user_id = d.user_id AND owner_event.id = d.event_id`;
-const INDEPENDENT_EVENT = `(attempted_at IS NOT NULL OR owner_completion_json IS NOT NULL OR collection_required = 0)`;
-const INTAKE_COMPLETE = `(${INDEPENDENT_EVENT} OR NOT EXISTS (SELECT 1 FROM ea_financial_intake_state intake
-  WHERE intake.user_id = ea_financial_events.user_id AND intake.enabled = 1
-    AND (intake.status IN ('pending', 'processing', 'retry')
-      OR julianday(intake.completed_through) < julianday(COALESCE(ea_financial_events.collection_deadline, ea_financial_events.created_at) / 1000.0, 'unixepoch'))))`;
 const DOCUMENTS_READY = `NOT EXISTS (SELECT 1 FROM ea_financial_documents d
     WHERE d.user_id = ea_financial_events.user_id AND d.event_id = ea_financial_events.id
-      AND d.dismissed_at IS NULL AND d.processed_revision < d.revision)
-  AND (${INDEPENDENT_EVENT} OR NOT EXISTS (SELECT 1 FROM ea_financial_documents arrival
-    WHERE arrival.user_id = ea_financial_events.user_id AND arrival.dismissed_at IS NULL AND arrival.status IN ('pending', 'processing')))`;
+      AND d.dismissed_at IS NULL AND d.processed_revision < d.revision)`;
 const PROFILE_CHANGED = `attempted_at IS NULL AND owner_completion_json IS NULL AND plan_json IS NOT NULL AND EXISTS (
   SELECT 1 FROM ea_settings settings WHERE settings.user_id = ea_financial_events.user_id
     AND (settings.financial_profiles_revision <> COALESCE(json_extract(plan_json, '$.profile.revision'), -1)
       OR settings.actual_budget_sync_id IS NOT json_extract(plan_json, '$.profile.budgetId')))`;
 const ACTIVE_EVENT = `(status IN ('pending', 'waiting') OR (status = 'needs_review' AND (${PROFILE_CHANGED})))`;
 const READY_EVENT = `dismissed_at IS NULL AND ${ACTIVE_EVENT} AND (next_attempt_at IS NULL OR next_attempt_at <= ? OR (${PROFILE_CHANGED}))
-  AND ${INTAKE_COMPLETE} AND ${DOCUMENTS_READY}`;
+  AND ${DOCUMENTS_READY}`;
 
-/** Read-only progress uses the same capture gates as admission, never a provider call. */
+/** Only revisions of linked sources gate readiness, never unrelated capture. */
 export const FINANCIAL_EVENT_STATUS_SELECT = `SELECT ea_financial_events.*, CASE
   WHEN dismissed_at IS NOT NULL OR status NOT IN ('pending', 'waiting', 'processing') THEN NULL
   WHEN attempted_at IS NOT NULL THEN 'recovering'
   WHEN status = 'processing' THEN 'saving'
-  WHEN NOT (${INTAKE_COMPLETE} AND ${DOCUMENTS_READY}) THEN 'checking_emails'
+  WHEN NOT (${DOCUMENTS_READY}) THEN 'checking_emails'
   WHEN status = 'pending' THEN 'queued'
   ELSE NULL END AS progress FROM ea_financial_events`;
 
@@ -182,7 +175,7 @@ export function eventFromRow(row: Row, documents: FinancialDocument[]): Financia
     plan: readJson<FinancialEmailPlan>(row.plan_json), ownerCompletion: readJson<FinancialOwnerCompletion>(row.owner_completion_json),
     operation: readJson(row.operation_json),
     attemptedAt: nullableNumber(row.attempted_at), outcome: readJson(row.outcome_json),
-    reason: nullableString(row.reason), collectionDeadline: nullableNumber(row.collection_deadline),
+    reason: nullableString(row.reason), collectionRequired: Number(row.collection_required) === 1, collectionDeadline: nullableNumber(row.collection_deadline),
     nextAttemptAt: nullableNumber(row.next_attempt_at),
     ...(row.progress ? { progress: row.progress as FinancialEvent["progress"] } : {}),
     createdAt: Number(row.created_at), updatedAt: Number(row.updated_at), documents,
@@ -210,7 +203,7 @@ export function createFinancialEventStore(dbClient: StoreDb = db, now = Date.now
       sql: `UPDATE ea_financial_documents SET status = 'processing', claim_token = ?, claimed_at = ?,
               attempts = attempts + 1, updated_at = ?
             WHERE id = (SELECT next.id FROM ea_financial_documents next
-              WHERE next.dismissed_at IS NULL AND next.status IN ('pending', 'retry') AND (next.next_attempt_at IS NULL OR next.next_attempt_at <= ?)
+              WHERE next.dismissed_at IS NULL AND (next.status = 'pending' OR (next.status = 'retry' AND next.next_attempt_at IS NOT NULL)) AND (next.next_attempt_at IS NULL OR next.next_attempt_at <= ?)
                 AND NOT EXISTS (SELECT 1 FROM ea_financial_documents busy
                   WHERE busy.user_id = next.user_id AND busy.status = 'processing')
               ORDER BY next.created_at, next.id LIMIT 1)
@@ -281,6 +274,9 @@ export function createFinancialEventStore(dbClient: StoreDb = db, now = Date.now
                   WHERE user_id = ? AND reference_key IN (SELECT value FROM json_each(?)) AND event_id <> ?)
               ON CONFLICT(id) DO UPDATE SET revision = revision + 1,
                 status = CASE WHEN status = 'processing' THEN status ELSE 'pending' END,
+                plan_json = CASE WHEN owner_completion_json IS NULL AND attempted_at IS NULL
+                  AND COALESCE(json_extract(outcome_json, '$.outcome'), '') NOT IN ('added', 'updated', 'already_present')
+                  THEN NULL ELSE plan_json END,
                 collection_required = MIN(collection_required, excluded.collection_required),
                 collection_deadline = CASE WHEN owner_completion_json IS NULL AND attempted_at IS NULL AND collection_required = 1 AND excluded.collection_deadline IS NOT NULL
                   THEN MAX(COALESCE(collection_deadline, 0), excluded.collection_deadline) ELSE collection_deadline END,
@@ -534,7 +530,6 @@ export function createFinancialEventStore(dbClient: StoreDb = db, now = Date.now
               AND (owner_completion_json IS NOT NULL OR (? = 'matched' AND EXISTS (
                 SELECT 1 FROM ea_settings settings WHERE settings.user_id = ea_financial_events.user_id
                   AND settings.actual_budget_sync_id = ? AND settings.financial_profiles_revision = ?)))
-              AND ${INTAKE_COMPLETE}
               AND ${DOCUMENTS_READY}`,
       args: [writeJson(operation), timestamp, timestamp, plan ? writeJson(plan) : null,
         claim.userId, claim.id, claim.claimToken, claim.revision,
@@ -561,10 +556,10 @@ export function createFinancialEventStore(dbClient: StoreDb = db, now = Date.now
     const result = await dbClient.execute({
       sql: `SELECT MIN(wake_at) AS wake_at FROM (
               SELECT MIN(COALESCE(next.next_attempt_at, ?)) AS wake_at FROM ea_financial_documents next
-                WHERE ? = 0 AND next.dismissed_at IS NULL AND next.status IN ('pending', 'retry') AND NOT EXISTS (
+                WHERE ? = 0 AND next.dismissed_at IS NULL AND (next.status = 'pending' OR (next.status = 'retry' AND next.next_attempt_at IS NOT NULL)) AND NOT EXISTS (
                   SELECT 1 FROM ea_financial_documents busy WHERE busy.user_id = next.user_id AND busy.status = 'processing')
               UNION ALL SELECT MIN(COALESCE(next_attempt_at, ?)) FROM ea_financial_events
-                WHERE dismissed_at IS NULL AND ${ACTIVE_EVENT} AND ${INTAKE_COMPLETE} AND ${DOCUMENTS_READY})`,
+                WHERE dismissed_at IS NULL AND ${ACTIVE_EVENT} AND ${DOCUMENTS_READY})`,
       args: [timestamp, eventsOnly ? 1 : 0, timestamp],
     });
     return nullableNumber(result.rows[0]?.wake_at);

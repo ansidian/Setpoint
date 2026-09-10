@@ -152,7 +152,7 @@ describe("financial received-email capture", () => {
     expect(await intake().processNextPage()).toBe(false);
   });
 
-  it("retains failed pages across a multi-day outage and holds dispatch until capture passes the stable collection deadline", async () => {
+  it("retains failed pages across a multi-day outage without holding already assessed events", async () => {
     let failSecond = true;
     const windows: Array<{ start: number; end: number }> = [];
     vi.stubGlobal("fetch", async (input: string | URL) => {
@@ -174,11 +174,13 @@ describe("financial received-email capture", () => {
     await intake().recoverStaleClaims();
     await intake().processNextPage();
     const document = await store().claimDocument("first");
-    await store().associateDocument(document!, { candidate: { type: "expense", amount: 12 }, contentHash: "first", eventId: "purchase", nextAttemptAt: now + 90_000 });
+    await store().associateDocument(document!, { candidate: { type: "expense", amount: 12 }, contentHash: "first", eventId: "purchase", nextAttemptAt: now });
     await intake().processNextPage();
     expect(await state()).toMatchObject({ status: "retry", completed_through: CUTOVER, window_end: new Date(START).toISOString(), page_token: "second" });
+    const ready = await store().claimEvent("incomplete-capture");
+    expect(ready).toMatchObject({ id: "purchase" });
+    await store().saveEvent(ready!, { plan: null, status: "needs_review", nextAttemptAt: null });
     now += 3 * DAY;
-    expect(await store().claimEvent("incomplete")).toBeNull();
     failSecond = false;
     const resumed = intake();
     await resumed.recoverStaleClaims();
@@ -189,10 +191,7 @@ describe("financial received-email capture", () => {
     for (let document = await store().claimDocument("sibling"); document; document = await store().claimDocument("sibling")) {
       await store().settleDocument(document, { candidate: null, contentHash: "unrelated", status: "ignored" });
     }
-    const event = await store().claimEvent("caught-up");
-    expect(event).toMatchObject({ id: "purchase", collectionDeadline: START + 90_000 });
-    await store().saveEvent(event!, { plan: null, status: "waiting", nextAttemptAt: now + 15 * 60_000 });
-    expect((await store().getEventForEmail("user-1", "gmail-gmail-work-first"))?.collectionDeadline).toBe(START + 90_000);
+    expect(await store().claimEvent("caught-up")).toBeNull();
     // The durable capture included the outage interval instead of falling back
     // to the old two-hour Inbox lookback.
     expect(windows.some((window) => window.start < START + DAY / 2 && window.end > START + DAY / 2)).toBe(true);

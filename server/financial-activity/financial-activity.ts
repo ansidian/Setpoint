@@ -91,9 +91,10 @@ export function createFinancialActivityReader(dbClient: Pick<Client, "batch"> = 
       const source = sourceRows[0];
       const review = projectReviewItem({ ...row, ...(source ? { email_uid: source.email_uid, subject: source.subject,
         from_name: source.from_name, candidate_json: source.candidate_json, received_at: source.email_date_utc } : {}),
+        sources_current: docs.every(doc => doc.dismissedAt != null || doc.processedRevision === doc.revision || (isDocument && doc.status === "retry")) ? 1 : 0,
         entity_id: key(reference), state: row.status === "retry" ? "waiting" : row.status,
         reason: row.reason || row.last_error, related_emails: sourceRows.length });
-      const waiting = ["waiting", "needs_review", "retry"].includes(String(row.status));
+      const waiting = ["pending", "processing", "waiting", "needs_review", "retry"].includes(String(row.status));
       const attention = waiting && review.attention !== "retrying";
       const plan = docs[0] ? projectManagedFinancialPlan(docs[0], event) : event?.plan || null;
       return { id, reference, occurrences: [reference, ...docs.filter(() => !isDocument).map((doc): FinancialActivityReference => ({ owner: "document", id: String(doc.id) }))], source: "managed", contexts: ["arrival"],

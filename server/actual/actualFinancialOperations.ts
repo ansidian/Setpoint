@@ -9,6 +9,7 @@ import type {
   ActualUtilityScheduleInput,
 } from "../../shared/types/financial-operations.ts";
 import { buildDateCondition } from "./actualCoreModel.ts";
+import { findBillPaymentAdjustment } from "../../shared/billPaymentAdjustments.ts";
 import { readOriginalResult, settleOriginalEvidence, type ActualEvidencePort } from "./actualOriginalEvidence.ts";
 import { runActualTransactionImport, type SdkImportResult, type SdkImportTransactionInput } from "./actualTransactionImportModel.ts";
 
@@ -284,13 +285,24 @@ async function utilitySchedule(
   const categoryId = input.effectiveCategoryId !== undefined ? input.effectiveCategoryId || undefined
     : mode === "recover" ? undefined : await availableCategoryId(sdk, input.categoryId);
   let payeeId = matchingPayees[0]?.id;
+  // A known card fee can explain an existing payment, but never change the
+  // admitted cents or make a different payload count as a recovered write.
+  const adjustment = mode === "preview" ? findBillPaymentAdjustment(matchingPayees[0]?.name || input.payee) : null;
+  const matchingAmounts = [input.amountCents, ...(adjustment ? [input.amountCents - adjustment.amountCents] : [])];
+  const matchesAmount = (amount: unknown) => typeof amount === "number" && matchingAmounts.includes(amount);
   if (payeeId) {
     const paidRows = await sdk.runQuery(sdk.q("transactions").withoutValidatedRefs().filter({
-      account: input.accountId, payee: payeeId, date: input.date, amount: input.amountCents,
-    }).select(["id", "account", "payee", "amount", "date", "transfer_id"]));
+      account: input.accountId, payee: payeeId, date: input.date, $or: matchingAmounts.map(amount => ({ amount })),
+    }).select(["id", "account", "payee", "category", "amount", "date", "transfer_id"]));
     const paid = (paidRows.data as TransactionRow[]).filter((row) => row.account === input.accountId
-      && row.payee === payeeId && row.date === input.date && row.amount === input.amountCents && !row.transfer_id && !row.tombstone);
-    if (paid.length === 1) return result("already_present", "The utility payment is already recorded.", { transactionId: paid[0]!.id });
+      && row.payee === payeeId && row.date === input.date && matchesAmount(row.amount) && !row.transfer_id && !row.tombstone);
+    if (paid.length === 1) {
+      if (paid[0]!.amount !== input.amountCents && categoryId && paid[0]!.category !== categoryId) {
+        return review("An existing utility payment with the configured fee has a different category than this statement.");
+      }
+      return result("already_present", paid[0]!.amount === input.amountCents ? "The utility payment is already recorded."
+        : "The utility payment, including its configured processing fee, is already recorded.", { transactionId: paid[0]!.id });
+    }
     if (paid.length > 1) return review("Multiple utility payments match this statement.");
   }
   const deterministicId = scheduleIdentity(budgetId, input.identityKey);
@@ -319,9 +331,10 @@ async function utilitySchedule(
     return review("The selected utility schedule has conflicting or unsupported rules.");
   }
   const scheduleFingerprint = selected && rule ? fingerprint(selected, rule) : undefined;
-  if (selected && !selected.completed && rule && condition(rule, "amount")?.value === input.amountCents && selected.next_date === input.date
+  if (selected && !selected.completed && rule && matchesAmount(condition(rule, "amount")?.value) && selected.next_date === input.date
     && categoryMatches(rule, categoryId)) {
-    return result("already_present", "An exact utility schedule already exists.", { scheduleId: selected.id, scheduleFingerprint });
+    return result("already_present", condition(rule, "amount")?.value === input.amountCents ? "An exact utility schedule already exists."
+      : "A utility schedule including the configured processing fee already exists.", { scheduleId: selected.id, scheduleFingerprint });
   }
   if (mode === "recover") return review("A utility schedule write was attempted but its complete result cannot be verified.");
   if (selected && mode === "write_once" && input.expectedScheduleFingerprint !== scheduleFingerprint) {

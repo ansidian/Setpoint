@@ -43,6 +43,7 @@ Actual Budget engine integration: write paths, the forked SDK worker, and the lo
 
 - Runtime paths must use the in-process `@actual-app/api` singleton via `actual.ts`; the `npm run actual` CLI is for ad-hoc debugging only.
 - Categories are optional across financial-event and retained bill writes. Unavailable category IDs are omitted; schedule updates preserve existing categories when no replacement is supplied.
+- Read-only utility preview recognizes an exact existing base amount or the base plus its configured SCE/SoCalGas fee on the same account/payee/date. Competing matches require review. The fee is never added to a write, and immutable write/recovery verification remains exact.
 - Managed utility and transfer updates preserve Actual's `is`/`isapprox` date-matching operator while verifying the requested schedule date exactly.
 - Managed utility updates retain complex recurrence calendars and finite occurrence limits, using Actual's recurrence engine to verify and select an upcoming occurrence.
 - `actual-worker.ts` forks `actual-worker-child.ts` by CWD-relative path; keep both files in this directory.

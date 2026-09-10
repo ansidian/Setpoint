@@ -77,11 +77,11 @@ describe("financial event persistence", () => {
     });
   }
 
-  async function associate(uid: string, eventId = "event-1", nextAttemptAt?: number): Promise<FinancialDocument> {
+  async function associate(uid: string, eventId = "event-1"): Promise<FinancialDocument> {
     await insertEmail(uid);
     const document = await store().claimDocument(`document-${uid}`);
     expect(document?.emailUid).toBe(uid);
-    expect(await store().associateDocument(document!, { candidate, eventId, contentHash: uid, nextAttemptAt })).toBe(true);
+    expect(await store().associateDocument(document!, { candidate, eventId, contentHash: uid })).toBe(true);
     return document!;
   }
 
@@ -238,23 +238,25 @@ describe("financial event persistence", () => {
     expect((await store().claimDocument("next"))?.emailUid).toBe("second");
   });
 
-  it("links related documents into one event and delays execution while new arrivals need assessment", async () => {
-    await associate("receipt", "purchase", now + 90_000);
+  it("links related documents as they arrive without making unrelated assessment an admission gate", async () => {
+    await associate("receipt", "purchase");
     await insertEmail("confirmation");
-    expect(await store().claimEvent("early")).toBeNull();
+    const early = await store().claimEvent("early");
+    expect(early).toMatchObject({ id: "purchase" });
     const confirmation = await store().claimDocument("confirmation");
-    expect(await store().associateDocument(confirmation!, { candidate, contentHash: "confirmation", eventId: "purchase", nextAttemptAt: now + 90_000 })).toBe(true);
+    expect(await store().associateDocument(confirmation!, { candidate, contentHash: "confirmation", eventId: "purchase" })).toBe(true);
+    expect(await store().admitOperation(early!, { amountCents: -1200 }, authorizedPlan)).toBe(false);
+    expect(await store().saveEvent(early!, { plan: null, status: "waiting" })).toBe(false);
     expect((await store().listDocuments("owner", { since: CUTOVER })).map((item) => item.emailUid)).toEqual(["confirmation", "receipt"]);
     expect((await store().listDocuments("owner", { since: ARRIVAL, until: Date.parse(ARRIVAL) })).map((item) => item.emailUid)).toEqual(["confirmation", "receipt"]);
     expect(await store().listDocuments("owner", { until: Date.parse(ARRIVAL) - 1 })).toEqual([]);
     expect(await store().listDocuments("other-owner")).toEqual([]);
-    expect(await store().getNextWakeAt()).toBe(now + 90_000);
-    now += 90_000;
+    expect(await store().getNextWakeAt()).toBe(now);
     const event = await store().claimEvent("event");
     expect(event).toMatchObject({ id: "purchase", revision: 2, documents: [{ emailUid: "receipt" }, { emailUid: "confirmation" }] });
     expect(await store().getEventForEmail("other-owner", "receipt")).toBeNull();
     await insertEmail("possible-cancellation");
-    expect(await store().admitOperation(event!, { amountCents: -1200 }, authorizedPlan)).toBe(false);
+    expect(await store().admitOperation(event!, { amountCents: -1200 }, authorizedPlan)).toBe(true);
   });
 
   it("requires current profile authority for automatic admission without consuming a rejected attempt", async () => {
@@ -381,27 +383,36 @@ describe("financial event persistence", () => {
     expect(await store().claimDocument("due")).toMatchObject({ emailUid: "receipt", error: "Provider unavailable", attempts: 3 });
   });
 
-  it("requires capture through the fixed collection deadline and permits attempted recovery during unrelated intake outages", async () => {
-    await associate("receipt", "purchase", now + 90_000);
+  it("ignores legacy collection deadlines and unrelated intake outages for planning, admission and recovery", async () => {
+    await associate("receipt", "purchase");
+    await db.execute({ sql: "UPDATE ea_financial_events SET collection_required = 1, collection_deadline = ? WHERE id = 'purchase'", args: [now + 90_000] });
     await db.execute({
       sql: `INSERT INTO ea_financial_intake_state (user_id, account_id, completed_through, status, updated_at)
-            VALUES ('owner', 'gmail', ?, 'waiting', ?)`, args: [new Date(now).toISOString(), now],
+            VALUES ('owner', 'gmail', ?, 'retry', ?)`, args: [new Date(now - 86400_000).toISOString(), now],
     });
-    now += 90_000;
-    expect(await store().claimEvent("cursor-too-old")).toBeNull();
-    await db.execute({ sql: "UPDATE ea_financial_intake_state SET completed_through = ?", args: [new Date(now).toISOString()] });
-    const event = await store().claimEvent("collected");
-    expect(event).toMatchObject({ collectionDeadline: now });
+    await insertEmail("unrelated-arrival");
+    const event = await store().claimEvent("ready");
+    expect(event).toMatchObject({ id: "purchase", attemptedAt: null });
     await store().saveEvent(event!, { plan: null, status: "waiting", nextAttemptAt: now + 15 * 60_000 });
     now += 15 * 60_000;
-    const retried = await store().claimEvent("stable-deadline");
-    expect(retried?.collectionDeadline).toBe(event?.collectionDeadline);
+    const retried = await store().claimEvent("operational-retry");
     const operation = { kind: "transaction", id: "purchase" };
     expect(await store().admitOperation(retried!, operation, authorizedPlan)).toBe(true);
     await store().saveEvent(retried!, { plan: null, status: "waiting", nextAttemptAt: now });
-    await db.execute("UPDATE ea_financial_intake_state SET status = 'retry'");
-    await insertEmail("unrelated-arrival");
     expect(await store().claimEvent("recover-attempt")).toMatchObject({ operation });
+  });
+
+  it("keeps a candidate needing owner review suspended until its source changes", async () => {
+    await insertEmail("ambiguous");
+    const document = await store().claimDocument("assess");
+    await store().settleDocument(document!, { candidate, contentHash: "ambiguous-v1", status: "retry", nextAttemptAt: null,
+      error: "Waiting for evidence that distinguishes similar purchases." });
+    now += 24 * 3600_000;
+    expect(await store().getDocumentForEmail("owner", "ambiguous")).toMatchObject({ status: "retry", candidate, nextAttemptAt: null });
+    expect(await store().claimDocument("restart")).toBeNull();
+    expect(await store().getNextWakeAt()).toBeNull();
+    await db.execute("UPDATE ea_email_index SET body_text = 'A distinct reference identifies this $12.00 purchase' WHERE uid = 'ambiguous'");
+    expect(await store().claimDocument("changed-source")).toMatchObject({ emailUid: "ambiguous", revision: 2 });
   });
 });
 

@@ -51,8 +51,8 @@ describe("durable financial attention changes", () => {
       attempted?: boolean; outcome?: string | null; confirmed?: boolean } = {}) {
     for (const uid of uids) await source(uid, { owner });
     await db.execute({ sql: `INSERT INTO ea_financial_events (id, user_id, status, reason, created_at, updated_at,
-      next_attempt_at, plan_json, attempted_at, operation_json, outcome_json, owner_completion_json)
-      VALUES (?, ?, ?, ?, ?, ?, 50000, ?, ?, ?, ?, ?)`,
+      next_attempt_at, plan_json, attempted_at, operation_json, outcome_json, owner_completion_json, collection_required)
+      VALUES (?, ?, ?, ?, ?, ?, 50000, ?, ?, ?, ?, ?, 0)`,
     args: [id, owner, state, reason, createdAt, updatedAt, plan ? JSON.stringify(plan) : null,
       attempted ? 2000 : null, attempted ? JSON.stringify({ executor: "financial", input: { budgetId: "budget" } }) : null,
       outcome ? JSON.stringify({ outcome }) : null,
@@ -66,7 +66,7 @@ describe("durable financial attention changes", () => {
     await source("unknown-retry", { value: null, reason: "Financial assessment will retry: API is unavailable" });
     await source("pending", { status: "pending" });
     await source("negative", { status: "ignored", value: null });
-    await event("queued", { state: "pending" });
+    await event("queued", { state: "pending", confirmed: true });
     await event("done", { state: "settled" });
     await event("another-owner", { owner: "other" });
     await source("another-owner-retry", { owner: "other" });
@@ -107,7 +107,7 @@ describe("durable financial attention changes", () => {
     await source("assessment", { reason: "Financial assessment will retry: API is offline" });
 
     expect((await readFinancialReviewChanges(OWNER, { dbClient: db })).items.map((item) => item.emailUid).sort())
-      .toEqual(["actual-conflict", "already-recorded", "attempted-conflict", "fresh-conflict", "missing-account", "missing-date", "recorded-plan", "source-conflict"]);
+      .toEqual(["actual-conflict", "already-recorded", "assessment", "attempted-conflict", "auth", "fresh-conflict", "missing-account", "missing-date", "recorded-plan", "source-conflict"]);
   });
 
   it("advances a changes cursor over silent rows and all timestamp ties before returning a later alert", async () => {
@@ -127,7 +127,7 @@ describe("durable financial attention changes", () => {
     await source("old-email", { createdAt: 1, updatedAt: 1000, reason: "Waiting for evidence that distinguishes similar purchases." });
     const original = await readFinancialReviewChanges(OWNER, { dbClient: db });
     const store = createFinancialEventStore(db, () => 2000);
-    await db.execute("INSERT INTO ea_financial_events (id, user_id, status, created_at, updated_at) VALUES ('old-event', 'owner', 'waiting', 1, 2000)");
+    await db.execute("INSERT INTO ea_financial_events (id, user_id, status, created_at, updated_at, collection_required) VALUES ('old-event', 'owner', 'waiting', 1, 2000, 0)");
     await db.execute("UPDATE ea_financial_documents SET event_id = 'old-event', status = 'associated' WHERE email_uid = 'old-email'");
     const associated = await store.getEventForEmail(OWNER, "old-email");
     await db.execute({ sql: "UPDATE ea_financial_events SET status = 'waiting', reason = ?, updated_at = 3000 WHERE id = ?", args: [DETAILS_REASON, associated!.id] });

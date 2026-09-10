@@ -4,8 +4,8 @@ import type { BillCandidate, FinancialEmailPlan, FinancialPlanReasonCode } from 
 import type { FinancialEventReviewItem, FinancialReviewAttention,
   FinancialReviewChangeCursor, FinancialReviewChangesResponse } from "../../shared/types/financial-review.ts";
 import { selectSemanticBillAmount } from "../bills/financial-email-planner.ts";
-import { completionBlocker, type FinancialOwnerCompletion } from "./financial-event-completion-model.ts";
-import type { FinancialStatusDb } from "./financial-event-store.ts";
+import { canReviewKnownDetails, completionBlocker, hasPendingFinancialPlan, type FinancialOwnerCompletion } from "./financial-event-completion-model.ts";
+import type { FinancialEvent, FinancialStatusDb } from "./financial-event-store.ts";
 
 const CHANGE_PAGE_SIZE = 50;
 
@@ -19,11 +19,14 @@ const REVIEW_ROWS = `WITH review AS (
     (SELECT COUNT(*) FROM ea_financial_documents related
       WHERE related.user_id = event.user_id AND related.event_id = event.id) AS related_emails,
     event.created_at, event.updated_at, event.next_attempt_at, event.attempted_at,
-    event.operation_json, event.outcome_json, event.plan_json, event.owner_completion_json, source.candidate_json
+    event.operation_json, event.outcome_json, event.plan_json, event.owner_completion_json, source.candidate_json,
+    event.collection_required,
+    NOT EXISTS (SELECT 1 FROM ea_financial_documents changed WHERE changed.user_id = event.user_id
+      AND changed.event_id = event.id AND changed.dismissed_at IS NULL AND changed.processed_revision < changed.revision) AS sources_current
   FROM ea_financial_events event
   JOIN ea_financial_documents source ON source.user_id = event.user_id AND source.event_id = event.id
   JOIN ea_email_index email ON email.user_id = source.user_id AND email.uid = source.email_uid
-  WHERE event.user_id = ? AND event.dismissed_at IS NULL AND event.status IN ('waiting', 'needs_review')
+  WHERE event.user_id = ? AND event.dismissed_at IS NULL AND event.status IN ('pending', 'processing', 'waiting', 'needs_review')
     AND source.id = (SELECT MIN(choice.id) FROM ea_financial_documents choice
       JOIN ea_email_index current_email ON current_email.user_id = choice.user_id AND current_email.uid = choice.email_uid
       WHERE choice.user_id = event.user_id AND choice.event_id = event.id)
@@ -32,7 +35,7 @@ const REVIEW_ROWS = `WITH review AS (
     email.subject, email.from_name, email.from_address, email.email_date_utc,
     'waiting', source.last_error, 1,
     source.created_at, source.updated_at, source.next_attempt_at, NULL,
-    NULL, NULL, NULL, NULL, source.candidate_json
+    NULL, NULL, NULL, NULL, source.candidate_json, NULL, 1
   FROM ea_financial_documents source
   JOIN ea_email_index email ON email.user_id = source.user_id AND email.uid = source.email_uid
   WHERE source.user_id = ? AND source.dismissed_at IS NULL AND source.event_id IS NULL AND source.status = 'retry' AND source.candidate_json IS NOT NULL
@@ -46,6 +49,7 @@ const DETAILS_REASONS = new Set([
   "Waiting for complete, consistent payment details.",
   "Waiting for a clear payment purpose.",
   "Waiting for evidence that distinguishes similar purchases.",
+  "Review this candidate alongside similar purchases.",
 ]);
 const DETAILS_CODES = new Set<FinancialPlanReasonCode>([
   "semantic_event_missing", "semantic_event_ambiguous", "canonical_amount_missing", "minimum_due_only",
@@ -76,11 +80,13 @@ function nonempty(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function attentionFor(row: Record<string, unknown>, canComplete: boolean, plan: FinancialEmailPlan | null): FinancialReviewAttention {
+function attentionFor(row: Record<string, unknown>, canComplete: boolean, plan: FinancialEmailPlan | null, reviewingDetails: boolean): FinancialReviewAttention {
   if (row.state === "needs_review") {
     const outcome = objectJson<{ outcome?: string }>(row.outcome_json);
     return !canComplete || outcome?.outcome === "needs_review" ? "check_actual" : "complete_details";
   }
+  if (reviewingDetails) return "complete_details";
+  if (row.state === "pending" || row.state === "processing") return "retrying";
   // A saved plan can predate the current provider failure. Operational waiting
   // reasons take precedence so stale missing-field reasons never send an alert.
   const reason = String(row.reason || "");
@@ -98,15 +104,24 @@ function attentionFor(row: Record<string, unknown>, canComplete: boolean, plan: 
 }
 
 export function projectReviewItem(row: Record<string, unknown>): FinancialEventReviewItem {
-  const plan = objectJson<FinancialEmailPlan>(row.plan_json);
+  let plan = objectJson<FinancialEmailPlan>(row.plan_json);
   const confirmed = objectJson<FinancialOwnerCompletion>(row.owner_completion_json);
-  const canComplete = !completionBlocker({
+  const status: FinancialEvent["status"] = row.state === "pending" || row.state === "processing" || row.state === "needs_review" || row.state === "settled" ? row.state : "waiting";
+  const event = {
     attemptedAt: row.attempted_at == null ? null : Number(row.attempted_at),
     operation: objectJson(row.operation_json), outcome: objectJson(row.outcome_json),
     plan: plan?.reconciliation ? plan : null, ownerCompletion: confirmed,
-    status: row.state === "needs_review" ? "needs_review" : "waiting",
-  });
-  const candidate = plan?.candidate || objectJson<BillCandidate>(row.candidate_json) || {};
+    dismissedAt: row.dismissed_at == null ? null : Number(row.dismissed_at),
+    collectionRequired: Number(row.collection_required) === 1,
+    status,
+  };
+  const completedBlocker = completionBlocker(event);
+  const sourcePending = !completedBlocker && !confirmed && row.sources_current === 0;
+  const canComplete = !completedBlocker && !sourcePending;
+  if (!completedBlocker && (hasPendingFinancialPlan(event) || sourcePending)) plan = null;
+  const savedCandidate = sourcePending ? null : objectJson<BillCandidate>(row.candidate_json);
+  const reviewingDetails = canReviewKnownDetails(String(row.entity_id).startsWith("document:") ? null : event, savedCandidate);
+  const candidate = plan?.candidate || savedCandidate || {};
   const amount = confirmed?.entry?.amount ?? selectSemanticBillAmount(candidate)?.amount;
   return {
     id: String(row.entity_id), emailUid: String(row.email_uid), subject: String(row.subject || ""),
@@ -114,10 +129,10 @@ export function projectReviewItem(row: Record<string, unknown>): FinancialEventR
     payee: nonempty(confirmed?.entry?.payee) || nonempty(plan?.targets?.payee?.label) || nonempty(candidate.payee_hint) || nonempty(candidate.payee),
     amount: typeof amount === "number" && Number.isFinite(amount) && amount > 0 ? amount : null,
     currency: confirmed?.entry ? "USD" : nonempty(candidate.currency),
-    state: row.state === "needs_review" ? "needs_review" : "waiting",
-    reason: String(row.reason || "Checking the financial entry."), relatedEmails: Number(row.related_emails),
+    state: reviewingDetails || row.state === "needs_review" ? "needs_review" : "waiting",
+    reason: sourcePending ? "Checking updated source details." : reviewingDetails ? "Review the details before recording in Actual." : String(row.reason || "Checking the financial entry."), relatedEmails: Number(row.related_emails),
     createdAt: Number(row.created_at), nextAttemptAt: row.next_attempt_at == null ? null : Number(row.next_attempt_at),
-    canComplete, attention: attentionFor(row, canComplete, plan),
+    canComplete, attention: sourcePending ? "retrying" : attentionFor(row, canComplete, plan, reviewingDetails),
   };
 }
 

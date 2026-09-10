@@ -11,6 +11,7 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import type { FinancialEmailPlan } from "../../../shared/types/bills";
 import type { FinancialEventCompletionEntry } from "../../../shared/types/financial-operations";
+import { completionValues, createCompletionDraft, editCompletionDraft, enrichCompletionDraft, type FinancialCompletionFields } from "./financialCompletionDraft";
 
 type EntryKind = FinancialEventCompletionEntry["kind"];
 const kinds: Array<[EntryKind, string]> = [
@@ -20,13 +21,6 @@ const kinds: Array<[EntryKind, string]> = [
 const inputClass = "h-9 min-w-0 w-full rounded-md border border-white/15 bg-input-bg px-2.5 text-base sm:text-xs text-foreground outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/40 [color-scheme:dark]";
 const actionClass = "transition-transform hover:-translate-y-px focus-visible:-translate-y-px focus-visible:ring-2 focus-visible:ring-primary active:translate-y-0 motion-reduce:transform-none motion-reduce:transition-none";
 
-function initialKind(plan: FinancialEmailPlan): EntryKind {
-  if (plan.operation.intended === "create_transfer") return "transfer";
-  if (plan.operation.intended === "create_transfer_schedule") return "transfer_schedule";
-  if (plan.candidate.type === "transfer") return ["card_payment_completed", "account_transfer_completed"].includes(String(plan.candidate.event_kind)) ? "transfer" : "transfer_schedule";
-  if (plan.operation.intended === "create_schedule") return "bill";
-  return plan.candidate.type === "income" ? "income" : plan.candidate.type === "bill" ? "bill" : "expense";
-}
 
 function Field({ name, icon, children }: { name: string; icon?:ReactNode; children: ReactElement<{ id?: string }> }) {
   const id = useId();
@@ -47,18 +41,14 @@ export default function FinancialEventCompletionForm({ plan, onCancel, onQueued,
 }) {
   // Capture the displayed revision once. A poll must not silently authorize an
   // entry against source changes the owner has not reviewed.
-  const [revision] = useState(plan.workflow!.completion!);
+  const [draft, setDraft] = useState(() => createCompletionDraft(plan));
+  const { revision, fields } = draft;
+  const { kind, amount, date, payee, accountId, fromAccountId, toAccountId, categoryId, scheduleName, notes } = fields;
   const [profileSuggestion] = useState(plan.profileSuggestion);
-  const [kind, setKind] = useState<EntryKind>(() => initialKind(plan));
-  const [amount, setAmount] = useState(plan.candidate.amount == null ? "" : String(plan.candidate.amount));
-  const [date, setDate] = useState(plan.candidate.due_date || "");
-  const [payee, setPayee] = useState(plan.targets.payee.label || plan.candidate.payee || plan.candidate.payee_hint || "");
-  const [accountId, setAccount] = useState(plan.targets.account.id || "");
-  const [fromAccountId, setFromAccount] = useState(plan.targets.fromAccount.id || "");
-  const [toAccountId, setToAccount] = useState(plan.targets.toAccount.id || "");
-  const [categoryId, setCategory] = useState("");
-  const [scheduleName, setScheduleName] = useState<string | null>(null);
-  const [notes, setNotes] = useState(plan.candidate.notes || "");
+  const [profileValues] = useState(() => completionValues(fields));
+  function edit<K extends keyof FinancialCompletionFields>(key: K, value: FinancialCompletionFields[K]) {
+    setDraft(current => editCompletionDraft(current, key, value));
+  }
   const [metadata, setMetadata] = useState<ActualMetadata | null>(null);
   const [reload, setReload] = useState(0);
   const [sending, setSending] = useState(false);
@@ -69,6 +59,9 @@ export default function FinancialEventCompletionForm({ plan, onCancel, onQueued,
   const [dismissed, setDismissed] = useState(false);
   const [confirming,setConfirming] = useState(false);
   const reviewTrigger = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!confirming && !sending && !dismissing && !stale && !dismissed) setDraft(current => enrichCompletionDraft(current, plan));
+  }, [plan, confirming, sending, dismissing, stale, dismissed]);
   useEffect(() => { onConfirming?.(confirming); return () => onConfirming?.(false); },[confirming,onConfirming]);
   const submitted = useRef(false);
   const alive = useRef(true);
@@ -91,20 +84,18 @@ export default function FinancialEventCompletionForm({ plan, onCancel, onQueued,
     : plan.targets.schedule.label || payee.trim();
   const effectiveScheduleName = scheduleName ?? (transfer && defaultScheduleName ? `${defaultScheduleName} Payment` : defaultScheduleName);
   const hasAccount = (value: string) => accounts.some((account) => account.id === value);
-  const canSend = !sending && !stale && !dismissing && !dismissed && Number(amount) > 0 && !!date && (transfer
+  const canSend = !!kind && !sending && !stale && !dismissing && !dismissed && Number(amount) > 0 && !!date && (transfer
     ? hasAccount(fromAccountId) && hasAccount(toAccountId) && fromAccountId !== toAccountId
     : hasAccount(accountId) && !!payee.trim() && payee.trim().length <= 200);
 
-  const values = JSON.stringify([kind,amount === "" ? "" : Number(amount),date,notes,
-    ...(transfer ? [fromAccountId,toAccountId] : [accountId,payee.trim(),categoryId]),
-    ...(scheduled ? [scheduleName?.trim() ?? null] : [])]);
-  const [baseline] = useState(values);
+  const values = completionValues(fields);
+  const baseline = completionValues(draft.baseline);
   useEffect(() => { onDirty?.(!dismissed && values !== baseline); },[values,baseline,dismissed,onDirty]);
 
   async function send(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     event.stopPropagation();
-    if (!canSend || submitted.current) return;
+    if (!kind || !canSend || submitted.current) return;
     if (ordinaryPayment && !confirming) { setConfirming(true); return; }
     submitted.current = true;
     setSending(true);
@@ -156,29 +147,29 @@ export default function FinancialEventCompletionForm({ plan, onCancel, onQueued,
       {confirming ? <PaymentConfirmation amountCents={Math.round(Number(amount) * 100) * (kind === 'income' ? 1 : -1)} account={accounts.find(account => account.id === accountId)?.name || 'Account unavailable'} payee={payee.trim()} date={date} category={metadata?.categories.find(category => category.id === categoryId)?.name} notes={notes} /> : <>
       <p className="text-xs leading-relaxed text-foreground/85">Confirm the details you know. Category is optional; Actual can categorize the entry later.</p>
       <Field name="Record as">
-        <Dropdown ariaLabel="Record as" value={kind} onChange={value => setKind(value as EntryKind)} disabled={sending || dismissing} options={kinds.map(([id,name]) => ({ id,name }))} />
+        <Dropdown ariaLabel="Record as" value={kind} placeholder="Choose an entry type" onChange={value => edit("kind", value as EntryKind)} disabled={sending || dismissing} options={kinds.map(([id,name]) => ({ id,name }))} />
       </Field>
       <div className="grid min-w-0 grid-cols-2 gap-3">
-        <Field name={`${transfer ? "Transfer" : kind === "income" ? "Inflow" : "Outflow"} amount (USD)`} icon={<Wallet size={13} aria-hidden="true" className="text-muted-foreground" />}><Input className={inputClass} type="number" min="0.01" step="0.01" required value={amount} onChange={(event) => setAmount(event.target.value)} disabled={sending || dismissing} /></Field>
+        <Field name={`${transfer ? "Transfer" : kind === "income" ? "Inflow" : "Outflow"} amount (USD)`} icon={<Wallet size={13} aria-hidden="true" className="text-muted-foreground" />}><Input className={inputClass} type="number" min="0.01" step="0.01" required value={amount} onChange={(event) => edit("amount", event.target.value)} disabled={sending || dismissing} /></Field>
         <Field name={kind === "bill" ? "Due date" : kind === "transfer_schedule" ? "Payment date" : "Transaction date"}>
-          <DateField ariaLabel={kind === "bill" ? "Due date" : kind === "transfer_schedule" ? "Payment date" : "Transaction date"} value={date} onChange={setDate} disabled={sending || dismissing} />
+          <DateField ariaLabel={kind === "bill" ? "Due date" : kind === "transfer_schedule" ? "Payment date" : "Transaction date"} value={date} onChange={value => edit("date", value)} disabled={sending || dismissing} />
         </Field>
       </div>
       <p className="text-[11px] text-foreground/75">Enter a positive amount. {transfer ? "Money moves from the From account to the To account." : kind === "income" ? "This adds money to the selected account." : "This takes money out of the selected account; no minus sign needed."}</p>
       {transfer ? <>
-        <Field name="From account" icon={<ArrowUpRight size={13} aria-hidden="true" className="text-[var(--sp-transfer)]" />}><SearchableDropdown ariaLabel="From account" options={accounts} value={fromAccountId} onChange={setFromAccount} disabled={sending || dismissing} placeholder="Choose an account" /></Field>
-        <Field name="To account" icon={<ArrowDownLeft size={13} aria-hidden="true" className="text-[var(--sp-transfer)]" />}><SearchableDropdown ariaLabel="To account" options={accounts} value={toAccountId} onChange={setToAccount} disabled={sending || dismissing} placeholder="Choose an account" /></Field>
+        <Field name="From account" icon={<ArrowUpRight size={13} aria-hidden="true" className="text-[var(--sp-transfer)]" />}><SearchableDropdown ariaLabel="From account" options={accounts} value={fromAccountId} onChange={value => edit("fromAccountId", value)} disabled={sending || dismissing} placeholder="Choose an account" /></Field>
+        <Field name="To account" icon={<ArrowDownLeft size={13} aria-hidden="true" className="text-[var(--sp-transfer)]" />}><SearchableDropdown ariaLabel="To account" options={accounts} value={toAccountId} onChange={value => edit("toAccountId", value)} disabled={sending || dismissing} placeholder="Choose an account" /></Field>
         {fromAccountId && fromAccountId === toAccountId && <p role="status" className="text-xs text-[var(--sp-rose)]">Choose different source and destination accounts.</p>}
       </> : <>
-        <Field name="Payee"><SearchableDropdown ariaLabel="Payee" options={payeeOptions} value={payee} onChange={setPayee} allowCreate disabled={sending || dismissing} placeholder="Choose or add a payee" /></Field>
+        <Field name="Payee"><SearchableDropdown ariaLabel="Payee" options={payeeOptions} value={payee} onChange={value => edit("payee", value)} allowCreate disabled={sending || dismissing} placeholder="Choose or add a payee" /></Field>
         {payee.trim().length > 200 && <p role="status" className="text-xs text-[var(--sp-rose)]">Payee must be 200 characters or fewer.</p>}
-        <Field name="Account" icon={<Landmark size={13} aria-hidden="true" className="text-muted-foreground" />}><SearchableDropdown ariaLabel="Account" options={accounts} value={accountId} onChange={setAccount} disabled={sending || dismissing} placeholder="Choose an account" /></Field>
-        <Field name="Category (optional)"><SearchableDropdown ariaLabel="Category (optional)" options={[{ id:"",name:"No category" },...(metadata?.categories || []).map(item => ({ id:item.id,name:item.group ? `${item.group} / ${item.name}` : item.name }))]} value={categoryId} onChange={setCategory} disabled={sending || dismissing} placeholder="No category" /></Field>
+        <Field name="Account" icon={<Landmark size={13} aria-hidden="true" className="text-muted-foreground" />}><SearchableDropdown ariaLabel="Account" options={accounts} value={accountId} onChange={value => edit("accountId", value)} disabled={sending || dismissing} placeholder="Choose an account" /></Field>
+        <Field name="Category (optional)"><SearchableDropdown ariaLabel="Category (optional)" options={[{ id:"",name:"No category" },...(metadata?.categories || []).map(item => ({ id:item.id,name:item.group ? `${item.group} / ${item.name}` : item.name }))]} value={categoryId} onChange={value => edit("categoryId", value)} disabled={sending || dismissing} placeholder="No category" /></Field>
       </>}
-      {scheduled && <Field name="Schedule name (optional)"><Input className={inputClass} value={effectiveScheduleName} maxLength={200} onChange={(event) => setScheduleName(event.target.value)} disabled={sending || dismissing} placeholder={transfer ? "Account name + Payment" : payee || "Bill name"} /></Field>}
-      <Field name="Notes (optional)"><Input className={inputClass} value={notes} maxLength={1000} onChange={(event) => setNotes(event.target.value)} disabled={sending || dismissing} /></Field>
+      {scheduled && <Field name="Schedule name (optional)"><Input className={inputClass} value={effectiveScheduleName} maxLength={200} onChange={(event) => edit("scheduleName", event.target.value)} disabled={sending || dismissing} placeholder={transfer ? "Account name + Payment" : payee || "Bill name"} /></Field>}
+      <Field name="Notes (optional)"><Input className={inputClass} value={notes} maxLength={1000} onChange={(event) => edit("notes", event.target.value)} disabled={sending || dismissing} /></Field>
       {profileSuggestion && !sending && !stale && !dismissing ? (
-        values === baseline ? (
+        values === profileValues ? (
           <Link to="/settings?tab=finance" state={{ financialProfileDraft: profileSuggestion }}
             className={`inline-flex min-h-9 max-[600px]:min-h-11 items-center rounded-md px-2 text-xs font-medium text-primary underline decoration-primary/40 underline-offset-4 outline-none hover:bg-primary/10 hover:decoration-primary active:bg-primary/15 ${actionClass}`}>
             Create profile from these suggestions

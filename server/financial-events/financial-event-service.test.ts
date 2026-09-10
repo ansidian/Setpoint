@@ -1,5 +1,4 @@
 import { createClient, type Client } from "@libsql/client";
-import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { BillCandidate } from "../../shared/types/bills.ts";
 import type { ActualPayee } from "../../shared/types/actual.ts";
@@ -13,25 +12,7 @@ import { createFinancialEventExecutor } from "./financial-event-operation.ts";
 import { createFinancialEventStore } from "./financial-event-store.ts";
 import { createFinancialEventWorker } from "./financial-event-service.ts";
 
-import { day, arrival, receipt, authentication, type Source, saveReceiptProfile } from "./financial-event-service.test-utils.ts";
-const accounts = [
-  { id: "card", name: "Example Rewards Mastercard (3234)", type: "credit" },
-  { id: "checking", name: "Everyday Checking (0001)", type: "checking" },
-  { id: "savings", name: "Rainy Day Savings (0002)", type: "savings" },
-];
-
-interface LedgerEntry {
-  id: string;
-  identityKey: string;
-  budgetId: string;
-  accountId: string;
-  amountCents: number;
-  date: string;
-  payee: string;
-  payeeId: string | null;
-  transferAccountId?: string;
-}
-
+import { day, arrival, receipt, authentication, type Source, saveReceiptProfile, accounts, type LedgerEntry, initializeFinancialEventTestSchema } from "./financial-event-service.test-utils.ts";
 describe("autonomous financial event processing", () => {
   let db: Client;
   let clock: number;
@@ -54,6 +35,7 @@ describe("autonomous financial event processing", () => {
   let currentAccounts: typeof accounts;
   let loseWriteResponse: boolean;
   let duringPreview: (() => Promise<void>) | null;
+  let existingActualPreview: ActualFinancialOperationResult | null;
 
   function actualResult(input: ActualFinancialOperationInput, outcome: ActualFinancialOperationResult["outcome"]): ActualFinancialOperationResult {
     return { outcome, reason: outcome, budgetId: input.budgetId || activeBudget,
@@ -93,6 +75,7 @@ describe("autonomous financial event processing", () => {
           const pending = duringPreview;
           duringPreview = null;
           await pending?.();
+          if (existingActualPreview) return structuredClone(existingActualPreview);
           return actualResult(input, admitted.has(input.identityKey) ? "already_present" : "would_add");
         }
         if (mode === "recover") {
@@ -152,17 +135,13 @@ describe("autonomous financial event processing", () => {
   beforeEach(async () => {
     db = createClient({ url: "file::memory:" });
     await db.execute("PRAGMA foreign_keys = ON");
-    for (const file of ["001_ea_tables.sql", "013_email_index_normalized_date.sql", "025_email_thread_identity.sql",
-      "054_email_sender_authentication.sql", "062_financial_events.sql", "071_financial_event_readiness.sql", "068_financial_candidate_dismissal.sql", "067_financial_event_ai_requests.sql", "069_financial_profiles.sql", "070_financial_document_sources.sql"]) {
-      await db.executeMultiple(readFileSync(new URL("../db/migrations/" + file, import.meta.url), "utf8"));
-    }
-    await addFinancialCorrectionSchema(db);
+    await initializeFinancialEventTestSchema(db);
     await saveReceiptProfile(db);
     await db.execute({ sql: "UPDATE ea_financial_workflow_state SET cutover_at = ?", args: [new Date(arrival - 60_000).toISOString()] });
     clock = arrival;
     store = createFinancialEventStore(db, () => clock);
     sources = new Map(); assessments = new Map(); ledger = []; payees = [{ id: "payee-0", name: "Example Merchant Inc." }]; schedules = []; admitted = new Map();
-    activeBudget = "budget-1"; loseWriteResponse = false; duringPreview = null;
+    activeBudget = "budget-1"; loseWriteResponse = false; duringPreview = null; existingActualPreview = null;
     providerCredits = 10; providerReply = null; providerOffline = false;
     matchingOffline = false; assessmentCredits = 10; assessmentOffline = false; aiEnabled = true; currentAccounts = [...accounts];
     worker = newWorker();
@@ -190,7 +169,6 @@ describe("autonomous financial event processing", () => {
   }
 
   async function processEvents() {
-    clock += 90_000;
     for (let i = 0; i < 20; i++) if (!await worker.processNextEvent()) return;
     throw new Error("Event processing did not become idle");
   }
@@ -210,11 +188,47 @@ describe("autonomous financial event processing", () => {
     expect(await store.getEventForEmail("owner", "ready")).toMatchObject({ status: "settled" });
   });
 
-  it("retains collection for a receipt that needs correlation without a permanent source identity", async () => {
+  it("plans an unmapped receipt immediately despite unrelated capture and assessment outages", async () => {
+    await saveReceiptProfile(db, false);
     await arrive(receipt("unidentified", { reference: "" }));
     await assessArrivals();
-    expect(await store.getEventForEmail("owner", "unidentified")).toMatchObject({ nextAttemptAt: clock + 90_000 });
+    await db.execute({ sql: `INSERT INTO ea_financial_intake_state (user_id, account_id, completed_through, status, updated_at)
+      VALUES ('owner', 'gmail', ?, 'retry', ?)`, args: [new Date(clock - 86400_000).toISOString(), clock] });
+    await arrive(receipt("unrelated", { reference: "different-order", value: 50 }));
+    await store.claimDocument("slow-provider");
+    expect(await store.getEventForEmail("owner", "unidentified")).toMatchObject({ nextAttemptAt: clock });
+    expect(await worker.processNextEvent()).toBe(true);
+    expect(await store.getEventForEmail("owner", "unidentified")).toMatchObject({ status: "needs_review", nextAttemptAt: null,
+      plan: { candidate: { amount: 30, payee: "Example Merchant Inc.", due_date: day } } });
     expect(await worker.processNextEvent()).toBe(false);
+    expect(ledger).toEqual([]);
+  });
+
+  it.each(["already_present", "would_add", "needs_review"] as const)("checks Actual before unmapped review and handles %s without admitting a write", async outcome => {
+    await saveReceiptProfile(db, false);
+    existingActualPreview = { outcome, reason: outcome, budgetId: "budget-1",
+      ...(outcome === "already_present" ? { transactionId: "earlier-entry" } : {}) };
+    await arrive(receipt("later-email"));
+    await assessArrivals();
+    await processEvents();
+    expect(await store.getEventForEmail("owner", "later-email")).toMatchObject({
+      status: outcome === "already_present" ? "settled" : "needs_review", operation: null, attemptedAt: null, nextAttemptAt: null,
+      plan: { profile: { status: "missing" }, ...(outcome === "already_present"
+        ? { reconciliation: { status: "already_recorded", evidence: { transactionId: "earlier-entry" } } } : {}) },
+      ...(outcome === "already_present" ? { outcome: { outcome, transactionId: "earlier-entry" } } : {}),
+    });
+    expect(ledger).toEqual([]);
+    expect(schedules).toEqual([]);
+  });
+
+  it("does not resolve an incomplete receipt from an unrelated existing Actual result", async () => {
+    await saveReceiptProfile(db, false);
+    existingActualPreview = { outcome: "already_present", reason: "Earlier entry", budgetId: "budget-1", transactionId: "earlier-entry" };
+    const source = receipt("missing-amount");
+    await arrive({ ...source, candidate: { ...source.candidate, amount: null, amount_candidates: [] } });
+    await assessArrivals();
+    await processEvents();
+    expect(await store.getEventForEmail("owner", source.uid)).toMatchObject({ status: "needs_review", outcome: null, operation: null });
     expect(ledger).toEqual([]);
   });
 
@@ -249,11 +263,7 @@ describe("autonomous financial event processing", () => {
     matchingOffline = true;
     currentAccounts = accounts.filter((account) => account.id !== "card");
     await arrive({ ...source, candidate: { ...source.candidate, due_date: null } });
-    for (let attempt = 0; attempt < 3; attempt++) {
-      await assessArrivals();
-      const document = await store.getDocumentForEmail("owner", source.uid);
-      if (document?.nextAttemptAt) clock = document.nextAttemptAt;
-    }
+    await assessArrivals();
     await processEvents();
     const creditsAfterAssessment = providerCredits;
     for (let tick = 0; tick < 5; tick++) {
@@ -278,22 +288,21 @@ describe("autonomous financial event processing", () => {
     source.candidate = { ...source.candidate, due_date: null, event_evidence: "Paid $30.00" };
     providerReply = source.candidate;
     await arrive(source);
-    for (let attempt = 0; attempt < 3; attempt++) {
-      await assessArrivals();
-      const document = await store.getDocumentForEmail("owner", source.uid);
-      if (document?.nextAttemptAt) clock = document.nextAttemptAt;
-    }
+    await assessArrivals();
     await processEvents();
+    const remainingCredits = providerCredits;
+    const remainingAssessmentCredits = assessmentCredits;
     for (let retry = 0; retry < 4; retry++) {
       clock += 16 * 60_000;
       worker = newWorker();
       await worker.processNextEvent();
     }
     // The external provider's remaining billing credit is the costly regression.
-    expect(providerCredits).toBe(9);
+    expect(providerCredits).toBe(remainingCredits);
+    expect(assessmentCredits).toBe(remainingAssessmentCredits);
     expect(await store.getEventForEmail("owner", source.uid)).toMatchObject({
-      status: "waiting", revision: 1, attempts: 5, operation: null,
-      plan: { workflow: { state: "waiting" } },
+      status: "needs_review", nextAttemptAt: null, revision: 1, attempts: 1, operation: null,
+      plan: { workflow: { state: "needs_review", nextAttemptAt: null } },
     });
     expect(ledger).toEqual([]);
     await revise(receipt(source.uid));
@@ -308,11 +317,7 @@ describe("autonomous financial event processing", () => {
     providerReply = source.candidate;
     providerOffline = true;
     await arrive({ ...source, candidate: { ...source.candidate, due_date: null } });
-    for (let attempt = 0; attempt < 3; attempt++) {
-      await assessArrivals();
-      const document = await store.getDocumentForEmail("owner", source.uid);
-      if (document?.nextAttemptAt) clock = document.nextAttemptAt;
-    }
+    await assessArrivals();
     await processEvents();
     expect(await store.getEventForEmail("owner", source.uid)).toMatchObject({ status: "waiting", attempts: 1 });
     providerOffline = !recovers;
@@ -391,7 +396,7 @@ describe("autonomous financial event processing", () => {
     expect((await store.getDocumentForEmail("owner", "copy"))?.status).toBe("associated");
   });
 
-  it.each(["contradiction", "failed amount audit", "missing date", "unsupported year"])("reassesses %s before assigning a purchase identity", async (failure) => {
+  it.each(["contradiction", "failed amount audit", "missing date", "unsupported year"])("surfaces %s immediately and reconsiders only after source enrichment", async (failure) => {
     const source = receipt("reassessment");
     const initial: BillCandidate = { ...source.candidate,
       ...(failure === "contradiction" ? { event_kind: "refund" } : {}),
@@ -404,15 +409,25 @@ describe("autonomous financial event processing", () => {
     assessments.set(source.uid, [initial, source.candidate]);
     await arrive(source);
     await assessArrivals();
-    const waiting = await store.getDocumentForEmail("owner", source.uid);
-    expect(waiting).toMatchObject({ status: "retry", candidate: null, eventId: null });
-    expect(waiting!.nextAttemptAt).toBeGreaterThan(clock);
+    const document = await store.getDocumentForEmail("owner", source.uid);
+    expect(document).toMatchObject({ status: "associated", candidate: initial, nextAttemptAt: null });
+    await processEvents();
+    const review = await store.getEventForEmail("owner", source.uid);
+    expect(review).toMatchObject({ status: "needs_review", nextAttemptAt: null, operation: null });
     expect(ledger).toEqual([]);
+    const remainingAssessmentCredits = assessmentCredits;
+    const remainingProviderCredits = providerCredits;
+    clock += 24 * 3600_000;
+    worker = newWorker();
+    expect(await worker.processNextDocument()).toBe(false);
+    expect(await worker.processNextEvent()).toBe(false);
+    expect(assessmentCredits).toBe(remainingAssessmentCredits);
+    expect(providerCredits).toBe(remainingProviderCredits);
 
-    clock = waiting!.nextAttemptAt!;
+    await revise({ ...source, body: source.body + " Corrected purchase confirmation." });
     await assessArrivals();
     await processEvents();
-    expect(await store.getEventForEmail("owner", source.uid)).toMatchObject({ status: "settled", plan: { candidate: { type: "expense", event_kind: "purchase" } } });
+    expect(await store.getEventForEmail("owner", source.uid)).toMatchObject({ id: review!.id, status: "settled", plan: { candidate: { type: "expense", event_kind: "purchase" } } });
     expect(ledger.map((entry) => entry.amountCents)).toEqual([-3000]);
   });
 
@@ -427,7 +442,7 @@ describe("autonomous financial event processing", () => {
     } });
     await assessArrivals();
     await processEvents();
-    expect(await store.getEventForEmail("owner", source.uid)).toMatchObject({ status: "waiting", operation: null });
+    expect(await store.getEventForEmail("owner", source.uid)).toMatchObject({ status: "needs_review", nextAttemptAt: null, operation: null });
     expect(ledger).toEqual([]);
 
     await revise(receipt(source.uid, { value: 45 }));
@@ -463,18 +478,10 @@ describe("autonomous financial event processing", () => {
       candidate: { ...source.candidate, due_date: null, event_evidence: "Paid $30.00" } } : { ...source, authenticated: false };
     await arrive(incomplete);
     await assessArrivals();
-    if (missing === "date") {
-      // Exhaust bounded extraction retries; a source with no date then waits
-      // for new evidence without repeatedly charging for the same assessment.
-      for (let retry = 0; retry < 2; retry++) {
-        clock = (await store.getDocumentForEmail("owner", source.uid))!.nextAttemptAt!;
-        await assessArrivals();
-      }
-    }
     await processEvents();
     const waiting = await store.getEventForEmail("owner", source.uid);
     if (missing === "date") {
-      expect(waiting).toMatchObject({ status: "waiting", operation: null });
+      expect(waiting).toMatchObject({ status: "needs_review", nextAttemptAt: null, operation: null });
     } else {
       const document = await store.getDocumentForEmail("owner", source.uid);
       expect(waiting).toBeNull();
@@ -587,12 +594,3 @@ describe("autonomous financial event processing", () => {
     expect(ledger.map((entry) => entry.amountCents)).toEqual([-4500]);
   });
 });
-
-async function addFinancialCorrectionSchema(db: Client): Promise<void> {
-  for (const file of ['030_owner_bootstrap.sql', '041_email_transaction_imports.sql', '042_transaction_import_item_subject.sql',
-    '053_transaction_import_financial_plans.sql', '055_generic_financial_email_imports.sql',
-    '056_generic_financial_email_automation.sql', '058_generic_financial_email_income_automation.sql',
-    '059_generic_financial_email_transfer_automation.sql', '063_financial_activity.sql', '064_financial_corrections.sql']) {
-    await db.executeMultiple(readFileSync(new URL(`../db/migrations/${file}`, import.meta.url), 'utf8'));
-  }
-}
