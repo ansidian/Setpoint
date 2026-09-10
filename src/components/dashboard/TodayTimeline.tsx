@@ -124,6 +124,7 @@ function TodayTimeline({
 
   return (
     <div
+      data-dashboard-detail-region="true"
       data-testid={isMobile ? "today-timeline-mobile" : "today-timeline"}
       style={{
         padding: isMobile ? "16px" : "18px 20px",

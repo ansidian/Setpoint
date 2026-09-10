@@ -158,6 +158,7 @@ function NeedsYouBandInner({ snapshotLanes, liveDeadlines, railThreshold = 5, is
   return (
     <AnimatedHeight>
     <div
+      data-dashboard-detail-region="true"
       data-testid="needs-you-band"
       style={{ flex: "none", display: "flex", flexDirection: allClear ? "column" : "row", gap: allClear ? 0 : 20, alignItems: "stretch", padding: allClear ? "12px 20px" : "18px 20px", borderRadius: 16,
         background: "var(--sp-card, rgba(36,36,58,0.4))",

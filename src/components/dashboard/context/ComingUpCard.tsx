@@ -56,7 +56,7 @@ export default function ComingUpCard({ items = [], isMobile = false, onJump, onC
     : undefined;
 
   return (
-    <section data-testid="context-coming-up" className={`dashboard-ahead${isMobile ? " dashboard-ahead--mobile" : ""}`}>
+    <section data-dashboard-detail-region="true" data-testid="context-coming-up" className={`dashboard-ahead${isMobile ? " dashboard-ahead--mobile" : ""}`}>
       {isMobile ? <header className="dashboard-ahead-heading"><h3><CalendarClock size={16} aria-hidden="true" />Ahead</h3><span className="dashboard-ahead-horizon">Next 7 days</span></header>
         : <SectionHeader title="Ahead" right={<span className="dashboard-ahead-horizon">Next 7 days</span>} />}
       <AnimatedHeight>

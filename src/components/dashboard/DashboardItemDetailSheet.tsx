@@ -279,6 +279,7 @@ export default function DashboardItemDetailSheet({
         animatePosition
         dismissIgnoreSelector="[data-dashboard-detail-trigger='true']"
         draggable
+        avoidAnchorRegion="[data-dashboard-detail-region]"
         dragHandleLabel={<span className="detail-panel-label" style={{ color: `color-mix(in srgb, ${detailAccent} 75%, #cdd6f4)` }}><KindIcon size={14} aria-hidden="true" />{KIND_LABEL[kind]}</span>}
         placementKey={`${placementKey}:${editorOpen ? "editor" : "detail"}`}
         style={{

@@ -8,7 +8,7 @@ import useDismissablePortal from "@/hooks/useDismissablePortal";
 import useIsMobile from "@/hooks/useIsMobile";
 import BottomSheet from "@/components/ui/BottomSheet";
 import { heightTransition } from "@/lib/motion";
-import { resolveMobileSheetHeight } from "./anchoredFloatingPanelModel";
+import { resolveContentPlacement, resolveMobileSheetHeight } from "./anchoredFloatingPanelModel";
 
 export type AnchoredFloatingPanelProps = {
   anchorRef: RefObject<HTMLElement | null>;
@@ -37,10 +37,12 @@ export type AnchoredFloatingPanelProps = {
   draggable?: boolean;
   dragHandleLabel?: ReactNode;
   placementKey?: string;
+  avoidAnchorRegion?: string;
   children: ReactNode;
 };
 
 type PanelPosition = {
+  panelHeight?: number;
   top: number;
   left: number;
   width: number;
@@ -139,6 +141,7 @@ function AnchoredPanelDesktop({
   draggable = false,
   dragHandleLabel,
   placementKey = "panel",
+  avoidAnchorRegion,
   children,
 }: AnchoredPanelDesktopProps) {
   const reducedMotion = useReducedMotion() ?? false;
@@ -152,6 +155,12 @@ function AnchoredPanelDesktop({
   const [pos, setPos] = useState<PanelPosition | null>(null);
   const [manualPos, setManualPos] = useState<ManualPanelPosition | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [dragPlacementKey, setDragPlacementKey] = useState(placementKey);
+  if (dragPlacementKey !== placementKey) {
+    setDragPlacementKey(placementKey);
+    setManualPos(null);
+    setDragging(false);
+  }
   // Stable "panel is mounted" gate: flips false->true once when the panel first
   // renders and stays true across repositions. Used so the ResizeObserver and
   // wheel listener bind once when the panel appears without rebinding on every
@@ -174,21 +183,55 @@ function AnchoredPanelDesktop({
     const placementHeight = typeof measuredHeight === "number" && measuredHeight > 0
       ? measuredHeight
       : (height as number);
+    const region = avoidAnchorRegion ? anchor?.closest(avoidAnchorRegion) : null;
+    let contentPlacement: { left: number; top: number } | null = null;
+    if (region && anchor) {
+      const textRects: DOMRect[] = [];
+      let anchorRects: DOMRect[] = [];
+      let anchorTextLength = 0;
+      const walker = document.createTreeWalker(region, NodeFilter.SHOW_TEXT);
+      let node: Node | null;
+      while ((node = walker.nextNode())) {
+        if (!node.textContent?.trim()) continue;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        const rects = Array.from(range.getClientRects());
+        if (anchor.contains(node) && (node.textContent?.trim().length || 0) > anchorTextLength) {
+          anchorTextLength = node.textContent!.trim().length;
+          anchorRects = rects.filter(r => r.width > 0 && r.height > 0);
+        }
+        for (const textRect of rects) {
+          if (!textRect.width || !textRect.height || textRect.bottom < 0 || textRect.top > window.innerHeight) continue;
+          textRects.push(textRect);
+
+        }
+      }
+      const contentAnchor = anchorRects.length ? {
+        left: Math.min(...anchorRects.map(r => r.left)),
+        right: Math.max(...anchorRects.map(r => r.right)),
+        top: Math.min(...anchorRects.map(r => r.top)),
+        bottom: Math.max(...anchorRects.map(r => r.bottom)),
+      } : rect;
+      contentPlacement = resolveContentPlacement(contentAnchor, textRects, resolvedWidth,
+        placementHeight || 0, window.innerWidth, window.innerHeight);
+    }
     const nextPos = {
-      ...computePlacement(rect, resolvedWidth, placementHeight),
+      ...(contentPlacement || computePlacement(rect, resolvedWidth, placementHeight)),
       width: resolvedWidth,
+      panelHeight: placementHeight || 0,
     };
 
     setPos((prev) => {
       if (prev
         && prev.top === nextPos.top
         && prev.left === nextPos.left
-        && prev.width === nextPos.width) {
+        && prev.width === nextPos.width
+        && prev.panelHeight === nextPos.panelHeight) {
         return prev;
       }
       return nextPos;
     });
-  }, [anchorRef, height, matchAnchorWidth, maxWidth, minWidth, resolvedPanelRef, width]);
+  }, [anchorRef, avoidAnchorRegion, height, matchAnchorWidth, maxWidth, minWidth, resolvedPanelRef, width]);
 
   // Coalesce scroll/resize-driven re-measures to one rAF so a burst of scroll
   // events runs the two getBoundingClientRect reads at most once per frame.
@@ -201,6 +244,8 @@ function AnchoredPanelDesktop({
   }, [updatePos]);
 
   useLayoutEffect(() => {
+    // Retarget even when the caller keeps one ref object and the new content has
+    // the same dimensions. The frame also observes parent layout-effect refs.
     // eslint-disable-next-line react-hooks/set-state-in-effect -- DOM measurement for initial positioning
     updatePos();
     let frame: number | null = null;
@@ -225,7 +270,7 @@ function AnchoredPanelDesktop({
         positionRafRef.current = 0;
       }
     };
-  }, [anchorRef, updatePos, scheduleUpdate]);
+  }, [anchorRef, placementKey, updatePos, scheduleUpdate]);
 
   useLayoutEffect(() => {
     if (!pos) return;
@@ -351,7 +396,11 @@ function AnchoredPanelDesktop({
 
   if (!pos) return null;
 
-  const activeManualPos = manualPos?.placementKey === placementKey ? manualPos : null;
+  const activeManualPos = manualPos && manualPos.placementKey === placementKey
+    ? { ...manualPos, width: pos.width,
+      left: Math.max(10, Math.min(manualPos.left, window.innerWidth - pos.width - 10)),
+      top: Math.max(10, Math.min(manualPos.top, window.innerHeight - (pos.panelHeight || 0) - 10)) }
+    : null;
   const displayPos = activeManualPos || pos;
   const floatingPanelStyle: CSSProperties = {
     position: "fixed",
