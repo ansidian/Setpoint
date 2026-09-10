@@ -1,4 +1,5 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useCallback, useState } from "react";
+import useWarmImport from "../../hooks/useWarmImport";
 import { AnalyticsModalMount } from "../shell/AnalyticsModalMount";
 import CommandPalette from "../shell/CommandPalette";
 import type { Dispatch, RefObject, SetStateAction } from "react";
@@ -7,6 +8,7 @@ import type { SnapshotView } from "../../../shared/types/snapshots";
 import type { DashboardActiveSnapshotController } from "./useLiveReadOverrides";
 import type { DashboardGlanceSheet } from "./dashboardShellModel";
 import type { GlanceActionContext } from "./glanceActionsModel";
+import type DashboardDetailSheetComponent from "./DashboardItemDetailSheet";
 import type { DashboardSheetItem } from "./DashboardItemDetailSheet";
 import type { CalendarRangeController } from "../../hooks/calendar/useCalendarRange";
 
@@ -39,7 +41,8 @@ interface DashboardShellOverlaysProps {
 
 const AddTaskPanel = lazy(() => import("../todoist/AddTaskPanel"));
 const BriefingHistoryPanel = lazy(() => import("../briefing/BriefingHistoryPanel"));
-const DashboardItemDetailSheet = lazy(() => import("./DashboardItemDetailSheet"));
+const importDashboardItemDetailSheet = () => import("./DashboardItemDetailSheet");
+const DashboardItemDetailSheet = lazy(importDashboardItemDetailSheet);
 
 export default function DashboardShellOverlays({
   isMobile,
@@ -67,11 +70,20 @@ export default function DashboardShellOverlays({
   handleSelectSnapshot,
   setHistoryOpen,
 }: DashboardShellOverlaysProps) {
+  // Preload after first paint and bypass the first lazy/Suspense commit once
+  // ready; warming the import alone still delays the first detail's appearance.
+  const [ReadyDetailSheet, setReadyDetailSheet] = useState<typeof DashboardDetailSheetComponent | null>(null);
+  const warmDetailSheet = useCallback(async () => {
+    const module = await importDashboardItemDetailSheet();
+    setReadyDetailSheet(() => module.default);
+  }, []);
+  useWarmImport(warmDetailSheet);
+  const DetailSheet = ReadyDetailSheet || DashboardItemDetailSheet;
   return (
     <>
       {itemSheet && (
         <Suspense fallback={null}>
-          <DashboardItemDetailSheet
+          <DetailSheet
             kind={itemSheet.kind}
             calendarRange={calendarRange}
             onEditorDirtyChange={onEditorDirtyChange}
