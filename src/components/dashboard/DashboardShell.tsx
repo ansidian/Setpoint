@@ -1,6 +1,7 @@
 import useWorkspaceTabRoute from './useWorkspaceTabRoute';
 import type { FinanceDestination } from '../finances/financesNavigation';
 import { financesHref } from '../finances/financesNavigation';
+import { financialHref } from '../financial/financialNavigation';
 import WorkspaceLoading from '../shared/WorkspaceLoading';
 import MobileShellActions from "../shell/MobileShellActions";
 import { useState, useEffect, useLayoutEffect, useMemo, lazy, Suspense, useCallback, startTransition } from "react";
@@ -331,6 +332,8 @@ export function DashboardShell({
 
   const handlePaletteAction = useCallback((item: { kind: string; payload?: string }) => {
     if (item.kind === "tab" && item.payload) setShellTab(item.payload as DashboardTab);
+    else if (item.kind === "finance-journal") navigate(financesHref({ view: 'journal' }));
+    else if (item.kind === "financial-activity") navigate(financialHref({ view: 'all' }));
     else if (item.kind === "calendar-view" && item.payload === "bills") navigate(financesHref());
     else if (item.kind === "calendar-view" && item.payload === "events") openCalendar("events");
     else if (item.kind === "analytics") {

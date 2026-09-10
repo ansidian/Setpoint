@@ -6,7 +6,7 @@ import {
   BarChart3,
   LayoutList, Inbox, CreditCard,
   Search, ArrowRight, CalendarDays, History, Settings as SettingsIcon,
-  Notebook, Newspaper,
+  Notebook, Newspaper, BookOpen, ListChecks,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { motionDuration, motionTransition } from "../../lib/motion";
@@ -66,6 +66,8 @@ function CommandPaletteInner({ open, reduceMotion, accent, onClose, onAction }: 
     { id: "go-dashboard", icon: LayoutList, label: "Go to Dashboard", aliases: ["home", "today", "overview", "briefing"], kind: "tab", payload: "dashboard" },
     { id: "go-inbox",     icon: Inbox,      label: "Go to Inbox",     aliases: ["email", "mail", "messages"], kind: "tab", payload: "inbox" },
     { id: "bills",        icon: CreditCard, label: "Go to Finances",  aliases: ["bills", "utilities", "payments", "payables"], kind: "tab", payload: "finances" },
+    { id: "go-journal", icon: BookOpen, label: "Finances: Journal", aliases: ["ledger", "transactions"], kind: "finance-journal" },
+    { id: "go-financial-activity", icon: ListChecks, label: "Financial Activity", aliases: ["finance activity", "financial review", "imports"], kind: "financial-activity" },
     { id: "events",       icon: CalendarDays, label: "Go to Events",  aliases: ["calendar", "schedule", "meetings"], kind: "calendar-view", payload: "events" },
     ...(!isDemoMode() ? [{ id: "go-notes", icon: Notebook, label: "Go to Notes", aliases: ["ideas", "canvas", "tldraw"], kind: "tab", payload: "notes" }] : []),
     { id: "go-news",      icon: Newspaper,  label: "Go to News",      aliases: ["articles", "headlines", "feed"], kind: "tab", payload: "news" },
