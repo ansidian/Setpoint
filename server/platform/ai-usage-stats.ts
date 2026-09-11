@@ -15,6 +15,13 @@ function emptyCategory(): AiUsageCategory {
   return { ...emptyTotals(), byPurpose: {}, models: [], recentFailures: [] };
 }
 
+function emptyContexts(): EmailAiUsageStats["contexts"] {
+  return {
+    production: { triage: emptyCategory(), financialEmail: emptyCategory() },
+    evaluation: { triage: emptyCategory(), financialEmail: emptyCategory() },
+  };
+}
+
 const measurements = {
   inputTokens: "input_tokens", outputTokens: "output_tokens", cachedInputTokens: "cached_input_tokens",
   cacheCreationInputTokens: "cache_creation_input_tokens", estimatedCostUsd: "estimated_cost_usd",
@@ -64,25 +71,24 @@ export async function getEmailAiUsageStats(userId: string, {
       args: [userId, cutoff, now.toISOString()],
     }),
     ...["purpose IN ('triage_cheap', 'triage_strong')", "purpose IN ('extraction', 'verification', 'matching')"].map((purposes) => dbClient.execute({
-      sql: `SELECT event_id, run_id, purpose, origin, provider, model, started_at,
-        provider_latency_ms, outcome, http_status, input_tokens, output_tokens, diagnostics_json
+      sql: `SELECT * FROM (SELECT event_id, run_id, purpose, origin, provider, model, started_at,
+        provider_latency_ms, outcome, http_status, input_tokens, output_tokens, diagnostics_json,
+        ROW_NUMBER() OVER (PARTITION BY provider ORDER BY started_at DESC, event_id DESC) AS provider_rank
         FROM ea_ai_usage_events
         WHERE user_id = ? AND run_context = 'production' AND started_at >= ? AND started_at <= ?
-          AND outcome IN ('provider_error', 'parse_error') AND ${purposes}
-        ORDER BY started_at DESC, event_id DESC LIMIT 20`,
+          AND outcome IN ('provider_error', 'parse_error') AND ${purposes})
+        WHERE provider_rank <= 20 ORDER BY started_at DESC, event_id DESC`,
       args: [userId, cutoff, now.toISOString()],
     })),
   ]);
   const response: EmailAiUsageStats = {
     generatedAt: now.toISOString(), windowDays,
     ledgerStartedAt: String(boundary.rows[0]?.started_at ?? ""),
-    contexts: {
-      production: { triage: emptyCategory(), financialEmail: emptyCategory() },
-      evaluation: { triage: emptyCategory(), financialEmail: emptyCategory() },
-    },
+    contexts: emptyContexts(),
+    byProvider: { openai: emptyContexts(), anthropic: emptyContexts() },
   };
   for (const [category, failures] of [["triage", triageFailures], ["financialEmail", financialFailures]] as const) {
-    response.contexts.production[category].recentFailures = (failures?.rows ?? []).map((row): AiUsageFailure => ({
+    const recentFailures = (failures?.rows ?? []).map((row): AiUsageFailure => ({
       eventId: String(row.event_id), runId: String(row.run_id),
       purpose: row.purpose as AiUsagePurpose, origin: row.origin as AiUsageFailure["origin"],
       provider: row.provider as AiUsageFailure["provider"], model: String(row.model),
@@ -93,20 +99,30 @@ export async function getEmailAiUsageStats(userId: string, {
       outputTokens: row.output_tokens == null ? null : Number(row.output_tokens),
       diagnostics: row.diagnostics_json == null ? null : JSON.parse(String(row.diagnostics_json)),
     }));
+    response.contexts.production[category].recentFailures = recentFailures.slice(0, 20);
+    for (const provider of ["openai", "anthropic"] as const) {
+      response.byProvider[provider].production[category].recentFailures = recentFailures.filter((failure) => failure.provider === provider);
+    }
   }
   for (const row of result.rows) {
     const purpose = row.purpose as AiUsagePurpose;
-    const context = row.run_context === "evaluation" ? response.contexts.evaluation : response.contexts.production;
-    const category = purpose.startsWith("triage_") ? context.triage : context.financialEmail;
-    addRow(category, row);
-    const detail = category.byPurpose[purpose] ??= emptyTotals();
-    addRow(detail, row);
-    const model = `${row.provider}: ${row.model}`;
-    if (!category.models.includes(model)) category.models.push(model);
+    const contexts = [response.contexts];
+    if (row.provider === "openai" || row.provider === "anthropic") contexts.push(response.byProvider[row.provider]);
+    for (const scope of contexts) {
+      const context = row.run_context === "evaluation" ? scope.evaluation : scope.production;
+      const category = purpose.startsWith("triage_") ? context.triage : context.financialEmail;
+      addRow(category, row);
+      const detail = category.byPurpose[purpose] ??= emptyTotals();
+      addRow(detail, row);
+      const model = `${row.provider}: ${row.model}`;
+      if (!category.models.includes(model)) category.models.push(model);
+    }
   }
-  for (const context of Object.values(response.contexts)) {
-    context.triage.models.sort();
-    context.financialEmail.models.sort();
+  for (const scope of [response.contexts, ...Object.values(response.byProvider)]) {
+    for (const context of Object.values(scope)) {
+      context.triage.models.sort();
+      context.financialEmail.models.sort();
+    }
   }
   return response;
 }

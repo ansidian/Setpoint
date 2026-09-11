@@ -30,6 +30,21 @@ function event(overrides: Partial<AiUsageEvent> = {}): AiUsageEvent {
 }
 
 describe("durable email AI call ledger", () => {
+  it("separates provider totals and keeps each provider's latest failures", async () => {
+    for (let i = 0; i < 21; i++) {
+      await recordAiUsageEvent(event({ eventId: `openai-${i}`, outcome: "parse_error" }), { dbClient: db });
+    }
+    await recordAiUsageEvent(event({ eventId: "claude", provider: "anthropic", model: "claude-haiku-4-5",
+      startedAt: "2026-09-02T12:00:00.000Z", outcome: "provider_error", estimatedCostUsd: null }), { dbClient: db });
+    const stats = await getEmailAiUsageStats("owner", { dbClient: db, now: NOW });
+    expect(stats.contexts.production.triage.calls).toBe(22);
+    expect(stats.contexts.production.triage.recentFailures).toHaveLength(20);
+    expect(stats.byProvider.openai.production.triage).toMatchObject({ calls: 21, failures: 21, unpricedCalls: 0 });
+    expect(stats.byProvider.anthropic.production.triage).toMatchObject({ calls: 1, failures: 1, unpricedCalls: 1,
+      estimatedCostUsd: null, models: ["anthropic: claude-haiku-4-5"], byPurpose: { triage_cheap: { calls: 1 } } });
+    expect(stats.byProvider.anthropic.production.triage.recentFailures.map((failure) => failure.eventId)).toEqual(["claude"]);
+    expect(stats.byProvider.openai.production.triage.recentFailures).toHaveLength(20);
+  });
   it.each([
     { error: new Error("private provider body"), status: 429, code: "http_error" },
     { error: new TypeError("private connection details"), status: null, code: "transport_error" },
@@ -260,7 +275,7 @@ describe("provider token and pricing semantics", () => {
   it("does not price unknown variants, malformed or absent usage, or unsupported tiers", () => {
     const zero = normalizeAiUsage("openai", { input_tokens: 0, output_tokens: 0 });
     expect(estimateAiUsageCost("openai", "gpt-5.4", zero).estimatedCostUsd).toBe(0);
-    expect(estimateAiUsageCost("openai", "gpt-5.4-pro", zero).estimatedCostUsd).toBeNull();
+    expect(estimateAiUsageCost("openai", "gpt-5.4-unverified", zero).estimatedCostUsd).toBeNull();
     expect(estimateAiUsageCost("openai", "gpt-5.4", zero, "priority").estimatedCostUsd).toBeNull();
     for (const usage of [undefined, {}, { input_tokens: -1, output_tokens: 2 }, { input_tokens: "3", output_tokens: 2 }]) {
       expect(estimateAiUsageCost("openai", "gpt-5.4", normalizeAiUsage("openai", usage)).estimatedCostUsd).toBeNull();

@@ -278,8 +278,10 @@ export interface AlfredUsageModelSummary {
   calls: number;
   inputTokens: number;
   cachedInputTokens: number;
+  cacheCreationInputTokens: number;
+  unpricedCalls: number;
   outputTokens: number;
-  estimatedCostUsd: number;
+  estimatedCostUsd: number | null;
 }
 
 export interface AlfredUsageToolSummary {
@@ -297,13 +299,15 @@ export interface AlfredUsageWindow {
   turns: number;
   inputTokens: number;
   cachedInputTokens: number;
+  cacheCreationInputTokens: number;
+  unpricedCalls: number;
   outputTokens: number;
-  estimatedCostUsd: number;
-  estimatedSavingsUsd: number;
+  estimatedCostUsd: number | null;
+  estimatedSavingsUsd: number | null;
   cacheHitRate: number;
 }
 
-export interface AlfredUsageStats extends AlfredUsageWindow {
+export interface AlfredUsageSummary extends AlfredUsageWindow {
   generatedAt: string;
   lastUsedAt: string | null;
   byModel: Record<string, AlfredUsageModelSummary | undefined>;
@@ -312,6 +316,10 @@ export interface AlfredUsageStats extends AlfredUsageWindow {
     distinctTools: number;
     byTool: AlfredUsageToolSummary[];
   };
-  estimatedSavingsUsd: number;
+  estimatedSavingsUsd: number | null;
   comparisonWindows: { monthToDate: AlfredUsageWindow };
+}
+
+export interface AlfredUsageStats extends AlfredUsageSummary {
+  byProvider: Record<AlfredProvider, AlfredUsageSummary>;
 }

@@ -1,40 +1,15 @@
 import db from "../db/connection.ts";
+import { calculateAlfredUsage } from "./alfred-usage.ts";
 import type { InStatement } from "@libsql/client";
 import type {
   AlfredUsageModelSummary,
   AlfredUsageStats,
+  AlfredUsageSummary,
   AlfredUsageToolSummary,
   AlfredUsageWindow,
 } from "../../shared/types/alfred.ts";
 
 const DEFAULT_WINDOW_DAYS = 7;
-
-// Standard text pricing per 1M tokens. Long-context and regional uplifts remain
-// outside this estimate, matching the existing analytics contract.
-type ModelPrice = { input: number; cachedInput: number; output: number };
-const MODEL_PRICE_PER_MILLION: Record<string, ModelPrice> = {
-  "claude-sonnet-4-6": { input: 3.00, cachedInput: 0.30, output: 15.00 },
-  "claude-haiku-4-5": { input: 1.00, cachedInput: 0.10, output: 5.00 },
-  "gpt-5.6-sol": { input: 4.00, cachedInput: 0.40, output: 20.00 },
-  "gpt-5.6-terra": { input: 2.00, cachedInput: 0.20, output: 12.00 },
-  "gpt-5.6-luna": { input: 0.20, cachedInput: 0.02, output: 1.20 },
-  "gpt-5.5": { input: 5.00, cachedInput: 0.50, output: 30.00 },
-  "gpt-5.5-pro": { input: 30.00, cachedInput: 30.00, output: 180.00 },
-  "gpt-5.4": { input: 2.50, cachedInput: 0.25, output: 15.00 },
-  "gpt-5.4-mini": { input: 0.75, cachedInput: 0.075, output: 4.50 },
-  "gpt-5.4-nano": { input: 0.20, cachedInput: 0.02, output: 1.25 },
-  "gpt-5.4-pro": { input: 30.00, cachedInput: 30.00, output: 180.00 },
-};
-const PRICE_MODEL_KEYS = Object.keys(MODEL_PRICE_PER_MILLION)
-  .sort((left, right) => right.length - left.length);
-
-function priceForModel(model: unknown): ModelPrice | null {
-  const modelId = String(model || "");
-  const exact = MODEL_PRICE_PER_MILLION[modelId];
-  if (exact) return exact;
-  const base = PRICE_MODEL_KEYS.find((key) => modelId.startsWith(`${key}-`));
-  return base ? (MODEL_PRICE_PER_MILLION[base] || null) : null;
-}
 
 function safeJson(value: unknown, fallback: Record<string, unknown> = {}): Record<string, unknown> {
   if (!value) return fallback;
@@ -55,7 +30,7 @@ function monthToDateCutoff(now: Date): Date {
 }
 
 function emptyByModel(): AlfredUsageModelSummary {
-  return { calls: 0, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, estimatedCostUsd: 0 };
+  return { calls: 0, inputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, outputTokens: 0, estimatedCostUsd: 0, unpricedCalls: 0 };
 }
 
 type UsageRow = {
@@ -65,10 +40,11 @@ type UsageRow = {
   input_tokens?: number | null;
   cached_input_tokens?: number | null;
   output_tokens?: number | null;
+  cache_creation_input_tokens?: number | null;
   metadata_json?: string | null;
 };
 
-type MutableUsageSummary = Omit<AlfredUsageStats, "comparisonWindows"> & {
+type MutableUsageSummary = Omit<AlfredUsageSummary, "comparisonWindows"> & {
   comparisonWindows?: AlfredUsageStats["comparisonWindows"];
 };
 
@@ -91,6 +67,8 @@ function summarizeRows(rows: UsageRow[], { windowDays, windowLabel, cutoff, now 
     turns: 0,
     inputTokens: 0,
     cachedInputTokens: 0,
+    cacheCreationInputTokens: 0,
+    unpricedCalls: 0,
     outputTokens: 0,
     cacheHitRate: 0,
     estimatedCostUsd: 0,
@@ -105,7 +83,7 @@ function summarizeRows(rows: UsageRow[], { windowDays, windowLabel, cutoff, now 
 
   for (const row of rows) {
     const at = Date.parse(row.created_at || "");
-    if (!Number.isFinite(at) || at < cutoffMs) continue;
+    if (!Number.isFinite(at) || at < cutoffMs || at > now.getTime()) continue;
     if (row.created_at && (!summary.lastUsedAt || row.created_at > summary.lastUsedAt)) {
       summary.lastUsedAt = row.created_at;
     }
@@ -114,21 +92,28 @@ function summarizeRows(rows: UsageRow[], { windowDays, windowLabel, cutoff, now 
       const meta = safeJson(row.metadata_json);
       if (meta.conversation_id) conversationIds.add(String(meta.conversation_id));
       summary.turns += 1;
-      const input = tokenCount(row.input_tokens);
-      const cached = tokenCount(row.cached_input_tokens);
-      const output = tokenCount(row.output_tokens);
+      // Old rows kept provider-shaped input counts. New rows retain normalized
+      // usage and the price at recording time, so future rate edits cannot reprice them.
+      const saved = meta.accounting as ReturnType<typeof calculateAlfredUsage> | undefined;
+      const accounting = saved?.version === 1 ? saved : calculateAlfredUsage(String(row.model || ""), {
+        input_tokens: row.input_tokens,
+        output_tokens: row.output_tokens,
+        cache_read_input_tokens: row.cached_input_tokens,
+        cache_creation_input_tokens: row.cache_creation_input_tokens ?? 0,
+      }, meta.provider);
+      const input = tokenCount(accounting.tokens.inputTokens);
+      const cached = tokenCount(accounting.tokens.cachedInputTokens);
+      const created = tokenCount(accounting.tokens.cacheCreationInputTokens);
+      const output = tokenCount(accounting.tokens.outputTokens);
       summary.inputTokens += input;
       summary.cachedInputTokens += cached;
+      summary.cacheCreationInputTokens += created;
       summary.outputTokens += output;
-
-      const price = priceForModel(row.model);
-      const uncached = Math.max(0, input - cached);
-      const cost = price
-        ? (uncached / 1e6) * price.input + (cached / 1e6) * price.cachedInput + (output / 1e6) * price.output
-        : 0;
-      const savings = price ? (cached / 1e6) * (price.input - price.cachedInput) : 0;
-      summary.estimatedCostUsd += cost;
-      summary.estimatedSavingsUsd += savings;
+      const cost = accounting.estimatedCostUsd;
+      const savings = accounting.estimatedSavingsUsd;
+      if (cost === null) summary.unpricedCalls += 1;
+      summary.estimatedCostUsd = (summary.estimatedCostUsd ?? 0) + (cost ?? 0);
+      summary.estimatedSavingsUsd = (summary.estimatedSavingsUsd ?? 0) + (savings ?? 0);
 
       const model = String(row.model || "unknown");
       if (!summary.byModel[model]) summary.byModel[model] = emptyByModel();
@@ -137,8 +122,10 @@ function summarizeRows(rows: UsageRow[], { windowDays, windowLabel, cutoff, now 
       m.calls += 1;
       m.inputTokens += input;
       m.cachedInputTokens += cached;
+      m.cacheCreationInputTokens += created;
       m.outputTokens += output;
-      m.estimatedCostUsd += cost;
+      if (cost === null) m.unpricedCalls += 1;
+      m.estimatedCostUsd = (m.estimatedCostUsd ?? 0) + (cost ?? 0);
     } else if (row.event_type === "alfred_tool_call") {
       const meta = safeJson(row.metadata_json);
       const name = String(meta.tool || "unknown");
@@ -155,10 +142,11 @@ function summarizeRows(rows: UsageRow[], { windowDays, windowLabel, cutoff, now 
   summary.cacheHitRate = summary.inputTokens
     ? roundRate(summary.cachedInputTokens / summary.inputTokens)
     : 0;
-  summary.estimatedCostUsd = roundMoney(summary.estimatedCostUsd);
-  summary.estimatedSavingsUsd = roundMoney(summary.estimatedSavingsUsd);
+  const allUnpriced = summary.turns > 0 && summary.unpricedCalls === summary.turns;
+  summary.estimatedCostUsd = allUnpriced ? null : roundMoney(summary.estimatedCostUsd);
+  summary.estimatedSavingsUsd = allUnpriced ? null : roundMoney(summary.estimatedSavingsUsd);
   for (const m of Object.values(summary.byModel)) {
-    if (m) m.estimatedCostUsd = roundMoney(m.estimatedCostUsd);
+    if (m) m.estimatedCostUsd = m.unpricedCalls === m.calls ? null : roundMoney(m.estimatedCostUsd);
   }
 
   const byTool: AlfredUsageToolSummary[] = [...toolMap.values()].map((t) => ({
@@ -185,6 +173,8 @@ function compactWindow(summary: MutableUsageSummary): AlfredUsageWindow {
     turns: summary.turns,
     inputTokens: summary.inputTokens,
     cachedInputTokens: summary.cachedInputTokens,
+    cacheCreationInputTokens: summary.cacheCreationInputTokens,
+    unpricedCalls: summary.unpricedCalls,
     outputTokens: summary.outputTokens,
     estimatedCostUsd: summary.estimatedCostUsd,
     estimatedSavingsUsd: summary.estimatedSavingsUsd,
@@ -205,7 +195,7 @@ export async function getAlfredUsageStats(userId: string, {
   try {
     const result = await dbClient.execute({
       sql: `SELECT created_at, event_type, model, input_tokens, cached_input_tokens,
-                   output_tokens, metadata_json
+                   cache_creation_input_tokens, output_tokens, metadata_json
             FROM ea_alfred_usage
             WHERE user_id = ? AND created_at >= ?`,
       args: [userId, queryCutoff.toISOString()],
@@ -215,18 +205,21 @@ export async function getAlfredUsageStats(userId: string, {
     if (!/no such table/i.test(err instanceof Error ? err.message : "")) throw err;
   }
 
-  const summary = summarizeRows(rows, {
-    windowDays,
-    windowLabel: "rolling",
-    cutoff: windowCutoff,
-    now,
-  });
-  const monthToDate = summarizeRows(rows, {
-    windowDays: null,
-    windowLabel: "month_to_date",
-    cutoff: monthCutoff,
-    now,
-  });
-  summary.comparisonWindows = { monthToDate: compactWindow(monthToDate) };
-  return summary as AlfredUsageStats;
+  function summarize(selectedRows: UsageRow[]): AlfredUsageSummary {
+    const summary = summarizeRows(selectedRows, { windowDays, windowLabel: "rolling", cutoff: windowCutoff, now });
+    const monthToDate = summarizeRows(selectedRows, { windowDays: null, windowLabel: "month_to_date", cutoff: monthCutoff, now });
+    return { ...summary, comparisonWindows: { monthToDate: compactWindow(monthToDate) } };
+  }
+  function belongsTo(row: UsageRow, provider: "openai" | "anthropic"): boolean {
+    const meta = safeJson(row.metadata_json);
+    if (meta.provider === "openai" || meta.provider === "anthropic") return meta.provider === provider;
+    return Boolean(row.model?.startsWith(provider === "openai" ? "gpt-" : "claude-"));
+  }
+  return {
+    ...summarize(rows),
+    byProvider: {
+      openai: summarize(rows.filter((row) => belongsTo(row, "openai"))),
+      anthropic: summarize(rows.filter((row) => belongsTo(row, "anthropic"))),
+    },
+  };
 }

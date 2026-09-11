@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ComponentType } from "react";
 import { BarChart3 } from "lucide-react";
 import { getAlfredUsageStats, getEmailAiUsageStats, getEmailSearchStats } from "@/api";
-import AnimatedHeight from "@/components/shared/AnimatedHeight";
 import {
   Dialog,
   DialogContent,
@@ -15,7 +14,8 @@ import EmailSearchAnalyticsSection from "./analytics/EmailSearchAnalyticsSection
 import TriageAnalyticsSection from "./analytics/TriageAnalyticsSection";
 import FinancialEmailAnalyticsSection from "./analytics/FinancialEmailAnalyticsSection";
 
-type AnalyticsTabKey = "alfred" | "search" | "triage" | "financial";
+import AnalyticsProviderFilter, { AnalyticsProviderComparison } from "./analytics/AnalyticsProviderFilter";
+import { providerComparison, selectProviderStats, type AnalyticsTabKey, type AnalyticsProvider } from "./analytics/analyticsProviderData";
 
 interface AnalyticsTab {
   key: AnalyticsTabKey;
@@ -105,10 +105,9 @@ function SectionError({ onRetry }: { onRetry: () => void }) {
 
 export default function AiAnalyticsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [active, setActive] = useState<AnalyticsTabKey>("alfred");
+  const [provider, setProvider] = useState<AnalyticsProvider>("all");
   const [sections, retry] = useSectionData(open);
-  const current = TABS.find((tab) => tab.key === active) ?? TABS[0]!;
-  const slice = sections[active] || { loading: true };
-  const Section = current.Section;
+
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose?.(); }}>
@@ -133,18 +132,21 @@ export default function AiAnalyticsModal({ open, onClose }: { open: boolean; onC
             "linear-gradient(color-mix(in srgb, var(--sp-deep) 62%, transparent), color-mix(in srgb, var(--sp-deep) 74%, transparent))",
           ].join(", "),
         }}
-        className="max-h-[min(760px,calc(100vh-2rem))] overflow-y-auto border border-white/[0.08] bg-[var(--sp-panel)] p-0 text-foreground shadow-[0_20px_60px_rgba(0,0,0,0.7)] sm:max-w-[760px] max-sm:[&>[data-slot=dialog-close]]:min-h-11 max-sm:[&>[data-slot=dialog-close]]:min-w-11 [&>[data-slot=dialog-close]]:transition-[background-color,transform] [&>[data-slot=dialog-close]]:hover:bg-white/10 [&>[data-slot=dialog-close]]:focus-visible:ring-2 [&>[data-slot=dialog-close]]:focus-visible:ring-primary/60 motion-safe:[&>[data-slot=dialog-close]]:hover:-translate-y-px motion-safe:[&>[data-slot=dialog-close]]:focus-visible:-translate-y-px [&>[data-slot=dialog-close]]:active:scale-95 motion-reduce:[&>[data-slot=dialog-close]]:transform-none motion-reduce:[&>[data-slot=dialog-close]]:transition-none"
+        className="max-h-[calc(100dvh-2rem)] grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden border border-white/[0.08] bg-[var(--sp-panel)] p-0 text-foreground shadow-[0_20px_60px_rgba(0,0,0,0.7)] sm:max-w-[760px] max-sm:[&>[data-slot=dialog-close]]:min-h-11 max-sm:[&>[data-slot=dialog-close]]:min-w-11 [&>[data-slot=dialog-close]]:transition-[background-color,transform] [&>[data-slot=dialog-close]]:hover:bg-white/10 [&>[data-slot=dialog-close]]:focus-visible:ring-2 [&>[data-slot=dialog-close]]:focus-visible:ring-primary/60 motion-safe:[&>[data-slot=dialog-close]]:hover:-translate-y-px motion-safe:[&>[data-slot=dialog-close]]:focus-visible:-translate-y-px [&>[data-slot=dialog-close]]:active:scale-95 motion-reduce:[&>[data-slot=dialog-close]]:transform-none motion-reduce:[&>[data-slot=dialog-close]]:transition-none"
       >
         <DialogHeader className="border-b border-white/[0.07] px-5 py-4">
           <div className="flex items-start gap-3">
-            <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/[0.10] text-primary">
+            <div className="mt-0.5 hidden size-8 sm:flex shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/[0.10] text-primary">
               <BarChart3 size={16} />
             </div>
-            <div className="min-w-0">
+            <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 pr-7">
               <DialogTitle className="text-[13px] font-semibold tracking-[1.8px] text-foreground uppercase">
                 AI analytics
               </DialogTitle>
-              <DialogDescription className="mt-1 max-w-2xl text-[12px] leading-relaxed text-muted-foreground/75">
+              <div className="col-start-2 row-start-1 sm:row-span-2">
+                <AnalyticsProviderFilter value={provider} onChange={setProvider} />
+              </div>
+              <DialogDescription className="col-span-2 mt-1 max-w-2xl text-[12px] leading-relaxed text-muted-foreground/75 sm:col-span-1">
                 Alfred, email search, triage, and financial-email model usage.
               </DialogDescription>
             </div>
@@ -173,14 +175,38 @@ export default function AiAnalyticsModal({ open, onClose }: { open: boolean; onC
           })}
         </div>
 
-        <AnimatedHeight hold={slice.loading}>
-          <div role="tabpanel" aria-busy={Boolean(slice.loading)} className="p-5">
-            {slice.loading ? <p role="status" className="sr-only">Loading analytics…</p> : null}
-            {slice.loading ? <SectionSkeleton /> : null}
-            {slice.error ? <SectionError onRetry={() => retry(active)} /> : null}
-            {slice.data ? <Section stats={slice.data as never} /> : null}
-          </div>
-        </AnimatedHeight>
+        {/* Overlapping grid cells reserve the tallest section/provider's natural height.
+            Inactive panels affect sizing but cannot be seen, focused, or read. */}
+        <div className="grid min-h-0 grid-rows-[minmax(0,1fr)]">
+          {TABS.flatMap(({ key, Section }) => (["all", "openai", "anthropic"] as const).map((panelProvider) => {
+            const slice = sections[key] || { loading: true };
+            const selectedStats = selectProviderStats(key, slice.data, panelProvider);
+            const comparison = providerComparison(key, slice.data);
+            const selected = key === active && panelProvider === provider;
+            return (
+              <div
+                key={`${key}-${panelProvider}`}
+                role="tabpanel"
+                aria-hidden={!selected}
+                inert={!selected}
+                aria-busy={Boolean(slice.loading)}
+                className={`col-start-1 row-start-1 min-h-0 overflow-y-auto overscroll-contain p-5 ${selected ? "" : "invisible"}`}
+              >
+                {panelProvider === "all" && comparison && !slice.loading && !slice.error && (
+                  <div className="mb-4"><AnalyticsProviderComparison comparison={comparison} /></div>
+                )}
+                {slice.loading ? <p role="status" className="sr-only">Loading analytics…</p> : null}
+                {slice.loading ? <SectionSkeleton /> : null}
+                {slice.error ? <SectionError onRetry={() => retry(key)} /> : null}
+                {slice.data && key === "search" && panelProvider === "anthropic" ? (
+                  <p className="text-[12px] leading-relaxed text-muted-foreground">Email Search embeddings use OpenAI. Anthropic has no embedding usage in this section.</p>
+                ) : selectedStats ? <Section stats={selectedStats as never} /> : slice.data ? (
+                  <p className="text-[12px] text-muted-foreground">Provider analytics are unavailable for this section.</p>
+                ) : null}
+              </div>
+            );
+          }))}
+        </div>
       </DialogContent>
     </Dialog>
   );

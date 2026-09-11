@@ -22,6 +22,7 @@ Build-time fictional walkthrough (`VITE_EA_DEMO=1`). `src/api.ts` routes demo re
 - `snapshotRows.ts` — snapshot row collection and lookup helpers.
 - `snapshotAdapter.ts` — in-memory snapshot history, mail actions, read state, and body/search responses.
 - `emailAttachments.ts` — local fictional attachment descriptors and content.
+- `alfredUsageData.ts` — fictional Alfred usage with provider-specific summaries; no assistant calls
 - `emailAiUsageData.ts` — fictional email-AI usage and legacy triage statistics.
 - `financialHistory.ts` — a two-email fictional bill journey and saved history metadata; related source bodies use the protected demo reader.
 - `financialActivity.ts` — shared fictional imported history plus managed completed, processing and uncertain examples; old-target binding stays inert.

@@ -16,8 +16,8 @@ Cross-domain infrastructure: config, account canonicalization, settings validati
 - `fetch-with-timeout.ts` — shared timeout helper for external provider fetches and non-fetch async operations
 - `ai-usage.ts` — scoped email-AI run attribution and idempotent, best-effort production per-provider-call ledger; tagged evaluations bypass accounting writes
 - `ai-usage-diagnostics.ts` — allowlisted response measurements and normalized failure categories; never raw provider/error content
-- `ai-usage-tokens.ts` — OpenAI/Anthropic cache-token normalization and nullable standard-text pricing estimates
-- `ai-usage-stats.ts` — owner/window/context-isolated triage and financial-email ledger rollups
+- `ai-usage-tokens.ts` — OpenAI/Anthropic cache-token normalization and shared, source-checked standard-text pricing and net cache-savings estimates
+- `ai-usage-stats.ts` — owner/window/context/provider-isolated triage and financial-email ledger rollups
 - `provider-reauth.ts` — OAuth reconnect signaling: check for `invalid_grant` errors, flag/clear needs-reauth on accounts and Todoist
 - `canonical-url.ts` — canonical-origin normalization, legacy import, persistence, WebAuthn derivation, and provider callback URL projection
 - `instance-credential-registry.ts` — code allowlist and provider-neutral metadata for deployment-wide credentials
@@ -35,5 +35,7 @@ Cross-domain infrastructure: config, account canonicalization, settings validati
 - The cron composition root lives at `server/scheduler.ts`, not here — it imports from every domain.
 
 ## Related
+
+- `AI_PRICING.md` — official pricing audit, coverage and accounting limits
 
 - `server/routes/settings.ts` — main consumer of settings/encryption helpers

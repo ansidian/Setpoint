@@ -58,21 +58,23 @@ export function normalizeAiUsage(provider: "openai" | "anthropic", raw: unknown)
   };
 }
 
-// Standard text API prices, USD / 1M tokens, checked 2026-09-03.
+// Standard text API prices, USD / 1M tokens, checked 2026-09-10.
 // https://developers.openai.com/api/docs/pricing
 // https://platform.claude.com/docs/en/about-claude/pricing
-// Deliberately do not prefix-match arbitrary variants (e.g. -pro). Unknown
+// Deliberately do not prefix-match arbitrary variants. Unknown
 // models, nonstandard service tiers, and unsupported long contexts stay unpriced.
-const PRICING_VERSION = "standard-text-2026-09-03";
+const PRICING_VERSION = "standard-text-2026-09-10";
 type Price = { input: number; cached: number; output: number };
 const OPENAI: Record<string, Price> = {
   "gpt-5.6-sol": { input: 4, cached: 0.4, output: 20 },
   "gpt-5.6-terra": { input: 2, cached: 0.2, output: 12 },
   "gpt-5.6-luna": { input: 0.2, cached: 0.02, output: 1.2 },
   "gpt-5.5": { input: 5, cached: 0.5, output: 30 },
+  "gpt-5.5-pro": { input: 30, cached: 30, output: 180 },
   "gpt-5.4": { input: 2.5, cached: 0.25, output: 15 },
   "gpt-5.4-mini": { input: 0.75, cached: 0.075, output: 4.5 },
   "gpt-5.4-nano": { input: 0.2, cached: 0.02, output: 1.25 },
+  "gpt-5.4-pro": { input: 30, cached: 30, output: 180 },
 };
 const ANTHROPIC: Record<string, Price> = {
   "claude-haiku-4-5": { input: 1, cached: 0.1, output: 5 },
@@ -80,25 +82,44 @@ const ANTHROPIC: Record<string, Price> = {
   "claude-sonnet-4-6": { input: 3, cached: 0.3, output: 15 },
   "claude-opus-4-5": { input: 5, cached: 0.5, output: 25 },
   "claude-opus-4-6": { input: 5, cached: 0.5, output: 25 },
+  "claude-opus-4-7": { input: 5, cached: 0.5, output: 25 },
+  "claude-opus-4-8": { input: 5, cached: 0.5, output: 25 },
+  "claude-opus-5": { input: 5, cached: 0.5, output: 25 },
+  "claude-sonnet-5": { input: 2, cached: 0.2, output: 10 },
+  "claude-fable-5": { input: 10, cached: 1, output: 50 },
+  "claude-mythos-5": { input: 10, cached: 1, output: 50 },
+  "claude-fable-5-1": { input: 10, cached: 0.25, output: 50 },
+  "claude-mythos-5-1": { input: 10, cached: 0.25, output: 50 },
 };
 
 export function estimateAiUsageCost(provider: "openai" | "anthropic", model: string, tokens: AiUsageTokens, serviceTier?: unknown): {
-  estimatedCostUsd: number | null; pricingVersion: string | null;
+  estimatedCostUsd: number | null; estimatedSavingsUsd: number | null; pricingVersion: string | null;
 } {
-  const unknown = { estimatedCostUsd: null, pricingVersion: null };
+  const unknown = { estimatedCostUsd: null, estimatedSavingsUsd: null, pricingVersion: null };
   if (serviceTier && serviceTier !== "default" && serviceTier !== "standard") return unknown;
   const base = model.replace(provider === "openai" ? /-\d{4}-\d{2}-\d{2}$/ : /-\d{8}$/, "");
   const price = (provider === "openai" ? OPENAI : ANTHROPIC)[base];
   const { inputTokens: input, outputTokens: output, cachedInputTokens: cached,
     cacheCreationInputTokens: created, cacheCreation5mTokens: fiveMin, cacheCreation1hTokens: oneHour } = tokens;
+  const openAiLongContext = provider === "openai" && base.startsWith("gpt-5.6-");
+  const claudeLongContext = provider === "anthropic"
+    && !["claude-haiku-4-5", "claude-sonnet-4-5", "claude-opus-4-5"].includes(base);
+  const maxPricedInput = openAiLongContext || claudeLongContext ? 1_000_000
+    : provider === "openai" ? 272_000 : 200_000;
   if (!price || input === null || output === null || cached === null || created === null
-    || fiveMin === null || oneHour === null || input > 200_000
+    || fiveMin === null || oneHour === null || input > maxPricedInput
     || cached + created > input) return unknown;
   if (provider === "anthropic" && fiveMin + oneHour !== created) return unknown;
   if (provider === "openai" && created > 0 && !base.startsWith("gpt-5.6-")) return unknown;
   const writesCost = provider === "openai" ? created * price.input * 1.25
     : fiveMin * price.input * 1.25 + oneHour * price.input * 2;
-  const cost = ((input - cached - created) * price.input + cached * price.cached
-    + writesCost + output * price.output) / 1_000_000;
-  return { estimatedCostUsd: cost, pricingVersion: PRICING_VERSION };
+  // GPT-5.6 premiums apply to the full request above 272K. Older OpenAI
+  // session-wide premiums remain unpriced because this ledger is per call.
+  const inputMultiplier = openAiLongContext && input > 272_000 ? 2 : 1;
+  const outputMultiplier = inputMultiplier === 2 ? 1.5 : 1;
+  const cost = (((input - cached - created) * price.input + cached * price.cached
+    + writesCost) * inputMultiplier + output * price.output * outputMultiplier) / 1_000_000;
+  // Savings are net of cache-write premiums, relative to all input at base price.
+  const savings = (input * price.input * inputMultiplier + output * price.output * outputMultiplier) / 1_000_000 - cost;
+  return { estimatedCostUsd: cost, estimatedSavingsUsd: savings, pricingVersion: PRICING_VERSION };
 }

@@ -70,9 +70,9 @@ it("aggregates queries, tokens, cache hit, model split, and tools", async () => 
 
   expect(stats.queries).toBe(2); // distinct conversation ids
   expect(stats.turns).toBe(3);
-  expect(stats.inputTokens).toBe(2700);
+  expect(stats.inputTokens).toBe(4500);
   expect(stats.cachedInputTokens).toBe(1800);
-  expect(stats.cacheHitRate).toBeCloseTo(1800 / 2700, 4);
+  expect(stats.cacheHitRate).toBeCloseTo(1800 / 4500, 4);
   expect(stats.byModel["claude-sonnet-4-6"]!.calls).toBe(3);
   expect(stats.tools.totalCalls).toBe(3);
   expect(stats.tools.distinctTools).toBe(2);
@@ -126,6 +126,9 @@ it("queries durable usage with owner and wider-cutoff isolation", async () => {
     await db.executeMultiple(readFileSync(
       new URL("../db/migrations/016_alfred_usage.sql", import.meta.url),
       "utf8",
+    ));
+    await db.executeMultiple(readFileSync(
+      new URL("../db/migrations/019_alfred_usage_cache_creation.sql", import.meta.url), "utf8",
     ));
     const recent = turn({ conv: "owned", input: 100, at: "2026-06-13T12:00:00Z" });
     const beforeCutoff = turn({ conv: "old", input: 900, at: "2026-05-31T23:59:59Z" });

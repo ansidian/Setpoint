@@ -20,13 +20,18 @@ type AlfredAnalyticsStats = Partial<Omit<AlfredUsageStats, "byModel" | "tools" |
 // decorative colors. Order is stable per render via the row index.
 const MODEL_ACCENTS = ["var(--sp-accent)", "var(--sp-blue)", "var(--sp-cyan)", "var(--sp-green)"];
 
+function formatCost(value: number | null | undefined): string {
+  if (value == null) return "Unavailable";
+  return value < 0 ? `−${formatUsdEstimate(-value)}` : formatUsdEstimate(value);
+}
+
 export default function AlfredAnalyticsSection({ stats }: { stats: AlfredAnalyticsStats }) {
   const metrics = useMemo<MetricProps[]>(() => ([
     { label: "Queries", value: numberValue(stats?.queries), icon: Bot },
     { label: "Tool calls", value: numberValue(stats?.tools?.totalCalls), icon: Wrench },
     { label: "Cache hit", value: formatPercent(stats?.cacheHitRate), icon: Gauge, tone: "accent" },
-    { label: "Est. saved", value: formatUsdEstimate(stats?.estimatedSavingsUsd), icon: BarChart3, tone: "success" },
-    { label: "Cost", value: formatUsdEstimate(stats?.estimatedCostUsd), icon: Coins },
+    { label: "Net cache savings", value: formatCost(stats?.estimatedSavingsUsd), icon: BarChart3 },
+    { label: stats?.unpricedCalls ? "Known cost" : "Est. cost", value: formatCost(stats?.estimatedCostUsd), icon: Coins },
     { label: "Output", value: formatCompactNumber(stats?.outputTokens), icon: Layers3 },
   ]), [stats]);
   const tools = stats?.tools?.byTool || [];
@@ -44,7 +49,8 @@ export default function AlfredAnalyticsSection({ stats }: { stats: AlfredAnalyti
           Cache read
         </div>
         <p className="mt-2 text-[12px] leading-relaxed text-foreground/85">
-          Saved {formatPercent(stats?.cacheHitRate)} of input tokens via the cached tool and transcript prefix.
+          Read {formatPercent(stats?.cacheHitRate)} of input tokens from cache.
+          {" "}{formatCompactNumber(stats?.cacheCreationInputTokens)} input tokens written to cache.
         </p>
       </div>
 
@@ -107,14 +113,25 @@ export default function AlfredAnalyticsSection({ stats }: { stats: AlfredAnalyti
                   </span>
                 </div>
                 <div className="flex shrink-0 items-baseline gap-3 text-[11px]">
-                  <span className="tabular-nums text-muted-foreground/75">{numberValue(model.calls)} calls</span>
-                  <span className="tabular-nums font-semibold text-primary">{formatUsdEstimate(model.estimatedCostUsd)}</span>
+                  <span className="tabular-nums text-muted-foreground/75">{numberValue(model.calls)} {model.calls === 1 ? "call" : "calls"}</span>
+                  <span className="tabular-nums font-semibold text-primary">
+                    {formatCost(model.estimatedCostUsd)}{model.unpricedCalls && model.estimatedCostUsd != null ? " (partial)" : ""}
+                  </span>
                 </div>
               </div>
             ))}
           </div>
         </div>
       )}
+      <div className="space-y-1 text-[10px] leading-relaxed text-muted-foreground">
+        <p>Recorded model turns in the last {stats?.windowDays ?? 7} days. Estimates include cache writes; net cache savings subtract their premium.</p>
+        {Boolean(stats?.unpricedCalls) && (
+          <p className="text-[var(--sp-cream)]">
+            {stats.unpricedCalls} of {stats.turns} calls could not be priced. Cost and savings include only priced calls.
+          </p>
+        )}
+        <p>Older usage uses available recorded counts. Interrupted calls may be absent; provider billing is the final total.</p>
+      </div>
     </div>
   );
 }

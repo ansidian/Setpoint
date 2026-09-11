@@ -17,8 +17,8 @@ Alfred: the tool-calling assistant run loop behind the Alfred Panel. Domain tool
 - `alfred-types.ts` — server-local provider, conversation, dependency, usage, and run-loop contracts
 - `alfred-prompt.ts` — system prompt: Pacific date anchor, coverage, trust rules
 - `alfred-models.ts` — centralized catalog facade plus persisted Settings resolution
-- `alfred-usage.ts` — usage rows into `ea_alfred_usage` (run turns + per-tool calls)
-- `alfred-usage-stats.ts` — aggregates `ea_alfred_usage` into the Alfred analytics summary (queries, cache hit, savings, model split, per-tool latency/errors)
+- `alfred-usage.ts` — usage rows into `ea_alfred_usage` (run turns + per-tool calls), normalized accounting and versioned pricing snapshots in metadata
+- `alfred-usage-stats.ts` — aggregates `ea_alfred_usage` into the Alfred analytics summary (queries, cache reads/writes, net savings, model split, per-tool latency/errors) with separate OpenAI/Anthropic summaries
 
 (Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)
 

@@ -55,6 +55,7 @@ export interface EmailAiUsageStats {
   generatedAt: string;
   windowDays: number;
   ledgerStartedAt: string;
+  byProvider: Record<"openai" | "anthropic", EmailAiUsageStats["contexts"]>;
   contexts: Record<AiUsageRunContext, {
     triage: AiUsageCategory;
     financialEmail: AiUsageCategory;

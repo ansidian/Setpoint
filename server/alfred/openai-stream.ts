@@ -33,10 +33,10 @@ function normalizedUsage(value: unknown): Record<string, unknown> {
     ? usage.input_tokens_details as Record<string, unknown>
     : {};
   return {
-    input_tokens: Number(usage.input_tokens || 0),
-    cache_read_input_tokens: Number(details.cached_tokens || 0),
-    cache_creation_input_tokens: Number(details.cache_write_tokens || 0),
-    output_tokens: Number(usage.output_tokens || 0),
+    input_tokens: usage.input_tokens,
+    cache_read_input_tokens: details.cached_tokens,
+    cache_creation_input_tokens: details.cache_write_tokens,
+    output_tokens: usage.output_tokens,
   };
 }
 
@@ -101,7 +101,7 @@ export async function consumeOpenAiStream(
   return {
     output,
     stopReason: toolCalls.length ? "tool_use" : String(response.status || "completed"),
-    usage: normalizedUsage(response.usage),
+    usage: { ...normalizedUsage(response.usage), service_tier: response.service_tier },
     model: typeof response.model === "string" ? response.model : null,
     toolCalls,
   };

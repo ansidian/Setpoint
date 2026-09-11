@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { cleanup, render, screen, within, waitFor, fireEvent } from "@testing-library/react";
 import { afterEach, beforeEach, it, expect, vi } from "vitest";
 import AiAnalyticsModal from "./AiAnalyticsModal";
 import { demoEmailAiUsageStats } from "@/demo/emailAiUsageData";
@@ -35,11 +35,12 @@ it("recovers the failing section when Try again succeeds", async () => {
   });
 
   render(<AiAnalyticsModal open onClose={() => {}} />);
-  expect(await screen.findByText(/couldn.t load/i)).toBeTruthy();
+  const panel = within(screen.getByRole("tabpanel"));
+  expect(await panel.findByText(/couldn.t load/i)).toBeTruthy();
 
   fireEvent.click(screen.getByRole("button", { name: /try again/i }));
 
-  expect(await screen.findByText(/Queries/i)).toBeTruthy();
-  expect(screen.getByText("5")).toBeTruthy();
-  await waitFor(() => expect(screen.queryByText(/couldn.t load/i)).toBeNull());
+  expect(await panel.findByText(/Queries/i)).toBeTruthy();
+  expect(panel.getByText("5")).toBeTruthy();
+  await waitFor(() => expect(panel.queryByText(/couldn.t load/i)).toBeNull());
 });

@@ -1,3 +1,4 @@
+import { demoAlfredUsageStats } from "./alfredUsageData";
 import { DEMO_RECEIPT_UID } from "./financialReceipt";
 import { demoTaskFields } from "./taskFields";
 import { handleDemoFinances } from './financesWorkspace';
@@ -553,7 +554,7 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
     }];
   }
   if (pathname === "/api/ea/important-senders") return clone(seed.importantSenders);
-  if (pathname === "/api/alfred/usage") return { enabled: false, demo: true };
+  if (pathname === "/api/alfred/usage") return demoAlfredUsageStats();
   if (pathname === "/api/ea/email-search/usage") return { enabled: false, demo: true };
   if (pathname === "/api/ea/reminders") {
     const sourceType = url.searchParams.get("sourceType");

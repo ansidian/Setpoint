@@ -40,7 +40,11 @@ const noCalls: AiUsageCategory = { ...empty, byPurpose: {}, models: [], recentFa
 // Fictional, in-memory samples only. The UI labels this data as demo usage.
 export function demoEmailAiUsageStats(): EmailAiUsageStats {
   const now = new Date();
-  return {
+  const stats: EmailAiUsageStats = {
+    byProvider: {
+      openai: { production: { triage: structuredClone(noCalls), financialEmail: structuredClone(noCalls) }, evaluation: { triage: structuredClone(noCalls), financialEmail: structuredClone(noCalls) } },
+      anthropic: { production: { triage: structuredClone(noCalls), financialEmail: structuredClone(noCalls) }, evaluation: { triage: structuredClone(noCalls), financialEmail: structuredClone(noCalls) } },
+    },
     generatedAt: now.toISOString(), windowDays: 7,
     ledgerStartedAt: new Date(now.getTime() - 7 * 86400000).toISOString(),
     contexts: {
@@ -73,6 +77,9 @@ export function demoEmailAiUsageStats(): EmailAiUsageStats {
       evaluation: { triage: structuredClone(noCalls), financialEmail: structuredClone(noCalls) },
     },
   };
+  stats.byProvider.openai.production.triage = structuredClone(stats.contexts.production.triage);
+  stats.byProvider.anthropic.production.financialEmail = structuredClone(stats.contexts.production.financialEmail);
+  return stats;
 }
 
 export function demoLegacyTriageStats(): TriageCacheStatsResponse {
