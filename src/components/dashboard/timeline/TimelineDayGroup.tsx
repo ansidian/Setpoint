@@ -62,6 +62,14 @@ export default function TimelineDayGroup({
     [items, now, isMobile],
   );
 
+  if (items.length === 0) {
+    return isToday && showEmptyState ? (
+      <p data-testid="timeline-today-empty" style={{ margin: "0 0 12px", padding: "10px 6px", fontSize: 11.5, color: "var(--color-text-secondary, #a6adc8)" }}>
+        {emptyDescription}
+      </p>
+    ) : null;
+  }
+
   return (
     <div style={{ marginBottom: 12 }}>
       {!hideHeader && (
@@ -113,7 +121,6 @@ export default function TimelineDayGroup({
         style={{
           position: "relative",
           paddingLeft: gutter,
-          minHeight: isToday && items.length === 0 ? 28 : undefined,
           paddingTop: 4,
         }}
       >
@@ -154,41 +161,6 @@ export default function TimelineDayGroup({
             </Fragment>
           );
         })}
-        {isToday && items.length === 0 && showEmptyState ? (
-          <div
-            data-testid="timeline-today-empty"
-            style={{
-              position: "relative",
-              display: "flex",
-              flexDirection: "column",
-              gap: 3,
-              minHeight: 44,
-              justifyContent: "center",
-              padding: "3px 0 7px",
-            }}
-          >
-            <span
-              aria-hidden="true"
-              style={{
-                position: "absolute",
-                left: spineLeft - gutter - 3,
-                top: 18,
-                width: 7,
-                height: 7,
-                borderRadius: "50%",
-                border: `1px solid ${accent}99`,
-                background: "var(--sp-page)",
-                boxShadow: `0 0 6px ${accent}30`,
-              }}
-            />
-            <span style={{ fontSize: 11.5, fontWeight: 600, color: "rgba(205,214,244,0.78)" }}>
-              Today is clear
-            </span>
-            <span style={{ fontSize: 10.5, color: "var(--color-text-faint)" }}>
-              {emptyDescription}
-            </span>
-          </div>
-        ) : null}
         {nowMarkerIndex === items.length && <TimelineNowMarker now={now} accent={accent} />}
       </div>
     </div>

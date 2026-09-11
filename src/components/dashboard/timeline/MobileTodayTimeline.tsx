@@ -4,7 +4,9 @@ import { partitionTodayEvents } from "./timeline-helpers";
 import type { DashboardTimelineItem } from "./timeline-helpers";
 import type { TimelineRowJumpPayload } from "./TimelineRow";
 
-export default function MobileTodayTimeline({ items, now, accent, onJump, showEmptyState, emptyDescription, promotedDeadlineIds = [] }: {
+export default function MobileTodayTimeline({ items, now, accent, onJump, showEmptyState, emptyDescription, promotedDeadlineIds = [], earlierOpen, onEarlierToggle }: {
+  earlierOpen: boolean;
+  onEarlierToggle: (open: boolean) => void;
   items: DashboardTimelineItem[];
   now: number;
   accent: string;
@@ -18,7 +20,7 @@ export default function MobileTodayTimeline({ items, now, accent, onJump, showEm
   return (
     <>
       {earlier.length > 0 && (
-        <details className="timeline-earlier">
+        <details className="timeline-earlier" open={earlierOpen} onToggle={(event) => onEarlierToggle(event.currentTarget.open)}>
           <summary className="timeline-mobile-control">
             <ChevronRight size={14} aria-hidden="true" />
             <span>Earlier today</span>

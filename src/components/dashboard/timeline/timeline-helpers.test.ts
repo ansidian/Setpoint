@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildTimelineGroups,
-  buildTodayTomorrowRestGroups, partitionTodayEvents
+  buildTodayTomorrowRestGroups, partitionTodayEvents, toggleTimelineFilter
 } from "./timeline-helpers";
 
 describe("timeline helpers", () => {
@@ -113,5 +113,18 @@ describe("buildTodayTomorrowRestGroups", () => {
     expect(result.rest[0]![1]).toHaveLength(2);
     expect(result.rest[1]![1]).toHaveLength(1);
     expect(result.restCount).toBe(3);
+  });
+});
+
+describe("timeline filter selection", () => {
+  it.each([
+    [{ events: true, deadlines: true }, "events", { events: false, deadlines: true }],
+    [{ events: true, deadlines: true }, "deadlines", { events: true, deadlines: false }],
+    [{ events: true, deadlines: false }, "events", { events: true, deadlines: false }],
+    [{ events: false, deadlines: true }, "deadlines", { events: false, deadlines: true }],
+    [{ events: true, deadlines: false }, "deadlines", { events: true, deadlines: true }],
+    [{ events: false, deadlines: true }, "events", { events: true, deadlines: true }],
+  ] as const)("keeps a source enabled when toggling %s / %s", (before, key, after) => {
+    expect(toggleTimelineFilter(before, key)).toEqual(after);
   });
 });

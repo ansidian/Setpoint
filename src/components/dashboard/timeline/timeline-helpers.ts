@@ -17,6 +17,12 @@ export interface TimelineFilters {
   deadlines: boolean;
 }
 
+/** A timeline must keep at least one source visible. */
+export function toggleTimelineFilter(filters: TimelineFilters, key: keyof TimelineFilters): TimelineFilters {
+  const next = { ...filters, [key]: !filters[key] };
+  return next.events || next.deadlines ? next : filters;
+}
+
 export interface DashboardTimelineItem {
   kind: string;
   startMs?: number;

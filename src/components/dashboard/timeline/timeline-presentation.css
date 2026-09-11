@@ -8,9 +8,9 @@
 .timeline-filter[aria-checked="false"] > svg { opacity:0; }
 .timeline-filter > svg { color:var(--timeline-accent); }
 .timeline-filter,.timeline-disclosure { transition:transform 150ms ease,background 150ms ease,border-color 150ms ease; }
-.timeline-filter:hover,.timeline-disclosure:hover { background:rgba(255,255,255,.045); transform:translateY(-1px); }
+.timeline-filter:enabled:hover,.timeline-disclosure:hover { background:rgba(255,255,255,.045); transform:translateY(-1px); }
 .timeline-filter:focus-visible:where([data-sp-keyboard-focus="true"] *),.timeline-disclosure:focus-visible:where([data-sp-keyboard-focus="true"] *) { outline:2px solid var(--sp-accent); outline-offset:2px; transform:translateY(-1px); }
-.timeline-filter:active,.timeline-disclosure:active { transform:scale(.985); background:rgba(255,255,255,.065); }
+.timeline-filter:enabled:active,.timeline-disclosure:active { transform:scale(.985); background:rgba(255,255,255,.065); }
 .timeline-refresh { display:inline-flex; align-items:center; gap:6px; color:var(--color-text-secondary,#a6adc8); font-size:11px; }
 .timeline-refresh > svg { animation:spin 1.6s linear infinite; }
 .timeline-disclosure { border-radius:6px; }
@@ -35,3 +35,8 @@
 
 .timeline-row--past .timeline-row-metadata,.timeline-row--past .timeline-row-status { color:var(--color-text-faint); }
 .timeline-row--past .timeline-row-status { background:rgba(255,255,255,.025); }
+
+/* A persistent status slot keeps refresh feedback out of the control layout. */
+.timeline-refresh-slot { position:relative; display:inline-flex; flex-shrink:0; }
+.timeline-refresh-visible { position:absolute; inset:0; white-space:nowrap; }
+.timeline-refresh-slot > [aria-hidden=true] > svg { animation:none; }

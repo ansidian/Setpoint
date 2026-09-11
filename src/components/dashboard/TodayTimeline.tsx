@@ -10,6 +10,8 @@ import {
   buildTodayTomorrowRestGroups,
   formatFullDateForOffset,
   shouldHoldPartialTimeline,
+  partitionTodayEvents,
+  toggleTimelineFilter,
 } from "./timeline/timeline-helpers";
 import TimelineSkeleton from "./timeline/TimelineSkeleton";
 import type { DashboardDeadline } from "../../context/dashboardTaskProjection";
@@ -66,6 +68,7 @@ function TodayTimeline({
   const [now, setNow] = useState(() => Date.now());
   const [tomorrowOpen, setTomorrowOpen] = useState(false);
   const [restOpen, setRestOpen] = useState(false);
+  const [earlierOpen, setEarlierOpen] = useState(false);
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 30000);
@@ -105,6 +108,14 @@ function TodayTimeline({
     [filtered, nowDayKey, filters],
   );
 
+  const hasEarlier = isMobile && partitionTodayEvents(ttr.today, now).earlier.length > 0;
+  const allGroupsCollapsed = !tomorrowOpen && (ttr.restCount <= 0 || !restOpen) && (!hasEarlier || !earlierOpen);
+  const toggleAllGroups = () => {
+    setTomorrowOpen(allGroupsCollapsed);
+    setRestOpen(allGroupsCollapsed);
+    setEarlierOpen(allGroupsCollapsed);
+  };
+
   const todayLabel = formatFullDateForOffset(0, now);
   const holdPartialTimeline = shouldHoldPartialTimeline({
     eventLoadingState,
@@ -142,9 +153,11 @@ function TodayTimeline({
         filters={filters}
         isMobile={isMobile}
         now={now}
-        onToggleFilter={(key) => setFilters((prev) => ({ ...prev, [key]: !prev[key] }))}
+        onToggleFilter={(key) => setFilters((prev) => toggleTimelineFilter(prev, key))}
         showRefreshStatus={showRefreshStatus}
         todayLabel={todayLabel}
+        allGroupsCollapsed={allGroupsCollapsed}
+        onToggleAll={showEventSkeletons ? undefined : toggleAllGroups}
       />
 
       <div
@@ -165,6 +178,8 @@ function TodayTimeline({
           <>
             {isMobile ? (
               <MobileTodayTimeline
+                earlierOpen={earlierOpen}
+                onEarlierToggle={setEarlierOpen}
                 items={ttr.today}
                 now={now}
                 accent={accent}
