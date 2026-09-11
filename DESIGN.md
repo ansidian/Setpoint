@@ -304,6 +304,15 @@ Utilities is the default view, with Coming due and Recorded this month as primar
 
 Event and deadline editors use **Reminders** as the section title and **Delivered via Discord** as secondary text. Deadlines also clarify that these are separate from Todoist notifications; reserve “webhook” for connection setup. Place the custom date/time trigger inline with preset chips, wrapping naturally when space is tight. Custom pickers use the shared floating-panel disclosure animation and reduced-motion behavior. Date/time pickers size to their bounded content without internal scrolling; scrollable suggestion lists remain separate.
 
+### Layout Stability
+
+Keep repeated navigation and controls stationary across tabs, filters, provider selections, loading, and empty states. Animate feedback without moving the next interaction target.
+
+- Centered compact dialogs reserve the largest relevant content state, capped by the viewport. Keep the header and navigation outside the scrolling content. Inactive sizing content must be invisible, inert, and excluded from accessibility; never mount duplicate stateful forms or duplicate data requests just to measure them.
+- Large list/detail workspaces retain their existing viewport-bounded frame. Keep filters in the header and pagination outside the scrolling records. Disable pagination while loading; do not remove it or move it after the last row.
+- Reserve a slot for transient status and stable scrollbar gutters where overflow changes would move controls horizontally. Calendar rows retain consistent heights across dates and months.
+- Preserve intentional disclosures, responsive reflow, and natural document reading. Do not apply full-viewport heights to compact dialogs, arbitrary fixed heights across the app, or height animations that continually recenter an active control.
+
 ### Floating Panels
 
 Floating panels must be portaled to `document.body`, fixed-positioned from the trigger rect, opaque `#16161e`, isolated with `isolation: isolate`, and scroll-contained. Outside click must check both trigger and portal refs.

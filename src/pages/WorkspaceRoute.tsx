@@ -7,7 +7,6 @@ import FinancialWorkspace from '../components/financial/FinancialWorkspace';
 import { financialReference, financialSearch, legacyFinancialHref } from '../components/financial/financialNavigation';
 import { useFinancialNavigationGuard } from '../components/financial/useFinancialNavigationGuard';
 import AnimatedCollapse from '../components/shared/AnimatedCollapse';
-import AnimatedHeight from '../components/shared/AnimatedHeight';
 import { ArrowLeft, CircleAlert, Trash2 } from 'lucide-react';
 
 /** One foreground owner; repair hides (rather than unmounts) the retained financial editor. */
@@ -68,12 +67,12 @@ export default function WorkspaceRoute({ children }: { children:ReactNode }) {
         overlayClassName="bg-[var(--sp-deep)]/70" overlayStyle={{ backdropFilter:'none' }}
         showCloseButton={!financial && !repair}
         className="isolate flex flex-col gap-0 overflow-hidden bg-[#16161e] p-0 [&>[data-slot=dialog-close]]:right-4 [&>[data-slot=dialog-close]]:top-4 [&>[data-slot=dialog-close]]:size-9 [&>[data-slot=dialog-close]]:transition-transform motion-safe:[&>[data-slot=dialog-close]]:hover:-translate-y-px motion-safe:[&>[data-slot=dialog-close]]:focus-visible:-translate-y-px [&>[data-slot=dialog-close]]:focus-visible:ring-2 [&>[data-slot=dialog-close]]:active:scale-95 motion-reduce:[&>[data-slot=dialog-close]]:transition-none">
-        <AnimatedHeight><div className="workspace-foreground-frame" data-financial={financial}>
+        <div className="workspace-foreground-frame">
         <AnimatedCollapse open={Boolean(guard.pending)} style={{ flexShrink:0 }}><section className="financial-discard" role="alert" aria-label="Unsaved changes"><h3><CircleAlert size={16} />Discard this draft?</h3><p>Your changes have not been saved to Actual.</p><div className="financial-actions"><button autoFocus className="financial-button financial-primary" onClick={guard.keep}><ArrowLeft size={14} />Keep editing</button><button className="financial-button financial-danger" onClick={guard.discard}><Trash2 size={14} />Discard draft and continue</button></div></section></AnimatedCollapse>
         {repair && <div className="financial-toolbar"><h2 id="financial-heading">Actual connection</h2><button className="financial-button financial-action financial-back" onClick={returnRecord}><ArrowLeft size={14} />{new URLSearchParams(retainedSearch || '').get('financial') === 'record' ? 'Back to record' : 'Back to activity'}</button></div>}
         {retainedSearch && <div className="financial-retained flex min-h-0 flex-col" inert={Boolean(guard.pending)} hidden={!financial} style={!financial ? { display:'none' } : undefined}><FinancialWorkspace search={financial ? search : retainedSearch} onNavigate={navigateFinancial} onClose={close} onRepair={repairConnection} onDirty={setDraftDirty} registerBack={registerBack} requestDiscard={request} /></div>}
         {!financial && <div className="flex min-h-0 flex-1 flex-col"><Outlet /></div>}
-        </div></AnimatedHeight>
+        </div>
       </DialogContent>
     </Dialog>
   </>;

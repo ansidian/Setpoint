@@ -12,8 +12,7 @@
 [data-workspace-foreground=finance] { --workspace-width:clamp(1024px,86vw,1680px); }
 [data-workspace-foreground=record] { --workspace-width:clamp(640px,52vw,1000px); }
 .workspace-foreground-frame { display:flex; flex-direction:column; height:var(--workspace-height); max-height:var(--workspace-height); }
-/* Shared AnimatedHeight owns content changes; viewport caps apply immediately, including during resize. */
-.workspace-foreground-frame[data-financial=true] { height:auto; }
+/* Keep the workspace chrome stationary through filters, loading, and record changes. */
 @media (min-width:1200px) {
   [data-workspace-foreground] { --workspace-inline-inset:clamp(16px,2vw,64px); --workspace-block-inset:clamp(16px,3dvh,64px); }
 }
@@ -248,3 +247,9 @@
 .financial-completion-status { margin-top:20px; padding:16px; }
 .financial-completion-status p { max-width:70ch; }
 .financial-status-panel[data-tone=progress] { border-color:color-mix(in srgb,var(--sp-blue) 22%,transparent); background:color-mix(in srgb,var(--sp-blue) 5%,transparent); color:var(--sp-blue); }
+
+/* Pagination belongs to the fixed list frame, outside its scrolling records. */
+.financial-list { display:flex; flex-direction:column; overflow:hidden; padding:0; }
+.financial-list-scroll { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; scrollbar-gutter:stable; padding:12px; }
+.financial-pagination { display:flex; flex-shrink:0; flex-wrap:wrap; align-items:center; gap:8px; padding:12px; border-top:1px solid #ffffff18; font-variant-numeric:tabular-nums; }
+.financial-detail { scrollbar-gutter:stable; }

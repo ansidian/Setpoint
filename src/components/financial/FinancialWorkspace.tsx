@@ -118,7 +118,8 @@ export default function FinancialWorkspace({ search,onNavigate,onClose,onRepair,
     </div>}
     {displayError && <div className="financial-toolbar financial-error" role="alert">{displayError} Saved details and entered drafts are retained.<button className="financial-button" disabled={loading} onClick={refresh}>Try again</button></div>}
     <div className="financial-body" data-selected={showDetail}>
-      {list && <div className="financial-list" ref={listRef} onScroll={event => scrolls.current.set(queryKey,event.currentTarget.scrollTop)} aria-label="Financial activity list" aria-busy={loading}>
+      {list && <div className="financial-list" aria-label="Financial activity list" aria-busy={loading}>
+        <div className="financial-list-scroll" ref={listRef} onScroll={event => scrolls.current.set(queryKey,event.currentTarget.scrollTop)}>
         <AnimatedHeight hold={loading}>
         {loading && !page && <p role="status" className="financial-note">Loading financial activity…</p>}
         <div className="space-y-4 p-1">{groups.filter(group => group.items.length).map(group => <section key={group.label || 'activity'} aria-label={group.label || 'Activity'}>
@@ -132,8 +133,13 @@ export default function FinancialWorkspace({ search,onNavigate,onClose,onRepair,
         </button>)}</div></section>)}</div>
         {list && view === 'needs_attention' && selected?.status === 'completed' && <div className="financial-note p-3 space-y-3"><p>This record has moved to Completed.</p><button className="financial-button" onClick={() => changeQuery({ view:'completed' })}>View completed activity</button></div>}
         {page?.total === 0 && !(view === 'needs_attention' && selected?.status === 'completed') && <p className="financial-note p-3">{query.source || query.runId ? 'No records match these filters.' : view === 'completed' ? 'No completed financial activity yet.' : view === 'all' ? 'No financial activity yet.' : 'No financial records need your attention.'}</p>}
-        {page && page.total > 20 && <div className="flex flex-wrap gap-2 mt-4"><button className="financial-button" disabled={loading || !page.offset} onClick={() => changeQuery({ offset:Math.max(0,page.offset - 20) })}>Previous</button><button className="financial-button" disabled={loading || page.offset + 20 >= page.total} onClick={() => changeQuery({ offset:page.offset + 20 })}>Next</button><p>{page.offset + 1}–{Math.min(page.offset + 20,page.total)} of {page.total}</p></div>}
         </AnimatedHeight>
+        </div>
+        <div className="financial-pagination" aria-label="Financial activity pagination">
+          <button className="financial-button" disabled={loading || !page || !page.offset} onClick={() => changeQuery({ offset:Math.max(0,(page?.offset ?? 0) - 20) })}>Previous</button>
+          <button className="financial-button" disabled={loading || !page || page.offset + 20 >= page.total} onClick={() => changeQuery({ offset:(page?.offset ?? 0) + 20 })}>Next</button>
+          <p>{loading ? 'Loading…' : page ? page.total ? `${page.offset + 1}–${Math.min(page.offset + 20,page.total)} of ${page.total}` : '0 records' : 'Unavailable'}</p>
+        </div>
       </div>}
       <div className="financial-detail">
         <AnimatedHeight hold={Boolean(reference) && !selected && !displayError}>

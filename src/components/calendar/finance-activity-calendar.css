@@ -70,8 +70,8 @@
 .fac-legend{flex-wrap:wrap;gap:8px 12px}
 .fac-scheduled{position:absolute;top:7px;right:3px;display:flex;align-items:center;gap:2px;font-size:9px}
 .fac-day:has(.fac-scheduled) .fac-transfer-mark{position:static}
-.fac-day:has(.fac-scheduled){min-height:64px}
-@media(max-width:767px){.fac-scheduled{top:3px;right:2px}.fac-scheduled>span{display:none}.fac-day:has(.fac-scheduled){min-height:44px}}
+.fin-activity-calendar[data-payments=true] .fac-day{min-height:64px}
+@media(max-width:767px){.fac-scheduled{top:3px;right:2px}.fac-scheduled>span{display:none}.fin-activity-calendar[data-payments=true] .fac-day{min-height:44px}}
 
 .fin-activity-calendar[data-payments=true] .fac-markers i[data-flow=out]{background:var(--sp-income)}
 .fin-workspace .fac-day-summary>.fac-payment-list{display:block;margin-top:8px}
