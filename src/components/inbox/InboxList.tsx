@@ -165,10 +165,10 @@ export default function InboxList({
   const effectiveCollapsed: CollapsedLanes = {
     ...(activeSnapshotMode ? { handled: true, untriaged_read: true } : {}),
     ...collapsed,
-    ...(lane === "handled" ? { handled: filterDisclosure.collapsed } : {}),
+    ...(lane !== "__all" ? { [lane]: filterDisclosure.collapsed } : {}),
   };
   const toggleLane = (k: string) => {
-    if (k === "handled" && lane === "handled") {
+    if (k === lane && lane !== "__all") {
       setFilterDisclosure(value => ({ ...value, collapsed: !value.collapsed }));
       return;
     }
@@ -197,8 +197,8 @@ export default function InboxList({
   const allLanesCollapsed = visibleLaneKeys.length > 0 && visibleLaneKeys.every(key => effectiveCollapsed[key]);
   const toggleAllLanes = () => {
     const nextCollapsed = !allLanesCollapsed;
-    setCollapsed(current => ({ ...current, ...Object.fromEntries(visibleLaneKeys.map(key => [key, nextCollapsed])) }));
-    if (lane === "handled") setFilterDisclosure(current => ({ ...current, collapsed: nextCollapsed }));
+    setCollapsed(current => ({ ...current, ...Object.fromEntries(visibleLaneKeys.filter(key => key !== lane).map(key => [key, nextCollapsed])) }));
+    if (lane !== "__all") setFilterDisclosure(current => ({ ...current, collapsed: nextCollapsed }));
   };
   const laneToggleLabel = allLanesCollapsed ? "Expand all lanes" : "Collapse all lanes";
 
