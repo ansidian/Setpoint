@@ -22,7 +22,7 @@ export default function MoneyAheadCard({ bills, loading, configured, health, onO
       <span className="dashboard-finance-amount">{typeof bill.amount === "number" ? formatAmount(Math.abs(bill.amount)) : "Amount unknown"}</span>
     </button>
   );
-  return <section className="dashboard-finance-card" aria-label="Money ahead">
+  return <section data-dashboard-detail-region="true" className="dashboard-finance-card" aria-label="Money ahead">
     <div className="dashboard-finance-heading"><h3><Wallet size={15} />Money Ahead</h3><span className="dashboard-finance-caption">Today + next 7 days</span></div>
     {!configured ? <p className="dashboard-finance-note">Connect Actual Budget in Settings to see scheduled obligations.</p>
       : loading && !upcoming.length ? <p className="dashboard-finance-note">Loading scheduled obligations…</p>
