@@ -323,7 +323,6 @@ describe("GET /settings response allowlist (SEC-06)", () => {
     expect(bodyJson).not.toContain("super-secret-value");
     expect(bodyJson).not.toContain("future-token-value");
     expect(bodyJson).not.toContain("MARKER-todoist-oauth-scope-should-never-leak");
-    expect(res.body.email_lookback_hours).toBe(16);
     expect(res.body.weather_lat).toBe(34.0686);
     expect(res.body.weather_location).toBe("El Monte, CA");
     expect(res.body.actual_budget_url).toBeNull();
@@ -465,14 +464,12 @@ describe("settings PUT scalar field validation (P3-55)", () => {
     const res = await request(makeApp())
       .put("/api/ea/settings")
       .send({
-        email_lookback_hours: 24,
         weather_lat: 40.7128,
         weather_lng: -74.006,
       });
 
     expect(res.status).toBe(200);
     const row = await getSettingsRow();
-    expect(row.email_lookback_hours).toBe(24);
     expect(row.weather_lat).toBe(40.7128);
     expect(row.weather_lng).toBe(-74.006);
     expect(row.actual_budget_url).toBeNull();

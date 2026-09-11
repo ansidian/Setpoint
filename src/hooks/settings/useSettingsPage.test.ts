@@ -10,8 +10,8 @@ describe("mergeFailedPayload", () => {
     expect(
       mergeFailedPayload(
         { email_triage_mode: "paused" },
-        { email_triage_mode: "auto", email_lookback_hours: 6 },
+        { email_triage_mode: "auto", weather_lat: 40 },
       ),
-    ).toEqual({ email_triage_mode: "paused", email_lookback_hours: 6 });
+    ).toEqual({ email_triage_mode: "paused", weather_lat: 40 });
   });
 });

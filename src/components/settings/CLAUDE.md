@@ -22,7 +22,7 @@ The settings surface: a Connections directory plus Automation, Finance, and Syst
 ### Sections (one per tab)
 - `sections/ConnectionsSettingsSection.tsx` — directory shell that binds projected service rows, onboarding progress, and advanced deep links to connection panels
 - `sections/ActualBudgetSettingsSection.tsx` — Finance preferences: saved financial profiles, browser alerts and utility pay links, with automatic budget-scoped Actual metadata, explicit failure retry, and one-time unsaved review-draft or partial email-seed navigation
-- `sections/EmailAutomationSettingsSection.tsx` — triage mode, sounds, AI models, extraction, lookback
+- `sections/EmailAutomationSettingsSection.tsx` — triage mode, sounds, AI models, extraction, interests
 - `sections/SystemSettingsSection.tsx` — passkeys and API tokens
 
 ### Cards: AI + automation

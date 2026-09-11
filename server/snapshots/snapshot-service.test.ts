@@ -22,7 +22,7 @@ const pinWithSnapshot = pin as unknown as (
 
 const syncUserConfig = (): UserConfig => ({
   accounts: [],
-  settings: { email_lookback_hours: 16 } as unknown as UserConfig["settings"],
+  settings: {} as unknown as UserConfig["settings"],
 });
 
 describe("active briefing snapshots", () => {

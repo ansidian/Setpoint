@@ -142,12 +142,13 @@ describe("financial profiles through Settings", () => {
       [{ ...draft, accountLast4: "12345" }],
       [{ ...draft, target: { kind: "card_payment", toAccountId: "card" } }],
     ];
+    const originalLatitude = (await request(app()).get("/api/ea/settings")).body.weather_lat;
     for (const financial_profiles of invalid) {
-      const response = await request(app()).put("/api/ea/settings").send({ financial_profiles, email_lookback_hours: 24 });
+      const response = await request(app()).put("/api/ea/settings").send({ financial_profiles, weather_lat: 40 });
       expect(response.status, JSON.stringify(financial_profiles)).toBe(400);
     }
     expect(await readFinancialProfiles("user-1")).toEqual({ budgetId: "budget-1", revision: 0, profiles: [] });
-    expect((await request(app()).get("/api/ea/settings")).body.email_lookback_hours).toBe(16);
+    expect((await request(app()).get("/api/ea/settings")).body.weather_lat).toBe(originalLatitude);
   });
 
   it("rejects enabled targets that cross budgets, use closed accounts, or misidentify schedule/payment direction", async () => {

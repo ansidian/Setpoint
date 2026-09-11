@@ -1,10 +1,7 @@
-import { Clock, Tag, X } from "lucide-react";
+import { Tag, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  SectionLabel,
-  SettingsCard,
-} from "@/components/settings/settings-ui";
+import { SettingsCard } from "@/components/settings/settings-ui";
 import { SETTINGS_PRIMARY_BUTTON_CLASS } from "@/components/settings/settings-core";
 import EmailTriageModeCard from "@/components/settings/cards/EmailTriageModeCard";
 import TriageSoundSettingsCard from "@/components/settings/cards/TriageSoundSettingsCard";
@@ -112,32 +109,6 @@ export default function EmailAutomationSettingsSection({
           />
         </>
       ) : null}
-
-      <SettingsCard
-        title="Email Lookback"
-        icon={<Clock size={14} />}
-        description="Controls how far back the email snapshot looks when gathering context."
-      >
-        <div className="flex flex-wrap items-center gap-3">
-          <SectionLabel className="mb-0 whitespace-nowrap">Fetch emails from the last</SectionLabel>
-          <Input
-            type="number"
-            min="1"
-            max="168"
-            value={settings?.email_lookback_hours ?? 16}
-            onChange={(event) => {
-              const value = Math.max(1, Math.min(168, parseInt(event.target.value, 10) || 16));
-              setSettings((current) => ({ ...(current || {}), email_lookback_hours: value }));
-              patch({ email_lookback_hours: value });
-            }}
-            className="w-[80px] text-center"
-            autoComplete="off"
-            data-1p-ignore
-            data-lpignore="true"
-          />
-          <span className="text-[13px] text-muted-foreground/75">hours</span>
-        </div>
-      </SettingsCard>
 
       <SettingsCard
         title="Email Interests"

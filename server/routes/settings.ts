@@ -86,7 +86,6 @@ const requireRecentAuthForSecretSettings: RequestHandler = (req, res, next) => {
 // public field requires an explicit, reviewed addition here.
 const SETTINGS_PUBLIC_FIELDS = [
   "user_id",
-  "email_lookback_hours",
   "home_location_label",
   "home_location_address",
   "home_location_place_id",
@@ -241,7 +240,7 @@ router.get("/email-search/usage", async (_req, res) => {
 
 router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, SettingsPatchRequest>("/settings", requireRecentAuthForSecretSettings, async (req, res) => {
   const userId = process.env.EA_USER_ID!;
-  const { schedules_json, email_lookback_hours, home_location_label, home_location_address, home_location_place_id, home_location_lat, home_location_lng, weather_lat, weather_lng, weather_location, actual_budget_url, actual_budget_password, actual_budget_sync_id, email_ai_provider, email_ai_model, alfred_provider, alfred_model, email_interests_json, todoist_api_token, todoist_oauth_token_response, bill_extract_provider, bill_extract_model, email_triage_mode, email_triage_classify_read_arrivals, triage_sound_settings, discord_webhook_url, discord_user_id, utility_pay_links, financial_profiles } = req.body;
+  const { schedules_json, home_location_label, home_location_address, home_location_place_id, home_location_lat, home_location_lng, weather_lat, weather_lng, weather_location, actual_budget_url, actual_budget_password, actual_budget_sync_id, email_ai_provider, email_ai_model, alfred_provider, alfred_model, email_interests_json, todoist_api_token, todoist_oauth_token_response, bill_extract_provider, bill_extract_model, email_triage_mode, email_triage_classify_read_arrivals, triage_sound_settings, discord_webhook_url, discord_user_id, utility_pay_links, financial_profiles } = req.body;
 
   try {
     if (actual_budget_url !== undefined || actual_budget_password !== undefined || actual_budget_sync_id !== undefined) {
@@ -268,12 +267,7 @@ router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, Sett
     // Minimal type/range coercion at the write boundary for the scalar settings
     // fields (hours/coords/url/sync_id), 400 on failure, mirroring the
     // JSON/model-field validation already in this handler.
-    if (email_lookback_hours !== undefined) {
-      if (!Number.isInteger(email_lookback_hours) || email_lookback_hours < 1 || email_lookback_hours > 168) {
-        return res.status(400).json({ message: "email_lookback_hours must be an integer between 1 and 168" });
-      }
-      updates.push("email_lookback_hours = ?"); args.push(email_lookback_hours);
-    }
+
     if (
       home_location_label !== undefined
       || home_location_address !== undefined

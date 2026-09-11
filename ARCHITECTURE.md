@@ -555,7 +555,6 @@ erDiagram
     ea_settings {
         text user_id PK
         text schedules_json "cron schedule array"
-        int email_lookback_hours
         real weather_lat
         real weather_lng
         text weather_location
@@ -765,7 +764,7 @@ erDiagram
 | `ea_pinned_emails` | `022_pinned_emails.sql`, `023_pinned_emails_rebuild.sql` |
 | `ea_reminders` | `010_discord_reminders.sql`, `046_time_to_leave_foundation.sql` |
 | `ea_sessions` | `001_ea_tables.sql`, `031_auth_recovery.sql`, `038_auth_security_generation.sql`, `039_password_step_up_window.sql` |
-| `ea_settings` | `001_ea_tables.sql`, `003_triage_sound_settings.sql`, `008_bill_pay_mappings.sql`, `010_discord_reminders.sql`, `020_utility_pay_links.sql`, `026_news.sql`, `028_provider_needs_reauth.sql`, `036_todoist_oauth_setup.sql`, `043_email_triage_classify_read_arrivals.sql`, `044_alfred_model_settings.sql`, `046_time_to_leave_foundation.sql`, `069_financial_profiles.sql` |
+| `ea_settings` | `001_ea_tables.sql`, `003_triage_sound_settings.sql`, `008_bill_pay_mappings.sql`, `010_discord_reminders.sql`, `020_utility_pay_links.sql`, `026_news.sql`, `028_provider_needs_reauth.sql`, `036_todoist_oauth_setup.sql`, `043_email_triage_classify_read_arrivals.sql`, `044_alfred_model_settings.sql`, `046_time_to_leave_foundation.sql`, `069_financial_profiles.sql`, `073_remove_email_lookback.sql` |
 | `ea_snoozed_emails` | `001_ea_tables.sql` |
 | `ea_tldraw_documents` | `050_tldraw_workspace.sql` |
 | `ea_todoist_items` | `001_ea_tables.sql` |

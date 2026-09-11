@@ -98,12 +98,12 @@ describe("useSettingsPage debounced auto-save", () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(500); });
     // A later, unrelated field change should flush WITH the re-queued field,
     // not drop it — the buggy code cleared pendingRef before the failed await.
-    act(() => result.current.patch({ lookback_hours: 12 }));
+    act(() => result.current.patch({ weather_lat: 40 }));
     await act(async () => { await vi.advanceTimersByTimeAsync(500); });
     // test-architecture: allow-boundary-interaction -- only the second outbound Settings PUT payload proves a rejected field is re-queued and coalesced with the newer edit.
     expect(mockApi.updateSettings).toHaveBeenNthCalledWith(2, {
       triage_mode: "auto",
-      lookback_hours: 12,
+      weather_lat: 40,
     });
   });
 });

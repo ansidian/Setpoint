@@ -291,10 +291,10 @@ async function runActiveSnapshotSync(userId: string, {
   now = new Date(),
   timeZone = DEFAULT_TIMEZONE,
 }: ActiveSnapshotSyncOptions = {}): Promise<ActiveSnapshotView> {
-  const { accounts, settings } = await timeSnapshotSyncSource("config", () => loadUserConfigFn(userId), (result) => ({
+  const { accounts } = await timeSnapshotSyncSource("config", () => loadUserConfigFn(userId), (result) => ({
     accounts: result?.accounts?.length || 0,
   }));
-  const hoursBack = Number(settings?.email_lookback_hours) || 16;
+  const hoursBack = 16;
   const emails = await timeSnapshotSyncSource("emailFetch", () => fetchAllEmailsFn(accounts, hoursBack), (result) => ({
     accounts: accounts.length,
     emails: result?.length || 0,

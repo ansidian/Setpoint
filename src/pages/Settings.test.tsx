@@ -178,13 +178,14 @@ describe("Settings page", () => {
 
     const { unmount } = renderSettings();
 
-    const lookback = await screen.findByDisplayValue("16");
-    fireEvent.change(lookback, { target: { value: "24" } });
+    const interest = await screen.findByPlaceholderText("e.g. Da Vien, Anthropic, GitHub…");
+    fireEvent.change(interest, { target: { value: "Example" } });
+    fireEvent.submit(interest.closest("form")!);
     unmount();
 
     await waitFor(() => {
       // test-architecture: allow-boundary-interaction -- after unmount there is no page state to observe; the outbound Settings write is the durability contract for pending edits.
-      expect(mockApi.updateSettings).toHaveBeenCalledWith({ email_lookback_hours: 24 });
+      expect(mockApi.updateSettings).toHaveBeenCalledWith({ email_interests_json: ["Example"] });
     });
   });
 });

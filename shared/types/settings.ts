@@ -114,7 +114,6 @@ export interface GeocodeResult {
 
 export interface SettingsResponse {
   user_id: string;
-  email_lookback_hours: number | null;
   home_location_label: string | null;
   home_location_address: string | null;
   home_location_place_id: string | null;
@@ -160,7 +159,6 @@ export interface TodoistOAuthTokenResponse {
 
 export interface SettingsPatchRequest {
   schedules_json?: BriefingSchedule[] | string;
-  email_lookback_hours?: number;
   home_location_label?: string | null;
   home_location_address?: string | null;
   home_location_place_id?: string | null;
