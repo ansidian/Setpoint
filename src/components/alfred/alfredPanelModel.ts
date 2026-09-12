@@ -329,13 +329,23 @@ export function formatAlfredDate(isoDate: unknown): string {
   return new Date(y, m - 1, d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-// Full absolute date+time for the row tooltip — the relative "Nd ago" label is
-// fine at a glance but hides the actual date; this fills it in on hover.
+const ALFRED_PACIFIC_DAY = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit",
+});
+
+// Match the model's Pacific date context regardless of the browser's time zone.
+// A date-only source has no known time, so never invent one in its tooltip.
 export function formatAlfredAbsolute(iso: string | null | undefined): string {
   if (!iso) return "";
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    return date.toLocaleDateString("en-US", {
+      timeZone: "UTC", month: "short", day: "numeric", year: "numeric",
+    });
+  }
   return date.toLocaleString("en-US", {
+    timeZone: "America/Los_Angeles", timeZoneName: "short",
     month: "short", day: "numeric", year: "numeric",
     hour: "numeric", minute: "2-digit",
   });
@@ -344,11 +354,19 @@ export function formatAlfredAbsolute(iso: string | null | undefined): string {
 export function formatAlfredAgo(iso: string | null | undefined, now = new Date()): string {
   const then = new Date(iso || "").getTime();
   if (!Number.isFinite(then)) return "";
-  const mins = Math.max(0, Math.round((now.getTime() - then) / 60000));
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.round(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.round(hours / 24)}d ago`;
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(iso || "");
+  const today = ALFRED_PACIFIC_DAY.format(now);
+  const day = dateOnly ? iso! : ALFRED_PACIFIC_DAY.format(then);
+  if (!dateOnly && day === today && then <= now.getTime()) {
+    const mins = Math.floor((now.getTime() - then) / 60000);
+    return mins < 60 ? `${mins}m ago` : `${Math.floor(mins / 60)}h ago`;
+  }
+  const yesterday = new Date(Date.parse(`${today}T12:00:00.000Z`) - 86_400_000).toISOString().slice(0, 10);
+  if (!dateOnly && day === yesterday) return "Yesterday";
+  return new Date(then).toLocaleDateString("en-US", {
+    timeZone: dateOnly ? "UTC" : "America/Los_Angeles", month: "short", day: "numeric",
+    ...(day.slice(0, 4) !== today.slice(0, 4) ? { year: "numeric" } : {}),
+  });
 }
 
 // Todoist priority: 4 is highest (P1). P4 (priority 1) renders no flag.

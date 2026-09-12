@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AlfredEmailPreview from "./AlfredEmailPreview";
@@ -29,12 +29,17 @@ function PreviewHarness({ uid }: { uid: string }) {
 }
 
 describe("AlfredEmailPreview", () => {
-  it("closes on pointerdown outside the preview, not inside it", () => {
+  it("closes on a backdrop click, not a click inside the preview", async () => {
     render(<PreviewHarness uid="dismiss-1" />);
-    fireEvent.pointerDown(screen.getByRole("dialog", { name: "Email preview" }));
+    fireEvent.click(screen.getByRole("dialog", { name: "Email preview" }));
     expect(screen.getByText("open")).toBeTruthy();
-    fireEvent.pointerDown(document.body);
-    expect(screen.getByText("closed")).toBeTruthy();
+    const backdrop = document.querySelector<HTMLElement>('[data-slot="dialog-overlay"]')!;
+    fireEvent.pointerDown(backdrop, { button: 0, pointerType: "mouse" });
+    fireEvent.mouseDown(backdrop, { button: 0 });
+    fireEvent.pointerUp(backdrop, { button: 0, pointerType: "mouse" });
+    fireEvent.mouseUp(backdrop, { button: 0 });
+    fireEvent.click(backdrop);
+    await waitFor(() => expect(screen.getByText("closed")).toBeTruthy());
     expect(screen.queryByRole("dialog", { name: "Email preview" })).toBeNull();
   });
 });

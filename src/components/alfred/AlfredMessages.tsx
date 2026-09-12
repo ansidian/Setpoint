@@ -33,6 +33,7 @@ import {
 import type { AlfredEmailAttachmentRef } from "../../../shared/types/alfred";
 import { AlfredSentEmailReference } from "./AlfredEmailContext";
 import AlfredRichText from "./AlfredRichText";
+import type { AlfredWorkMessage } from "./alfredMessagePresentation";
 
 const dimmer = "rgba(205,214,244,0.4)";
 const text = "var(--sp-text)";
@@ -79,27 +80,30 @@ export const NoticeLine = memo(function NoticeLine({ text: body }: { text: strin
   );
 });
 
-export const ToolRows = memo(function ToolRows({ tools, accent }: { tools: AlfredToolEntry[]; accent: string }) {
+export const ToolRows = memo(function ToolRows({ tools, accent, done = false }: { tools: AlfredToolEntry[]; accent: string; done?: boolean }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 3, padding: "1px 2px" }}>
       {tools.map((t) => {
-        const running = t.state === "running";
+        const running = t.state === "running" && !done;
+        const incomplete = t.state === "running" && done;
         const failed = t.state === "error";
         const color = failed ? "var(--sp-rose)" : "var(--color-text-faint)";
         return (
           <div key={t.toolId} style={{
-            display: "flex", alignItems: "center", gap: 7, minHeight: 20,
-            fontFamily: mono, fontSize: 10, color, transition: "color 150ms ease-out",
+            display: "flex", alignItems: "flex-start", gap: 7, minHeight: 20,
+            fontFamily: mono, fontSize: 10, lineHeight: 1.6, color, transition: "color 150ms ease-out",
           }}>
-            <span style={{ display: "inline-flex", width: 12, justifyContent: "center" }}>
+            <span style={{ display: "inline-flex", width: 12, flexShrink: 0, paddingTop: 3, justifyContent: "center" }}>
               {running
                 ? <RefreshCw size={10} color={accent} style={{ animation: "alfred-spin 1s linear infinite" }} />
-                : failed
-                  ? <AlertCircle size={11} color="var(--sp-rose)" />
+                : failed || incomplete
+                  ? <AlertCircle size={11} color={color} />
                   : <Check size={10} strokeWidth={2.5} color="color-mix(in srgb, var(--sp-green) 70%, transparent)" />}
             </span>
-            <span style={{ minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {running ? alfredToolRunningLabel(t.name) : (t.summary || alfredToolRunningLabel(t.name))}
+            <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>
+              {incomplete
+                ? `${alfredToolRunningLabel(t.name).replace(/…$/, "")} · incomplete`
+                : running ? alfredToolRunningLabel(t.name) : (t.summary || alfredToolRunningLabel(t.name))}
             </span>
           </div>
         );
@@ -109,14 +113,8 @@ export const ToolRows = memo(function ToolRows({ tools, accent }: { tools: Alfre
 });
 
 export const SayBlock = memo(function SayBlock({ text: body, done, preamble }: { text: string; done?: boolean; preamble?: boolean }) {
-  // Render quietly as one block — don't promote the first sentence to the answer
-  // lead — when the say is either (a) still streaming, or (b) a settled between-
-  // tool preamble. A preamble is Alfred narrating what it's about to do; it
-  // persists in the thread as plain prose (like any agentic tool) rather than
-  // flashing as a header. Rendering it identically to its streaming state means
-  // there's no visual jump when the next tool_start settles it. Only the finished
-  // answer (done && !preamble) resolves into a single readable paragraph with
-  // only its opening sentence emphasized.
+  // Progress remains quiet prose. Completed answers preserve the model's
+  // explicit formatting without inventing emphasis on the opening sentence.
   if (!done || preamble) {
     return (
       <div
@@ -138,48 +136,44 @@ export const SayBlock = memo(function SayBlock({ text: body, done, preamble }: {
   );
 });
 
-// One run's tool calls, rendered from the same `tools` array as a single
-// disclosure with two live phases:
-//  • running (done=false): the trail is held open so each step accumulates with
-//    its real summary as it finishes (the in-flight one spins), under a live
-//    "N steps" count — you watch it build instead of one line flashing past.
-//  • settled (done=true): it collapses back to the "N steps" disclosure (unless
-//    the owner reopened it), so the provenance ADR 0006 leans on stays one click
-//    away instead of dominating the answer.
-// `expanded` unifies the two: forced open while running, owner-controlled (and
-// collapsed by default) once done.
-export const ToolSteps = memo(function ToolSteps({ tools, done, accent }: { tools: AlfredToolEntry[]; done: boolean; accent: string }) {
+// One disclosure per user turn. Live progress stays open; after completion the
+// full ordered history is available alongside the answer and native results.
+export const WorkHistory = memo(function WorkHistory({ messages, done, accent }: { messages: AlfredWorkMessage[]; done: boolean; accent: string }) {
   const [open, setOpen] = useState(false);
   const expanded = done ? open : true;
+  const tools = messages.flatMap((message) => message.type === "tools" ? message.tools : []);
   const n = tools.length;
+  const failures = tools.filter((tool) => tool.state === "error").length;
+  const incomplete = done ? tools.filter((tool) => tool.state === "running").length : 0;
   const Chevron = expanded ? ChevronDown : ChevronRight;
   return (
-    <div style={{ display: "flex", flexDirection: "column" }}>
+    <div data-alfred-work-history style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
       <button
         type="button"
-        className={done ? "transition-transform duration-150 motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0 motion-safe:active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 motion-reduce:transition-none motion-reduce:transform-none" : undefined}
-        onClick={done ? () => setOpen((v) => !v) : undefined}
+        className="transition-[color,transform] duration-150 enabled:hover:text-foreground motion-safe:enabled:hover:-translate-y-0.5 motion-safe:focus-visible:-translate-y-0.5 motion-safe:enabled:active:translate-y-0 motion-safe:enabled:active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 motion-reduce:transition-none motion-reduce:transform-none"
+        onClick={() => setOpen((v) => !v)}
         aria-expanded={expanded}
-        aria-disabled={!done}
+        disabled={!done}
         style={{
-          display: "inline-flex", alignItems: "center", gap: 5, alignSelf: "flex-start",
-          padding: "2px 4px", background: "transparent", border: "none",
+          display: "inline-flex", alignItems: "center", flexWrap: "wrap", gap: 5, alignSelf: "flex-start",
+          minHeight: 28, padding: "4px", background: "transparent", border: "none", textAlign: "left",
           cursor: done ? "pointer" : "default",
-          fontFamily: mono, fontSize: 10, color: "var(--color-text-faint)", borderRadius: 5,
-          transition: "color 150ms ease-out",
+          fontFamily: "var(--font-sans)", fontSize: 10.5, color: "var(--sp-text-muted)", borderRadius: 5,
         }}
-        onMouseEnter={done ? (e) => { e.currentTarget.style.color = text; } : undefined}
-        onMouseLeave={done ? (e) => { e.currentTarget.style.color = "var(--color-text-faint)"; } : undefined}
       >
         <Chevron size={11} />
         {done ? null : (
           <RefreshCw size={10} color={accent} style={{ animation: "alfred-spin 1s linear infinite" }} />
         )}
-        <span>{n} step{n === 1 ? "" : "s"}</span>
+        <span>{done ? "Work history" : "Working"} · {n} step{n === 1 ? "" : "s"}</span>
+        {failures ? <span style={{ color: "var(--sp-rose)" }}>· {failures} failed</span> : null}
+        {incomplete ? <span>· {incomplete} incomplete</span> : null}
       </button>
       <AnimatedCollapse open={expanded}>
-        <div style={{ paddingTop: 6 }}>
-          <ToolRows tools={tools} accent={accent} />
+        <div style={{ display: "grid", gap: 8, padding: "8px 4px 4px" }}>
+          {messages.map((message) => message.type === "tools"
+            ? <ToolRows key={message.id} tools={message.tools} accent={accent} done={done} />
+            : <SayBlock key={message.id} text={message.text} done={message.done} preamble />)}
         </div>
       </AnimatedCollapse>
     </div>

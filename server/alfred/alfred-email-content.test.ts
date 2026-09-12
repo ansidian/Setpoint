@@ -50,4 +50,33 @@ describe("Alfred email content trust boundary", () => {
     expect(row).not.toHaveProperty("urgency");
     expect(row).not.toHaveProperty("scores");
   });
+
+  it.each([
+    ["2026-09-12T00:57:54.000Z", "2026-09-11"],
+    ["2026-12-12T07:57:54.000Z", "2026-12-11"],
+    ["Fri, 11 Sep 2026 17:57:54 -0700", "2026-09-11"],
+  ])("gives the model the Pacific calendar day for %s", (date, datePacific) => {
+    const row = searchEmailResultRow({ uid: "gmail-1", email_date: date });
+    expect(row).toMatchObject({ date, date_pacific: datePacific });
+  });
+
+  it("prefers the normalized UTC timestamp without changing cached source data", () => {
+    const candidate = {
+      uid: "gmail-1", email_date: "Fri, 12 Sep 2026 00:57:54 +0000",
+      email_date_utc: "2026-09-12T00:57:54.000Z",
+    };
+    expect(searchEmailResultRow(candidate)).toMatchObject({
+      date: candidate.email_date_utc, date_pacific: "2026-09-11",
+    });
+    expect(candidate.email_date).toBe("Fri, 12 Sep 2026 00:57:54 +0000");
+  });
+
+  it.each([null, "", "not a date", "2026-09-12", "2026-09-12T10:00:00"])(
+    "preserves %s without inventing a Pacific timestamp",
+    (date) => {
+      const row = searchEmailResultRow({ uid: "gmail-1", email_date: date });
+      expect(row.date).toBe(date);
+      expect(row).not.toHaveProperty("date_pacific");
+    },
+  );
 });

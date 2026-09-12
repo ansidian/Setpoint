@@ -1,5 +1,5 @@
 import { cacheAlfredItems, readAlfredItems } from "./alfred-conversations.ts";
-import { searchEmailResultRow, wrapEmailContent } from "./alfred-email-content.ts";
+import { formatEmailDatePacific, searchEmailResultRow, wrapEmailContent } from "./alfred-email-content.ts";
 import type {
   AlfredBreakdownEvent,
   AlfredItem,
@@ -14,6 +14,7 @@ import type { TransactionGroupBy } from "../../shared/types/transactions.ts";
 import type { AlfredToolContext } from "./alfred-types.ts";
 import { stageAlfredCalendarProposal } from "./alfred-calendar-proposals.ts";
 import { boundEmailEvidence, EMAIL_EVIDENCE_TRUNCATED } from "../email/email-evidence.ts";
+import { describeAlfredToolFailure, type AlfredToolFailure } from "./alfred-tool-errors.ts";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_RANGE_DAYS = 92;
@@ -38,7 +39,7 @@ export const ALFRED_TOOL_DEFINITIONS = [
     input_schema: {
       type: "object",
       properties: {
-        query: { type: "string", description: "Natural-language description of what to find" },
+        query: { type: "string", description: "Required natural-language search terms. Use the structured after/before/read_filter fields for filters; do not invent is: flags (only is:read and is:unread are supported)." },
         lexical_queries: { type: "array", items: { type: "string" }, description: "Optional exact keyword phrases likely to appear in matching emails; up to 3 are each run as keyword searches and the results merged" },
         after: { type: "string", description: "Only emails on/after this ISO date (YYYY-MM-DD)" },
         before: { type: "string", description: "Only emails on/before this ISO date (YYYY-MM-DD)" },
@@ -307,11 +308,13 @@ async function runGetEmailBody(input: ToolInput, { userId, deps }: AlfredToolCon
   // needed to interpret a reply. Preserve it within the shared evidence limit.
   const html = "html_body" in body ? body.html_body : body.body;
   const text = boundEmailEvidence(deps.htmlToPlainText(html || ""));
+  const datePacific = formatEmailDatePacific(body.date);
   return {
     uid,
     subject: wrapEmailContent(uid, body.subject || ""),
     from: wrapEmailContent(uid, body.from || ""),
     date: body.date || "",
+    ...(datePacific ? { date_pacific: datePacific } : {}),
     body: wrapEmailContent(uid, text),
     ...(text.includes(EMAIL_EVIDENCE_TRUNCATED) ? { truncated: true } : {}),
   };
@@ -561,7 +564,7 @@ export async function executeAlfredTool(
   }
 }
 
-export function alfredToolSummary(name: AlfredToolName, result: AlfredToolResultBase = {}): string {
+export function alfredToolSummary(name: AlfredToolName, result: AlfredToolResultBase = {}, failure?: AlfredToolFailure): string {
   if (result.error) {
     const source = {
       search_email: "Mail",
@@ -575,7 +578,7 @@ export function alfredToolSummary(name: AlfredToolName, result: AlfredToolResult
       show_items: "Display",
       group_items: "Display",
     }[name] || "Tool";
-    return `${source} · failed`;
+    return `${source} · ${(failure ?? describeAlfredToolFailure(result.error)).message}`;
   }
   switch (name) {
     case "search_email": return `Mail · ${result.total ?? 0} matches`;

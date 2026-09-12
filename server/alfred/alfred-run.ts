@@ -12,13 +12,14 @@ import { resolveAiApiKey } from "../ai-credentials.ts";
 import { getAlfredModelAdapter } from "./alfred-provider.ts";
 import { buildContextBearingAlfredMessage } from "./alfred-email-context.ts";
 import { commitStagedAlfredCalendarProposal } from "./alfred-calendar-proposals.ts";
+import { describeAlfredToolFailure, type AlfredToolFailure } from "./alfred-tool-errors.ts";
 
 const MAX_TOOL_ITERATIONS = 12;
 
 // Cite-by-reference backstop (ADR 0006): smaller models sometimes retype item
-// details instead of calling show_items. When a run retrieved a small, almost
-// certainly named result set and is about to end without rows, remind once.
-// Above this size the answer is likely a summary/count, where rows would spam.
+// details instead of calling show_items. Remind once for small domain result
+// sets and for email searches regardless of breadth; the conditional reminder
+// lets aggregate/no-match answers finish without showing unrelated items.
 // Pinned to one default search page: a lower cap let every default search_email
 // call disarm the backstop by itself (C8: 12 retrieved > 8 cap).
 const MAX_NUDGE_ITEMS = DEFAULT_SEARCH_LIMIT;
@@ -86,6 +87,7 @@ async function runAlfredInner({
   }
 
   let retrievedCount = 0;
+  let retrievedEmail = false;
   let showItemsCalled = false;
   let groupItemsCalled = false;
   let summarizeCalled = false;
@@ -151,7 +153,11 @@ async function runAlfredInner({
         adapter.appendUserText(conversation, GROUP_ITEMS_NUDGE);
         continue;
       }
-      if (!nudged && !showItemsCalled && !groupItemsCalled && retrievedCount > 0 && retrievedCount <= MAX_NUDGE_ITEMS) {
+      // Search breadth says nothing about how many emails the answer names.
+      // Keep the conditional reminder after repeated searches/body reads, while
+      // allowing a no-match/aggregate conclusion to finish without unrelated rows.
+      if (!nudged && !showItemsCalled && !groupItemsCalled && !summarizeCalled
+        && (retrievedEmail || (retrievedCount > 0 && retrievedCount <= MAX_NUDGE_ITEMS))) {
         nudged = true;
         adapter.appendUserText(conversation, SHOW_ITEMS_NUDGE);
         continue;
@@ -175,6 +181,7 @@ async function runAlfredInner({
       emit({ type: "tool_start", tool_id: toolUse.id, name: toolName });
       const toolStartedAt = now().getTime();
       let result;
+      let failure: AlfredToolFailure | undefined;
       try {
         result = await executeAlfredTool(toolName, toolUse.input, {
           userId,
@@ -186,19 +193,23 @@ async function runAlfredInner({
           proposalStage,
         });
       } catch (err) {
-        result = { error: errorMessage(err) };
+        failure = describeAlfredToolFailure(err);
+        result = { error: failure.message };
       }
       signal?.throwIfAborted();
+      if (result.error && !failure) failure = describeAlfredToolFailure(result.error);
       recordUsage(userId, {
         eventType: "alfred_tool_call",
         model: turn.model || conversation.model,
         usage: {},
         metadata: {
           tool: toolUse.name,
+          tool_id: toolUse.id,
           ok: !result?.error,
           duration_ms: Math.max(0, now().getTime() - toolStartedAt),
           conversation_id: conversation.id,
           provider: conversation.provider,
+          ...(failure ? { failure } : {}),
         },
       }).catch((err) => {
         console.error("[Alfred] tool usage recording failed:", errorMessage(err, "tool usage recording failed"));
@@ -214,13 +225,17 @@ async function runAlfredInner({
         summarizeCalled = true;
       } else if (!result?.error) {
         retrievedCount += citableRowCount(result);
+        if ((toolName === "search_email" && citableRowCount(result) > 0)
+          || (toolName === "get_email_body" && conversation.items.has(`email:${String(result.uid)}`))) {
+          retrievedEmail = true;
+        }
       }
       emit({
         type: "tool_result",
         tool_id: toolUse.id,
         name: toolName,
         ok: !result?.error,
-        summary: alfredToolSummary(toolName, result),
+        summary: alfredToolSummary(toolName, result, failure),
       });
       toolResults.push({ toolId: toolUse.id, name: toolName, result });
     }

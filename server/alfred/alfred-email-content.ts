@@ -9,6 +9,18 @@ import type { AlfredSearchCandidate } from "./alfred-types.ts";
 // boilerplate that cuts off right before the useful line (balance, due date), so
 // each result also carries the first ~300 chars of the actual body text.
 const EXCERPT_CHAR_LIMIT = 300;
+const PACIFIC_DATE_FORMATTER = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit",
+});
+
+// Keep this absolute: tool results may remain in the conversation past midnight.
+// A date without a time zone cannot establish a Pacific day; retain its raw value
+// in `date` instead of manufacturing a derived date for the model.
+export function formatEmailDatePacific(value: string | null | undefined): string | undefined {
+  if (!value || !/(?:z|[+-]\d{2}:?\d{2}|ut|utc|gmt|[ecmp][sd]t)(?:\s*\([^)]*\))?\s*$/i.test(value)) return undefined;
+  const ms = Date.parse(value);
+  return Number.isFinite(ms) ? PACIFIC_DATE_FORMATTER.format(ms) : undefined;
+}
 
 // Candidates carry `from` as a { name, address } object; get_email_body carries
 // it as a string. Flatten to a readable "Name <address>" before fencing so the
@@ -42,6 +54,8 @@ export function searchEmailResultRow(candidate: AlfredSearchCandidate): Record<s
   const meta = candidate.metadata || {};
   const account = candidate.account?.email || candidate.account?.label || "";
   const excerpt = String(candidate.body_excerpt || "").slice(0, EXCERPT_CHAR_LIMIT);
+  const date = candidate.email_date_utc || candidate.email_date;
+  const datePacific = formatEmailDatePacific(date);
   // Same "resolved" rule as email-search-ranking.ts: lane/urgency mean "act on this
   // now"; once the item is handled or its deadline has passed they are frozen history
   // (the anchor incident: a PAID statement still advertised needs_attention/high while
@@ -55,7 +69,8 @@ export function searchEmailResultRow(candidate: AlfredSearchCandidate): Record<s
     // delimiter so the system prompt's distrust rule covers them, not just the body.
     from: wrapEmailContent(candidate.uid, formatSender(candidate.from)),
     subject: wrapEmailContent(candidate.uid, candidate.subject),
-    date: candidate.email_date_utc || candidate.email_date,
+    date,
+    ...(datePacific ? { date_pacific: datePacific } : {}),
     read: candidate.read,
     ...(account ? { account } : {}),
     snippet: wrapEmailContent(candidate.uid, candidate.body_snippet),

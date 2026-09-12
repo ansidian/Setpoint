@@ -18,10 +18,11 @@ import {
   NoticeLine,
   SayBlock,
   SuggestionList,
-  ToolSteps,
+  WorkHistory,
   UserLine,
 } from "./AlfredMessages";
 import { RowsBlock } from "./AlfredRows";
+import { presentAlfredMessages } from "./alfredMessagePresentation";
 import AlfredComposer from "./AlfredComposer";
 import AlfredEmailPreview from "./AlfredEmailPreview";
 import AlfredTransactionBreakdown from "./AlfredTransactionBreakdown";
@@ -248,17 +249,16 @@ function AlfredPanel({ dockTarget = null, open, onClose, accent, handoff, emailH
     return () => window.clearTimeout(timer);
   }, [emailHandoff, prepareEmail]);
 
-  // The panel owns Esc ordering for its overlay stack: preview first, panel
-  // second. Document capture + consume, so the calendar's own capture-phase
-  // hotkeys (and anything beneath) never see an Esc that Alfred handled.
+  // The source dialog owns Escape while open, including its nested controls.
+  // Otherwise capture + consume so an Escape that closes Alfred never reaches
+  // the calendar's hotkeys or another surface underneath it.
   useEffect(() => {
     if (!open) return undefined;
     function onKey(e: KeyboardEvent): void {
-      if (e.key !== "Escape") return;
+      if (e.key !== "Escape" || previewItem) return;
       e.preventDefault();
       e.stopPropagation();
-      if (previewItem) setPreviewItem(null);
-      else onClose();
+      onClose();
     }
     document.addEventListener("keydown", onKey, true);
     return () => document.removeEventListener("keydown", onKey, true);
@@ -404,10 +404,10 @@ function AlfredPanel({ dockTarget = null, open, onClose, accent, handoff, emailH
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {messages.map((m) => {
+            {presentAlfredMessages(messages, busy).map((m) => {
               if (m.type === "user") return <UserLine key={m.id} text={m.text} accent={accent} attachment={m.attachment} failed={m.failed} onPreviewAttachment={onPreviewAttachment} />;
               if (m.type === "notice") return <NoticeLine key={m.id} text={m.text} />;
-              if (m.type === "tools") return <ToolSteps key={m.id} tools={m.tools} done={m.done} accent={accent} />;
+              if (m.type === "work-history") return <WorkHistory key={m.id} messages={m.messages} done={m.done} accent={accent} />;
               if (m.type === "say") return <SayBlock key={m.id} text={m.text} done={m.done} preamble={m.preamble} />;
               if (m.type === "rows") return <RowsBlock key={m.id} kind={m.kind} items={m.items as AlfredRow[]} accent={accent} onActivateItem={onActivateChip} />;
               if (m.type === "summary") return <AlfredTransactionBreakdown key={m.id} buckets={m.buckets} period={m.period} group_by={m.group_by} accent={accent} />;

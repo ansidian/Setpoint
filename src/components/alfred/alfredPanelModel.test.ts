@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyAlfredEvent, markAlfredProposalCreated,
-  clearUncreatedAlfredProposals
+  clearUncreatedAlfredProposals, formatAlfredAbsolute, formatAlfredAgo,
 } from "./alfredPanelModel";
 import type { AlfredPanelMessage } from "./alfredPanelModel";
 import type { AlfredRunEvent } from "../../../shared/types/alfred";
@@ -20,6 +20,31 @@ function messageAt<T extends AlfredPanelMessage["type"]>(
   if (!message || message.type !== type) throw new Error(`Expected ${type} message at index ${index}`);
   return message as Extract<AlfredPanelMessage, { type: T }>;
 }
+
+describe("Alfred email date labels", () => {
+  const now = new Date("2026-09-12T07:10:00.000Z"); // September 12, 00:10 Pacific
+
+  it("uses Pacific days for yesterday and explicit dates for older evidence", () => {
+    expect(formatAlfredAgo("2026-09-12T07:00:00.000Z", now)).toBe("10m ago");
+    expect(formatAlfredAgo("2026-09-12T06:59:00.000Z", now)).toBe("Yesterday");
+    expect(formatAlfredAgo("2026-09-12T00:57:54.000Z", now)).toBe("Yesterday");
+    expect(formatAlfredAgo("2026-07-15T20:00:00.000Z", now)).toBe("Jul 15");
+    expect(formatAlfredAgo("2025-07-15T20:00:00.000Z", now)).toBe("Jul 15, 2025");
+  });
+
+  it("shows the actual Pacific date and zone in the full tooltip", () => {
+    expect(formatAlfredAbsolute("2026-09-12T00:57:54.000Z")).toBe("Sep 11, 2026, 5:57 PM PDT");
+    expect(formatAlfredAbsolute("2026-12-12T07:57:54.000Z")).toBe("Dec 11, 2026, 11:57 PM PST");
+  });
+
+  it("preserves date-only values and does not invent relative times for future or invalid dates", () => {
+    expect(formatAlfredAgo("2026-09-12", now)).toBe("Sep 12");
+    expect(formatAlfredAbsolute("2026-09-12")).toBe("Sep 12, 2026");
+    expect(formatAlfredAgo("2026-09-13T20:00:00.000Z", now)).toBe("Sep 13");
+    expect(formatAlfredAgo("invalid", now)).toBe("");
+    expect(formatAlfredAbsolute(null)).toBe("");
+  });
+});
 
 describe("applyAlfredEvent", () => {
   it("appends atomic proposals and supersedes only the referenced active card", () => {

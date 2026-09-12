@@ -114,23 +114,6 @@ function parseBlocks(value: string): AlfredRichBlock[] {
   return blocks;
 }
 
-function openingParagraphNodes(value: string): ReactNode {
-  const trimmed = value.trim();
-  // Respect explicit leading emphasis from the model instead of nesting it.
-  if (/^(?:\*\*|__)/.test(trimmed)) return inlineNodes(trimmed, "opening");
-
-  const sentence = trimmed.match(/[.!?](?:\s|$)/);
-  const cut = sentence?.index != null ? sentence.index + 1 : trimmed.length;
-  const opening = trimmed.slice(0, cut).trim();
-  const rest = trimmed.slice(cut).trim();
-  return (
-    <>
-      <strong style={{ fontWeight: 600, color: "var(--sp-text)" }}>{inlineNodes(opening, "opening-lead")}</strong>
-      {rest ? <> {inlineNodes(rest, "opening-rest")}</> : null}
-    </>
-  );
-}
-
 function AlfredRichText({ text }: { text: string }) {
   const blocks = parseBlocks(text);
   return (
@@ -139,9 +122,7 @@ function AlfredRichText({ text }: { text: string }) {
         if (block.type === "paragraph") {
           return (
             <p key={blockIndex} style={{ margin: 0 }}>
-              {blockIndex === 0
-                ? openingParagraphNodes(block.text)
-                : inlineNodes(block.text, `paragraph-${blockIndex}`)}
+              {inlineNodes(block.text, `paragraph-${blockIndex}`)}
             </p>
           );
         }

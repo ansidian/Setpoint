@@ -9,6 +9,7 @@ Alfred: the tool-calling assistant run loop behind the Alfred Panel. Domain tool
 - `anthropic-adapter.ts` / `openai-adapter.ts` — provider request, transcript, tool-result, and usage translation
 - `anthropic-stream.ts` / `openai-stream.ts` — provider SSE stream parsers
 - `alfred-tools.ts` — read-only domain tools plus non-mutating calendar proposal staging; `show_items` emits cached rows by reference
+- `alfred-tool-errors.ts` — allowlisted tool-failure reasons shared by streamed summaries and usage diagnostics; never persists raw error messages, queries or provider bodies
 - `alfred-calendar-proposals.ts` — semantic owner intent with exact trusted-turn provenance, provider-empty field normalization, field/date/source validation, duplicate policy, and atomic run-local proposal staging
 - `alfred-email-content.ts` — email-content shaping for tool results: `<email_content>` trust fencing, sender formatting, the compact search-candidate row
 - `alfred-email-context.ts` — whole-email preparation for deliberate reader attachments: semantic text, link/image/file shaping, metadata authority, 50k limit, and trust fencing
@@ -24,7 +25,7 @@ Alfred: the tool-calling assistant run loop behind the Alfred Panel. Domain tool
 
 ## Local patterns
 
-- Cite-by-reference backstop: if a run retrieved a small item set and tries to finish without `show_items`, `alfred-run.ts` injects a one-time `<system-reminder>` user turn instead of ending — prompt rules alone proved unreliable on Haiku.
+- Cite-by-reference backstop: if a run retrieved a small item set, found emails across any number of search pages, or read a cached email and tries to finish without `show_items`, `alfred-run.ts` injects a one-time conditional `<system-reminder>` user turn instead of ending. An unrelated/aggregate result need not produce cards; prompt rules alone proved unreliable on Haiku. Tool failures carry a safe reason, stage and optional HTTP status in the existing usage metadata alongside the tool-call id.
 
 - Tools receive injectable `deps`; the route (`server/routes/alfred.ts`) provides real services, tests provide fakes.
 - Email content in tool results is wrapped in `<email_content>` tags; the prompt declares it untrusted data.

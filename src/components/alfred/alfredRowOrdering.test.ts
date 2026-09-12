@@ -38,7 +38,7 @@ describe("groupAlfredRows — email", () => {
     expect(rest).toEqual(["x"]);
   });
 
-  it("buckets non-attention emails into Today / This week / Earlier, newest first, dropping empties", () => {
+  it("buckets non-attention emails into Today / Past 7 days / Earlier, newest first, dropping empties", () => {
     const items = [
       { uid: "old1", email_date: "2026-05-20T10:00:00.000Z" },
       { uid: "today", email_date: "2026-06-13T10:00:00.000Z" },
@@ -46,11 +46,46 @@ describe("groupAlfredRows — email", () => {
       { uid: "week", email_date: "2026-06-10T10:00:00.000Z" },
     ];
     const groups = groupAlfredRows("email", items, NOW);
-    expect(groups.map((g) => g.section!.label)).toEqual(["Today", "This week", "Earlier"]);
+    expect(groups.map((g) => g.section!.label)).toEqual(["Today", "Past 7 days", "Earlier"]);
     expect(groups.every((g) => g.section!.tone === "time")).toBe(true);
     expect(groups[0]!.items.map((i) => i.uid)).toEqual(["today"]);
     expect(groups[1]!.items.map((i) => i.uid)).toEqual(["week"]);
     expect(groups[2]!.items.map((i) => i.uid)).toEqual(["old2", "old1"]);
+  });
+
+  it("uses Pacific calendar boundaries and the normalized date rather than elapsed hours", () => {
+    const groups = groupAlfredRows("email", [
+      { uid: "yesterday", email_date: "2026-09-12T06:59:00.000Z" },
+      {
+        uid: "today", email_date: "2026-09-11T23:00:00.000Z",
+        email_date_utc: "2026-09-12T07:01:00.000Z",
+      },
+      { uid: "old", email_date: "2026-09-05T20:00:00.000Z" },
+      { uid: "week", email_date: "2026-09-06T20:00:00.000Z" },
+    ], new Date("2026-09-12T07:10:00.000Z"));
+    expect(groups.map((group) => [group.section!.label, group.items.map((item) => item.uid)])).toEqual([
+      ["Today", ["today"]], ["Yesterday", ["yesterday"]],
+      ["Past 7 days", ["week"]], ["Earlier", ["old"]],
+    ]);
+  });
+
+  it("keeps yesterday correct across the 25-hour Pacific daylight-saving day", () => {
+    const groups = groupAlfredRows("email", [
+      { uid: "today", email_date: "2026-11-02T08:05:00.000Z" },
+      { uid: "yesterday", email_date: "2026-11-01T07:05:00.000Z" },
+    ], new Date("2026-11-02T08:10:00.000Z"));
+    expect(groups.map((group) => group.section!.label)).toEqual(["Today", "Yesterday"]);
+  });
+
+  it("does not label future or unknown email dates as today or earlier", () => {
+    const groups = groupAlfredRows("email", [
+      { uid: "unknown", email_date: "not a date" },
+      { uid: "future", email_date: "2026-09-13T20:00:00.000Z" },
+      { uid: "today", email_date: "2026-09-12T20:00:00.000Z" },
+    ], new Date("2026-09-12T21:00:00.000Z"));
+    expect(groups.map((group) => [group.section!.label, group.items[0]!.uid])).toEqual([
+      ["Future date", "future"], ["Today", "today"], ["Date unavailable", "unknown"],
+    ]);
   });
 
 });

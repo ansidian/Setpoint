@@ -168,7 +168,7 @@ describe("get_email_body", () => {
       html_body: "<p>Hello <b>world</b></p>",
       subject: "Hi",
       from: "A <a@b.com>",
-      date: "2026-06-10T12:00:00.000Z",
+      date: "2026-09-12T00:57:54.000Z",
     });
     const result = await executeAlfredTool("get_email_body", { uid: "em-1" }, ctxWith({ getEmailBody, htmlToPlainText }));
     // test-architecture: allow-boundary-interaction -- Email body loading is a provider/index boundary; the owner/message identity sent outbound is not recoverable from the wrapped body result.
@@ -176,6 +176,7 @@ describe("get_email_body", () => {
     expect(result.body).toContain("<email_content uid=\"em-1\">");
     expect(result.body).toContain("Hello");
     expect(result.body).not.toContain("<p>");
+    expect(result).toMatchObject({ date: "2026-09-12T00:57:54.000Z", date_pacific: "2026-09-11" });
   });
 
   it("preserves quoted context needed to interpret the reply", async () => {

@@ -15,6 +15,7 @@ import {
   billsTotalDue,
   deadlineDone,
   emailDotState,
+  emailRowDate,
   eventPassed,
   groupAlfredRows,
   isOverdueYmd,
@@ -160,13 +161,15 @@ export function DeadlineRow({ item, onActivate, todayYmd }: AlfredLeafRowProps) 
   );
 }
 
-export function EmailRow({ item, onActivate }: AlfredLeafRowProps) {
+export function EmailRow({ item, onActivate, now }: AlfredLeafRowProps) {
   // Dot encodes two signals: attention lane → color, unread → fill vs ring.
   const { unread, attention } = emailDotState(item);
   const dotColor = attention ? "var(--sp-rose)" : "var(--sp-teal)";
   const sender = typeof item.from === "object" ? item.from : null;
   const fromName = sender?.name || sender?.address || (typeof item.from === "string" ? item.from : "");
-  const absolute = item.email_date ? formatAlfredAbsolute(item.email_date) : "";
+  const date = emailRowDate(item);
+  const absolute = formatAlfredAbsolute(date);
+  const dateLabel = formatAlfredAgo(date, now);
   return (
     <RowShell onActivate={onActivate} title={absolute ? `Received ${absolute}` : undefined}>
       <span style={{
@@ -177,7 +180,7 @@ export function EmailRow({ item, onActivate }: AlfredLeafRowProps) {
       }} />
       <TitleCell
         title={item.subject}
-        sub={`${fromName} · ${formatAlfredAgo(item.email_date)}`}
+        sub={[fromName, dateLabel].filter(Boolean).join(" · ")}
       />
     </RowShell>
   );

@@ -96,10 +96,14 @@ function AlfredComposer({
     if (replaced && draft.trim()) setReviewCue("Attachment replaced—review your prompt");
   }
 
-  // focus composer after the open transition (moved verbatim from AlfredPanel)
+  // Focus after the open transition only if the user has not moved focus to a
+  // source preview or another control in the meantime.
   useEffect(() => {
     if (!open) return undefined;
-    const t = setTimeout(() => inputRef.current?.focus(), 260);
+    const initialFocus = document.activeElement;
+    const t = setTimeout(() => {
+      if (document.activeElement === initialFocus) inputRef.current?.focus();
+    }, 260);
     return () => clearTimeout(t);
   }, [open]);
 

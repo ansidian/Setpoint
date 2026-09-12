@@ -19,6 +19,7 @@ export interface AlfredRow extends Record<string, unknown> {
   due_date?: string | null;
   next_date?: string | null;
   email_date?: string | null;
+  email_date_utc?: string | null;
   time?: string;
   calendarName?: string;
   location?: string | null;
@@ -44,14 +45,21 @@ function toMs(now: Date | string | number | null | undefined): number {
   return base.getTime();
 }
 
+export function emailRowDate(item: AlfredRow): string | null | undefined {
+  return item.email_date_utc || item.email_date;
+}
+
 function emailTime(item: AlfredRow): number {
-  const t = new Date(String(item.email_date || "")).getTime();
-  return Number.isFinite(t) ? t : 0;
+  return Date.parse(emailRowDate(item) || "");
 }
 
 // Newest first; ties keep input order (stable sort).
 function byRecencyDesc(a: AlfredRow, b: AlfredRow): number {
-  return emailTime(b) - emailTime(a);
+  const aTime = emailTime(a);
+  const bTime = emailTime(b);
+  if (!Number.isFinite(aTime)) return Number.isFinite(bTime) ? 1 : 0;
+  if (!Number.isFinite(bTime)) return -1;
+  return bTime - aTime;
 }
 
 function isNeedsAttention(item: AlfredRow): boolean {
@@ -70,19 +78,7 @@ export function emailDotState(item: AlfredRow): { unread: boolean; attention: bo
   };
 }
 
-const DAY_MS = 86_400_000;
-// Buckets are by elapsed time (not calendar date) so grouping is timezone-stable
-// and matches the relative "Nh/Nd ago" label each row already shows. First bucket
-// whose `max` the age falls under wins.
-const TIME_BUCKETS = [
-  { label: "Today", max: DAY_MS },
-  { label: "This week", max: 7 * DAY_MS },
-  { label: "Earlier", max: Infinity },
-];
-
-function bucketIndex(ageMs: number): number {
-  return TIME_BUCKETS.findIndex((bucket) => ageMs < bucket.max);
-}
+const EMAIL_DATE_BUCKETS = ["Future date", "Today", "Yesterday", "Past 7 days", "Earlier", "Date unavailable"];
 
 // A single group reads as a flat list, so drop its header — section labels only
 // earn their keep once there are 2+ groups to distinguish.
@@ -98,12 +94,22 @@ function groupEmail(list: AlfredRow[], nowMs: number): AlfredRowGroup[] {
   const attention = list.filter(isNeedsAttention).sort(byRecencyDesc);
   const rest = list.filter((item) => !isNeedsAttention(item)).sort(byRecencyDesc);
 
-  const buckets: AlfredRowGroup[] = TIME_BUCKETS.map((bucket) => ({
-    section: { label: bucket.label, tone: "time" },
+  const today = pacificYMD(nowMs);
+  const yesterday = addDaysYmd(today, -1);
+  const weekStart = addDaysYmd(today, -6);
+  const buckets: AlfredRowGroup[] = EMAIL_DATE_BUCKETS.map((label) => ({
+    section: { label, tone: "time" },
     items: [],
   }));
   for (const item of rest) {
-    buckets[bucketIndex(nowMs - emailTime(item))]!.items.push(item);
+    const time = emailTime(item);
+    const rawDate = emailRowDate(item) || "";
+    const day = Number.isFinite(time)
+      ? /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : pacificYMD(time)
+      : "";
+    const bucket = !day ? 5 : day > today ? 0 : day === today ? 1
+      : day === yesterday ? 2 : day >= weekStart ? 3 : 4;
+    buckets[bucket]!.items.push(item);
   }
 
   return finalize([
