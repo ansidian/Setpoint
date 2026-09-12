@@ -21,7 +21,7 @@ function initialKind(plan: FinancialEmailPlan): FinancialCompletionFields['kind'
   if (plan.operation.intended === 'create_schedule') return 'bill';
   if (plan.candidate.type === 'transfer') {
     if (['card_payment_completed', 'account_transfer_completed'].includes(String(plan.candidate.event_kind))) return 'transfer';
-    return plan.candidate.event_kind === 'payment_scheduled' ? 'transfer_schedule' : '';
+    return ['statement_issued', 'payment_scheduled'].includes(String(plan.candidate.event_kind)) ? 'transfer_schedule' : '';
   }
   return ['expense', 'income', 'bill'].includes(String(plan.candidate.type)) ? plan.candidate.type as EntryKind : '';
 }

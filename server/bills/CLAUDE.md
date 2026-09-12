@@ -22,7 +22,7 @@ Bill domain logic: AI extraction from emails, profile-authorized financial-email
 - `financial-email-evaluator.ts` — write-disabled redacted comparison of the planner result with a supplied legacy resolution
 - `financial-email-observe-report.ts` — read-only legacy planner sample plus owner/window aggregates of all new financial documents, unplanned failures, event states and verified Actual outcomes; writes are counted by event
 - `financialEmailClassificationPolicy.ts` — validates source-grounded semantic identity and classifies document/intent independently of resolved Actual targets; ambiguous payment purposes stay review
-- `financialEmailAutomationPolicy.ts` — semantic consistency, saved profile authority, amount/date, authentication and Actual gates; automatic classes are expenses, income, utility bills and scheduled card payments
+- `financialEmailAutomationPolicy.ts` — semantic consistency, saved profile authority, amount/date, authentication and Actual gates; automatic classes are expenses, income, utility bills and card-payment schedules from statements or scheduled-payment confirmations
 - `financialEmailIdentity.ts` — one-way, versioned stable identity derived from owner, provider account, provider message, and optional candidate hint
 - `financialEmailSourceIdentity.ts` — validates normalized email authentication projections and adapts them into planner source identity
 - `financialEmailTargetInference.ts` — Package 2 deterministic Actual target inference from metadata, schedules, and bounded direction-aware history; returns provenance and competing candidates
@@ -33,7 +33,7 @@ Bill domain logic: AI extraction from emails, profile-authorized financial-email
 - `financialEmailMerchantCandidates.ts` — bounded generic merchant similarity retrieval over real Actual payees plus repeated direction/account-compatible history; unresolved merchants also rank existing non-transfer payees without requiring history, and unresolved plausible matches block new-payee creation
 - `financialEmailRewardEvidence.ts` — owner-approved Cashback interpretation plus evidence-gated payee/category and settlement-account discovery; ambiguous Actual evidence remains unresolved
 - `financialEmailTargetRanker.ts` — constrained external-provider adapter that can select only supplied opaque account, payee, or history-bundle keys with high-confidence verbatim evidence
-- `billSemanticAmountPolicy.ts` — canonical semantic amount selection for the planner; minimum due is never operational
+- `billSemanticAmountPolicy.ts` — canonical semantic amount selection for the planner; card statements require the full statement balance and minimum due is never operational
 - `statementActualStatusModel.ts` — strict pure matcher for statement candidates against Actual schedules, occurrences, and exact transactions
 - `bills-mirror-sync.ts` — syncs bill occurrences into `ea_bills_mirror_*`, schedules maintenance; thin IO + scheduler + refresh-orchestration over billsMirrorModel.ts
 - `billsMirrorModel.ts` — pure derivation: date/range math, mirror row<->object projections, upsert arg builders, and the maintenance-due predicate

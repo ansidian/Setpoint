@@ -28,10 +28,12 @@ function resolveSemanticBillAmount(candidate: BillCandidate): SemanticAmountReso
       ))
     : [];
   const eventKind = String(candidate.event_kind || "");
+  const cardStatement = eventKind === "statement_issued" && candidate.type === "transfer";
   const scheduledPayment = eventKind === "payment_scheduled";
   const paymentEvent = ["payment_scheduled", "payment_completed", "card_payment_completed", "account_transfer_pending", "account_transfer_completed"].includes(eventKind);
   const statementAmountAllowed = !eventKind || ["statement_issued", "payment_due", "bill_issued"].includes(eventKind);
   const allowedCandidates = candidates.filter((item) => item.kind !== "minimum_due"
+    && (!cardStatement || item.kind === "statement_balance")
     && (!scheduledPayment || item.kind === "payment_amount")
     && (statementAmountAllowed || item.kind !== "statement_balance"));
   const priorityKind = paymentEvent && allowedCandidates.some((item) => item.kind === "payment_amount")
@@ -67,6 +69,7 @@ function resolveSemanticBillAmount(candidate: BillCandidate): SemanticAmountReso
     candidate.amount_kind
     && BILL_AMOUNT_KINDS.includes(candidate.amount_kind)
     && candidate.amount_kind !== "minimum_due"
+    && (!cardStatement || candidate.amount_kind === "statement_balance")
     && (!scheduledPayment || candidate.amount_kind === "payment_amount")
     && (statementAmountAllowed || candidate.amount_kind !== "statement_balance")
     && candidates.length === 0

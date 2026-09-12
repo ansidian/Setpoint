@@ -27,15 +27,19 @@ describe("email profile editing seed", () => {
       budgetId: "source-budget", target: { kind: "expense", accountId: "actual-card", payeeId: "actual-shop" } });
   });
 
-  it.each([false, true])("does not seed a scheduled-payment card identity from its funding suffix (destination supplied: %s)", destination => {
+  it.each([
+    { eventKind: "payment_scheduled", destination: false }, { eventKind: "payment_scheduled", destination: true },
+    { eventKind: "statement_issued", destination: false }, { eventKind: "statement_issued", destination: true },
+  ] as const)("keeps $eventKind card identity separate from funding (destination supplied: $destination)", ({ eventKind, destination }) => {
     const sourcePlan = plan();
-    sourcePlan.candidate = { ...sourcePlan.candidate, type: "transfer", event_kind: "payment_scheduled",
+    sourcePlan.candidate = { ...sourcePlan.candidate, type: "transfer", event_kind: eventKind,
       from_account_hint: "Savings ending 1234", from_account_hint_confidence: 0.99,
       account_last4_evidence: "Savings ending 1234",
       ...(destination ? { to_account_hint: "Rewards Card ending 9876", to_account_hint_confidence: 0.99 } : {}) };
     const seed = buildEmailFinancialProfileSeed(email, { body: "Payment from Savings ending 1234 to Rewards Card ending 9876.",
       resolution: { key: "receiving-gmail:receipt", plan: sourcePlan } });
     expect(seed.accountLast4).toBe(destination ? "9876" : undefined);
+    expect(seed.target).toMatchObject({ kind: "card_payment" });
   });
 
   it("does not borrow another message’s suggestion", () => {

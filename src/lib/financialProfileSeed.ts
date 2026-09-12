@@ -55,7 +55,7 @@ function candidateTarget(candidate: BillCandidate | null, plan?: FinancialEmailP
   if (!candidate) return undefined;
   const targets = plan?.targets;
   if (candidate.type === "bill") return { kind: "utility", scheduleId: existingId(targets?.schedule) };
-  if (candidate.type === "transfer" && candidate.event_kind === "payment_scheduled") return {
+  if (candidate.type === "transfer" && ["statement_issued", "payment_scheduled"].includes(String(candidate.event_kind))) return {
     kind: "card_payment", fromAccountId: existingId(targets?.fromAccount), toAccountId: existingId(targets?.toAccount),
     ...(existingId(targets?.schedule) ? { scheduleId: existingId(targets?.schedule) } : {}),
   };
@@ -83,7 +83,7 @@ export function buildEmailFinancialProfileSeed(email: SourceEmail, {
   let suffix = text(candidate?.account_last4, 16);
   let suffixEvidence = candidate?.account_last4_evidence;
   let suffixConfidence = candidate?.account_last4_confidence;
-  if (candidate?.type === "transfer" && candidate.event_kind === "payment_scheduled") {
+  if (candidate?.type === "transfer" && ["statement_issued", "payment_scheduled"].includes(String(candidate.event_kind))) {
     const roleSuffix = (role: "from_account" | "to_account") => Number(candidate[`${role}_hint_confidence`]) >= 0.8
       && Number(candidate[`${role}_hint_confidence`]) <= 1 && grounded(candidate[`${role}_hint`])
       ? String(candidate[`${role}_hint`]).match(/\b\d{4}\b/g)?.pop() : undefined;

@@ -106,6 +106,7 @@ export function createFinancialEventWorker({
       let assessedCandidate = await assessSource(document, contentHash);
       if (assessedCandidate && !isIgnoredFinancialNotice(assessedCandidate) && !document.acquiredSource
         && (assessedCandidate.type === "bill" || assessedCandidate.type === "income" || assessedCandidate.event_kind === "payment_scheduled"
+          || (assessedCandidate.type === "transfer" && assessedCandidate.event_kind === "statement_issued")
           || document.senderAuthentication?.status !== "pass")) {
         // Preserve the initial assessment if acquisition retries. PDF evidence
         // gets its own bounded assessment identity once the complete source lands.

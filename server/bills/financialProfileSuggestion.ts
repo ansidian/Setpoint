@@ -15,7 +15,7 @@ function suggestedTarget(candidate: BillCandidate, intended: FinancialIntendedOp
     const scheduleId = resolvedId(targets.schedule);
     return scheduleId ? { kind: "utility", scheduleId } : null;
   }
-  if (candidate.type === "transfer" && candidate.event_kind === "payment_scheduled" && intended === "create_transfer_schedule") {
+  if (candidate.type === "transfer" && ["statement_issued", "payment_scheduled"].includes(String(candidate.event_kind)) && intended === "create_transfer_schedule") {
     const fromAccountId = resolvedId(targets.fromAccount);
     const toAccountId = resolvedId(targets.toAccount);
     const scheduleId = resolvedId(targets.schedule);

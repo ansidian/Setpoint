@@ -237,6 +237,7 @@ Return a corrected extraction using the required schema. Focus on amount, amount
 
 First-pass extraction:
 ${JSON.stringify({
+    type: canonicalCandidate.type ?? null,
     event_kind: canonicalCandidate.event_kind ?? null,
     amount: canonicalCandidate.amount ?? null,
     amount_kind: canonicalCandidate.amount_kind ?? null,
@@ -245,7 +246,7 @@ ${JSON.stringify({
 
   try {
     const verified = await provider.extract({ model, systemPrompt: prompt, content, usagePurpose: "verification" });
-    const verifiedCandidate = withoutMinimumDueSelection({ ...verified.fields, event_kind: canonicalCandidate.event_kind });
+    const verifiedCandidate = withoutMinimumDueSelection({ ...verified.fields, type: canonicalCandidate.type, event_kind: canonicalCandidate.event_kind });
     const verifiedCovered = coveredCurrencyValueCount(sourceValues, verifiedCandidate);
     const accepted = verifiedCovered === sourceValues.length
       && selectionIsValid(verifiedCandidate, sourceValues)

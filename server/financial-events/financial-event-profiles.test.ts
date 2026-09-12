@@ -50,6 +50,18 @@ function notice(uid: string, date: string, amount: number, card = false): Source
   };
 }
 
+function cardStatement(uid: string, date: string, amount: number): Source {
+  const source = notice(uid, date, amount, true);
+  const event = "Your Example Card statement is now available";
+  const balance = `Statement balance $${amount.toFixed(2)}`;
+  return { ...source, body: `${event}. ${balance}. Minimum due $35.00. Payment due ${date}. Reference: ${uid}.`,
+    candidate: { ...source.candidate, type_evidence: event, event_evidence: event, event_kind: "statement_issued",
+      document_role: "statement", amount_kind: "statement_balance", amount_candidates: [
+        { kind: "statement_balance", value: amount, confidence: 0.99, evidence: balance },
+        { kind: "minimum_due", value: 35, confidence: 0.99, evidence: "Minimum due $35.00" },
+      ] } };
+}
+
 describe("financial profile schedule lifecycle", () => {
   let db: Client;
   let clock: number;
@@ -62,6 +74,7 @@ describe("financial profile schedule lifecycle", () => {
   let acquiredSources: Map<string, FinancialEmailSource>;
   let acquiredCandidates: Map<string, BillCandidate>;
   let sourceOffline: boolean;
+  let auditResponse: BillCandidate | null;
 
   function metadata(): ActualMetadata {
     return {
@@ -117,7 +130,10 @@ describe("financial profile schedule lifecycle", () => {
       metadataReader: async () => ({ ...metadata(), syncHealth: { state: "current", lastSuccessAt: new Date(clock).toISOString() } }),
       occurrenceReader: async () => ({ schedules: [] }), transactionReader: async () => ({ transactions: [] }),
       candidateVerification: createBillCandidateVerificationService({ credentialResolver: async () => null,
-        providers: { openai: { extract: async () => { throw new Error("No additional email evidence is available"); } } } }),
+        providers: { openai: { extract: async () => {
+          if (auditResponse) return { fields: structuredClone(auditResponse), usage: {} };
+          throw new Error("No additional email evidence is available");
+        } } } }),
       modelChoiceReader: async () => ({ provider: "openai", model: "fixture" }), now: () => new Date(clock),
     });
     const execute = createFinancialEventExecutor({
@@ -188,6 +204,7 @@ describe("financial profile schedule lifecycle", () => {
     await db.execute({ sql: "UPDATE ea_financial_workflow_state SET cutover_at=?", args: [new Date(clock - 60_000).toISOString()] });
     await db.execute("INSERT INTO ea_settings (user_id,actual_budget_sync_id) VALUES ('owner','budget')");
     sources = new Map(); acquiredSources = new Map(); acquiredCandidates = new Map(); sourceOffline = false;
+    auditResponse = null;
     savedUpdates = []; duringPreview = null;
     schedules = [
       { id: "electric", name: "Electricity", type: "bill", accountId: "savings", payeeId: "power", categoryId: "electricity", amountCents: -5_000, date: "2026-08-21" },
@@ -234,9 +251,10 @@ describe("financial profile schedule lifecycle", () => {
     expect(savedUpdates).toHaveLength(1);
   });
 
-  it("checks the complete scheduled-payment source even when indexed sender authentication already passes", async () => {
+  it.each(["payment", "statement"])("checks the complete card %s source even when indexed sender authentication already passes", async kind => {
     await saveProfiles([cardProfile]);
-    const initial = notice("changed-payment-source", "2026-09-25", 251.32, true);
+    const initial = kind === "statement" ? cardStatement("changed-payment-source", "2026-09-25", 251.32)
+      : notice("changed-payment-source", "2026-09-25", 251.32, true);
     const body = "Your card payment was cancelled.";
     acquiredSources.set(initial.uid, { body, fromName: "Provider", fromAddress: initial.from,
       subject: "Bill or payment notice", emailDate: new Date(clock).toISOString(), threadId: null, messageId: null,
@@ -250,6 +268,53 @@ describe("financial profile schedule lifecycle", () => {
       operation: null, plan: { operation: { intended: "no_write" } }, documents: [{ candidate: { event_kind: "payment_cancelled" } }] });
     expect(savedUpdates).toEqual([]);
   });
+
+  it("schedules a statement's full balance for its new cycle and preserves settled repeats", async () => {
+    await saveProfiles([cardProfile]);
+    schedules[1]!.date = "2026-09-05";
+    schedules[1]!.amountCents = -122_903;
+    await arrive(cardStatement("october-statement", "2026-10-05", 207.43));
+    await processEvent();
+    const original = await store.getEventForEmail("owner", "october-statement");
+    expect(original).toMatchObject({ status: "settled", outcome: { outcome: "updated" },
+      plan: { candidate: { event_kind: "statement_issued", amount_kind: "statement_balance" } } });
+    expect(savedUpdates).toMatchObject([{ scheduleId: "card-payment", fromAccountId: "savings", toAccountId: "card",
+      date: "2026-10-05", amountCents: 20_743 }]);
+    restart();
+    await arrive(cardStatement("october-statement-copy", "2026-10-05", 207.43));
+    await processEvent();
+    expect(await store.getEventForEmail("owner", "october-statement-copy")).toMatchObject({ id: original!.id, status: "settled" });
+    expect(savedUpdates).toHaveLength(1);
+  });
+
+  it.each(["no_profile", "missing_balance", "minimum_only", "current_balance_only", "missing_date", "unsupported_year"])(
+    "keeps statement facts in review when scheduling lacks %s", async missing => {
+      if (missing !== "no_profile") await saveProfiles([cardProfile]);
+      const source = cardStatement("review-statement", "2026-10-05", 207.43);
+      const candidate = source.candidate!;
+      if (missing === "missing_balance" || missing === "minimum_only") {
+        source.body = source.body.replace("Statement balance $207.43.", "");
+        candidate.amount = missing === "minimum_only" ? 35 : null;
+        candidate.amount_kind = missing === "minimum_only" ? "minimum_due" : null;
+        candidate.amount_candidates = candidate.amount_candidates!.filter(amount => amount.kind === "minimum_due");
+      }
+      if (missing === "missing_date") { source.body = source.body.replace("Payment due 2026-10-05.", ""); candidate.due_date = null; }
+      if (missing === "unsupported_year") source.body = source.body.replace("2026-10-05", "10/05");
+      if (missing === "current_balance_only") {
+        source.body = source.body.replace("Statement balance", "Current balance");
+        candidate.amount_kind = "other";
+        candidate.amount_candidates![0] = { kind: "other", value: 207.43, evidence: "Current balance $207.43" };
+      }
+      auditResponse = candidate;
+      await arrive(source);
+      await processEvent();
+      expect(await store.getEventForEmail("owner", source.uid)).toMatchObject({ status: "needs_review", operation: null,
+        documents: [{ candidate: { event_kind: "statement_issued", document_role: "statement" } }] });
+      expect(savedUpdates).toEqual([]);
+      expect(await worker.processNextDocument()).toBe(false);
+      expect(await worker.processNextEvent()).toBe(false);
+    },
+  );
 
   it("updates two utility cycles and keeps late copies of the first cycle quiet after restart", async () => {
     await saveProfiles([utilityProfile]);
@@ -374,6 +439,11 @@ describe("financial profile schedule lifecycle", () => {
     expect(savedUpdates).toMatchObject([{ scheduleId: "card-payment", fromAccountId: "savings", toAccountId: "card",
       date: "2026-09-25", amountCents: 25_132 }]);
     expect(schedules[1]).toMatchObject({ id: "card-payment", date: "2026-09-25", amountCents: -25_132 });
+    const statement = cardStatement("same-cycle-statement", "2026-09-25", 251.32);
+    statement.candidate = { ...statement.candidate, account_hint: "Example Card", account_hint_confidence: 0.99 };
+    await arrive(statement);
+    await processEvent();
+    expect(await store.getEventForEmail("owner", statement.uid)).toMatchObject({ status: "settled" });
     for (const event_kind of ["card_payment_completed", "payment_due"] as const) {
       const source = notice(event_kind, "2026-09-25", 251.32, true);
       const evidence = event_kind === "payment_due" ? "Your payment is due in five days" : "Your card payment completed";

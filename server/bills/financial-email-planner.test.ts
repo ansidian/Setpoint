@@ -81,20 +81,24 @@ describe("financial email planner contract", () => {
     });
   });
 
-  it("ignores credit-card statements with corroborating account evidence", async () => {
+  it("keeps credit-card statements available for full-balance schedule review", async () => {
     const plan = planner();
     const corroborated = await plan("u1", {
       candidate: candidate("statement_issued", {
         type: "transfer",
+        type_confidence: 0.99,
+        type_evidence: "Card statement available",
+        amount_kind: "statement_balance",
+        amount_candidates: [{ kind: "statement_balance", value: 42.25, confidence: 0.99 }],
         account_last4: "4242",
         account_last4_confidence: 0.98,
         account_last4_evidence: "Card ending in 4242",
       }),
     });
     expect(corroborated).toMatchObject({
-      classification: { documentKind: "informational", reasons: ["informational_event"] },
-      operation: { intended: "no_write", kind: "no_write" },
-      reviewReasons: [],
+      classification: { documentKind: "credit_card_statement", reasons: [] },
+      operation: { intended: "create_transfer_schedule", kind: "review" },
+      candidate: { amount: 42.25, amount_kind: "statement_balance", event_kind: "statement_issued" },
     });
   });
 

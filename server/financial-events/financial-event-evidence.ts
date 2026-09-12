@@ -190,7 +190,11 @@ export function combineFinancialEventEvidence(documents: FinancialEvidenceDocume
 /** A verified old write is never evidence that changed source facts are correct. */
 export function financialEvidenceChangedAfterAttempt(candidate: BillCandidate | null, admitted: BillCandidate | null): boolean {
   if (!candidate || !admitted) return true;
-  if (family(candidate) !== family(admitted) || candidate.event_kind !== admitted.event_kind) return true;
+  const sameCardSchedule = [candidate, admitted].every(item => item.type === "transfer"
+    && ["statement_issued", "payment_scheduled"].includes(String(item.event_kind)));
+  if (family(candidate) !== family(admitted) || (candidate.event_kind !== admitted.event_kind && !sameCardSchedule)) return true;
+  // Statement balances and arranged payments can describe the same schedule.
+  // Compare their original amount roles below; relabeling either would lose its canonical amount.
   if (merchant(candidate) && merchant(admitted) && merchant(candidate) !== merchant(admitted)) return true;
   const normalize = (value: unknown) => text(value).toLowerCase();
   return ["due_date", "currency", "account_last4", "account_hint", "from_account_hint", "to_account_hint", "settlement_kind"]

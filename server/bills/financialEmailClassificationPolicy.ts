@@ -144,11 +144,11 @@ function hasRecurringEvidence(candidate: BillCandidate): boolean {
     || candidate.type === "bill";
 }
 
-/** Only original bill details and scheduled card payments create schedule work. */
+/** Original bills, card statements and scheduled card payments can create schedule work. */
 export function isIgnoredFinancialNotice(candidate: BillCandidate): boolean {
   return candidate.event_kind === "payment_due" || candidate.event_kind === "card_payment_completed"
     || (candidate.type === "bill" && ["payment_completed", "payment_scheduled"].includes(String(candidate.event_kind)))
-    || (candidate.type === "transfer" && ["statement_issued", "account_transfer_completed", "account_transfer_pending"].includes(String(candidate.event_kind)));
+    || (candidate.type === "transfer" && ["account_transfer_completed", "account_transfer_pending"].includes(String(candidate.event_kind)));
 }
 
 function hasApprovedExternalIncome(candidate: BillCandidate): boolean {

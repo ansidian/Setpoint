@@ -17,6 +17,12 @@ function plan(): FinancialEmailPlan {
 }
 
 describe('financial completion draft policy', () => {
+  it('prepares a statement for payment scheduling while its financial plan is still pending', () => {
+    const statement = plan();
+    statement.candidate = { type: 'transfer', event_kind: 'statement_issued', amount: 207.43, due_date: '2026-10-05' };
+    expect(createCompletionDraft(statement).fields).toMatchObject({ kind: 'transfer_schedule', amount: '207.43', date: '2026-10-05' });
+  });
+
   it('keeps enrichment clean without changing the reviewed source version', () => {
     const initial = plan();
     const draft = createCompletionDraft(initial);

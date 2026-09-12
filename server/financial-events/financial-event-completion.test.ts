@@ -478,6 +478,26 @@ describe("owner completion of managed financial events", () => {
     expect([...ledger.values()]).toEqual(recorded);
   });
 
+  it.each([12, 14])("compares a later statement balance of %s with the owner-confirmed payment schedule", async amount => {
+    const candidate: BillCandidate = { ...partial, type: "transfer", event_kind: "statement_issued", amount_kind: "statement_balance",
+      provider_reference: "STATEMENT-123", provider_reference_confidence: 0.99, provider_reference_evidence: "STATEMENT-123" };
+    await arrive("statement", candidate, { body: "Statement balance $12.00. Reference STATEMENT-123.", authenticated: true });
+    const original = await completion().complete("owner", await request("statement", { ...entry, kind: "transfer_schedule",
+      fromAccountId: "checking", toAccountId: "card", scheduleName: "Card payment" }));
+    await drainEvent();
+    const recorded = [...ledger.values()];
+    now += 86_400_000;
+    await arrive("repeat-statement", { ...candidate, amount, due_date: DATE }, {
+      body: `Statement balance $${amount.toFixed(2)} due ${DATE}. Reference STATEMENT-123.`, authenticated: true, date: now,
+    });
+    await worker().processNextDocument();
+    await drainEvent();
+    expect(await store.getEventForEmail("owner", "repeat-statement")).toMatchObject({ id: original.workflow?.id,
+      status: amount === 12 ? "settled" : "needs_review" });
+    expect(recorded).toHaveLength(1);
+    expect([...ledger.values()]).toEqual(recorded);
+  });
+
   it("projects a corrected schedule as a recorded ledger entry while retaining the original managed outcome", async () => {
     await arrive("receipt", null);
     const completed = await completion().complete("owner", await request("receipt", { ...entry, kind: 'bill' }));

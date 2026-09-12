@@ -18,7 +18,7 @@ function groundedHint(candidate: BillCandidate, role: "account" | "from_account"
 }
 
 function fundingSuffix(candidate: BillCandidate, content: string): string | null {
-  return candidate.type === "transfer" && candidate.event_kind === "payment_scheduled"
+  return candidate.type === "transfer" && ["statement_issued", "payment_scheduled"].includes(String(candidate.event_kind))
     ? accountSuffix(groundedHint(candidate, "from_account", content) || "") : null;
 }
 
@@ -35,7 +35,7 @@ export function financialProfileCardIdentity(candidate: BillCandidate, content: 
 function profileKind(candidate: BillCandidate): FinancialProfile["target"]["kind"] | null {
   if (isIgnoredFinancialNotice(candidate)) return null;
   if (candidate.type === "bill" && ["bill_issued", "statement_issued"].includes(String(candidate.event_kind))) return "utility";
-  if (candidate.type === "transfer" && candidate.event_kind === "payment_scheduled") return "card_payment";
+  if (candidate.type === "transfer" && ["statement_issued", "payment_scheduled"].includes(String(candidate.event_kind))) return "card_payment";
   if (candidate.type === "expense") return "expense";
   if (candidate.type === "income") return "income";
   return null;
