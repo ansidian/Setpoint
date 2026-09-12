@@ -29,9 +29,11 @@ function amountKey(value: unknown): string | null {
 
 export function currencyValuesInText(content: string): number[] {
   const values = new Map<string, number>();
-  const pattern = /(?:\$|US\$|USD\s*)\s*([0-9][0-9,]*(?:\.\d{1,2})?)|([0-9][0-9,]*(?:\.\d{1,2})?)\s*USD\b/gi;
+  // Consume a same-line suffix with its amount so "$26.52 USD 1" cannot
+  // reuse USD as a prefix for the following receipt quantity.
+  const pattern = /(?:\$|US\$)\s*([0-9][0-9,]*(?:\.\d{1,2})?)(?:[^\S\r\n]*USD\b)?|USD\s*([0-9][0-9,]*(?:\.\d{1,2})?)|([0-9][0-9,]*(?:\.\d{1,2})?)\s*USD\b/gi;
   for (const match of content.matchAll(pattern)) {
-    const value = moneyNumber(match[1] || match[2]);
+    const value = moneyNumber(match[1] || match[2] || match[3]);
     const key = amountKey(value);
     if (value != null && key) values.set(key, value);
   }
@@ -126,11 +128,24 @@ function amountEvidenceNeedsAudit(content: string, candidate: BillCandidate): bo
     || hasAmbiguousSemanticBillAmount({ ...candidate, amount_verification: undefined });
 }
 
+function hasSupersededCurrencyCoverage(content: string, candidate: BillCandidate, sourceValues: number[]): boolean {
+  const audit = candidate.amount_verification;
+  if (audit?.status !== "failed" || audit.source_value_count <= sourceValues.length) return false;
+  // Reproduce the previous scanner on this exact source before reconsidering a
+  // saved failure. A changed count alone cannot revoke an unrelated failed audit.
+  const previousPattern = /(?:\$|US\$|USD\s*)\s*([0-9][0-9,]*(?:\.\d{1,2})?)|([0-9][0-9,]*(?:\.\d{1,2})?)\s*USD\b/gi;
+  const previousValues = new Set([...content.matchAll(previousPattern)]
+    .map((match) => amountKey(match[1] || match[2])));
+  return previousValues.size === audit.source_value_count
+    && previousValues.size > currencyValuesInText(content).length;
+}
+
 export function shouldVerifyBillAmounts(content: string, candidate: BillCandidate): boolean {
   if (hasUnknownAmountRoles(candidate)) return true;
   const sourceValues = requiredCurrencyValues(content);
   if (sourceValues.length < MIN_VERIFY_VALUES || sourceValues.length > MAX_VERIFY_VALUES) return false;
-  return coveredCurrencyValueCount(sourceValues, candidate) < sourceValues.length
+  return hasSupersededCurrencyCoverage(content, candidate, sourceValues)
+    || coveredCurrencyValueCount(sourceValues, candidate) < sourceValues.length
     || !selectionIsValid(candidate, sourceValues)
     || (sourceValues.length > 1 && amountEvidenceNeedsAudit(content, candidate));
 }
@@ -197,7 +212,8 @@ export async function verifyBillAmounts({
       usage: {},
     };
   }
-  const needsEvidenceAudit = unknownRoles || (sourceValues.length > 1 && amountEvidenceNeedsAudit(content, canonicalCandidate));
+  const needsEvidenceAudit = unknownRoles || ((sourceValues.length > 1 || canonicalCandidate.amount_verification?.status === "failed")
+    && amountEvidenceNeedsAudit(content, canonicalCandidate));
   if (initialCovered === sourceValues.length && !selectionIsValid(canonicalCandidate, sourceValues) && !needsEvidenceAudit) {
     const repaired = repairSelectionFromSemanticCandidates(canonicalCandidate, sourceValues);
     if (repaired) {
@@ -216,6 +232,21 @@ export async function verifyBillAmounts({
         usage: {},
       };
     }
+  }
+
+  if (hasSupersededCurrencyCoverage(content, canonicalCandidate, sourceValues)
+    && initialCovered === sourceValues.length
+    && selectionIsValid(canonicalCandidate, sourceValues)
+    && !amountEvidenceNeedsAudit(content, canonicalCandidate)) {
+    return {
+      candidate: {
+        ...canonicalCandidate,
+        amount_verification: verificationMetadata(
+          "corrected", sourceValues.length, initialCovered, providerId, model, initialCovered,
+        ),
+      },
+      usage: {},
+    };
   }
 
   const prompt = `Audit a first-pass bill amount extraction against the original email evidence.
@@ -256,7 +287,8 @@ ${JSON.stringify({
         candidate: {
           ...canonicalCandidate,
           amount_verification: verificationMetadata(
-            needsEvidenceAudit || initialCovered < sourceValues.length || !selectionIsValid(canonicalCandidate, sourceValues)
+            canonicalCandidate.amount_verification?.status === "failed"
+              || needsEvidenceAudit || initialCovered < sourceValues.length || !selectionIsValid(canonicalCandidate, sourceValues)
               ? "failed"
               : "kept_initial",
             sourceValues.length,

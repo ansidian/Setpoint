@@ -58,7 +58,9 @@ export function evidenceReasons(
     if (minimumDueOnly(candidate)) {
       reasons.push(reason("minimum_due_only", "A minimum due amount is informational and cannot be used for a write.", "amount"));
     } else if (!semanticAmount || semanticAmount.amount <= 0) {
-      reasons.push(reason("canonical_amount_missing", "A non-minimum canonical amount is required.", "amount"));
+      reasons.push(reason("canonical_amount_missing", candidate.amount_verification?.status === "failed"
+        ? "The extracted amount could not be verified against the email. Review the total before recording."
+        : "A transaction total or bill balance is required before recording.", "amount"));
     }
     if (!candidate.due_date) {
       reasons.push(reason("due_date_missing", "A valid transaction or schedule date is required.", "due_date"));
