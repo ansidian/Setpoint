@@ -146,11 +146,12 @@ describe("bill event verifier", () => {
   });
 
   it.each([
-    { name: "verified initial confirmation", context: { kind: "initial_confirmation_without_date", confidence: 0.99, evidence: "Your order was placed" }, accepted: "initial_confirmation_without_date" },
+    { name: "verified initial confirmation at 0.85 confidence", context: { kind: "initial_confirmation_without_date", confidence: 0.85, evidence: "Your order was placed" }, accepted: "initial_confirmation_without_date" },
+    { name: "initial confirmation at the confidence floor", context: { kind: "initial_confirmation_without_date", confidence: 0.8, evidence: "Your order was placed" }, accepted: "initial_confirmation_without_date" },
     { name: "negative reassessment", context: { kind: "other", confidence: 0.99, evidence: "Receipt reissued" }, accepted: "other" },
     { name: "omitted context", context: undefined, accepted: null },
     { name: "ungrounded context", context: { kind: "initial_confirmation_without_date", confidence: 0.99, evidence: "Purchase made today" }, accepted: null },
-    { name: "uncertain context", context: { kind: "initial_confirmation_without_date", confidence: 0.89, evidence: "Your order was placed" }, accepted: null },
+    { name: "uncertain context", context: { kind: "initial_confirmation_without_date", confidence: 0.79, evidence: "Your order was placed" }, accepted: null },
   ] as const)("requires fresh grounded purchase date context during audit: $name", async ({ context, accepted }) => {
     const candidate: BillCandidate = {
       event_kind: "purchase", event_confidence: 0.99, event_evidence: "Your order was placed",

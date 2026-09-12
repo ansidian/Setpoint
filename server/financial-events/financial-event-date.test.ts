@@ -12,7 +12,7 @@ function confirmation(candidate: Partial<BillCandidate> = {}, source: Partial<Fi
     candidate: { type: "expense", type_confidence: 0.99, type_evidence: "Your purchase is confirmed.",
       event_kind: "purchase", event_confidence: 0.99, event_evidence: "Your purchase is confirmed.",
       document_role: "merchant_receipt", amount: 30, currency: "USD", due_date: null,
-      purchase_date_context: { kind: "initial_confirmation_without_date", confidence: 0.99, evidence: "Your purchase is confirmed." },
+      purchase_date_context: { kind: "initial_confirmation_without_date", confidence: 0.85, evidence: "Your purchase is confirmed." },
       ...candidate }, ...source,
   };
 }
@@ -43,10 +43,19 @@ describe("source-backed purchase confirmation dates", () => {
     expect(financialDocumentSupportsDate(unsupported, unsupported.candidate!, now)).toBe(false);
   });
 
+  it("accepts grounded timing context at the confidence floor", () => {
+    const source = confirmation({ purchase_date_context: {
+      kind: "initial_confirmation_without_date", confidence: 0.8, evidence: "Your purchase is confirmed.",
+    } });
+    const candidate = resolveFinancialDocumentDate(source, now)!;
+    expect(candidate.due_date).toBe("2026-09-06");
+    expect(financialDocumentSupportsDate(source, candidate, now)).toBe(true);
+  });
+
   it.each<Partial<BillCandidate>>([
     { purchase_date_context: null },
     { purchase_date_context: { kind: "other", confidence: 0.99, evidence: "Your purchase is confirmed." } },
-    { purchase_date_context: { kind: "initial_confirmation_without_date", confidence: 0.89, evidence: "Your purchase is confirmed." } },
+    { purchase_date_context: { kind: "initial_confirmation_without_date", confidence: 0.79, evidence: "Your purchase is confirmed." } },
     { purchase_date_context: { kind: "initial_confirmation_without_date", confidence: 1.1, evidence: "Your purchase is confirmed." } },
     { purchase_date_context: { kind: "initial_confirmation_without_date", confidence: 0.99, evidence: "Ordered today" } },
     { type: "income" }, { type: "bill" }, { type: "transfer" },

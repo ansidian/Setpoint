@@ -24,7 +24,7 @@ export function resolveFinancialDocumentDate(document: FinancialEvidenceDocument
     || !hasStrongFinancialType(candidate) || !hasVerbatimFinancialEvidence(content, candidate.type_evidence)
     || !(Number(candidate.event_confidence) >= 0.9 && Number(candidate.event_confidence) <= 1)
     || !hasVerbatimFinancialEvidence(content, candidate.event_evidence)
-    || context?.kind !== "initial_confirmation_without_date" || !(context.confidence >= 0.9 && context.confidence <= 1)
+    || context?.kind !== "initial_confirmation_without_date" || !(context.confidence >= 0.8 && context.confidence <= 1)
     || !hasVerbatimFinancialEvidence(content, context.evidence)) return candidate;
   const timestamp = new Date(document.emailDate);
   if (!Number.isFinite(timestamp.getTime())

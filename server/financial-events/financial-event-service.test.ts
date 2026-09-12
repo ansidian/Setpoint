@@ -333,12 +333,12 @@ describe("autonomous financial event processing", () => {
     expect(ledger.map((entry) => entry.amountCents)).toEqual(recovers ? [-3000] : []);
   });
 
-  it("records an initial undated purchase using the original email day and preserves its source across recovery", async () => {
+  it("records an initial undated purchase at 0.85 timing confidence and preserves its email date across recovery", async () => {
     const source = receipt("initial-order", { role: "merchant_receipt", receivedOffset: 6 * 3600_000 + 10 * 60_000 });
     source.body = source.body.replace("Paid $30.00 on " + day, "Your order is confirmed for $30.00");
     source.candidate = { ...source.candidate, due_date: null, type_confidence: 0.99, type_evidence: "Your order is confirmed",
       event_evidence: "Your order is confirmed", amount_candidates: [{ kind: "transaction_amount", value: 30, confidence: 0.99, evidence: "$30.00" }],
-      purchase_date_context: { kind: "initial_confirmation_without_date", confidence: 0.99, evidence: "Your order is confirmed" } };
+      purchase_date_context: { kind: "initial_confirmation_without_date", confidence: 0.85, evidence: "Your order is confirmed" } };
     clock = arrival + 2 * 86400_000;
     await arrive(source); await assessArrivals(); await processEvents();
     expect(ledger.map(entry => [entry.date, entry.amountCents])).toEqual([[day, -3000]]);

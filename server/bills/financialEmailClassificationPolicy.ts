@@ -28,7 +28,7 @@ export function validateFinancialSemanticIdentity(candidate: BillCandidate, cont
   const normalized = { ...candidate };
   const purchaseDateContext = candidate.purchase_date_context;
   if (purchaseDateContext != null
-    && !(Number(purchaseDateContext.confidence) >= 0.9
+    && !(Number(purchaseDateContext.confidence) >= 0.8
       && Number(purchaseDateContext.confidence) <= 1
       && ["initial_confirmation_without_date", "other"].includes(purchaseDateContext.kind)
       && hasVerbatimFinancialEvidence(content, purchaseDateContext.evidence)
