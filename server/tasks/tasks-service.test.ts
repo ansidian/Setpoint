@@ -337,6 +337,15 @@ describe("deadline-domain mutations", () => {
 });
 
 describe("updateDeadline", () => {
+  beforeEach(() => {
+    // Keep reminder fixtures in the future regardless of the host's clock.
+    vi.useFakeTimers({ now: new Date("2026-05-10T12:00:00.000Z"), toFake: ["Date"] });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("recomputes unsent Todoist reminders when the due date changes through EA", async () => {
     await seedReminder();
     todoist.updateTodoistTask.mockResolvedValueOnce({
