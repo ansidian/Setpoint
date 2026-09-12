@@ -293,6 +293,40 @@ describe("useCalendarRange", () => {
     expect(result.current.staleRefreshPending).toBe(false);
   });
 
+  it.each([true, false])("keeps the provider change when stale marking supersedes a read (saved cache: %s)", async (savedCache) => {
+    const original = { id: "event-1", startMs: new Date("2026-04-20T18:00:00Z").getTime(), title: "Original" };
+    const changed = { ...original, title: "External edit" };
+    getCalendarRange.mockResolvedValue({ events: [original] });
+    const { result } = renderHook(() => useCalendarRange());
+    if (savedCache) {
+      await act(async () => { await result.current.ensureRange("2026-04-18", "2026-04-25", { prefetchKeys: ["2026-04"] }); });
+    }
+    let resolveOld!: (value: CalendarRangeTestResponse) => void;
+    let resolveNew!: (value: CalendarRangeTestResponse) => void;
+    getCalendarRange.mockReturnValue(new Promise((resolve) => { resolveOld = resolve; }));
+    let oldRead!: Promise<CalendarRangeEvent[]>;
+    act(() => {
+      oldRead = savedCache
+        ? result.current.refreshRangeInPlace("2026-04-18", "2026-04-25")
+        : result.current.ensureRange("2026-04-18", "2026-04-25", { prefetchKeys: ["2026-04"] });
+    });
+    getCalendarRange.mockReturnValue(new Promise((resolve) => { resolveNew = resolve; }));
+    let newRead!: Promise<CalendarRangeEvent[]>;
+    act(() => {
+      result.current.markStale();
+      newRead = result.current.refreshRangeInPlace("2026-04-18", "2026-04-25");
+    });
+    expect(result.current.getEvents(2026, 3)).toEqual(savedCache ? [original] : []);
+    expect(result.current.staleRefreshPending).toBe(true);
+    await act(async () => { resolveNew({ events: [changed] }); await newRead; });
+    expect(result.current.getEvents(2026, 3)).toEqual([changed]);
+    const stamp = result.current.cacheStamp;
+    await act(async () => { resolveOld({ events: [original] }); await oldRead; });
+    expect(result.current.getEvents(2026, 3)).toEqual([changed]);
+    expect(result.current.cacheStamp).toBe(stamp);
+    expect(result.current.staleRefreshPending).toBe(false);
+  });
+
   it("refetches months whose inherited in-flight fetch was aborted by a previous pass", async () => {
     const event = { id: "april-event", startMs: new Date("2026-04-20T18:00:00Z").getTime(), title: "April" };
     const controllerA = new AbortController();

@@ -32,6 +32,7 @@ The HTTP surface: Express routers that validate input, apply auth, and delegate 
 - `reminders.ts` — Discord reminder testing and configuration
 - `settings.ts` — user settings, model selection, and active integration configs; legacy Bill Pay mappings are retained only in storage and are not exposed
 - `gmail-push.ts` — Gmail Pub/Sub push intake, queues history syncs
+- `calendar-push.ts` — bodyless Google Calendar callback, admitted by persisted channel identity/token before browser CSRF middleware; acknowledges only durable work
 - `todoist-webhook.ts` — Todoist webhook deliveries with signature verification
 - `todoist-oauth.ts` — Todoist OAuth begin/callback/status routes with callback-scoped browser binding
 - `instance-credentials.ts` — authenticated metadata and write-only deployment credential mutations; dispatches allowlisted validation/promotion and Gmail Pub/Sub lifecycle actions to provider-owned managers

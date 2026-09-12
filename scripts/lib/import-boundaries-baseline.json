@@ -12,6 +12,7 @@
     ],
     "calendar": [
       "calendar.ts",
+      "calendar-push.ts",
       "calendar-search-mirror.ts"
     ],
     "dashboard": [

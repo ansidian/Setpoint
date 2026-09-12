@@ -139,4 +139,19 @@ describe("dashboard refresh model", () => {
       refreshCalendarDomains: { force: true, includeBills: false },
     });
   });
+
+  it.each(["calendar_push_synced", "calendar_reconciled"])("refreshes the visible events range and invalidates retained months after %s", (reason) => {
+    const event = { source: "calendar", state: "current", reason };
+    expect(resolveDashboardCurrentEventPlan(event, {
+      open: true, view: "events", eventsRange: { start: "2026-04-01", end: "2026-04-30" },
+    })).toMatchObject({
+      markCalendarEventsStale: true,
+      refreshVisibleEvents: { start: "2026-04-01", end: "2026-04-30" },
+      markBillRangeStale: false,
+      markDeadlineRangeStale: false,
+    });
+    expect(resolveDashboardCurrentEventPlan(event, { open: false })).toMatchObject({
+      markCalendarEventsStale: true, refreshVisibleEvents: null,
+    });
+  });
 });

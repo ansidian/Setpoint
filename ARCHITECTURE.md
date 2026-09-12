@@ -514,6 +514,8 @@ The desktop reader's email-context handoff is a separate model-free preparation 
 
 **Current Data Cache** — Non-email boot-critical data is cached by user and cache key, with health metadata exposed in the current dashboard envelope.
 
+**Calendar Push & Recovery** — Google Calendar uses programmatic HTTPS Events/CalendarList watches at `/api/calendar/push`, using existing Google OAuth and the canonical public origin. Migration `074_calendar_push.sql` stores hashed channel tokens, renewal evidence and an owner revision queue. The callback validates account eligibility and channel/resource identity, persists work atomically, then acknowledges. `server/calendar/calendar-push.ts` serializes incremental search-mirror and current-calendar refreshes, publishes Calendar SSE after completion, and retains pending arrivals across retries/restarts. Production renews/discovers watches hourly; one-minute drains and fifteen-minute reconciliation recover missed pushes. Normal development only reconciles. Calendar's five-minute cache TTL remains separate from its twenty-minute health deadline; watch configuration cannot substitute for a successful data check.
+
 ## News Tab
 
 The fifth shell tab: RSS/Atom headlines only, no AI classification or summarization, $0 running cost. Migration `026_news.sql` adds `ea_news_topics` (owner-named topic sections), `ea_news_sources` (per-topic feed rows; `kind='hn'` sources build their `hnrss.org` URL from `hn_query`/`min_points` instead of storing one), and `ea_news_items` (a rolling window keyed unique on `(source_id, guid)`, plus `ea_settings.news_last_seen_at` for the single seen-marker); `029_news_retry_after.sql` adds durable provider retry windows. `server/news/news-poller.ts` is an in-process interval worker (mirrors the `bills-mirror-sync`/`calendar-search-mirror` pattern): a 20-minute sweep does conditional-GET fetches (`ETag`/`Last-Modified`, 10s timeout), parses with `rss-parser`, upserts items, self-heals redirected feed URLs, and backs a source off to a ~6h retry cadence after 5 consecutive failures. Reddit 429s pause the shared Reddit host until the provider's persisted `Retry-After` expires, with six hours as the fallback. Retention keeps the newest 30 items per source and additionally deletes anything older than 14 days beyond that. `server/routes/news.ts` exposes the page payload (`GET /api/news`), topic/source CRUD, starter-catalog import, an add-source preview endpoint (fetches the pasted URL and follows one autodiscovered `<link rel=alternate>` if it isn't already a feed), the seen-marker bump, and a debounced manual refresh.
@@ -715,6 +717,9 @@ erDiagram
 | `ea_bills_mirror_state` | `001_ea_tables.sql`, `002_bills_mirror.sql` |
 | `ea_briefing_snapshot_items` | `001_ea_tables.sql`, `018_carryover_depth_bound.sql` |
 | `ea_briefing_snapshots` | `001_ea_tables.sql` |
+| `ea_calendar_push_channels` | `074_calendar_push.sql` |
+| `ea_calendar_push_sync` | `074_calendar_push.sql` |
+| `ea_calendar_push_watch_state` | `074_calendar_push.sql` |
 | `ea_calendar_search_mirror_state` | `011_calendar_search_mirror.sql`, `049_calendar_mirror_snapshot_hash.sql` |
 | `ea_calendar_search_occurrences` | `011_calendar_search_mirror.sql` |
 | `ea_completed_tasks` | `001_ea_tables.sql`, `014_completed_deadline_occurrences.sql` |
@@ -950,6 +955,7 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | POST | `/api/calendar/events/batch` | `server/routes/calendar.ts` |
 | GET | `/api/calendar/places/:placeId` | `server/routes/calendar.ts` |
 | GET | `/api/calendar/places/suggest` | `server/routes/calendar.ts` |
+| POST | `/api/calendar/push/` | `server/routes/calendar-push.ts` |
 | GET | `/api/calendar/range` | `server/routes/calendar.ts` |
 | GET | `/api/calendar/search` | `server/routes/calendar.ts` |
 | GET | `/api/capabilities/` | `server/routes/capabilities.ts` |

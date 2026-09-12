@@ -394,7 +394,7 @@ export async function syncCalendarSearchMirror(
   accounts: StoredCalendarAccount[],
   {
     dbClient = db,
-    listCalendars = listCalendarsForAccount,
+    listCalendars = (account) => listCalendarsForAccount(account, { requireComplete: true }),
     syncClient = defaultSyncClient,
     now = new Date(),
     forceFull = false,

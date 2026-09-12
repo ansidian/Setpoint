@@ -44,6 +44,14 @@ This restores password-or-passkey mode and clears passkeys and browser sessions;
 
 A personal token in Settings supports normal read/write behavior with periodic reconciliation. For OAuth and webhooks, expand **Settings → Connections → Todoist → Advanced OAuth and webhooks**, enter the developer app credentials, register the displayed callback and webhook URLs in Todoist, then connect with OAuth. Saving a personal token later returns to periodic delivery.
 
+## Google Calendar push
+
+Production automatically registers Calendar watches for calendar-enabled Google accounts using the existing OAuth grant and saved canonical HTTPS URL at `/api/calendar/push`. There is no Calendar Pub/Sub topic, subscription, new secret, or manual webhook registration to configure. Existing accounts with Calendar access normally need no new consent; an account whose authorization has expired still needs reconnecting in Settings → Connections.
+
+The server checks watches hourly, renews them before expiry, and retries failed checks after five minutes. Calendar notifications queue durable synchronization before acknowledgement. A minute worker drains pending/retry work, and a fifteen-minute reconciliation catches missed notifications and downtime. Normal localhost development keeps periodic synchronization but never registers watches against the production URL. After a domain change, Setpoint replaces registrations using the new saved canonical origin; that HTTPS endpoint must reach the deployed server with a valid certificate.
+
+Calendar cache refresh remains eligible after five minutes. The health indicator gives automatic recovery a twenty-minute window from the last successful data check; failed synchronization, expired/failed watches, reconnect requirements and browser connection failures remain visible. A working subscription by itself does not establish fresh calendar data.
+
 ## Turso semantic search verification
 
 To exercise native vectors instead of local SQLite, configure `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`, then run:

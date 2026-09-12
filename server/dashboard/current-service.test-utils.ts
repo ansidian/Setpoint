@@ -57,6 +57,7 @@ vi.mock("../platform/weather.ts", () => ({
 // test-architecture: allow-boundary-mock -- Google Calendar is an outbound provider boundary; dashboard orchestration cases inject its normalized current payload.
 vi.mock("../calendar/calendar.ts", () => ({
   fetchCalendar: (...args: unknown[]) => testState.fetchCalendar(...args),
+  getCalendarPushHealth: async () => ({ state: "inactive", message: null }),
 }));
 // test-architecture: allow-boundary-mock -- The Todoist mirror/provider facade is the durable external-task boundary consumed by dashboard current-data refreshes.
 vi.mock("../tasks/todoist.ts", () => ({

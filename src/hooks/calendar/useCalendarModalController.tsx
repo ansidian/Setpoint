@@ -413,6 +413,7 @@ export default function useCalendarModalController({
   const { calendarSearch, calendarSearchShell } = useCalendarSearchActivation({
     open,
     view,
+    eventsRevision,
     onViewChange,
     viewYear,
     viewMonth,

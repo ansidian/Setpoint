@@ -12,6 +12,7 @@ interface SearchEventEditor { isEditorOpen: boolean; isDirty: boolean; closeEdit
 export interface CalendarSearchActivationOptions {
   open: boolean;
   view: string;
+  eventsRevision?: number;
   onViewChange?: (view: string) => void;
   viewYear: number;
   viewMonth: number;
@@ -54,6 +55,7 @@ export interface CalendarSearchActivationOptions {
 export default function useCalendarSearchActivation({
   open,
   view,
+  eventsRevision,
   onViewChange,
   viewYear,
   viewMonth,
@@ -204,6 +206,7 @@ export default function useCalendarSearchActivation({
   const calendarSearch = useCalendarModalSearch({
     modalOpen: open,
     view,
+    eventsRevision,
     onActivateResult: activateCalendarSearchResult,
   });
 

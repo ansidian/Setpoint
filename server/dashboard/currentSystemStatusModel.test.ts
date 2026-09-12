@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { CurrentDashboardSourceHealth } from "../../shared/types/dashboard.ts";
 import { composeSystemStatus } from "./currentSystemStatusModel.ts";
 
 describe("composeSystemStatus", () => {
@@ -90,8 +91,8 @@ describe("composeSystemStatus", () => {
 describe("domain status evidence", () => {
   const fetchedAt = "2026-09-06T12:00:00.000Z";
   const expiresAt = "2026-09-06T12:05:00.000Z";
-  const cacheSource = (key: "weather_current" | "calendar_current" | "deadlines_current" | "bills_current", state: "current" | "needs_sync" | "degraded" | "refreshing" = "current") => ({
-    key, state, severity: state === "degraded" ? "warning" as const : state === "current" ? "none" as const : "info" as const,
+  const cacheSource = (key: CurrentDashboardSourceHealth["key"], state: CurrentDashboardSourceHealth["state"] = "current"): CurrentDashboardSourceHealth => ({
+    key, state, severity: state === "unavailable" ? "error" : state === "degraded" ? "warning" : state === "current" ? "none" : "info",
     fetchedAt, expiresAt, errorMessage: "secret provider error", failedAt: null, failureCount: 0, refreshStartedAt: null,
   });
   const baseline = () => ({
@@ -157,9 +158,50 @@ describe("domain status evidence", () => {
     const input = baseline();
     input.currentData.sources[0] = cacheSource("weather_current", "degraded");
     input.currentData.sources[1] = cacheSource("calendar_current", "refreshing");
-    const result = composeSystemStatus({ ...input, configured: { weather: false } });
+    const result = composeSystemStatus({ ...input, configured: { weather: false } }, { generatedAt: "2026-09-06T12:05:00.000Z" });
     expect(result.state).toBe("syncing");
     expect(result.sources[0]).toMatchObject({ state: "unconfigured", severity: "none", expiresAt: null });
+  });
+
+  it.each([
+    ["2026-09-06T12:05:00.000Z", "current"],
+    ["2026-09-06T12:19:59.999Z", "current"],
+    ["2026-09-06T12:20:00.000Z", "needs_sync"],
+  ])("bounds calendar freshness by the last complete check at %s", (generatedAt, state) => {
+    const input = baseline();
+    input.currentData.sources[1] = cacheSource("calendar_current", "needs_sync");
+    const result = composeSystemStatus(input, { generatedAt });
+    expect(result.sources.find((source) => source.key === "calendar")).toMatchObject({
+      state, lastSuccessAt: fetchedAt, expiresAt: "2026-09-06T12:20:00.000Z",
+    });
+    expect(input.currentData.sources[1]?.expiresAt).toBe(expiresAt);
+  });
+
+  it("shows overdue calendar checks during a refresh and preserves failed checks within the grace period", () => {
+    const input = baseline();
+    input.currentData.sources[1] = cacheSource("calendar_current", "refreshing");
+    const overdue = composeSystemStatus(input, { generatedAt: "2026-09-06T12:20:00.000Z" });
+    expect(overdue.sources.find((source) => source.key === "calendar")).toMatchObject({ state: "needs_sync", severity: "info" });
+    input.currentData.sources[1] = cacheSource("calendar_current", "degraded");
+    const failed = composeSystemStatus(input, { generatedAt: "2026-09-06T12:06:00.000Z" });
+    expect(failed.sources.find((source) => source.key === "calendar")).toMatchObject({ state: "degraded", severity: "warning" });
+  });
+
+  it("reports failed calendar push delivery without treating a working watch as a fresh provider check", () => {
+    const input = baseline();
+    const degraded = composeSystemStatus({ ...input, calendarPush: { state: "degraded", message: "Calendar updates are delayed. Automatic checks continue." } }, { generatedAt: "2026-09-06T12:06:00.000Z" });
+    expect(degraded.sources.find((source) => source.key === "calendar")).toMatchObject({
+      state: "degraded", severity: "warning", message: "Calendar updates are delayed. Automatic checks continue.",
+    });
+    const overdue = composeSystemStatus({ ...input, calendarPush: { state: "current" } }, { generatedAt: "2026-09-06T12:21:00.000Z" });
+    expect(overdue.sources.find((source) => source.key === "calendar")).toMatchObject({
+      state: "needs_sync", lastSuccessAt: fetchedAt, expiresAt: "2026-09-06T12:20:00.000Z",
+    });
+    const disconnected = composeSystemStatus({ ...input, configured: { calendar: false }, calendarPush: { state: "degraded" } });
+    expect(disconnected.sources.find((source) => source.key === "calendar")).toMatchObject({ state: "unconfigured", severity: "none", expiresAt: null });
+    input.currentData.sources[1] = { ...cacheSource("calendar_current", "unavailable"), fetchedAt: null };
+    const unavailable = composeSystemStatus({ ...input, calendarPush: { state: "degraded" } });
+    expect(unavailable.sources.find((source) => source.key === "calendar")).toMatchObject({ state: "unavailable", severity: "error", lastSuccessAt: null });
   });
 
   it("identifies iCloud reconnection and folds Todoist reauth into its existing task source", () => {

@@ -9,6 +9,7 @@ import { publishCurrentDashboardEvent } from "./current-events.ts";
 import { computeDeadlineStats } from "../tasks/deadline-helpers.ts";
 import { getActiveSnapshotView, syncActiveSnapshot } from "../snapshots/snapshot-service.ts";
 import { getTodoistSyncHealth } from "../tasks/todoist.ts";
+import { getCalendarPushHealth } from "../calendar/calendar.ts";
 import type { Client } from "@libsql/client";
 import type { BillsMirrorHealth, BillsMirrorPayload } from "../../shared/types/bills.ts";
 import type { TodoistMirrorHealth } from "../../shared/types/tasks.ts";
@@ -111,11 +112,14 @@ async function loadProviderHealth(
     billsHealth?: BillsMirrorHealth;
   } = {},
 ): Promise<CurrentDashboardProviderHealth> {
-  const [todoist, bills, connections] = await Promise.all([
+  const [todoist, bills, connections, calendarPush] = await Promise.all([
     todoistHealth ?? getTodoistSyncHealth(userId).catch((err) => unavailableTodoistHealth(err)),
     billsHealth ?? getBillsMirrorState(userId, { dbClient })
       .then((mirror) => mirror.syncHealth).catch(() => unavailableBillsHealth()),
     loadStatusConnections(userId, { dbClient }),
+    getCalendarPushHealth(userId, { dbClient, nowMs: now.getTime() }).catch(() => ({
+      state: "degraded" as const, message: "Calendar update checks are unavailable. Automatic checks continue.",
+    })),
   ]);
   return {
     currentData: summarizeCurrentDataHealth(rows, now), todoist,
@@ -123,7 +127,23 @@ async function loadProviderHealth(
       state: "unconfigured", configured: false, lastSuccessAt: null, lastError: null,
     },
     reauth: connections.reauth, configured: connections.configured,
+    calendarPush,
   };
+}
+
+// Provider notifications need only Calendar's cache. All Calendar reads share
+// the runner's fetch/write serialization, including cold and forced reads.
+export async function refreshCalendarCurrentData(userId: string): Promise<void> {
+  const rows = await loadCacheRows(userId);
+  const now = new Date();
+  const refreshing = await markRowsRefreshing(userId, rows, ["calendar_current"], { now });
+  const refreshedRows = await refreshRows(userId, refreshing, ["calendar_current"], {
+    now, force: true, refreshReasons: { calendar_current: "calendar_provider_sync" },
+  });
+  const refreshed = refreshedRows.calendar_current;
+  if (refreshed?.status !== "current" || Number(refreshed.refresh_failure_count || 0) > 0) {
+    throw new Error("Calendar dashboard synchronization failed");
+  }
 }
 
 export async function applyDeadlineCurrentStatus(userId: string, taskId: unknown, occurrenceDate: string, status: string, {

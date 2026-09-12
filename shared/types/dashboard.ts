@@ -90,6 +90,7 @@ export interface CurrentDashboardProviderHealth extends Record<string, unknown> 
   } | null;
   reauth?: CurrentDashboardReauthHealth;
   configured?: { weather?: boolean; calendar?: boolean };
+  calendarPush?: { state: "inactive" | "current" | "degraded"; message?: string | null };
 }
 
 export interface CurrentDashboardWeather extends Record<string, unknown> {

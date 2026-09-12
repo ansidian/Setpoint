@@ -128,6 +128,21 @@ describe("current dashboard model", () => {
     expect(calendarContentSignature(null)).toBe("null");
   });
 
+  it.each([
+    { title: "Moved to room B" },
+    { location: "Room B" },
+    { description: "Bring the updated draft" },
+    { attendees: ["new@example.test"] },
+    { sourceColor: "#123456" },
+    { writable: false },
+    { status: "cancelled" },
+    { reminderState: { status: "pending" } },
+  ])("adopts externally changed calendar content with unchanged times: %j", (change) => {
+    const previous = [{ id: "event-1", title: "Review", startMs: 1000, endMs: 2000 }];
+    const next = [{ ...previous[0], ...change }];
+    expect(stabilizeCalendar(previous, next as typeof previous)).toBe(next);
+  });
+
   it("changes the deadline content signature when status, due_date, _completing, or length differ", () => {
     const base = [{ id: "deadline-1", due_date: "2026-05-05", due_time: "11:59p", status: "incomplete" }];
     const differentStatus = [{ ...base[0], status: "complete" }];

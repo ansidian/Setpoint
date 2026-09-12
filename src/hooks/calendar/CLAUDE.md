@@ -43,7 +43,7 @@ Calendar domain and view state: range fetching/caching, modal interaction (selec
 - `useFinancePaymentCalendar.ts` — Utilities month reads, selected/preview day state, and bounded schedule lookahead
 - `useCalendarEventSelectionSet.ts` — event multi-select + clipboard submachine (selection set, copy/paste, seeded-toggle rules) hosting the event quick-actions bundle so its batch-delete callback prunes the selection; extracted from `useCalendarModalController.tsx`
 - `useCalendarSearchActivation.ts` — calendar-search activation cluster (search UI hook + result/date-header activation, grid-navigability, anchor resolution) extracted from `useCalendarModalController.tsx`; must be called after the view model (reads `computed`)
-- `useCalendarModalSearch.ts` — search UI state, debounced API calls, highlighting
+- `useCalendarModalSearch.ts` — search UI state, debounced API calls, highlighting, and event-revision revalidation with superseded-response guards
 - `useCalendarModalHotkeys.ts` — arrow nav, month pagination, Escape for the inner cascade (overflow/detail/editor), and the 3 key re-pressed in calendar toggles events/bills (1/2/4/5 bubble to the shell tab switcher); the calendar is a shell tab now, so Escape no longer closes a surface. Suspension ladder for `data-suspend-calendar-hotkeys`: `"true"` (target-based, mid-handler), `"all"` (target-based, pre-branch — Alfred), `"blocking"` (presence-based, pre-branch — Analytics/History/CommandPalette overlays, independent of where focus sits)
 
 ### Floating detail + editor routing
@@ -52,7 +52,7 @@ Calendar domain and view state: range fetching/caching, modal interaction (selec
 - `calendarEventCreateBridge.ts` — client-only create request/callback envelope plus acknowledgement/completion isolation; origin metadata never enters provider payloads
 
 ### Domain state + lifecycle
-- `useCalendarRange.ts` — per-month event caching/fetching, prefetch radius, staleness
+- `useCalendarRange.ts` — per-month event caching/fetching, prefetch radius, and generation-safe push invalidation that retains saved data
 - `useCalendarDomainRange.ts` — deadline/bill range cache, fetch, seed, stale, and prefetch orchestration over the domain-range data model
 - `useAgendaFetch.ts` — agenda month fetching: initial mount fetch, scroll-driven prefetch
 - `useCalendarScrollSync.ts` — grid↔agenda scroll orchestration: settle-driven sync, navigation commands, and immediate calendar-month boundaries for the mobile agenda

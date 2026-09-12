@@ -4,12 +4,12 @@ Engine for the `/api/dashboard/current` envelope: cache rows, refresh planning/s
 
 ## Files
 
-- `current-service.ts` — public current-dashboard entrypoints + response composition; wires store/model/runner together and exposes the read-only finance projection
+- `current-service.ts` — public current-dashboard entrypoints + response composition; wires store/model/runner together, exposes the read-only finance projection and narrow awaited Calendar cache refresh used by provider push
 - `current-service.test-utils.ts` — shared ephemeral dashboard database and external-provider fixtures for service behavior tests
 - `current-types.ts` — server-only provider, context, dependency, and payload contracts
 - `current-sources.ts` — cache-key registry + pure row/health helpers (TTL, usable-payload, content key)
 - `current-events.ts` — SSE event fan-out for current-dashboard changes
-- `currentSystemStatusModel.ts` — per-source cache/mirror freshness, reconnect evidence, impact text, and Connections repair actions → systemStatus
+- `currentSystemStatusModel.ts` — per-source cache/mirror freshness, Calendar twenty-minute overdue deadline and persisted push failures, reconnect evidence, impact text, and Connections repair actions → systemStatus
 - `currentRefreshPlanModel.ts` — pure refresh planning: `(rows, opts) → { scheduled, skipped }`
 - `currentCacheStore.ts` — all `ea_current_data_cache` reads/writes (load, save, mark-failed, mark-refreshing)
 - `currentRefreshRunner.ts` — async orchestration: fetch-timeout race, refreshRows, background dedup map

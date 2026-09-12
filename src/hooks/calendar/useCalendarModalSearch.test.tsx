@@ -174,6 +174,31 @@ describe("useCalendarModalSearch", () => {
     expect(secondEventSignal.aborted).toBe(false);
   });
 
+  it("rechecks an unchanged query after calendar invalidation and rejects the superseded result", async () => {
+    const oldRead = deferred();
+    const freshRead = deferred();
+    const saved = [{ id: "event:saved", title: "Saved event" }];
+    const searchApi = vi.fn<CalendarSearchApi>()
+      .mockResolvedValueOnce({ results: saved })
+      .mockReturnValueOnce(oldRead.promise)
+      .mockReturnValueOnce(freshRead.promise);
+    const { result, rerender } = renderHook(({ revision }) => useCalendarModalSearch({
+      modalOpen: true, view: "events", eventsRevision: revision, searchApi, debounceMs: 0,
+    }), { initialProps: { revision: 0 } });
+    act(() => { result.current.openSearch(); result.current.setQuery("event"); });
+    await waitFor(() => expect(result.current.results).toEqual(saved));
+    rerender({ revision: 1 });
+    await waitFor(() => expect(result.current.pending).toBe(true));
+    rerender({ revision: 2 });
+    expect(result.current.results).toEqual(saved);
+    await act(async () => { oldRead.resolve({ results: [{ id: "event:stale", title: "Stale result" }] }); await flushPromises(); });
+    expect(result.current.results).toEqual(saved);
+    await act(async () => { freshRead.resolve({ results: [{ id: "event:updated", title: "External edit" }] }); await flushPromises(); });
+    await waitFor(() => expect(result.current.results).toEqual([{ id: "event:updated", title: "External edit" }]));
+    expect(result.current.query).toBe("event");
+    expect(result.current.pending).toBe(false);
+  });
+
   it("aborts the active request when search closes", async () => {
     const searchApi = vi.fn<CalendarSearchApi>(() => new Promise(() => {}));
     const { result } = renderHook(() => useCalendarModalSearch({

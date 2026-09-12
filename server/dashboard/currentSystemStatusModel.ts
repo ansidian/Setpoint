@@ -19,9 +19,14 @@ interface SystemStatusProviderHealthInput {
   };
   reauth?: CurrentDashboardProviderHealth["reauth"];
   configured?: CurrentDashboardProviderHealth["configured"];
+  calendarPush?: CurrentDashboardProviderHealth["calendarPush"];
 }
 
 type HealthEvidence = Pick<CurrentDashboardSystemSource, "state" | "severity" | "lastSuccessAt">;
+// Calendar keeps its five-minute read cache. Health allows the fifteen-minute
+// recovery sweep plus five minutes to finish, measured from an actual complete
+// provider read. A working watch or quiet notification stream is not freshness.
+const CALENDAR_SUCCESS_DEADLINE_MS = 20 * 60_000;
 const STATE_PRIORITY: Record<CurrentDashboardHealthState, number> = {
   needs_reauth: 7, unavailable: 6, degraded: 5, needs_sync: 4, stale: 4,
   refreshing: 3, syncing: 3, current: 1, unconfigured: 0,
@@ -72,6 +77,20 @@ function activeRefreshStartedAt(cache: CurrentDashboardSourceHealth | undefined,
     mirror && "refreshStartedAt" in mirror ? mirror.refreshStartedAt : null,
   ].filter((value): value is string => typeof value === "string" && Number.isFinite(Date.parse(value)) && now >= Date.parse(value) && now - Date.parse(value) < 120_000);
   return timestamps.sort()[0] ?? null;
+}
+
+function calendarHealthCache(cache: CurrentDashboardSourceHealth | undefined, now: number): CurrentDashboardSourceHealth | undefined {
+  if (!cache?.fetchedAt) return cache;
+  const lastSuccess = Date.parse(cache.fetchedAt);
+  if (!Number.isFinite(lastSuccess)) return cache;
+  const deadline = lastSuccess + CALENDAR_SUCCESS_DEADLINE_MS;
+  const expiresAt = new Date(deadline).toISOString();
+  const ageOnly = cache.state === "current" || cache.state === "needs_sync" || cache.state === "stale";
+  const updating = cache.state === "refreshing" || cache.state === "syncing";
+  if (!ageOnly && !updating) return { ...cache, expiresAt };
+  if (cache.failureCount > 0) return { ...cache, expiresAt, state: "degraded", severity: "warning" };
+  const state = deadline <= now ? "needs_sync" : updating ? cache.state : "current";
+  return { ...cache, expiresAt, state, severity: state === "current" ? "none" : "info" };
 }
 
 function domainSource({ key, label, connection, cache, mirror, configured, now }: {
@@ -133,7 +152,7 @@ export function composeSystemStatus(
   const cache = (key: CurrentDashboardSourceHealth["key"]) => cacheSources?.find((source) => source.key === key);
   const sources: CurrentDashboardSystemSource[] = cacheSources ? [
     domainSource({ now, key: "weather", label: "Weather", connection: "pirate-weather", cache: cache("weather_current"), configured: providerHealth.configured?.weather }),
-    domainSource({ now, key: "calendar", label: "Calendar", connection: "google-workspace", cache: cache("calendar_current"), configured: providerHealth.configured?.calendar }),
+    domainSource({ now, key: "calendar", label: "Calendar", connection: "google-workspace", cache: calendarHealthCache(cache("calendar_current"), now), configured: providerHealth.configured?.calendar }),
   ] : [{
     // Compatibility for callers carrying only the older aggregate contract.
     key: "currentData", label: "Current data", state: providerHealth.currentData.state,
@@ -145,6 +164,15 @@ export function composeSystemStatus(
     domainSource({ now, key: "todoist", label: "Tasks", connection: "todoist", cache: cache("deadlines_current"), mirror: providerHealth.todoist }),
     domainSource({ now, key: "bills", label: "Bills", connection: "actual-budget", cache: cache("bills_current"), mirror: providerHealth.bills }),
   );
+  const calendar = sources.find((source) => source.key === "calendar");
+  if (providerHealth.calendarPush?.state === "degraded" && calendar
+    && calendar.state !== "unconfigured" && calendar.state !== "unavailable" && calendar.state !== "needs_reauth") {
+    Object.assign(calendar, {
+      state: "degraded", severity: "warning",
+      message: providerHealth.calendarPush.message || "Calendar updates are delayed. Automatic checks continue.",
+      action: { label: "Check connection", href: "/settings?tab=connections#google-workspace" },
+    });
+  }
   if (providerHealth.reauth?.todoist) {
     const tasks = sources.find((source) => source.key === "todoist")!;
     delete tasks.retrySource;

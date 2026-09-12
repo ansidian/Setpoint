@@ -60,6 +60,7 @@ export interface CalendarSearchActivationContext {
 export interface CalendarModalSearchOptions {
   modalOpen?: boolean;
   view?: string;
+  eventsRevision?: number;
   searchApi?: CalendarSearchApi;
   onActivateResult?: (result: CalendarSearchResultLike, context?: CalendarSearchActivationContext) => unknown;
   debounceMs?: number;
@@ -95,6 +96,7 @@ function resultStableId(result?: CalendarSearchResultLike) {
 export default function useCalendarModalSearch({
   modalOpen,
   view,
+  eventsRevision = 0,
   searchApi = defaultCalendarSearchApi,
   onActivateResult,
   debounceMs = DEFAULT_DEBOUNCE_MS,
@@ -109,6 +111,7 @@ export default function useCalendarModalSearch({
   const snapshotsRef = useRef(snapshots);
 
   const scope = searchScopeForCalendarView(view);
+  const sourceRevision = scope === "events" ? eventsRevision : 0;
   const activeSnapshot = snapshots[scope] || emptySearchSnapshot();
   const {
     query,
@@ -355,7 +358,7 @@ export default function useCalendarModalSearch({
         controllers[scope] = null;
       }
     };
-  }, [debounceMs, limit, modalOpen, open, query, scope, searchApi, updateSnapshot]);
+  }, [debounceMs, limit, modalOpen, open, query, scope, searchApi, sourceRevision, updateSnapshot]);
 
   return {
     open,

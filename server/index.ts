@@ -13,6 +13,7 @@ import briefingRoutes from "./routes/briefing/index.ts";
 import accountsRoutes from "./routes/accounts.ts";
 import dashboardRoutes from "./routes/dashboard.ts";
 import calendarRoutes from "./routes/calendar.ts";
+import calendarPushRoutes from "./routes/calendar-push.ts";
 import alfredRoutes from "./routes/alfred.ts";
 import { startAlfredConversationSweeper, stopAlfredConversationSweeper } from "./alfred/alfred-conversations.ts";
 import tldrawRoutes from "./routes/tldraw.ts";
@@ -28,7 +29,7 @@ import { startSnoozeWaker, stopSnoozeWaker } from "./snapshots/snooze-waker.ts";
 import { startEmailBackfillWorker, stopEmailBackfillWorker } from "./email/email-backfill-worker.ts";
 import { startTodoistMirrorSyncWorker, stopTodoistMirrorSyncWorker } from "./tasks/todoist-webhook.ts";
 import { startBillsMirrorRefreshWorker, stopBillsMirrorRefreshWorker } from "./bills/bills-service.ts";
-import { startCalendarSearchMirrorSyncWorker, stopCalendarSearchMirrorSyncWorker } from "./calendar/calendar-search-mirror.ts";
+import { startCalendarPushWorker, stopCalendarPushWorker } from "./calendar/calendar-push.ts";
 import { startNewsPollWorker, stopNewsPollWorker } from "./news/news-poller.ts";
 import { startTransactionImportWorker, stopTransactionImportWorker } from "./transaction-imports/transaction-import-runtime.ts";
 import { createGracefulShutdown } from "./shutdown.ts";
@@ -87,6 +88,7 @@ app.get("/healthz", (_req, res) => {
   res.json({ status: "ok" });
 });
 app.use("/api", requireClaimedInstance);
+app.use("/api/calendar/push", calendarPushRoutes);
 app.use("/api/todoist/webhook", express.raw({ type: "*/*" }), todoistWebhookRoutes);
 app.use(cookieParser());
 
@@ -169,7 +171,7 @@ function startOwnerRuntime(): void {
   scheduleStartupWorker("snooze", startupDelays.snooze, () => startSnoozeWaker());
   scheduleStartupWorker("todoist-sync", startupDelays.todoistSync, () => startTodoistMirrorSyncWorker());
   scheduleStartupWorker("bills-mirror", startupDelays.billsMirror, () => startBillsMirrorRefreshWorker());
-  scheduleStartupWorker("calendar-search-mirror", startupDelays.calendarSearchMirror, () => startCalendarSearchMirrorSyncWorker());
+  scheduleStartupWorker("calendar-sync", startupDelays.calendarSearchMirror, () => startCalendarPushWorker());
   scheduleStartupWorker("reminders", startupDelays.reminders, () => startReminderSchedulerWorker());
   scheduleStartupWorker("news-poll", startupDelays.news, () => startNewsPollWorker());
   scheduleStartupWorker("transaction-imports", startupDelays.news, () => startTransactionImportWorker());
@@ -220,7 +222,7 @@ timeAsync("migrations", () => migrate())
         stopSnoozeWaker,                      // Task 1
         stopTodoistMirrorSyncWorker,          // tasks/todoist-webhook.ts:248
         stopBillsMirrorRefreshWorker,         // Task 1
-        stopCalendarSearchMirrorSyncWorker,   // calendar/calendar-search-mirror:159
+        stopCalendarPushWorker,              // durable Calendar push/recovery and mirror drain
         stopNewsPollWorker,                   // news/news-poller.js:249
         stopTransactionImportWorker,          // durable transaction import drain
         stopAlfredConversationSweeper,        // Task 1

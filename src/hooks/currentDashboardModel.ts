@@ -86,15 +86,12 @@ export function mergeActiveSnapshotIntoCurrent(
 // freshly JSON-parsed `calendar` array on every poll/refetch, so its identity
 // churns even when nothing changed. This signature lets a caller reuse the prior
 // array reference when the contents are equivalent, killing the per-refetch
-// effect/setEvents churn downstream (the event shape carries id/startMs/endMs).
+// effect/setEvents churn downstream. Include the complete normalized event:
+// provider edits to text, location, attendees, recurrence, or permissions can
+// leave the identity and time range unchanged.
 export function calendarContentSignature(calendar: unknown): string {
   if (!Array.isArray(calendar)) return calendar == null ? "null" : "invalid";
-  let sig = `${calendar.length}`;
-  for (const ev of calendar as CalendarSignatureItem[]) {
-    const id = ev?.id ?? ev?.iCalUID ?? ev?.htmlLink ?? ev?.openUrl ?? "";
-    sig += `|${id}:${ev?.startMs ?? ""}:${ev?.endMs ?? ""}`;
-  }
-  return sig;
+  return JSON.stringify(calendar);
 }
 
 // Returns `prev` when its contents match `next` so the reference stays stable

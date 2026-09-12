@@ -2,7 +2,7 @@ import db from "../db/connection.ts";
 import { loadUserConfig } from "../platform/config-service.ts";
 import { providerFor } from "./current-providers/index.ts";
 import { CURRENT_CACHE_KEYS, expiresAtFor, parsePayload } from "./current-sources.ts";
-import { saveCacheRow, markCacheRowRefreshFailed } from "./currentCacheStore.ts";
+import { loadCacheRows, saveCacheRow, markCacheRowRefreshFailed } from "./currentCacheStore.ts";
 import type {
   CurrentDashboardCacheKey,
   CurrentDashboardCacheRows,
@@ -20,9 +20,23 @@ import type { CurrentRefreshRunnerOptions } from "./current-types.ts";
 // Comfortably above p99 healthy fetch latency; env-overridable for tests/ops.
 const PROVIDER_FETCH_TIMEOUT_MS = 4_000;
 const BACKGROUND_REFRESH_IN_FLIGHT = new Map<string, Promise<unknown>>();
+const CALENDAR_REFRESHES = new Map<string, Promise<void>>();
 
 export function clearCurrentDashboardRefreshState() {
   BACKGROUND_REFRESH_IN_FLIGHT.clear();
+  CALENDAR_REFRESHES.clear();
+}
+
+function serializeCalendarRefresh(userId: string, refresh: () => Promise<void>) {
+  // Cold reads, force syncs and push all write this cache. Serialize the actual
+  // fetch/write, not only background admission, so an older read cannot overwrite
+  // a push which has already been acknowledged as synchronized.
+  const previous = CALENDAR_REFRESHES.get(userId) || Promise.resolve();
+  const next = previous.catch(() => {}).then(refresh).finally(() => {
+    if (CALENDAR_REFRESHES.get(userId) === next) CALENDAR_REFRESHES.delete(userId);
+  });
+  CALENDAR_REFRESHES.set(userId, next);
+  return next;
 }
 
 function providerFetchTimeoutMs() {
@@ -66,44 +80,52 @@ export async function refreshRows(
 ): Promise<CurrentDashboardCacheRows> {
   if (!refreshKeys.length) return rows;
 
-  const config = await loadUserConfig(userId);
+  const config = refreshKeys.some((key) => key !== "calendar_current") ? await loadUserConfig(userId) : null;
   const refreshedRows = { ...rows };
   await Promise.all(refreshKeys.map(async (key) => {
     const provider = providerFor(key)!;
-    try {
-      // P1-6: bound each provider fetch so the awaited cold-cache/force refresh
-      // can never hang /current on a slow or stuck external call (e.g. the Actual
-      // worker). On timeout this throws into the catch below, which seeds a
-      // degraded/fallback row and lets the background refresh complete it later.
-      const payload = await withProviderFetchTimeout(
-        provider.fetchFresh(userId, config, { dbClient, now, force }),
-        key,
-      );
-      await saveCacheRow(userId, key, payload, { dbClient, now });
-      refreshedRows[key] = {
-        user_id: userId,
-        cache_key: key,
-        payload_json: JSON.stringify(payload),
-        fetched_at: now.toISOString(),
-        expires_at: expiresAtFor(key, now),
-        status: "current",
-        error_message: null,
-        last_refresh_failed_at: null,
-        last_refresh_error: null,
-        refresh_failure_count: 0,
+    const performRefresh = async () => {
+      let previousRow = rows[key];
+      try {
+        // Read configuration and fallback data after admission to the Calendar
+        // queue: a preceding fetch may have recovered, or an account was disabled.
+        const providerConfig = key === "calendar_current" ? await loadUserConfig(userId) : config!;
+        if (key === "calendar_current") previousRow = (await loadCacheRows(userId, { dbClient }))[key];
+        // P1-6: bound each provider fetch so the awaited cold-cache/force refresh
+        // can never hang /current on a slow or stuck external call (e.g. the Actual
+        // worker). On timeout this throws into the catch below, which seeds a
+        // degraded/fallback row and lets the background refresh complete it later.
+        const payload = await withProviderFetchTimeout(
+          provider.fetchFresh(userId, providerConfig, { dbClient, now, force }),
+          key,
+        );
+        await saveCacheRow(userId, key, payload, { dbClient, now });
+        refreshedRows[key] = {
+          user_id: userId,
+          cache_key: key,
+          payload_json: JSON.stringify(payload),
+          fetched_at: now.toISOString(),
+          expires_at: expiresAtFor(key, now),
+          status: "current",
+          error_message: null,
+          last_refresh_failed_at: null,
+          last_refresh_error: null,
+          refresh_failure_count: 0,
       };
       provider.onRefreshed?.(userId, {
-        previousRow: rows[key],
-        previousPayload: parsePayload(rows[key], null),
+        previousRow,
+        previousPayload: parsePayload(previousRow, null),
       }, payload, { now, refreshReason: refreshReasons[key] || null });
     } catch (err) {
       console.error(`[Dashboard] ${key} refresh failed:`, err instanceof Error ? err.message : String(err));
       refreshedRows[key] = await markCacheRowRefreshFailed(userId, key, err, {
         dbClient,
         now,
-        existingRow: rows[key],
+        existingRow: previousRow,
       });
     }
+    };
+    await (key === "calendar_current" ? serializeCalendarRefresh(userId, performRefresh) : performRefresh());
   }));
   return refreshedRows;
 }

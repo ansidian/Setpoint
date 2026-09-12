@@ -170,6 +170,25 @@ export function requestCalendarSearchMirrorSync(userId: string, {
   return { queued: true, coalesced: false };
 }
 
+// Push recovery must wait for the same serialized mirror used by search and
+// event writes. A request arriving during an older fetch always gets a follow-up.
+export async function refreshCalendarSearchMirror(userId: string) {
+  requestCalendarSearchMirrorSync(userId, { reason: "calendar-provider-sync", debounceMs: 0 });
+  while (pendingSyncs.has(userId) || activeSyncs.has(userId)) {
+    const active = activeSyncs.get(userId);
+    if (active) {
+      if (await active === null) throw new Error("Calendar search synchronization failed");
+      continue;
+    }
+    const pending = pendingSyncs.get(userId);
+    if (pending?.timer) clearTimeout(pending.timer);
+    if (pending) pending.timer = null;
+    if (await runRequestedCalendarSearchMirrorSync(userId) === null) {
+      throw new Error("Calendar search synchronization failed");
+    }
+  }
+}
+
 async function requestStartupCalendarSearchMirrorSyncIfNeeded(userId: string, {
   getHealthFn = getCalendarSearchMirrorHealth,
   requestSyncFn = requestCalendarSearchMirrorSync,

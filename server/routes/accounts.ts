@@ -26,6 +26,7 @@ import type {
   ICloudAccountResponse,
 } from "../../shared/types/accounts.ts";
 import { googleOAuthCredentialManager } from "../google-oauth-credentials.ts";
+import { requestCalendarPushReconciliation } from "../calendar/calendar-push.ts";
 
 type ErrorResponse = { message: string };
 type GmailOAuthQuery = { code?: string; state?: string; error?: string };
@@ -155,6 +156,7 @@ router.get<Record<string, never>, string, never, GmailOAuthQuery>("/accounts/gma
     }
     await queueEmailIndexBackfill(userId);
     wakeEmailBackfillWorker();
+    requestCalendarPushReconciliation(userId);
     const baseUrl = process.env.NODE_ENV === "production" ? "" : "http://localhost:5173";
     res.redirect(`${baseUrl}/settings?account_connected=${result.email}`);
   } catch (err) {
@@ -356,6 +358,7 @@ router.patch<{ id: string }, AccountMutationResponse | ErrorResponse, AccountPat
         sql: `UPDATE ea_accounts SET ${updates.join(", ")} WHERE id = ? AND user_id = ?`,
         args,
       });
+      if (calendar_enabled !== undefined) requestCalendarPushReconciliation(userId);
     }
     res.json({ success: true });
   } catch (err) {
@@ -374,6 +377,7 @@ router.delete<{ id: string }, AccountMutationResponse | ErrorResponse>("/account
     });
     if (result.rowsAffected === 0)
       return res.status(404).json({ message: "Account not found" });
+    requestCalendarPushReconciliation(userId);
     res.json({ success: true });
   } catch (err) {
     console.error("Error deleting account:", err);

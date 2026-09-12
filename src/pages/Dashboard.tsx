@@ -139,13 +139,21 @@ export default function Dashboard() {
   const calendarWorkspaceRef = useRef<DashboardCalendarWorkspaceState>({ open: false, view: "events", eventsRange: null });
   const markDeadlineRangeStale = deadlinesCache.range.markStale;
   const markBillRangeStale = billsCache.range.markStale;
+  const markCalendarRangeStale = calendarRange.markStale;
+  const refreshCalendarRangeInPlace = calendarRange.refreshRangeInPlace;
   // Sync the SSE dashboard-event handler into its ref from an effect (not during
   // render) — the EventSource reads `.current` at fire-time, so re-binding after
   // each render that changes its closure is equivalent and keeps render pure.
   useEffect(() => {
     dashboardEventHandlerRef.current = (event: CurrentDashboardEventInput | null) => {
       triageNotificationSounds.handleDashboardEvent(event);
-      const plan = resolveDashboardCurrentEventPlan(event || {});
+      const plan = resolveDashboardCurrentEventPlan(event || {}, calendarWorkspaceRef.current);
+      if (plan.markCalendarEventsStale) {
+        markCalendarRangeStale();
+      }
+      if (plan.refreshVisibleEvents) {
+        void refreshCalendarRangeInPlace(plan.refreshVisibleEvents.start, plan.refreshVisibleEvents.end);
+      }
       if (plan.markBillsRefreshRequested) {
         calendarBillsRefreshRequestedRef.current = true;
       }
@@ -160,8 +168,6 @@ export default function Dashboard() {
       }
     };
   });
-  const markCalendarRangeStale = calendarRange.markStale;
-  const refreshCalendarRangeInPlace = calendarRange.refreshRangeInPlace;
   const runDashboardRefresh = useCallback((trigger: "timer" | "explicit") => {
     const plan = resolveDashboardRefreshPlan({
       trigger,

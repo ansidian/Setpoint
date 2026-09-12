@@ -174,6 +174,9 @@ export default function useCalendarRange({ disabled = false }: { disabled?: bool
         }
         cacheStampRef.current += 1;
         return true;
+      } catch (error) {
+        if (cacheGenerationRef.current !== generation) return false;
+        throw error;
       } finally {
         for (const key of targetKeys) {
           if (flightRef.current.get(key) === promise) {
@@ -363,14 +366,18 @@ export default function useCalendarRange({ disabled = false }: { disabled?: bool
     const keys = start && end
       ? expandMonthKeys(monthsInRange(start, end), PREFETCH_MONTH_RADIUS)
       : [...cacheRef.current.keys()];
-    let changed = false;
+    // A provider notification may arrive while an older read is still running.
+    // Retain saved events, but release those request slots and reject their
+    // eventual writes so the next visible refresh checks the new provider state.
+    cacheGenerationRef.current += 1;
+    inFlightRef.current.clear();
+    backgroundInFlightRef.current.clear();
+    setStaleRefreshPending(false);
     for (const key of keys) {
       const entry = cacheRef.current.get(key);
       if (!entry) continue;
       cacheRef.current.set(key, staleCacheEntry(entry));
-      changed = true;
     }
-    if (!changed) return;
     setRevision((value) => value + 1);
     forceUpdate((n) => n + 1);
   }, [disabled]);

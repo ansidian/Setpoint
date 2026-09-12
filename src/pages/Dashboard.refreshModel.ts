@@ -81,8 +81,21 @@ export function resolveDashboardRefreshPlan({
   };
 }
 
-export function resolveDashboardCurrentEventPlan(event: CurrentDashboardEventInput = {}) {
+export function resolveDashboardCurrentEventPlan(event: CurrentDashboardEventInput = {}, calendarWorkspace: DashboardCalendarWorkspace = {}) {
   const source = event?.source;
+  if (source === "calendar" && event.state === "current") {
+    const range = calendarWorkspace.eventsRange;
+    return {
+      markCalendarEventsStale: true,
+      refreshVisibleEvents: calendarWorkspace.open && calendarWorkspace.view === "events" && range?.start && range.end
+        ? { start: range.start, end: range.end }
+        : null,
+      markBillsRefreshRequested: false,
+      markBillRangeStale: false,
+      markDeadlineRangeStale: false,
+      refreshCalendarDomains: null,
+    };
+  }
   if (source === "bills") {
     return {
       markBillsRefreshRequested: true,
