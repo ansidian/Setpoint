@@ -123,12 +123,12 @@ export default function CalendarScrollContainer({
 
   const activeKey = `${viewYear}-${viewMonth}`;
   const currentMonthData = useMemo(
-    () => ({ key: activeKey, view, viewData, itemsByDay, itemsByDate, cellMetaByDate }),
-    [activeKey, view, viewData, itemsByDay, itemsByDate, cellMetaByDate],
+    () => ({ key: activeKey, view, viewData, itemsByDay, itemsByDate, cellMetaByDate, dataRevision }),
+    [activeKey, view, viewData, itemsByDay, itemsByDate, cellMetaByDate, dataRevision],
   );
   const [monthDataState, setMonthDataState] = useState<{
-    tracked: MountedMonthData & { key: string; view: string };
-    cached: (MountedMonthData & { key: string; view: string }) | null;
+    tracked: MountedMonthData & { key: string; view: string; dataRevision: number };
+    cached: (MountedMonthData & { key: string; view: string; dataRevision: number }) | null;
   }>(() => ({
     tracked: currentMonthData,
     cached: null,
@@ -142,7 +142,10 @@ export default function CalendarScrollContainer({
     setMonthDataState(prev => ({ ...prev, tracked: currentMonthData }));
   }
 
-  const cachedMonthData = monthDataState.cached?.view === view
+  // A previous month's snapshot is only valid for the data it captured. After
+  // a move or refresh, render from the live month previews so old occurrences
+  // cannot survive alongside their new dates.
+  const cachedMonthData = monthDataState.cached?.view === view && monthDataState.cached.dataRevision === dataRevision
     ? monthDataState.cached
     : null;
 

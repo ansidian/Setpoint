@@ -101,6 +101,41 @@ function getScrollElement(container: HTMLElement): HTMLElement {
 }
 
 describe("CalendarScrollContainer", () => {
+  it.each([1, 2])("removes originals from the previous month after moving %s recurring occurrences separately", (count) => {
+    const originals = [13, 20].slice(0, count).map((day) => ({
+      id: `weekly_202604${day}T160000Z`,
+      title: "Weekly review",
+      startMs: Date.parse(`2026-04-${day}T16:00:00Z`),
+      endMs: Date.parse(`2026-04-${day}T17:00:00Z`),
+      allDay: false,
+      isRecurring: true,
+      recurringEventId: "weekly",
+      originalStartTime: `2026-04-${day}T09:00:00-07:00`,
+    }));
+    let events = originals;
+    const getMonthEvents = (_year: number, month: number) => events.filter((event) => new Date(event.startMs).getUTCMonth() === month);
+    const common = { activeView: eventsView, getMonthEvents, isMonthCached: () => true };
+    const monthData = (viewMonth: number) => {
+      const { itemsByDay, itemsByDate } = eventsView.compute({ data: { events }, viewYear: 2026, viewMonth });
+      return { viewMonth, viewData: { events, isLoading: false }, itemsByDay, itemsByDate };
+    };
+    const { container, rerenderContainer } = renderContainer({
+      ...common, ...monthData(3), dataRevision: 0,
+    });
+    rerenderContainer({ ...common, ...monthData(4), dataRevision: 0 });
+    const april = container.querySelector("[data-testid='month-block-2026-3']")!;
+    const may = container.querySelector("[data-testid='month-block-2026-4']")!;
+    for (let index = 0; index < originals.length; index++) {
+      events = events.map((event, eventIndex) => eventIndex === index ? {
+        ...event,
+        startMs: event.startMs + 21 * 86400000,
+        endMs: event.endMs + 21 * 86400000,
+      } : event);
+      rerenderContainer({ ...common, ...monthData(4), dataRevision: index + 1 });
+      expect(may.querySelectorAll("[data-testid='calendar-cell-item-chip']")).toHaveLength(index + 1);
+      expect(april.querySelectorAll("[data-testid='calendar-cell-item-chip']")).toHaveLength(count - index - 1);
+    }
+  });
 
   it("renders event and deadline ghosts in a trailing week owned by the next month block", () => {
     const { container } = renderContainer({
