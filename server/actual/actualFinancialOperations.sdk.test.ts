@@ -21,6 +21,42 @@ afterEach(async () => {
 });
 
 describe("Actual financial operation SDK compatibility", () => {
+  it("identifies an imported transaction when an Actual rule changes only its selected category", async () => {
+    dataDir = await createTestTempDir("actual-category-rule-conflict-");
+    const internal = await actualApi.init({ dataDir, verbose: false });
+    started = true;
+    await internal.send("create-budget", { budgetName: "Category rule conflict", avoidUpload: true });
+    const accountId = await actualApi.createAccount({ name: "Fictional card", offbudget: false });
+    const payeeId = await actualApi.createPayee({ name: "Fictional warehouse" });
+    const categories = (await actualApi.getCategories()).filter(category => "group_id" in category);
+    const categoryId = categories[0]!.id;
+    const ruleCategoryId = categories[1]!.id;
+    await actualApi.createRule({ stage: null, conditionsOp: "and",
+      conditions: [{ op: "is", field: "payee", value: payeeId }],
+      actions: [{ op: "set", field: "category", value: ruleCategoryId }] });
+    const sdk = { ...actualApi, sync: async () => undefined } as unknown as ActualFinancialSdk;
+    const execute = createFinancialEventExecutor({ financial: (_userId, input, mode) =>
+      reconcileActualFinancialOperation(sdk, "isolated", input, mode) });
+    const operation = { executor: "financial" as const, input: {
+      kind: "transaction" as const, identityKey: "financial-event:category-rule", accountId,
+      payee: "Fictional warehouse", categoryId, amountCents: -4_852, date: "2026-09-11", notes: "Receipt",
+    } };
+    const preview = await execute("owner", operation, "preview");
+    expect(preview).toMatchObject({ outcome: "would_add", effectiveCategoryId: categoryId });
+    expect(await actualApi.getTransactions(accountId, operation.input.date, operation.input.date)).toEqual([]);
+    const bound = bindFinancialEventOperation(operation, preview);
+    const result = await execute("owner", bound, "write_once");
+    const transactions = await actualApi.getTransactions(accountId, operation.input.date, operation.input.date);
+    expect(transactions).toEqual([expect.objectContaining({ account: accountId, payee: payeeId,
+      amount: -4_852, date: operation.input.date, imported_id: operation.input.identityKey, category: ruleCategoryId })]);
+    const expected = { outcome: "needs_review", transactionId: transactions[0]!.id,
+      reason: "Recorded in Actual, but the category differs from the selected category. Review the category in Actual." };
+    expect(result).toMatchObject(expected);
+    expect(await execute("owner", bound, "recover")).toMatchObject(expected);
+    expect(await execute("owner", bound, "write_once")).toMatchObject(expected);
+    expect(await actualApi.getTransactions(accountId, operation.input.date, operation.input.date)).toEqual(transactions);
+  }, 30_000);
+
   it("binds and verifies submitted payee and category through the managed operation facade", async () => {
     dataDir = await createTestTempDir("actual-financial-handshake-");
     const internal = await actualApi.init({ dataDir, verbose: false });

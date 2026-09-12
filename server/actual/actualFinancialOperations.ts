@@ -136,8 +136,14 @@ async function transaction(
   if (owned.length) {
     const recorded = owned[0]!;
     if (owned.length !== 1 || recorded.account !== input.accountId || recorded.date !== input.date
-      || recorded.amount !== input.amountCents || recorded.transfer_id || !payee || recorded.payee !== payee.id
-      || (categoryId && recorded.category !== categoryId)) return review("The recorded transaction identity conflicts with this event.");
+      || recorded.amount !== input.amountCents || recorded.transfer_id || !payee || recorded.payee !== payee.id) {
+      return review("The recorded transaction identity conflicts with this event.");
+    }
+    // Actual rules can replace an explicitly submitted category during import.
+    // Keep that difference reviewable while identifying the verified transaction.
+    if (categoryId && recorded.category !== categoryId) return result("needs_review",
+      "Recorded in Actual, but the category differs from the selected category. Review the category in Actual.",
+      { transactionId: recorded.id });
     return result("already_present", "The transaction identity is already recorded.", { transactionId: recorded.id });
   }
   // Distinct managed event IDs prove distinct purchases even when all their

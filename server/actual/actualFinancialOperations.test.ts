@@ -185,8 +185,27 @@ describe("Actual financial operations", () => {
     expect(await reconcileActualFinancialOperation(state.sdk, "budget", bound, "write_once", now)).toMatchObject({ outcome: "added" });
     state.transactions[0]![field] = "owner-edited";
     state.failCategoryRead();
-    expect(await reconcileActualFinancialOperation(state.sdk, "budget", bound, "recover", now)).toMatchObject({ outcome: "needs_review" });
+    const recovered = await reconcileActualFinancialOperation(state.sdk, "budget", bound, "recover", now);
+    expect(recovered).toMatchObject({ outcome: "needs_review", reason: field === "category"
+      ? "Recorded in Actual, but the category differs from the selected category. Review the category in Actual."
+      : "The recorded transaction identity conflicts with this event." });
+    expect(recovered.transactionId).toBe(field === "category" ? state.transactions[0]!.id : undefined);
     expect(state.transactions).toEqual([expect.objectContaining({ [field]: "owner-edited" })]);
+  });
+
+  it.each([
+    { account: "checking" }, { date: "2026-09-06" }, { amount: -3_001 },
+    { payee: "other-shop" }, { transfer_id: "other-transaction" },
+  ])("keeps an identity conflict blocking when the category also differs: %j", async (changed) => {
+    const state = fixture();
+    const input = { ...purchase, effectiveCategoryId: "utilities" };
+    await reconcileActualFinancialOperation(state.sdk, "budget", input, "write_once", now);
+    Object.assign(state.transactions[0]!, changed, { category: "owner-selected" });
+    const before = structuredClone(state.transactions);
+    const result = await reconcileActualFinancialOperation(state.sdk, "budget", input, "recover", now);
+    expect(result).toMatchObject({ outcome: "needs_review", reason: "The recorded transaction identity conflicts with this event." });
+    expect(result.transactionId).toBeUndefined();
+    expect(state.transactions).toEqual(before);
   });
 
   it("does not impose newly normalized category requirements on operations admitted before normalization", async () => {
