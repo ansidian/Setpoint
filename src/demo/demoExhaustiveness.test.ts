@@ -88,6 +88,7 @@ const ARGS: Partial<Record<ApiExportName, unknown[]>> = {
   updateNewsSource: ["demo-id", {}],
   updateNewsTopicMutedTerms: ["demo-id", []],
   saveTldrawDocument: [{ document: { store: {}, schema: {} }, baseRevision: 0 }],
+  savePaymentOrganization: [{ budgetId: 'demo-budget', revision: 0, groups: [{ id: 'ungrouped', name: 'Ungrouped', itemIds: [] }] }],
   uploadTldrawAsset: ["demo-hash", new File([], "demo.png", { type: "image/png" })],
   updateSettings: [{}],
   updateTodoistTask: ["demo-id", {}],

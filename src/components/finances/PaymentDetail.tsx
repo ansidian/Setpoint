@@ -5,7 +5,7 @@ import type { FinanceDestination } from './financesNavigation';
 import { financeDate, financeMoney } from './financeWorkspaceModel';
 import MonthlyPaymentChart from './MonthlyPaymentChart';
 
-const statusLabels = { paid: 'Paid', received: 'Received', transferred: 'Transferred', scheduled: 'Scheduled', nothing_due: 'Nothing due', unknown: 'Status unknown' } as const;
+const statusLabels = { paid: 'Paid', received: 'Received', transferred: 'Transferred', scheduled: 'Scheduled', statement: 'Statement received', nothing_due: 'Nothing due', unknown: 'Status unknown' } as const;
 
 export default function PaymentDetail({ row, historyComplete, onNavigate, onForeground, onClose, actions, month }: {
   row: PaymentPresentationRow; historyComplete: boolean; actions?: ReactNode; month?: string;
@@ -15,7 +15,7 @@ export default function PaymentDetail({ row, historyComplete, onNavigate, onFore
   const Icon = row.direction === 'transfer' ? ArrowLeftRight : recorded ? CheckCircle2 : Clock3;
   const paymentDates = [...new Set(row.payments.map(payment => payment.date))];
   const statements = [...row.statements, ...row.statementHistory.filter(statement => !row.statements.some(selected => selected.id === statement.id))];
-  const amountLabel = row.amountKind === 'payment' ? 'Recorded amount' : row.amountKind === 'statement' ? 'Statement amount' : row.amountKind === 'estimate' ? 'Schedule estimate' : 'Amount';
+  const amountLabel = row.amountKind === 'payment' ? 'Recorded amount' : row.amountKind === 'statement' ? row.isCreditCard ? 'Statement balance' : 'Statement amount' : row.amountKind === 'estimate' ? 'Schedule estimate' : 'Amount';
   return <article className="fin-payment-detail">
     <header className="fin-detail-heading"><div><h2>{row.name}</h2>{row.provider && row.provider !== row.name && <p>{row.provider}</p>}</div><button aria-label="Close payment details" onClick={onClose}><X size={16}/></button></header>
     {actions}
@@ -24,11 +24,14 @@ export default function PaymentDetail({ row, historyComplete, onNavigate, onFore
       <dl className="fin-recurring-facts">
         <Fact label={amountLabel}>{row.amountCents === null ? 'Not provided' : financeMoney(row.amountCents)}</Fact>
         <Fact label={row.dueDate ? "Due date" : row.scheduledDate ? "Scheduled date" : "Due date"}>{row.dueDate ? financeDate(row.dueDate) : row.scheduledDate ? financeDate(row.scheduledDate) : row.status === 'nothing_due' ? 'No payment required' : 'Not provided'}</Fact>
-        {row.scheduledDate && row.dueDate && row.scheduledDate !== row.dueDate && <Fact label="Scheduled date">{financeDate(row.scheduledDate)}</Fact>}
-        {(!recorded || row.paymentDate || paymentDates.length > 0) && <Fact label={row.direction === 'income' ? 'Received date' : row.direction === 'transfer' ? 'Transfer date' : 'Payment date'}>{paymentDates.length > 1 ? paymentDates.map(date => <time className="fin-payment-date" key={date} dateTime={date}>{financeDate(date)}</time>) : row.paymentDate ? financeDate(row.paymentDate) : paymentDates[0] ? financeDate(paymentDates[0]) : recorded ? 'Unavailable' : 'No linked payment'}</Fact>}
+        {row.scheduledDate && row.dueDate && (row.scheduledDate !== row.dueDate || row.isCreditCard) && <Fact label={row.isCreditCard ? "Transfer scheduled" : "Scheduled date"}>{financeDate(row.scheduledDate)}</Fact>}
+        {row.isCreditCard && row.occurrence && <Fact label="Transfer estimate">{financeMoney(Math.round(Math.abs(row.occurrence.amount) * 100))}</Fact>}
+        {row.isCreditCard && row.statements.length > 0 && row.payments.length > 0 && <Fact label="Recorded transfers this month">{row.payments.map(payment => <span className="fin-payment-date" key={payment.id}>{financeMoney(payment.amountCents)} · {financeDate(payment.date)}</span>)}</Fact>}
+        {!(row.isCreditCard && row.statements.length > 0) && (!recorded || row.paymentDate || paymentDates.length > 0) && <Fact label={row.direction === 'income' ? 'Received date' : row.direction === 'transfer' ? 'Transfer date' : 'Payment date'}>{paymentDates.length > 1 ? paymentDates.map(date => <time className="fin-payment-date" key={date} dateTime={date}>{financeDate(date)}</time>) : row.paymentDate ? financeDate(row.paymentDate) : paymentDates[0] ? financeDate(paymentDates[0]) : recorded ? 'Unavailable' : 'No linked payment'}</Fact>}
         {row.nextOccurrence && <><Fact label="Next scheduled"><time dateTime={row.nextOccurrence.next_date}>{financeDate(row.nextOccurrence.next_date)}</time></Fact><Fact label="Schedule estimate">{financeMoney(Math.round(row.nextOccurrence.amount * 100))}</Fact></>}
       </dl>
       {row.status === 'scheduled' && <p className="fin-muted">{row.occurrence ? 'Scheduled in Actual. No exact payment link is available for this occurrence.' : 'Statement due. No linked payment is available.'}</p>}
+      {row.isCreditCard && row.statements.length > 0 && <p className="fin-muted">Statement balance and due date come from the original statement. Recorded transfers are shown separately; they do not confirm that this statement is paid in full.</p>}
       {row.status === 'unknown' && <p className="fin-muted">No statement or scheduled occurrence establishes a payment status for this month.</p>}
     </section>
     {(row.payments.length > 0 || row.history.length > 0 || statements.length > 0) && <MonthlyPaymentChart payments={[...row.payments, ...row.history]} statements={statements} month={month || row.paymentDate?.slice(0, 7) || row.scheduledDate?.slice(0, 7) || new Date().toISOString().slice(0, 7)} historyComplete={historyComplete} onNavigate={onNavigate} onForeground={onForeground}/>}

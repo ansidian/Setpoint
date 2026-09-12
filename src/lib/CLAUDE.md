@@ -42,4 +42,4 @@ Shared, mostly-pure helpers with no owning feature directory — cross-cutting u
 
 (Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)
 
-- `financesApi.ts` — explicit Utilities/Journal and history capture transport
+- `financesApi.ts` — Payments/Journal reads, budget-bound utility mapping and staged payment-organization saves

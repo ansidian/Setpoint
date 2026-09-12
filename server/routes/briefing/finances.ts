@@ -2,9 +2,13 @@ import { Router } from 'express';
 import { readFinanceWorkspace } from '../../finances/finance-workspace.ts';
 import { readJournalRange } from '../../actual/actual.ts';
 import { readUtilityMappings, updateUtilityMapping } from '../../finances/utility-mappings.ts';
+import { savePaymentOrganization } from '../../finances/payment-groups.ts';
 
 const router = Router();
 const owner = () => process.env.EA_USER_ID!;
+router.put('/finances/payment-groups', async (req, res, next) => {
+  try { res.json(await savePaymentOrganization(owner(), req.body)); } catch (error) { next(error); }
+});
 router.get('/finances/utility-mappings', async (_req, res, next) => {
   try { res.json(await readUtilityMappings(owner())); } catch (error) { next(error); }
 });

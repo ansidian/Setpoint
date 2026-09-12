@@ -4,7 +4,7 @@ import AnchoredFloatingPanel from '../shared/pickers/AnchoredFloatingPanel';
 import AnimatedHeight from '../shared/AnimatedHeight';
 import type { RefObject } from 'react';
 import { ArrowRight, X } from 'lucide-react';
-import type { UtilityStatement } from '../../../shared/types/finances';
+import type { PaymentStatement } from '../../../shared/types/finances';
 import type { MonthlyPaymentAmount } from './monthlyPaymentModel';
 import type { FinanceDestination } from './financesNavigation';
 import { financeDate, financeMoney } from './financeWorkspaceModel';
@@ -28,10 +28,10 @@ export default function PaymentMonthDetails({ selected, mobile, contentId, ancho
     const frame = requestAnimationFrame(() => contentRef.current?.focus({ preventScroll:true }));
     return () => cancelAnimationFrame(frame);
   }, [mobile]);
-  const [email, setEmail] = useState<UtilityStatement | null>(null);
+  const [email, setEmail] = useState<PaymentStatement | null>(null);
   const emailTrigger = useRef<HTMLButtonElement>(null);
   const dismiss = () => { anchorRef.current?.focus({ preventScroll:true }); onClose(); };
-  const previewEmail = (statement: UtilityStatement, trigger: HTMLButtonElement) => { emailTrigger.current=trigger; setEmail(statement); };
+  const previewEmail = (statement: PaymentStatement, trigger: HTMLButtonElement) => { emailTrigger.current=trigger; setEmail(statement); };
   const monthLabel = new Date(`${selected.month}-01T12:00:00`).toLocaleDateString('en-US', { month:'long', year:'numeric' });
   const content = <section id={contentId} ref={contentRef} tabIndex={-1} className={`fin-month-records${mobile ? " fin-month-records-inline" : ""}`} aria-label={`${monthLabel} activity`} onKeyDown={event => {
     if (event.key === 'Escape' && !email && !event.defaultPrevented) { event.preventDefault(); event.stopPropagation(); dismiss(); }

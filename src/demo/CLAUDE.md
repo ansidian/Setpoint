@@ -49,4 +49,4 @@ Tests are not listed here; follow `AGENTS.md` behavior-ownership guidance.
 - Demo connection flags describe simulated state only. Keep real passwords, tokens, provider operations, and persistent settings out of this directory.
 - Canonical product behavior and provider writes remain in their production domains; this directory supplies only the walkthrough contract.
 
-- `financesWorkspace.ts` — Utilities/Journal from preserved fictional statement evidence and exact shared ledger relationships; utility mapping reads and edits stay in memory
+- `financesWorkspace.ts` — Payments/Journal from preserved fictional utility/card statements and exact shared ledger relationships; utility mapping and revision-checked display organization edits stay in memory

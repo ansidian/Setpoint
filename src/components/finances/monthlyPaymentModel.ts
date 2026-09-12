@@ -1,4 +1,4 @@
-import type { UtilityStatement } from '../../../shared/types/finances';
+import type { PaymentStatement } from '../../../shared/types/finances';
 import type { RecordedPayment } from './paymentPresentationModel';
 
 export interface MonthlyPaymentAmount {
@@ -6,12 +6,12 @@ export interface MonthlyPaymentAmount {
   amountCents: number | null;
   excludedFeeCents: number;
   paymentCount: number;
-  payments: Array<RecordedPayment & { statements: UtilityStatement[] }>;
-  statements: UtilityStatement[];
+  payments: Array<RecordedPayment & { statements: PaymentStatement[] }>;
+  statements: PaymentStatement[];
 }
 
 /** Recorded dates own totals; only exact recorded fee breakdowns reduce them. */
-export function monthlyPaymentAmounts(payments: RecordedPayment[], statements: UtilityStatement[], endMonth: string): MonthlyPaymentAmount[] {
+export function monthlyPaymentAmounts(payments: RecordedPayment[], statements: PaymentStatement[], endMonth: string): MonthlyPaymentAmount[] {
   const consumed = new Set<string>();
   const unique = payments.filter(payment => {
     if (payment.ids.some(id => consumed.has(id))) return false;
@@ -32,7 +32,7 @@ export function monthlyPaymentAmounts(payments: RecordedPayment[], statements: U
       const date = statement.paymentDate || statement.dueDate || statement.statementDate || statement.receivedAt;
       return date.startsWith(month);
     });
-    const sourceOwner = (statement: UtilityStatement) => records.find(payment => statement.paymentTransactionIds.some(id => payment.ids.includes(id)));
+    const sourceOwner = (statement: PaymentStatement) => records.find(payment => statement.paymentTransactionIds.some(id => payment.ids.includes(id)));
     let excludedFeeCents = 0;
     for (const payment of records) {
       if (payment.amountCents === null) continue;

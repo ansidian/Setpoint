@@ -12,7 +12,9 @@ export interface FinancePayment {
   scheduledDate?: string;
   amountCents: number | null;
   direction: 'income' | 'outflow' | 'transfer';
-  status: 'scheduled' | 'recorded';
+  status: 'scheduled' | 'recorded' | 'statement';
+  /** Ledger identity when one row has separate statement and transfer calendar entries. */
+  rowId?: string;
   utilityId?: string;
   target: FinanceDestination;
 }
@@ -24,6 +26,7 @@ export function financePayments(data: FinanceWorkspace, range: JournalRange | nu
   const allOccurrences = [...data.recurring, ...data.utilities.flatMap(utility => utility.occurrences)];
   const scheduleIds = new Set(allOccurrences.map(row => row.scheduleId));
   data.utilities.forEach(utility => utility.identity.scheduleIds.forEach(id => scheduleIds.add(id)));
+  data.paymentItems?.forEach(item => { if (item.scheduleId) scheduleIds.add(item.scheduleId); });
   const paymentIds = new Set(allOccurrences.flatMap(row => row.paymentTransactionIds || []));
   data.utilities.forEach(utility => utility.statements.forEach(statement => statement.paymentTransactionIds.forEach(id => paymentIds.add(id))));
   const belongs = (row: JournalRange['transactions'][number]) => paymentIds.has(row.id)

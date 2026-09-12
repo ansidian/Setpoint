@@ -14,13 +14,16 @@
 .fin-foreground-links{padding:0}
 .fin-workspace .fin-foreground-links>button{color:#a6adc8;padding:8px;gap:6px}
 .fin-workspace .fin-foreground-links>button:hover{color:#cdd6f4;background:#313244}
-.fin-search{position:relative}
+.fin-search{position:relative;transition:opacity 240ms ease}
 .fin-search>svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#a6adc8;pointer-events:none}
 .fin-workspace .fin-search input{padding:10px 12px 10px 38px;background:#11111b80;border-color:#39394e;border-radius:8px}
 
 .fin-workspace .fin-due{color:var(--sp-outflow)}
 
 .fin-search input::placeholder{color:#a6adc8;opacity:1}
+.fin-search:has(input:disabled){opacity:.55;cursor:not-allowed}
+.fin-workspace .fin-search input:disabled{cursor:not-allowed;background:transparent}
+@media(prefers-reduced-motion:reduce){.fin-search{transition:none}}
 
 .fin-disclosure-chevron{flex-shrink:0;transition:transform 160ms;color:#a6adc8}
 /* Journal rows expand into a quiet record with aligned facts and separate notes. */
@@ -126,7 +129,7 @@
   .fin-grid{flex:1;min-height:0;grid-template-columns:minmax(0,1.35fr) minmax(340px,1fr);gap:32px;align-items:start}
   .fin-companion{display:contents}
   .fin-overview,.fin-payment-calendar-wrap,.fin-grid .fin-detail{min-height:0;max-height:100%;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;scrollbar-width:thin;scrollbar-color:#45455c transparent}
-  .fin-overview{grid-column:1;grid-row:1;padding-right:8px}
+  .fin-overview{grid-column:1;grid-row:2;padding-right:8px}
   .fin-payment-calendar-wrap,.fin-grid .fin-detail{grid-column:2;grid-row:1}
   .fin-grid .fin-detail{width:100%}
 }
@@ -157,7 +160,7 @@
 .fin-workspace button.fin-pay-online:active:not(:disabled){background:color-mix(in srgb,var(--ea-accent) 85%,#11111b);border-color:color-mix(in srgb,var(--ea-accent) 85%,#11111b)}
 
 /* Payment facts share one scan path; selection occupies the calendar column. */
-.fin-payment-toolbar{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:20px;flex-shrink:0}
+.fin-payment-toolbar{display:flex;align-items:center;justify-content:space-between;gap:24px;min-width:0;flex-shrink:0}
 .fin-month-control{display:flex;align-items:center;gap:8px;white-space:nowrap}
 .fin-month-control h2{min-width:154px;text-align:center}
 .fin-payment-toolbar .fin-search{margin:0;width:min(360px,45%)}
@@ -194,19 +197,26 @@
 .fin-payment-detail .fin-detail-heading{position:sticky;top:-24px;background:#16161e;z-index:1;padding:12px 0;margin-top:-12px}
 .fin-payment-detail .fin-detail-heading>button{flex-shrink:0}
 @media(min-width:768px){
- .fin-grid{grid-template-columns:minmax(530px,1.45fr) minmax(340px,1fr);gap:24px}
- .fin-companion{display:block;grid-column:2;grid-row:1;height:100%;max-height:100%;min-height:0}
+ /* The empty upper-right cell keeps the calendar below the payment toolbar. */
+ .fin-grid{grid-template-columns:minmax(530px,1.45fr) minmax(340px,1fr);grid-template-rows:auto minmax(0,1fr);gap:20px 24px}
+ .fin-payment-toolbar{grid-column:1;grid-row:1;padding-right:8px;gap:12px}
+ .fin-payment-toolbar .fin-search{flex:1;min-width:0;width:auto}
+ .fin-companion{display:block;grid-column:2;grid-row:2;height:100%;max-height:100%;min-height:0}
  .fin-grid .fin-detail{max-height:none;overflow:visible}
 }
 @media(min-width:768px) and (max-width:1100px){
  .fin-workspace:not([data-view=journal]){padding-inline:16px}
- .fin-grid{grid-template-columns:minmax(380px,1.15fr) minmax(300px,1fr);gap:16px}
+ .fin-grid{grid-template-columns:minmax(380px,1.15fr) minmax(300px,1fr);grid-template-rows:auto auto minmax(0,1fr);column-gap:16px}
+ .fin-payment-toolbar{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:subgrid;grid-row:1/3;row-gap:normal}
+ .fin-payment-toolbar .fin-search{grid-column:1/-1;grid-row:2}
+ .fin-overview{grid-row:3}
+ .fin-companion{grid-row:2/4}
  .fin-status-columns,.fin-workspace button.fin-status-row{grid-template-columns:minmax(100px,1.2fr) minmax(70px,.8fr) minmax(65px,.8fr) minmax(65px,.7fr);gap:8px;padding-inline:8px}
  .fin-row-chevron,.fin-status-columns>span:last-child{display:none}
  .fin-detail-panel{padding:16px}
 }
 @media(max-width:767px){
- .fin-payment-toolbar{align-items:stretch;flex-direction:column;gap:12px;margin-bottom:24px}
+ .fin-payment-toolbar{align-items:stretch;flex-direction:column;gap:12px;order:-2}
  .fin-month-control{justify-content:space-between}.fin-payment-toolbar .fin-search{width:100%}
  .fin-status-columns{display:none}
  .fin-workspace button.fin-status-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:12px;padding:16px 8px}

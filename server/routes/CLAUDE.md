@@ -52,4 +52,4 @@ The HTTP surface: Express routers that validate input, apply auth, and delegate 
 - `server/<domain>/` directories — service layers these routes delegate to (see their maps)
 - `dashboard.ts` SSE stream is the push channel the frontend caches listen to
 
-- `briefing/finances.ts` — authenticated Utilities/Journal reads and explicit history preview/accept
+- `briefing/finances.ts` — authenticated Payments/Journal reads, utility membership repair, and revision-checked payment display organization

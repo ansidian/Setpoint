@@ -478,7 +478,7 @@ Build-time demo mutations update one exact-ID, in-memory financial projection. M
 
 ## Finances workspace and statement history
 
-`/finances` is the shell Utilities/Journal workspace (shortcut 6). Calendar is Events-only (shortcut 3); its retired Bills preference is ignored. `/finance` retains the guarded financial review, correction and import foreground, with accepted workspace location preserved through a cancelled close.
+`/finances` is the shell Payments/Journal workspace (shortcut 6). Calendar is Events-only (shortcut 3); its retired Bills preference is ignored. `/finance` retains the guarded financial review, correction and import foreground, with accepted workspace location preserved through a cancelled close.
 
 `GET /api/briefing/finances` composes budget-bound utility identities, saved source facts, one financial activity snapshot, recurring mirror occurrences and a bounded local Actual Journal read. Reads never extract, synchronize or write Actual. Exact schedule postings establish paid state independently of cleared/reconciled; statement amounts and recorded totals remain separate. Journal hydrates exact split and reciprocal transfer relatives; cross-date transfer sides keep their original dates.
 
@@ -491,3 +491,7 @@ Managed candidate dismissal uses `POST /api/briefing/financial-events/dismiss` w
 Utilities displays exact recorded payment evidence independently of email statements. The bounded workspace Journal history supplies shared row/detail/calendar payment dates and amounts; scheduled and statement due dates remain separate. Payee membership supplies history but does not settle a particular occurrence. Desktop details replace the calendar column; mobile uses a full-height sheet.
 
 Recording feedback follows a fresh original settlement receipt after explicit submission. The cue has no submission-to-confirmation deadline while the same requested record remains visible; closing, navigating, hiding the tab, rejection or attention cancels it. Audio startup retains its short expiry. Detail responses and form lifetime bind to the requested source alias so document-to-event promotion preserves the selected record and its pending feedback. Automatic/background records and saved history do not sound.
+
+Payment organization is presentation-only and scoped to the owner and exact Actual budget. `PUT /api/briefing/finances/payment-groups` atomically checks the displayed revision and budget before saving ordered groups and stable utility/schedule identities. Workspace GETs derive unsaved starters or reconcile new identities into the saved fallback group without writing; the fallback can be renamed/reordered. Organize drafts survive background refreshes and change the view only after Save. Demo uses the same validation in memory.
+
+Card statement history projects only saved original `statement_issued` transfer documents, matched to exact effective budget-bound schedule evidence or an explicitly validated card profile. Statement balance/deadline, scheduled transfer estimate/date, and recorded transfers remain separate. A partial transfer does not confirm a statement is paid. The calendar shows statement deadlines separately from scheduled money and deduplicates recorded transfer pairs. Display group names have no effect on source association or automation.

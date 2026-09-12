@@ -765,6 +765,7 @@ erDiagram
 | `ea_owner` | `030_owner_bootstrap.sql`, `031_auth_recovery.sql`, `038_auth_security_generation.sql`, `061_owner_password_login_throttle.sql` |
 | `ea_owner_recovery_codes` | `031_auth_recovery.sql` |
 | `ea_passkey_credentials` | `012_passkey_auth.sql` |
+| `ea_payment_organizations` | `076_payment_groups.sql` |
 | `ea_pending_auth` | `012_passkey_auth.sql`, `038_auth_security_generation.sql` |
 | `ea_pinned_emails` | `022_pinned_emails.sql`, `023_pinned_emails_rebuild.sql` |
 | `ea_reminders` | `010_discord_reminders.sql`, `046_time_to_leave_foundation.sql` |
@@ -910,6 +911,7 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | GET | `/api/briefing/email/snoozed` | `server/routes/briefing/email.ts` |
 | GET | `/api/briefing/finances` | `server/routes/briefing/finances.ts` |
 | GET | `/api/briefing/finances/journal` | `server/routes/briefing/finances.ts` |
+| PUT | `/api/briefing/finances/payment-groups` | `server/routes/briefing/finances.ts` |
 | GET | `/api/briefing/finances/utility-mappings` | `server/routes/briefing/finances.ts` |
 | PUT | `/api/briefing/finances/utility-mappings/:id` | `server/routes/briefing/finances.ts` |
 | GET | `/api/briefing/financial-activity` | `server/routes/briefing/financial-activity.ts` |

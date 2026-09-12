@@ -5,13 +5,17 @@ import { readBillsMirrorRange } from '../bills/bills-service.ts';
 import { financialActivityReader } from '../financial-activity/financial-activity.ts';
 import { linkStatementPayment, hydrateLegacyOccurrencePayments } from './finance-statement-model.ts';
 import { readUtilityStatements } from './finance-statement-sources.ts';
+import { readRecurringStatements } from './recurring-statement-sources.ts';
+import { financialProfilesFromSettingsRow } from '../bills/financial-profiles.ts';
+import { buildPaymentCatalog, readRetainedPaymentSchedules } from './payment-catalog.ts';
+import { readPaymentOrganization } from './payment-groups.ts';
 import type { FinanceWorkspace, UtilityIdentity } from '../../shared/types/finances.ts';
 
 export async function readFinanceWorkspace(userId: string): Promise<FinanceWorkspace> {
   const end = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
   const start = new Date(`${end}T00:00:00Z`); start.setUTCFullYear(start.getUTCFullYear() - 1);
   const range = { start: start.toISOString().slice(0, 10), end };
-  const settings = await db.execute({ sql: 'SELECT actual_budget_sync_id FROM ea_settings WHERE user_id=?', args: [userId] });
+  const settings = await db.execute({ sql: 'SELECT actual_budget_sync_id, financial_profiles_json, financial_profiles_revision FROM ea_settings WHERE user_id=?', args: [userId] });
   const budgetId = settings.rows[0]?.actual_budget_sync_id ? String(settings.rows[0].actual_budget_sync_id) : null;
   const result: FinanceWorkspace = { budgetId, ...range, utilities: [], recurring: [], updatedAt: null, issues: [], truncated: false };
   if (!budgetId) { result.issues.push('Connect Actual to see utility schedules and recorded payments.'); return result; }
@@ -19,9 +23,10 @@ export async function readFinanceWorkspace(userId: string): Promise<FinanceWorks
   const identities: UtilityIdentity[] = membership.rows.map(row => ({ id: String(row.id), label: String(row.label), provider: String(row.provider), budgetId,
     payeeId: String(row.payee_id), sourceIdentityText: String(row.source_identity_text || ''), scheduleIds: JSON.parse(String(row.schedule_ids_json)), sourceSenders: JSON.parse(String(row.source_senders_json)) }));
   const lookahead = new Date(`${range.end}T00:00:00Z`); lookahead.setUTCMonth(lookahead.getUTCMonth() + 3);
-  const [metadata, mirror, journal, activities] = await Promise.allSettled([
+  const [metadata, mirror, journal, activities, retained] = await Promise.allSettled([
     readActualMetadataProjection(userId), readBillsMirrorRange(userId, { start: range.start, end: lookahead.toISOString().slice(0, 10) }),
     readJournalRange(userId, { ...range, limit: 2000 }), financialActivityReader.forWorkspace(userId, range.start),
+    readRetainedPaymentSchedules(userId),
   ]);
   const meta = metadata.status === 'fulfilled' ? metadata.value : null;
   const transactions = journal.status === 'fulfilled' ? journal.value.transactions : [];
@@ -36,8 +41,17 @@ export async function readFinanceWorkspace(userId: string): Promise<FinanceWorks
   if (activities.status === 'rejected') result.issues.push('Saved record links are temporarily unavailable.');
   if (mirror.status === 'rejected') result.issues.push('Recurring payment schedules are unavailable.');
   if (!identities.length) result.issues.push('No verified utility identities are configured for this budget.');
-  const sources = await readUtilityStatements(userId, budgetId, range.start);
+  const profiles = financialProfilesFromSettingsRow(settings.rows[0]);
+  const [sources, cards] = await Promise.all([
+    readUtilityStatements(userId, budgetId, range.start),
+    readRecurringStatements(userId, budgetId, range.start, { activities: records, metadata: meta, profiles }).catch(() => {
+      result.issues.push('Saved credit card statements are temporarily unavailable.');
+      return { statements: [], cardScheduleIds: [], truncated: false };
+    }),
+  ]);
   result.truncated ||= sources.truncated;
+  result.truncated ||= cards.truncated;
+  result.recurringStatements = cards.statements;
   const usedSchedules = new Set<string>();
   for (const configured of identities) {
     const identity = { ...configured, scheduleIds: [...new Set([...configured.scheduleIds, ...(meta?.schedules || [])
@@ -68,5 +82,12 @@ export async function readFinanceWorkspace(userId: string): Promise<FinanceWorks
     result.utilities.push({ identity, statements: projected, occurrences: occurrences.filter(item => identity.scheduleIds.includes(item.scheduleId)) });
   }
   result.recurring = occurrences.filter(item => !usedSchedules.has(item.scheduleId));
+  result.paymentItems = buildPaymentCatalog({
+    budgetId, utilities: result.utilities.map(utility => utility.identity), schedules: meta?.schedules || [],
+    occurrences: retained.status === 'fulfilled' ? retained.value : occurrences, payees: meta?.payees || [],
+    profiles: profiles.profiles, cardScheduleIds: cards.cardScheduleIds,
+  });
+  try { result.paymentOrganization = await readPaymentOrganization(userId, budgetId, result.paymentItems); }
+  catch { result.issues.push('Saved payment groups are temporarily unavailable. Reload Payments to try again.'); }
   return result;
 }

@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { FileText } from 'lucide-react';
-import type { UtilityStatement } from '../../../shared/types/finances';
+import type { PaymentStatement } from '../../../shared/types/finances';
 import type { RecordedPayment } from './paymentPresentationModel';
 import { financeMoney } from './financeWorkspaceModel';
 import { monthlyPaymentAmounts } from './monthlyPaymentModel';
@@ -10,7 +10,7 @@ import PaymentMonthDetails from './PaymentMonthDetails';
 
 const monthLabel = (month: string) => new Date(`${month}-01T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 export default function MonthlyPaymentChart({ payments, statements, month, historyComplete, onNavigate, onForeground }: {
-  payments: RecordedPayment[]; statements: UtilityStatement[]; month: string; historyComplete: boolean; onNavigate: (target: FinanceDestination) => void; onForeground: (href: string) => void;
+  payments: RecordedPayment[]; statements: PaymentStatement[]; month: string; historyComplete: boolean; onNavigate: (target: FinanceDestination) => void; onForeground: (href: string) => void;
 }) {
   const contentId = useId();
   const mobile = useMediaQuery('(max-width: 767px)');

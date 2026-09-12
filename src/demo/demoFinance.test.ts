@@ -17,6 +17,57 @@ const imported = { owner: 'import' as const, id: 'demo-transaction-item-automati
 
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.useRealTimers(); vi.resetModules(); });
 
+describe('demo payment organization', () => {
+  it('saves only a complete draft in memory, isolates readers, and resets on refresh without changing financial records', async () => {
+    const api = await demo();
+    const before = await api.getFinances();
+    const original = structuredClone(before.paymentOrganization!);
+    const draft = structuredClone(original);
+    draft.groups.reverse();
+    const fallback = draft.groups.find(group => group.id === 'ungrouped')!;
+    fallback.name = 'Personal';
+    const cards = draft.groups.find(group => group.id === 'credit-cards')!;
+    fallback.itemIds.push(cards.itemIds.pop()!);
+    expect((await api.getFinances()).paymentOrganization).toEqual(original);
+
+    const saved = await api.savePaymentOrganization(draft);
+    expect(saved).toEqual({ ...draft, revision: 1 });
+    const after = await api.getFinances();
+    expect(after.paymentOrganization).toEqual(saved);
+    expect(after.recordedHistory).toEqual(before.recordedHistory);
+    expect(after.recurring).toEqual(before.recurring);
+    expect(after.recurringStatements).toEqual(before.recurringStatements);
+    saved.groups[0]!.name = 'Caller-only edit';
+    expect((await api.getFinances()).paymentOrganization!.groups[0]!.name).toBe('Personal');
+    await expect(api.savePaymentOrganization(original)).rejects.toMatchObject({ status: 409 });
+    await expect(api.savePaymentOrganization({ ...after.paymentOrganization!, groups: [] })).rejects.toMatchObject({ status: 400 });
+    expect((await api.getFinances()).paymentOrganization).toEqual(after.paymentOrganization);
+
+    const refreshed = await demo();
+    expect((await refreshed.getFinances()).paymentOrganization).toEqual(original);
+  });
+
+  it('keeps fictional full card balances and due dates distinct from transfer estimates and includes every stable payment', async () => {
+    const api = await demo();
+    const workspace = await api.getFinances();
+    const card = workspace.recurring.find(row => row.scheduleId === 'demo-card')!;
+    expect(card).toMatchObject({ amount: 512.84, next_date: date, type: 'transfer', paymentTransactionIds: [] });
+    expect(workspace.recurringStatements).toMatchObject([
+      { scheduleId: 'demo-card', budgetId: 'demo-budget', amountCents: 64215, amountKind: 'statement_balance', dueDate: '2026-09-10', paymentTransactionIds: [], recordedTotalCents: null },
+      { scheduleId: 'demo-card', amountCents: 48723, dueDate: '2026-08-01' },
+    ]);
+    const statement = workspace.recurringStatements![0]!;
+    expect(await api.getEmailBody(statement.emailUid)).toMatchObject({ body: expect.stringContaining('Full statement balance $642.15. Payment due 2026-09-10.') });
+    expect(workspace.paymentOrganization!.groups.find(group => group.id === 'credit-cards')!.itemIds).toEqual(['schedule:demo-card']);
+    const ids = workspace.paymentItems!.map(item => item.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).toEqual(expect.arrayContaining([
+      ...workspace.utilities.map(utility => `utility:${utility.identity.id}`),
+      ...workspace.recurring.map(row => `schedule:${row.scheduleId}`),
+    ]));
+  });
+});
+
 describe('shared fictional financial settlement', () => {
   it.each(['expense', 'income', 'transfer', 'bill'] as const)('projects managed %s completion and correction through the same ledger and bills', async kind => {
     const api = await demo();

@@ -1,3 +1,4 @@
+import type { PaymentItem, PaymentOrganization } from './payment-groups.ts';
 import type { ActualBillOccurrence, ActualPayee, ActualSchedule } from './actual.ts';
 import type { FinancialActivityReference } from './financial-activity.ts';
 
@@ -51,9 +52,8 @@ export interface UtilityMappingUpdate {
   payeeId: string;
   scheduleIds: string[];
 }
-export interface UtilityStatement {
+export interface PaymentStatement {
   id: string;
-  utilityId: string;
   emailUid: string;
   subject: string;
   receivedAt: string;
@@ -75,6 +75,13 @@ export interface UtilityStatement {
   feeCents: number | null;
   issue: string | null;
 }
+export interface UtilityStatement extends PaymentStatement {
+  utilityId: string;
+}
+export interface RecurringStatement extends PaymentStatement {
+  scheduleId: string;
+  budgetId: string;
+}
 export interface FinanceUtility {
   identity: UtilityIdentity;
   statements: UtilityStatement[];
@@ -87,6 +94,9 @@ export interface FinanceWorkspace {
   recordedHistory?: JournalRange;
   utilities: FinanceUtility[];
   recurring: ActualBillOccurrence[];
+  recurringStatements?: RecurringStatement[];
+  paymentItems?: PaymentItem[];
+  paymentOrganization?: PaymentOrganization;
   start: string;
   end: string;
   updatedAt: string | null;

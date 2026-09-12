@@ -22,4 +22,6 @@ Cross-layer, serializable contracts used by the server and client. Keep domain b
 
 - `financial-corrections.ts` — frozen correction preview, step journal, exact SDK snapshot and status contracts
 
-- `finances.ts` — budget-bound utilities, statement evidence, reviewable capture and Journal topology
+- `finances.ts` — budget-bound utilities, source-grounded utility/card statements and Journal topology
+
+- `payment-groups.ts` — stable recurring display identities and ordered, revisioned payment organization
