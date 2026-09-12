@@ -6,6 +6,7 @@ import {
   type BillAmountVerification,
 } from "../../shared/types/bills.ts";
 import { hasAmbiguousSemanticBillAmount, selectSemanticBillAmount } from "./billSemanticAmountPolicy.ts";
+import { CITI_CUSTOM_ALERT_THRESHOLD_INSTRUCTIONS } from "./bill-semantic-prompt.ts";
 
 const MIN_VERIFY_VALUES = 1;
 const MAX_VERIFY_VALUES = 8;
@@ -35,6 +36,17 @@ export function currencyValuesInText(content: string): number[] {
     if (value != null && key) values.set(key, value);
   }
   return [...values.values()];
+}
+
+function requiredCurrencyValues(content: string): number[] {
+  // Exclude only the configured threshold occurrence, never every $2 value.
+  const citiAlert = /^Subject:[^\n]*\nFrom:\s*alerts@info6\.citi\.com\s*\n/i.test(content)
+    && /\bcustom\s+alert\s+settings\b/i.test(content);
+  const evidence = citiAlert ? content.replace(
+    /\bThe\s+transaction\s+made\s+on\s+your\s+Costco\s+Anywhere\s+account\s+exceeded\s+\$2\.00\b/gi,
+    "Configured Citi notification threshold",
+  ) : content;
+  return currencyValuesInText(evidence);
 }
 
 function candidateValues(candidate: BillCandidate): Set<string> {
@@ -72,7 +84,7 @@ function withoutMinimumDueSelection(candidate: BillCandidate): BillCandidate {
   return { ...candidate, amount: null, amount_kind: null };
 }
 
-function selectionIsValid(candidate: BillCandidate): boolean {
+function selectionIsValid(candidate: BillCandidate, sourceValues: number[]): boolean {
   // Provider JSON is runtime input. The semantic policy intentionally ignores
   // unknown roles; that must not turn a malformed extraction into a valid null.
   if (hasUnknownAmountRoles(candidate)) return false;
@@ -80,15 +92,16 @@ function selectionIsValid(candidate: BillCandidate): boolean {
   if (hasAmbiguousSemanticBillAmount(unverified)) return false;
   const canonical = selectSemanticBillAmount(unverified);
   if (!canonical) return candidate.amount == null && candidate.amount_kind == null;
+  if (!sourceValues.some(value => amountKey(value) === amountKey(canonical.amount))) return false;
   const selected = selectedCandidate(candidate);
   return Boolean(selected && selected.kind === canonical.kind
     && amountKey(selected.value) === amountKey(canonical.amount));
 }
 
-function repairSelectionFromSemanticCandidates(candidate: BillCandidate): BillCandidate | null {
+function repairSelectionFromSemanticCandidates(candidate: BillCandidate, sourceValues: number[]): BillCandidate | null {
   const selected = selectSemanticBillAmount({ ...candidate, amount: null, amount_verification: undefined });
   const repaired = { ...candidate, amount: selected?.amount ?? null, amount_kind: selected?.kind ?? null };
-  return selectionIsValid(repaired) ? repaired : null;
+  return selectionIsValid(repaired, sourceValues) ? repaired : null;
 }
 
 function hasGroundedAmountEvidence(content: string, candidate: BillCandidate): boolean {
@@ -115,10 +128,10 @@ function amountEvidenceNeedsAudit(content: string, candidate: BillCandidate): bo
 
 export function shouldVerifyBillAmounts(content: string, candidate: BillCandidate): boolean {
   if (hasUnknownAmountRoles(candidate)) return true;
-  const sourceValues = currencyValuesInText(content);
+  const sourceValues = requiredCurrencyValues(content);
   if (sourceValues.length < MIN_VERIFY_VALUES || sourceValues.length > MAX_VERIFY_VALUES) return false;
   return coveredCurrencyValueCount(sourceValues, candidate) < sourceValues.length
-    || !selectionIsValid(candidate)
+    || !selectionIsValid(candidate, sourceValues)
     || (sourceValues.length > 1 && amountEvidenceNeedsAudit(content, candidate));
 }
 
@@ -156,12 +169,14 @@ export async function verifyBillAmounts({
   const canonicalCandidate = withoutMinimumDueSelection(candidate);
   const removedMinimumSelection = canonicalCandidate !== candidate;
   const unknownRoles = hasUnknownAmountRoles(canonicalCandidate);
-  const sourceValues = currencyValuesInText(content);
+  const sourceValues = requiredCurrencyValues(content);
   const initialCovered = coveredCurrencyValueCount(sourceValues, canonicalCandidate);
+  const invalidThresholdSelection = sourceValues.length < currencyValuesInText(content).length
+    && !selectionIsValid(canonicalCandidate, sourceValues);
   if (sourceValues.length < MIN_VERIFY_VALUES || sourceValues.length > MAX_VERIFY_VALUES
     || !shouldVerifyBillAmounts(content, canonicalCandidate)) {
     return {
-      candidate: unknownRoles
+      candidate: unknownRoles || invalidThresholdSelection
         ? {
             ...canonicalCandidate,
             amount_verification: verificationMetadata("failed", sourceValues.length, initialCovered, providerId, model),
@@ -183,8 +198,8 @@ export async function verifyBillAmounts({
     };
   }
   const needsEvidenceAudit = unknownRoles || (sourceValues.length > 1 && amountEvidenceNeedsAudit(content, canonicalCandidate));
-  if (initialCovered === sourceValues.length && !selectionIsValid(canonicalCandidate) && !needsEvidenceAudit) {
-    const repaired = repairSelectionFromSemanticCandidates(canonicalCandidate);
+  if (initialCovered === sourceValues.length && !selectionIsValid(canonicalCandidate, sourceValues) && !needsEvidenceAudit) {
+    const repaired = repairSelectionFromSemanticCandidates(canonicalCandidate, sourceValues);
     if (repaired) {
       return {
         candidate: {
@@ -209,6 +224,7 @@ Return a corrected extraction using the required schema. Focus on amount, amount
 - Use only these amount roles: ${BILL_AMOUNT_KINDS.join(", ")}. Event types such as reward are not amount roles. Resolve unsupported first-pass roles from the original evidence; do not repair them by substituting a similar role name.
 - Account for every distinct numeric currency value visible in the source, up to the schema limit.
 - Include informational, promotional, projected, and legal-footer currency values as amount_candidates with kind other and verbatim evidence of their non-operational role. They count toward coverage but must not replace or invalidate a separately evidenced payable or paid amount. For example, a receipt's payment and a statutory penalty cap are separate candidates: payment_amount for the payment and other for the cap.
+- ${CITI_CUSTOM_ALERT_THRESHOLD_INSTRUCTIONS}
 - Audit each semantic label as well as each numeric value. Complete numeric coverage does not establish correct label/value associations.
 - Preserve source rows and table relationships. When several labels precede several values, use explicit structural or repeated source evidence to resolve their association; do not guess from proximity.
 - For each amount_candidate, copy one short contiguous verbatim evidence excerpt (at most 320 characters) containing its currency value and supporting label. Do not paraphrase, add ellipses, or join separate source excerpts. An informational zero balance is not a statement balance unless the source explicitly labels it as such.
@@ -232,14 +248,14 @@ ${JSON.stringify({
     const verifiedCandidate = withoutMinimumDueSelection({ ...verified.fields, event_kind: canonicalCandidate.event_kind });
     const verifiedCovered = coveredCurrencyValueCount(sourceValues, verifiedCandidate);
     const accepted = verifiedCovered === sourceValues.length
-      && selectionIsValid(verifiedCandidate)
+      && selectionIsValid(verifiedCandidate, sourceValues)
       && !amountEvidenceNeedsAudit(content, verifiedCandidate);
     if (!accepted) {
       return {
         candidate: {
           ...canonicalCandidate,
           amount_verification: verificationMetadata(
-            needsEvidenceAudit || initialCovered < sourceValues.length || !selectionIsValid(canonicalCandidate)
+            needsEvidenceAudit || initialCovered < sourceValues.length || !selectionIsValid(canonicalCandidate, sourceValues)
               ? "failed"
               : "kept_initial",
             sourceValues.length,

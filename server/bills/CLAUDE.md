@@ -11,7 +11,7 @@ Bill domain logic: AI extraction from emails, profile-authorized financial-email
 - `bill-extractors/catalog.ts` — bill-extraction defaults and validation facade over the centralized AI model catalog
 - `bill-extractors/anthropic.ts` — Claude tool-use extraction call; records provider usage before field parsing
 - `bill-extractors/openai.ts` — OpenAI structured-JSON extraction call; records provider usage before field parsing
-- `billAmountVerifier.ts` — bounded second-pass LLM audit for incomplete amount coverage or ungrounded/conflicting monetary labels; failed audits block canonical selection
+- `billAmountVerifier.ts` — bounded second-pass LLM audit for incomplete amount coverage or ungrounded/conflicting monetary labels; the labeled Citi $2 custom-alert threshold is excluded, while genuine $2 values remain required; failed audits block canonical selection
 - `billEventVerifier.ts` — bounded second-pass LLM audit for uncertain events or missing payment purpose, with source-grounded type/account evidence and persisted attempt markers
 - `bill-candidate-verification-service.ts` — public bills-domain facade for semantic amount and event verification of email candidates
 - `financial-email-planner.ts` — financial-email contract seam with saved owner context; classifies purpose, preserves intended versus final operation, derives stable identity, adapts reconciliation, and never writes to Actual or persists plans

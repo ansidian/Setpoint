@@ -14,6 +14,68 @@ function providerWith(fields: Record<string, unknown>): BillExtractionProvider {
 }
 
 describe("semantic bill amount verifier", () => {
+  const citiPurchase = "Subject: A transaction was made on your Costco Anywhere account\nFrom: alerts@info6.citi.com\n\n"
+    + "You're receiving this email based on your custom alert settings.\n"
+    + "The transaction made on your Costco Anywhere account exceeded $2.00.\nAmount: $10.99";
+  const purchase: BillCandidate = {
+    event_kind: "purchase", amount: 10.99, amount_kind: "transaction_amount",
+    amount_candidates: [{ kind: "transaction_amount", value: 10.99, evidence: "Amount: $10.99" }],
+  };
+
+  it("accepts a Citi purchase with its configured notification threshold omitted", async () => {
+    const result = await verifyBillAmounts({
+      content: citiPurchase, candidate: purchase,
+      provider: providerWith({}), providerId: "anthropic", model: "test-model",
+    });
+    expect(selectSemanticBillAmount(result.candidate)).toMatchObject({ amount: 10.99, kind: "transaction_amount" });
+  });
+
+  it("retains an actual $2 Citi purchase independently of the threshold", async () => {
+    const result = await verifyBillAmounts({
+      content: citiPurchase.replace("Amount: $10.99", "Amount: $2.00"),
+      candidate: { ...purchase, amount: 2, amount_candidates: [{ kind: "transaction_amount", value: 2, evidence: "Amount: $2.00" }] },
+      provider: providerWith({}), providerId: "anthropic", model: "test-model",
+    });
+    expect(selectSemanticBillAmount(result.candidate)).toMatchObject({ amount: 2, kind: "transaction_amount" });
+  });
+
+  it("accepts an audit that covers other monetary evidence while omitting the threshold", async () => {
+    const result = await verifyBillAmounts({
+      content: `${citiPurchase}\nService fee: $1.50`, candidate: purchase,
+      provider: providerWith({ ...purchase, amount_candidates: [...purchase.amount_candidates!, { kind: "other", value: 1.5, evidence: "Service fee: $1.50" }] }),
+      providerId: "anthropic", model: "test-model",
+    });
+    expect(result.candidate.amount_verification?.status).toBe("corrected");
+    expect(selectSemanticBillAmount(result.candidate)?.amount).toBe(10.99);
+  });
+
+  it.each([
+    ["a separate fee", `${citiPurchase}\nService fee: $2.00`],
+    ["a genuine purchase", citiPurchase.replace("Amount: $10.99", "Amount: $2.00")],
+    ["another sender", citiPurchase.replace("alerts@info6.citi.com", "bank@example.test")],
+  ])("still requires the $2 amount for %s", async (_label, content) => {
+    const result = await verifyBillAmounts({
+      content, candidate: purchase,
+      provider: providerWith(purchase), providerId: "anthropic", model: "test-model",
+    });
+    expect(selectSemanticBillAmount(result.candidate)).toBeNull();
+  });
+
+  it.each([true, false])("cannot use the Citi notification threshold as the purchase amount (actual amount present: %s)", async (hasPurchase) => {
+    const wrongAmount: BillCandidate = {
+      ...purchase, amount: 2,
+      amount_candidates: [
+        { kind: "transaction_amount", value: 2, evidence: "exceeded $2.00" },
+        { kind: "other", value: 10.99, evidence: "Amount: $10.99" },
+      ],
+    };
+    const result = await verifyBillAmounts({
+      content: hasPurchase ? citiPurchase : citiPurchase.replace("\nAmount: $10.99", ""), candidate: wrongAmount,
+      provider: providerWith(wrongAmount), providerId: "anthropic", model: "test-model",
+    });
+    expect(selectSemanticBillAmount(result.candidate)).toBeNull();
+  });
+
   it("corrects mislabeled statement evidence even when every currency value was already covered", async () => {
     const result = await verifyBillAmounts({
       content: "Minimum payment | $40.00\nPlan adjusted balance | $0.00\nRemaining statement balance | $472.32\nAutopay On",
