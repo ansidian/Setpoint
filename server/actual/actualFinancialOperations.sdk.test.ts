@@ -411,6 +411,58 @@ describe("Actual financial operation SDK compatibility", () => {
     expect(await actualApi.getTransactions(accountId, "2026-09-01", "2026-10-31")).toEqual([]);
   }, 30_000);
 
+  it.each(["managed", "manual"])("keeps a recurring utility active and funded after a %s update and payment", async (writer) => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-12T12:00:00Z"));
+    dataDir = await createTestTempDir("actual-recurring-utility-payment-");
+    const internal = await actualApi.init({ dataDir, verbose: false });
+    started = true;
+    await internal.send("create-budget", { budgetName: "Recurring utility payment", avoidUpload: true });
+    const accountId = await actualApi.createAccount({ name: "Fictional checking", offbudget: false }, 100_000);
+    const payeeId = await actualApi.createPayee({ name: "Fictional power" });
+    const categoryId = (await actualApi.getCategories()).find(category => "group_id" in category)!.id;
+    const recurrence = { start: "2026-09-20", interval: 1, frequency: "monthly" as const, patterns: [],
+      skipWeekend: false, weekendSolveMode: "after" as const, endMode: "never" as const,
+      endOccurrences: 1, endDate: "2026-09-20" };
+    const scheduleId = await actualApi.createSchedule({ name: "Fictional power", account: accountId, payee: payeeId,
+      amount: -8_700, amountOp: "is", date: recurrence, posts_transaction: false });
+    const ruleId = (await actualApi.getSchedules()).find(schedule => schedule.id === scheduleId)!.rule;
+    const rule = (await actualApi.getRules()).find(rule => rule.id === ruleId)!;
+    await actualApi.updateRule({ ...rule, actions: [...rule.actions, { op: "set", field: "category", value: categoryId }] });
+    await actualApi.updateNote(categoryId, "#template-70 schedule Fictional power");
+    // Actual advances its next-date cursor only for a newer change timestamp.
+    vi.setSystemTime(new Date("2026-09-12T12:00:01Z"));
+    const sdk = { ...actualApi, sync: async () => undefined } as unknown as ActualFinancialSdk;
+    if (writer === "managed") {
+      const input: ActualUtilityScheduleInput = { kind: "utility_schedule", identityKey: "recurring-utility-update",
+        budgetId: "isolated", accountId, payeeId, payee: "Fictional power", scheduleId,
+        amountCents: -9_850, date: "2026-09-28", name: "Fictional power" };
+      const preview = await reconcileActualFinancialOperation(sdk, "isolated", input, "preview");
+      expect(await reconcileActualFinancialOperation(sdk, "isolated", { ...input,
+        expectedScheduleFingerprint: preview.scheduleFingerprint, preparedEvidence: preview.evidence }, "write_once"))
+        .toMatchObject({ outcome: "updated", scheduleId });
+    } else {
+      const writes = createActualSdkScheduleWrites(actualApi as unknown as ActualSdkSchedulePort);
+      expect(await writes.writeBill({ type: "bill", payee: "Fictional power", account_id: accountId,
+        category_id: categoryId, amount: 98.50, due_date: "2026-09-28" })).toMatchObject({ success: true });
+    }
+    expect(await actualApi.getSchedules()).toEqual([expect.objectContaining({ id: scheduleId, completed: false,
+      next_date: "2026-09-28", date: { ...recurrence, start: "2026-09-28" } })]);
+    await internal.send("budget/overwrite-goal-template", { month: "2026-09" });
+    vi.setSystemTime(new Date("2026-09-29T12:00:00Z"));
+    // The mark-paid facade posts this occurrence; Actual then advances its service.
+    await internal.send("schedule/post-transaction", { id: scheduleId });
+    await internal.send("schedule/force-run-service", true);
+    await internal.send("budget/overwrite-goal-template", { month: "2026-09" });
+    expect(await actualApi.getSchedules()).toEqual([expect.objectContaining({ id: scheduleId, completed: false,
+      next_date: "2026-10-28", date: { ...recurrence, start: "2026-09-28" } })]);
+    const budget = await actualApi.getBudgetMonth("2026-09");
+    expect(budget.categoryGroups.flatMap(group => group.categories || []).find(category => category.id === categoryId))
+      .toMatchObject({ budgeted: 9_850, spent: -9_850, balance: 0 });
+    expect(await actualApi.getTransactions(accountId, "2026-09-28", "2026-09-28"))
+      .toEqual([expect.objectContaining({ amount: -9_850, schedule: scheduleId })]);
+  }, 30_000);
+
   it("updates successive quarterly utility statements without changing the recurrence or sibling rules", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-04-01T12:00:00Z"));

@@ -1,4 +1,4 @@
-// Pure derivation over Actual SDK data for the in-process SDK path (actual-core.ts):
+// Pure derivation over Actual data for SDK operations and lightweight schedule writes:
 // schedule classification + matching, schedule-condition building, date helpers, and
 // the metadata/bill projections. No @actual-app/api, no DB — the residual owns the SDK
 // session lifecycle, the lock/cache singletons, and all IO.

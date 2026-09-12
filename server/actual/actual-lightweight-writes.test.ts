@@ -348,51 +348,57 @@ describe("sendBillLightweight", () => {
     expect(messages.rows.map((row) => row.dataset)).not.toContain("payee_mapping");
   });
 
-  it("updates an existing future bill schedule instead of creating duplicates", async () => {
+  it.each(["bill", "transfer"])("preserves a recurring %s when updating its next statement", async (type) => {
     mockActualRequests(2);
     const budgetDir = await createBudgetDb();
+    const input = type === "bill"
+      ? { type, payee: "Power Co", account_id: "acct-1" }
+      : { type, from_account_id: "acct-1", to_account_id: "acct-card", schedule_name: "Visa Payment" };
     const options = {
       dbClient: settingsDbClient(),
       now: new Date("2026-05-15T12:00:00.000Z"),
     };
 
     await sendBillLightweight("u1", {
-      type: "bill",
-      payee: "Power Co",
+      ...input,
       amount: 12.34,
       due_date: "2026-05-20",
-      account_id: "acct-1",
     }, options);
     const intermediateClient = createClient({ url: `file:${path.join(budgetDir, "db.sqlite")}` });
     await intermediateClient.execute("UPDATE schedules SET posts_transaction = 1, active = 1");
+    const recurrence = { start: "2026-05-20", interval: 1, frequency: "monthly", patterns: [],
+      skipWeekend: false, weekendSolveMode: "after", endMode: "never" };
+    await intermediateClient.execute({
+      sql: "UPDATE rules SET conditions = json_set(conditions, '$[0]', json(?))",
+      args: [JSON.stringify({ op: "isapprox", field: "date", value: recurrence })],
+    });
     await intermediateClient.execute({
       sql: "UPDATE rules SET actions = json_insert(actions, '$[#]', json(?))",
       args: [JSON.stringify({ op: "set", field: "category", value: "cat-1" })],
     });
     await intermediateClient.close();
     const result = await sendBillLightweight("u1", {
-      type: "bill",
-      payee: "Power Co",
+      ...input,
       amount: 15,
       due_date: "2026-05-25",
-      account_id: "acct-1",
       category_id: "removed-category",
     }, options);
 
     const client = createClient({ url: `file:${path.join(budgetDir, "db.sqlite")}` });
-    const schedules = await client.execute("SELECT id, name, rule, posts_transaction, active FROM schedules");
+    const schedules = await client.execute("SELECT id, name, rule, posts_transaction, active, completed FROM schedules");
     const rules = await client.execute("SELECT conditions, actions FROM rules");
     const nextDates = await client.execute("SELECT local_next_date, base_next_date FROM schedules_next_date");
     await client.close();
 
-    expect(result.message).toBe('Updated schedule "Power Co"');
+    expect(result.message).toBe(type === "bill" ? 'Updated schedule "Power Co"' : 'Updated transfer schedule "Visa Payment"');
     expect(schedules.rows).toEqual([expect.objectContaining({
       active: 1,
       posts_transaction: 1,
+      completed: 0,
     })]);
     expect(JSON.parse(String(rules.rows[0]!.conditions))).toEqual(expect.arrayContaining([
-      { op: "is", field: "date", value: "2026-05-25" },
-      { op: "is", field: "amount", value: -1500 },
+      { op: "isapprox", field: "date", value: { ...recurrence, start: "2026-05-25" } },
+      { op: "is", field: "amount", value: type === "bill" ? -1500 : 1500 },
     ]));
     expect(JSON.parse(String(rules.rows[0]!.actions))).toEqual(expect.arrayContaining([
       { op: "set", field: "category", value: "cat-1" },

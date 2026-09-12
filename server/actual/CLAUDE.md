@@ -46,7 +46,7 @@ Actual Budget engine integration: write paths, the forked SDK worker, and the lo
 - Transaction verification checks core identity before category. A rule-driven or later category-only mismatch retains the exact transaction ID and reports that it was recorded but needs category review; it never reports success, recreates the entry, or overwrites the Actual category. Actual's import preview does not expose the final category for new transactions, so this validation uses the synced readback.
 - Read-only utility preview recognizes an exact existing base amount or the base plus its configured SCE/SoCalGas fee on the same account/payee/date. Competing matches require review. The fee is never added to a write, and immutable write/recovery verification remains exact.
 - Managed utility and transfer updates preserve Actual's `is`/`isapprox` date-matching operator while verifying the requested schedule date exactly.
-- Managed utility updates retain complex recurrence calendars and finite occurrence limits, using Actual's recurrence engine to verify and select an upcoming occurrence.
+- Bill and transfer statement updates preserve saved recurrence on both lightweight and SDK paths; replacing it with a one-time date lets Actual complete the schedule after payment and remove it from budget templates. Managed utility updates retain complex recurrence calendars and finite occurrence limits, using Actual's recurrence engine to verify and select an upcoming occurrence.
 - `actual-worker.ts` forks `actual-worker-child.ts` by CWD-relative path; keep both files in this directory.
 
 ## Related

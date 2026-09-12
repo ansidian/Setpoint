@@ -43,6 +43,7 @@ import {
 } from "./actualSyncTransport.ts";
 import type { ActualBudgetMetadata } from "./actualSyncTransport.ts";
 import { actualWriteDateInt, computeActualSyncSince } from "./actualWriteModel.ts";
+import { buildDateCondition } from "./actualCoreModel.ts";
 import type { ActualSchedule, ActualScheduleCondition } from "../../shared/types/actual.ts";
 
 type ActualError = Error & { status?: number; code?: string; localWriteApplied?: boolean };
@@ -290,6 +291,11 @@ async function buildScheduleWrite(client: Client, billData: LightweightBillData,
   });
   const schedules = await readSchedules(client, columns.schedules);
   const existing = findExistingSchedule(schedules, payeeId, accountId, amount, name);
+  if (existing) {
+    // A statement updates one occurrence; making it one-off lets Actual end the
+    // schedule after payment and removes it from schedule-backed budget templates.
+    conditions[0] = buildDateCondition(existing.conditions || [], billData.due_date);
+  }
   const scheduleWrite = existing
     ? updateScheduleRows(existing, { name, conditions, dueDate: billData.due_date, columns, nowMs: now.getTime() })
     : createScheduleRows({ name, conditions, dueDate: billData.due_date, columns, nowMs: now.getTime() });
