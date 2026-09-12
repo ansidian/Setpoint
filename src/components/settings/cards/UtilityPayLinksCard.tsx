@@ -2,6 +2,7 @@ import { useState } from "react";
 import { X } from "lucide-react";
 import SearchableDropdown from "@/components/shared/SearchableDropdown";
 import { SURFACE_ROW_CLASS } from "@/components/settings/settings-core";
+import { SettingsNotice } from "@/components/settings/settings-ui";
 import { cn } from "@/lib/utils";
 import type { ActualSchedule } from "../../../../shared/types/actual";
 import type { ActualMetadataResponse } from "../../../../shared/types/bills";
@@ -61,7 +62,7 @@ export default function UtilityPayLinksCard({
       <h3 className="mb-2 text-xs font-medium text-muted-foreground">Other bill pay links</h3>
       <div className="flex flex-col gap-3">
         {metadataError ? (
-          <div className="text-[12px] text-danger">Actual schedules are unavailable. Try again above or repair the connection.</div>
+          <SettingsNotice tone="danger" title="Actual schedules are unavailable">Try again in Financial profiles or repair the Actual Budget connection.</SettingsNotice>
         ) : null}
 
         {links.map((link, index) => {
@@ -113,7 +114,7 @@ export default function UtilityPayLinksCard({
                 <button
                   type="button"
                   onClick={() => applyLinks(links.filter((_, i) => i !== index))}
-                  className="inline-flex min-h-[32px] min-w-[32px] shrink-0 items-center justify-center rounded-md text-muted-foreground/45 outline-none transition-[color,background-color,transform,box-shadow] duration-[160ms] hover:-translate-y-px hover:bg-white/[0.04] hover:text-danger focus-visible:-translate-y-px focus-visible:bg-white/[0.04] focus-visible:text-danger focus-visible:ring-2 focus-visible:ring-primary/60 active:translate-y-0 motion-reduce:transition-none motion-reduce:transform-none"
+                  className="inline-flex min-h-9 min-w-9 max-[600px]:min-h-11 max-[600px]:min-w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-[color,background-color,transform,box-shadow] duration-[160ms] hover:-translate-y-px hover:bg-white/[0.04] hover:text-danger focus-visible:-translate-y-px focus-visible:bg-white/[0.04] focus-visible:text-danger focus-visible:ring-2 focus-visible:ring-primary/60 active:translate-y-0 motion-reduce:transition-none motion-reduce:transform-none"
                   aria-label="Remove pay link"
                 >
                   <X size={14} />
@@ -125,13 +126,15 @@ export default function UtilityPayLinksCard({
                 inputMode="url"
                 placeholder="https://…"
                 value={link.url || ""}
+                aria-invalid={urlInvalid}
+                aria-describedby={urlInvalid ? `pay-link-error-${index}` : undefined}
                 onChange={(event) =>
                   updateLink(index, (current) => ({ ...current, url: event.target.value }))
                 }
-                className="min-w-0 rounded-md border border-white/[0.08] bg-transparent px-2.5 py-1.5 text-[13px] text-foreground outline-none transition-colors placeholder:text-muted-foreground/75 hover:border-white/[0.16] focus-visible:border-white/[0.24]"
+                className="min-h-9 max-[600px]:min-h-11 min-w-0 rounded-md border border-white/[0.08] bg-input-bg px-2.5 py-1.5 text-[13px] max-[600px]:text-base text-foreground outline-none transition-colors placeholder:text-muted-foreground hover:border-white/[0.16] focus-visible:border-primary focus-visible:ring-1 focus-visible:ring-primary aria-invalid:border-danger/60"
               />
               {urlInvalid ? (
-                <div className="text-[11px] text-danger">URL must start with http:// or https://</div>
+                <SettingsNotice id={`pay-link-error-${index}`} tone="danger" title="Check the pay link" className="sm:col-span-2">Use a URL starting with https:// or http://.</SettingsNotice>
               ) : null}
             </div>
           );
@@ -144,7 +147,7 @@ export default function UtilityPayLinksCard({
             onRequestMetadata?.();
             applyLinks([...links, { scheduleId: "", label: "", url: "" }]);
           }}
-          className="rounded-lg border border-dashed border-white/[0.1] bg-transparent px-3.5 py-2 text-left text-[12px] font-medium text-muted-foreground transition-[border-color,color,transform] duration-200 hover:-translate-y-px hover:border-white/[0.2] hover:text-foreground focus-visible:-translate-y-px focus-visible:border-white/[0.2] focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0 motion-reduce:transition-none motion-reduce:transform-none"
+          className="min-h-9 max-[600px]:min-h-11 rounded-lg border border-dashed border-white/[0.1] bg-transparent px-3.5 py-2 text-left text-[12px] font-medium text-muted-foreground transition-[border-color,color,transform] duration-200 hover:-translate-y-px hover:border-white/[0.2] hover:text-foreground focus-visible:-translate-y-px focus-visible:border-white/[0.2] focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0 motion-reduce:transition-none motion-reduce:transform-none"
         >
           + Add pay link
         </button>
@@ -172,7 +175,7 @@ export function UtilityPayUrlField({ settings, setSettings, patch, scheduleId, l
     <label htmlFor={`utility-url-${label}`} className="block text-xs text-muted-foreground">Pay link <span className="font-normal">(optional)</span></label>
     <input id={`utility-url-${label}`} aria-label={`${label} pay link (optional)`} type="url" inputMode="url" value={value} placeholder="https://…" disabled={disabled || !scheduleId} aria-invalid={invalid} aria-describedby={invalid ? `utility-url-error-${label}` : undefined}
       onChange={event => setDraft(event.target.value)} onBlur={save} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); save(); } }}
-      className="w-full min-w-0 rounded-md border border-white/[0.08] bg-transparent px-2.5 py-1.5 text-[13px] text-foreground outline-none transition-colors placeholder:text-muted-foreground hover:border-white/[0.16] focus-visible:border-primary focus-visible:ring-1 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-45"/>
-    {invalid && <p id={`utility-url-error-${label}`} className="text-xs text-danger">Use a URL starting with https:// or http://.</p>}
+      className="min-h-9 max-[600px]:min-h-11 w-full min-w-0 rounded-md border border-white/[0.08] bg-input-bg px-2.5 py-1.5 text-[13px] max-[600px]:text-base text-foreground outline-none transition-colors placeholder:text-muted-foreground hover:border-white/[0.16] focus-visible:border-primary focus-visible:ring-1 focus-visible:ring-primary aria-invalid:border-danger/60 disabled:cursor-not-allowed disabled:opacity-45"/>
+    {invalid && <SettingsNotice id={`utility-url-error-${label}`} tone="danger" title="Check the pay link">Use a URL starting with https:// or http://.</SettingsNotice>}
   </div>;
 }

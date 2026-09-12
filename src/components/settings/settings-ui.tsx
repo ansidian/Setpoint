@@ -1,14 +1,14 @@
 import { useRef } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
-import { Check, AlertCircle, Loader2 } from "lucide-react";
+import { Check, AlertCircle, AlertTriangle, Info, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TABS } from "@/components/settings/settings-core";
 import type { SettingsTab } from "@/components/settings/settings-core";
 import type { SettingsSaveStatus } from "@/hooks/settings/useSettingsPage";
 
 const FIELD_LABEL_CLASS =
-  "mb-1.5 block text-[11px] tracking-[1.5px] uppercase text-muted-foreground font-medium";
-const FIELD_HINT_CLASS = "text-[11px] leading-relaxed text-muted-foreground/75";
+  "mb-1.5 block text-[12px] font-medium text-foreground";
+const FIELD_HINT_CLASS = "max-w-[70ch] text-[12px] leading-relaxed text-muted-foreground";
 
 const STATUS_TONE_CLASSES = {
   neutral: "border-white/[0.08] bg-white/[0.03] text-muted-foreground/80",
@@ -78,6 +78,28 @@ export function FieldHint({ children, className }: { children: ReactNode; classN
   );
 }
 
+export function SettingsNotice({ id, title, tone = "warning", children, className }: {
+  id?: string;
+  title: string;
+  tone?: "warning" | "danger" | "neutral";
+  children: ReactNode;
+  className?: string;
+}) {
+  const Icon = tone === "danger" ? AlertCircle : tone === "warning" ? AlertTriangle : Info;
+  return (
+    <div id={id} role={tone === "danger" ? "alert" : "status"} className={cn(
+      "flex items-start gap-2.5 rounded-md border p-3 text-[12px] leading-relaxed",
+      STATUS_TONE_CLASSES[tone], className,
+    )}>
+      <Icon size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
+      <div className="min-w-0 flex-1">
+        <p className="font-semibold">{title}</p>
+        <div className="mt-1 max-w-[70ch] break-words">{children}</div>
+      </div>
+    </div>
+  );
+}
+
 export function SettingsCard({ id, ready = true, title, icon, description, children, headerAction, className }: {
   id?: string;
   ready?: boolean;
@@ -97,22 +119,22 @@ export function SettingsCard({ id, ready = true, title, icon, description, child
       data-settings-section=""
       data-settings-target-ready={id ? String(ready) : undefined}
       className={cn(
-        "scroll-mt-6 border-t border-white/[0.06] py-5 outline-none first:border-t-0 first:pt-0",
+        "scroll-mt-6 border-t border-white/[0.12] py-7 outline-none first:border-t-0 first:pt-0",
         className,
       )}
     >
       <div className="mb-4 flex items-start gap-3">
-        <div className="mt-0.5 flex size-5 shrink-0 items-center justify-center text-primary/80">
+        <div aria-hidden="true" className="mt-0.5 flex size-5 shrink-0 items-center justify-center text-muted-foreground">
           {icon}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-col items-start gap-2 sm:flex-row sm:justify-between sm:gap-3">
             <div className="min-w-0">
-              <div id={id ? `${id}-title` : undefined} className="text-[11px] tracking-[2.5px] uppercase text-muted-foreground font-semibold">
+              <h2 id={id ? `${id}-title` : undefined} className="text-[15px] leading-6 font-semibold text-foreground">
                 {title}
-              </div>
+              </h2>
               {description ? (
-                <p className="mt-1 max-w-3xl text-[12px] leading-relaxed text-muted-foreground/75">
+                <p className="mt-1 max-w-[70ch] text-[12px] leading-relaxed text-muted-foreground">
                   {description}
                 </p>
               ) : null}
@@ -134,7 +156,7 @@ export function SettingsCard({ id, ready = true, title, icon, description, child
 
 export function SkeletonCard({ lines = 2 }: { lines?: number }) {
   return (
-    <section className="animate-pulse border-t border-white/[0.06] py-5 first:border-t-0 first:pt-0">
+    <section className="animate-pulse border-t border-white/[0.12] py-7 first:border-t-0 first:pt-0 motion-reduce:animate-none">
       <div className="mb-4 flex items-start gap-3">
         <div className="mt-0.5 size-5 rounded bg-white/[0.06]" />
         <div className="min-w-0 flex-1">
@@ -257,7 +279,7 @@ export function SettingsLayout({ activeTab, onTabChange, headerAction, children 
             </div>
           </nav>
 
-          <div className="min-h-0 min-w-0 overflow-y-auto overscroll-contain pr-2" role="tabpanel" aria-label={activeTabMeta?.label}>
+          <div className="min-h-0 min-w-0 overflow-x-hidden overflow-y-auto overscroll-contain pr-2" role="tabpanel" aria-label={activeTabMeta?.label}>
             <div className="settings-content">{children}</div>
           </div>
         </div>

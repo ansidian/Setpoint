@@ -53,7 +53,7 @@ export function profileValidation(profile: FinancialProfile): string {
   if (profile.senderAddresses.some(address => !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(address))) {
     return "Use full sender email addresses, separated by commas or new lines.";
   }
-  if (profile.accountLast4 && !/^\d{4}$/.test(profile.accountLast4)) return "The card suffix must contain exactly four digits.";
+  if (profile.accountLast4 && !/^\d{4}$/.test(profile.accountLast4)) return "Enter exactly four digits for the card.";
   const target = profile.target;
   if (target.kind === "utility" && !target.scheduleId) return "Choose the existing utility schedule in Actual.";
   if (target.kind === "card_payment") {

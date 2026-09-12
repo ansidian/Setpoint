@@ -94,37 +94,15 @@ export default function ActualBudgetSettingsSection({
     void requestMetadata();
   }, [requestMetadata]);
 
-  if (!dependency.showSettings) {
-    return (
-      <>
-        <FinancialReviewNotificationsControl />
-        <TriageSoundSettingsCard scope="finance" settings={settings} setSettings={setSettings} patch={patch} />
+  return (
+    <>
+      {!dependency.showSettings ? (
         <ConnectionDependencyPrompt
           title="Connect Actual Budget"
           description="Finance tools become available after Actual Budget is connected. Existing profiles and pay links remain saved while disconnected."
           actions={[{ connectionId: "actual-budget", label: "Set up Actual Budget" }]}
         />
-        <UtilityMappingsCard key={budgetId} budgetId={budgetId} available={liveMetadataAvailable} settings={settings} setSettings={setSettings} patch={patch}/>
-        <FinancialProfilesCard
-          initialDraft={initialDraft}
-          settings={settings}
-          setSettings={setSettings}
-          patch={patch}
-          metadata={metadata}
-          metadataLoading={metadataLoading}
-          metadataError={metadataError}
-          onRequestMetadata={requestMetadata}
-          liveMetadataAvailable={liveMetadataAvailable}
-        />
-      </>
-    );
-  }
-
-  return (
-    <>
-      <FinancialReviewNotificationsControl />
-        <TriageSoundSettingsCard scope="finance" settings={settings} setSettings={setSettings} patch={patch} />
-      {dependency.actual === "needs_attention" ? (
+      ) : dependency.actual === "needs_attention" ? (
         <ConnectionDependencyPrompt
           title="Actual Budget needs attention"
           description="Profiles and pay links stay available for review. Repair the connection to refresh Actual accounts, payees, categories, and schedules."
@@ -144,7 +122,7 @@ export default function ActualBudgetSettingsSection({
         liveMetadataAvailable={liveMetadataAvailable}
       />
       <UtilityMappingsCard key={budgetId} budgetId={budgetId} available={liveMetadataAvailable} settings={settings} setSettings={setSettings} patch={patch}>
-      {mappedScheduleIds => <UtilityPayLinksCard
+      {dependency.showSettings ? mappedScheduleIds => <UtilityPayLinksCard
         mappedScheduleIds={mappedScheduleIds}
         settings={settings}
         setSettings={setSettings}
@@ -154,8 +132,10 @@ export default function ActualBudgetSettingsSection({
         metadataError={metadataError}
         onRequestMetadata={requestMetadata}
         liveMetadataAvailable={liveMetadataAvailable}
-      />}
+      /> : undefined}
       </UtilityMappingsCard>
+      <TriageSoundSettingsCard scope="finance" settings={settings} setSettings={setSettings} patch={patch} />
+      <FinancialReviewNotificationsControl />
     </>
   );
 }

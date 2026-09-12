@@ -7,7 +7,7 @@ The settings surface: a Connections directory plus Automation, Finance, and Syst
 ### Chrome + core
 - `SettingsChrome.tsx` — loading skeletons during settings fetch/transition
 - `settings-core.ts` — button class constants, tab definitions, tab-from-URL routing
-- `settings-ui.tsx` — StatusPill, SaveStatus, SettingsCard, SkeletonCard, SettingsLayout
+- `settings-ui.tsx` — StatusPill, SaveStatus, SettingsCard, SettingsNotice, SkeletonCard, SettingsLayout; shared section hierarchy and labeled feedback
 - `settingsTypes.ts` — shared Settings card state, patch, and account prop contracts
 - `connectionModel.ts` — fixed connection definitions plus pure service-level status projection
 - `connectionDirectoryModel.ts` — canonical/legacy connection hash parsing, allowlisted advanced targets, and directory summary/action projection
@@ -35,7 +35,7 @@ The settings surface: a Connections directory plus Automation, Finance, and Syst
 - `cards/TrustedRemoteContentCard.tsx` — persisted exact-sender + receiving-account remote-image trust list and removal
 
 ### Cards: financial preferences
-- `cards/FinancialProfilesCard.tsx` — compact profile list and explicit editor for exact sender identity, named Actual destinations; classified email seeds start enabled and leave unknown targets unset, and explicitly disabled profiles remain editable offline
+- `cards/FinancialProfilesCard.tsx` — compact profile list and focused explicit editor with grouped email matching, optional merchant/card filters, and named Actual destinations; classified email seeds start enabled and leave unknown targets unset, and explicitly disabled profiles remain editable offline
 - `cards/financialProfileModel.ts` — profile form defaults, navigation-draft projection, validation, target options and destination summaries; internal target IDs never become display labels
 
 - `cards/UtilityMappingsCard.tsx` — compact budget-bound utility rows with one Actual Schedule, its derived read-only payee and inline pay URL, preserving source matching
@@ -68,7 +68,8 @@ The settings surface: a Connections directory plus Automation, Finance, and Syst
 
 ## Local patterns
 
-- Cards share one shape: title + icon + description + content; local form state synced via patch().
+- Sections share a sentence-style heading, muted icon, bounded description, and stronger divider; local form state synced via patch(). Finance puts profiles and utility mappings before notification preferences.
+- Finance feedback uses SettingsNotice for a labeled icon + message, with danger for errors and warning for incomplete setup. The global danger/warning utilities map to the existing rose/cream tokens.
 - Provider/model pairs degrade through fallback chains when an API key is unconfigured.
 
 ## Related

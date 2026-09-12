@@ -6,13 +6,13 @@ import AnimatedCollapse from '@/components/shared/AnimatedCollapse';
 import SearchableDropdown from '@/components/shared/SearchableDropdown';
 import { UtilityPayUrlField } from './UtilityPayLinksCard';
 import type { SettingsCardStateProps } from '../settingsTypes';
-import { SettingsCard } from '../settings-ui';
+import { SettingsCard, SettingsNotice } from '../settings-ui';
 import { SETTINGS_PRIMARY_BUTTON_CLASS, SETTINGS_SECONDARY_BUTTON_CLASS, SURFACE_ROW_CLASS } from '../settings-core';
 import type { UtilityIdentity, UtilityMappingSettings } from '../../../../shared/types/finances';
 
 const utilityIcons: Record<string, LucideIcon> = { electricity: Zap, gas: Flame, internet: Wifi, trash: Trash2, water: Droplets };
 
-const buttonClass = 'min-h-8 rounded-md px-3 py-1.5 text-xs transition-[color,background-color,transform] duration-150 focus-visible:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-45 disabled:transform-none motion-reduce:transition-none motion-reduce:transform-none';
+const buttonClass = 'min-h-9 max-[600px]:min-h-11 rounded-md px-3 py-1.5 text-xs transition-[color,background-color,transform] duration-150 focus-visible:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-45 disabled:transform-none motion-reduce:transition-none motion-reduce:transform-none';
 export default function UtilityMappingsCard({ budgetId, available, children, ...settingsProps }: SettingsCardStateProps & { budgetId: string; available: boolean; children?: (scheduleIds: string[]) => ReactNode }) {
   const [data, setData] = useState<UtilityMappingSettings | null>(null);
   const [error, setError] = useState('');
@@ -27,9 +27,9 @@ export default function UtilityMappingsCard({ budgetId, available, children, ...
     return () => { active = false; };
   }, [budgetId, request]);
   const retry = () => { setLoading(true); setError(''); setRequest(value => value + 1); };
-  return <div id="utility-mappings" tabIndex={-1} className="scroll-mt-6"><SettingsCard title="Utility mappings" icon={<Link2 size={14}/>} description="Choose each utility’s Actual Schedule; its payee is linked automatically. Add a pay link for the calendar’s Pay Online action.">
+  return <SettingsCard id="utility-mappings" title="Utilities & pay links" icon={<Link2 size={14}/>} description="Link each utility to its schedule in Actual. Optional pay links appear in the calendar.">
     {loading && <p className="text-xs text-muted-foreground">Loading utility mappings…</p>}
-    {error && <p className="text-xs text-danger" role="alert">{error}</p>}
+    {error && <SettingsNotice tone="danger" title="Couldn’t load utility mappings" className="mb-3">{error}</SettingsNotice>}
     {!loading && (!data?.metadataAvailable || error) && <div className="flex items-center gap-3"><p className="text-xs text-muted-foreground">Refresh Actual data or repair the connection to edit mappings.</p><button className={`${buttonClass} ${SETTINGS_SECONDARY_BUTTON_CLASS}`} onClick={retry}>Retry</button></div>}
     {notice && <p className="text-xs text-primary" role="status">{notice}</p>}
     {data?.utilities.map(utility => <MappingEditor key={`${utility.id}:${utility.payeeId}:${utility.scheduleIds.join(',')}`} utility={utility} data={data} settingsProps={settingsProps} disabled={loading || !available || !data.metadataAvailable || data.budgetId !== budgetId} onSaved={saved => {
@@ -39,7 +39,7 @@ export default function UtilityMappingsCard({ budgetId, available, children, ...
     }}/>) }
     {!loading && data && !data.utilities.length && <p className="text-xs text-muted-foreground">No utilities are configured for this budget.</p>}
     {children?.(data?.budgetId === budgetId ? data.utilities.filter(row => row.scheduleIds.length === 1).flatMap(row => row.scheduleIds) : [])}
-  </SettingsCard></div>;
+  </SettingsCard>;
 }
 function MappingEditor({ utility, data, disabled, onSaved, settingsProps }: { settingsProps: SettingsCardStateProps; utility: UtilityIdentity; data: UtilityMappingSettings; disabled: boolean; onSaved: (utility: UtilityIdentity) => void }) {
   const UtilityIcon = utilityIcons[utility.id] || PlugZap;
@@ -79,8 +79,8 @@ function MappingEditor({ utility, data, disabled, onSaved, settingsProps }: { se
       </div>
       <UtilityPayUrlField key={utility.scheduleIds.join(',')} {...settingsProps} scheduleId={utility.scheduleIds.length === 1 ? utility.scheduleIds[0]! : ''} label={utility.label} disabled={changed || saving || disabled}/>
     </div>
-    {problem && !disabled && <p id={`mapping-problem-${utility.id}`} className="mt-2 text-xs text-muted-foreground">{problem}</p>}
-    {error && <p className="mt-2 text-xs text-danger" role="alert">{error}</p>}
+    {problem && !disabled && <SettingsNotice id={`mapping-problem-${utility.id}`} title="Schedule needed" className="mt-3">{problem}</SettingsNotice>}
+    {error && <SettingsNotice tone="danger" title="Couldn’t save mapping" className="mt-3">{error}</SettingsNotice>}
     <AnimatedCollapse open={changed}><div className="pt-2 flex items-center gap-3">
       <button className={`${buttonClass} ${SETTINGS_PRIMARY_BUTTON_CLASS}`} disabled={disabled || saving || !!problem} aria-describedby={problem && !disabled ? `mapping-problem-${utility.id}` : undefined} onClick={() => void save()}>{saving ? 'Saving…' : 'Save mapping'}</button>
       <span className="text-xs text-muted-foreground">Save the mapping before editing its pay link.</span>

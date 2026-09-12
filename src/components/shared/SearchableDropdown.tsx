@@ -20,6 +20,7 @@ type SearchableDropdownBaseProps = {
   options: SearchableDropdownOption[];
   placeholder?: string;
   ariaLabel?: string;
+  ariaDescribedBy?: string;
   onOpen?: () => void;
   disabled?: boolean;
 };
@@ -39,7 +40,7 @@ export type SearchableDropdownProps = SearchableDropdownBaseProps & ({
 });
 
 export default function SearchableDropdown(props: SearchableDropdownProps) {
-  const { options, placeholder = "Select...", ariaLabel, onOpen, disabled = false } = props;
+  const { options, placeholder = "Select...", ariaLabel, ariaDescribedBy, onOpen, disabled = false } = props;
   const allowCreate = !props.multiple && props.allowCreate;
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -86,13 +87,14 @@ export default function SearchableDropdown(props: SearchableDropdownProps) {
       <Popover open={open} onOpenChange={(nextOpen) => { setOpen(nextOpen); if (nextOpen) onOpen?.(); else setSearch(""); }} modal={false}>
         <PopoverTrigger
           aria-label={ariaLabel}
+          aria-describedby={ariaDescribedBy}
           disabled={disabled}
           className={cn(
             "flex min-h-9 max-[600px]:min-h-11 w-full items-center justify-between gap-2 rounded-md bg-input-bg px-2.5 py-1.5 text-left",
             "border border-white/[0.08] text-[13px] font-medium text-foreground",
             "cursor-pointer outline-none transition-[border-color,background-color,box-shadow,transform] duration-[var(--sp-motion-fast)]",
-            "hover:border-white/[0.15] hover:bg-white/[0.03] focus-visible:border-primary/45 focus-visible:ring-2 focus-visible:ring-primary/20 active:translate-y-px",
-            "disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-white/[0.08] disabled:hover:bg-input-bg disabled:active:translate-y-0",
+            "hover:-translate-y-px hover:border-white/[0.15] hover:bg-white/[0.03] focus-visible:-translate-y-px focus-visible:border-primary/45 focus-visible:ring-2 focus-visible:ring-primary/20 active:translate-y-px",
+            "disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:border-white/[0.08] disabled:hover:bg-input-bg disabled:active:translate-y-0",
             "motion-reduce:transition-none motion-reduce:transform-none",
           )}
         >
