@@ -25,6 +25,8 @@ let stopped: string[];
 let items: Array<{ id: string; selected?: boolean; hidden?: boolean }>;
 let discoveryFailure: boolean;
 let registrationFailure: boolean;
+let registrationRejection: { status: number; reason: string } | undefined;
+let unsupportedCalendars: Set<string>;
 let onWatch: ((watch: Watch) => Promise<void>) | undefined;
 
 function headers(watch: Watch, overrides: CalendarPushHeaders = {}): CalendarPushHeaders {
@@ -70,7 +72,7 @@ beforeEach(async () => {
   vi.stubEnv("EA_ENCRYPTION_KEY", "ab".repeat(32));
   tempDir = await createTestTempDir("calendar-push-");
   db = createClient({ url: `file:${join(tempDir, "calendar.db")}` });
-  for (const migration of ["001_ea_tables.sql", "028_provider_needs_reauth.sql", "074_calendar_push.sql"]) {
+  for (const migration of ["001_ea_tables.sql", "028_provider_needs_reauth.sql", "074_calendar_push.sql", "075_calendar_push_unsupported.sql"]) {
     await db.executeMultiple(readFileSync(new URL(`../db/migrations/${migration}`, import.meta.url), "utf8"));
   }
   issued = [];
@@ -78,6 +80,8 @@ beforeEach(async () => {
   items = [{ id: "primary" }];
   discoveryFailure = false;
   registrationFailure = false;
+  registrationRejection = undefined;
+  unsupportedCalendars = new Set();
   onWatch = undefined;
   // Google HTTPS is the external boundary; real channel policy, encryption,
   // account canonicalization, and SQLite commits work together in these cases.
@@ -94,6 +98,15 @@ beforeEach(async () => {
       const watch = { ...body, resourceUri,
         resourceId: createHash("sha256").update(resourceUri).digest("hex").slice(0, 24) } as Watch;
       issued.push(watch);
+      if (registrationRejection) return Response.json({ error: {
+        code: registrationRejection.status, message: "Registration rejected",
+        errors: [{ reason: registrationRejection.reason }],
+      } }, { status: registrationRejection.status });
+      const calendarId = decodeURIComponent(url.pathname.match(/\/calendars\/([^/]+)\/events\/watch$/)?.[1] || "");
+      if (unsupportedCalendars.has(calendarId)) return Response.json({ error: {
+        code: 400, message: "Push notifications are not supported by this resource.",
+        errors: [{ domain: "calendar", reason: "pushNotSupportedForRequestedResource" }],
+      } }, { status: 400 });
       if (registrationFailure) return Response.json({ error: { code: 503, message: `private ${watch.token}` } }, { status: 503 });
       await onWatch?.(watch);
       return Response.json(watch);
@@ -115,6 +128,53 @@ afterEach(() => {
 });
 
 describe("Calendar push lifecycle and durable notification admission", () => {
+  it("keeps unsupported holiday calendars on periodic sync without a registration warning or retry churn", async () => {
+    const holiday = "en.usa#holiday@group.v.calendar.google.com";
+    items = [{ id: "primary" }, { id: holiday }];
+    unsupportedCalendars.add(holiday);
+    await db.execute({
+      sql: `INSERT INTO ea_calendar_push_watch_state
+              (user_id, account_id, last_attempt_at, expected_channels, failure_count, last_error)
+            VALUES ('owner', 'account-1', ?, 3, 11, ?)`,
+      args: [nowMs - 60_000, "Google Calendar push registration could not be refreshed. Automatic retry is pending."],
+    });
+    await reconcile();
+    expect(await getCalendarPushHealth("owner", { dbClient: db, nowMs })).toMatchObject({
+      state: "current", activeChannels: 2,
+    });
+    db.close();
+    db = createClient({ url: `file:${join(tempDir, "calendar.db")}` });
+    expect(await reconcile(nowMs + 60 * 60_000)).toMatchObject({ registered: 0, failed: 0 });
+    expect((await channels()).filter((row) => row.calendar_id === holiday)).toHaveLength(1);
+    expect((await db.execute("SELECT last_error, failure_count, expected_channels FROM ea_calendar_push_watch_state")).rows)
+      .toEqual([{ last_error: null, failure_count: 0, expected_channels: 2 }]);
+  });
+
+  it.each([
+    { status: 400, reason: "invalidArgument" },
+    { status: 403, reason: "pushNotSupportedForRequestedResource" },
+  ])("keeps registration errors visible unless Google explicitly reports unsupported push: $status/$reason", async (rejection) => {
+    registrationRejection = rejection;
+    expect(await reconcile()).toMatchObject({ failed: 2 });
+    expect(await getCalendarPushHealth("owner", { dbClient: db, nowMs })).toMatchObject({ state: "degraded" });
+    expect((await channels()).every((row) => row.push_unsupported === 0)).toBe(true);
+    registrationRejection = undefined;
+    expect(await reconcile(nowMs + 60_000)).toMatchObject({ registered: 2, failed: 0 });
+    expect(await getCalendarPushHealth("owner", { dbClient: db, nowMs: nowMs + 60_000 })).toMatchObject({ state: "current" });
+  });
+
+  it("rechecks unsupported push after its capability cache expires", async () => {
+    const holiday = "en.usa#holiday@group.v.calendar.google.com";
+    items.push({ id: holiday });
+    unsupportedCalendars.add(holiday);
+    await reconcile();
+    unsupportedCalendars.clear();
+    expect(await reconcile(nowMs + 7 * DAY_MS)).toMatchObject({ registered: 3, failed: 0 });
+    expect((await channels()).filter((row) => row.calendar_id === holiday && row.status === "active")).toHaveLength(1);
+    expect(await getCalendarPushHealth("owner", { dbClient: db, nowMs: nowMs + 7 * DAY_MS }))
+      .toMatchObject({ state: "current", activeChannels: 3 });
+  });
+
   it("registers selected event collections and the granted CalendarList once, without storing bearer tokens", async () => {
     items = [{ id: "primary" }, { id: "work@example.com" }, { id: "hidden", hidden: true }, { id: "unselected", selected: false }];
     expect(await reconcile()).toMatchObject({ registered: 3, failed: 0 });

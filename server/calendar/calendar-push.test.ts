@@ -39,14 +39,20 @@ const event = (title = "Planning") => ({
 });
 
 type GoogleEvents = (url: URL) => Promise<Response>;
-function googleResponses(events: GoogleEvents = async () => Response.json({ items: [event()], nextSyncToken: "cursor-1" })) {
+function googleResponses(
+  events: GoogleEvents = async () => Response.json({ items: [event()], nextSyncToken: "cursor-1" }),
+  calendarIds = ["primary"],
+) {
   vi.stubGlobal("fetch", async (input: Parameters<typeof fetch>[0]) => {
     const url = new URL(String(input));
     if (url.origin !== "https://www.googleapis.com") throw new Error("Unexpected external provider");
     if (url.pathname.endsWith("/users/me/calendarList")) {
-      return Response.json({ items: [{ id: "primary", summary: "Personal", primary: true, selected: true, accessRole: "owner" }] });
+      return Response.json({ items: calendarIds.map((id) => ({
+        id, summary: id === "primary" ? "Personal" : "Holidays", primary: id === "primary",
+        selected: true, accessRole: id === "primary" ? "owner" : "reader",
+      })) });
     }
-    if (url.pathname.endsWith("/calendars/primary/events")) return events(url);
+    if (calendarIds.some((id) => url.pathname.endsWith(`/calendars/${encodeURIComponent(id)}/events`))) return events(url);
     throw new Error("Unexpected Google endpoint");
   });
 }
@@ -66,7 +72,7 @@ beforeEach(async () => {
   vi.setSystemTime(now);
   tempDir = await createTestTempDir("calendar-push-runtime-");
   database.current = createClient({ url: pathToFileURL(join(tempDir, "calendar.db")).href });
-  for (const migration of ["001_ea_tables.sql", "011_calendar_search_mirror.sql", "028_provider_needs_reauth.sql", "049_calendar_mirror_snapshot_hash.sql", "074_calendar_push.sql"]) {
+  for (const migration of ["001_ea_tables.sql", "011_calendar_search_mirror.sql", "028_provider_needs_reauth.sql", "049_calendar_mirror_snapshot_hash.sql", "074_calendar_push.sql", "075_calendar_push_unsupported.sql"]) {
     await database.current.executeMultiple(readFileSync(new URL(`../db/migrations/${migration}`, import.meta.url), "utf8"));
   }
   await database.current.execute({
@@ -93,6 +99,30 @@ afterEach(async () => {
 });
 
 describe("durable Calendar provider synchronization", () => {
+  it("still synchronizes a readable holiday calendar that cannot receive push notifications", async () => {
+    const holiday = "en.usa#holiday@group.v.calendar.google.com";
+    await database.current!.execute({
+      sql: `INSERT INTO ea_calendar_push_channels
+              (channel_id, user_id, account_id, kind, calendar_id, callback_url, token_hash,
+               status, created_at, expires_at, push_unsupported)
+            VALUES ('unsupported-holiday', ?, ?, 'events', ?, 'https://setpoint.example/api/calendar/push',
+                    ?, 'failed', ?, ?, 1)`,
+      args: [userId, accountId, holiday, createHash("sha256").update("fixture-token").digest("hex"), now, now + 86_400_000],
+    });
+    googleResponses(async (url) => {
+      const isHoliday = url.pathname.includes(encodeURIComponent(holiday));
+      return Response.json({
+        items: [{ ...event(isHoliday ? "Holiday" : "Planning"), id: isHoliday ? "holiday-1" : "event-1" }],
+        nextSyncToken: isHoliday ? "holiday-cursor" : "personal-cursor",
+      });
+    }, ["primary", holiday]);
+    await requestCalendarPushSync(userId);
+    expect(await drainCalendarPushSync(userId)).toBe(1);
+    expect((await displayedCalendar()).map((item: { title: string }) => item.title).sort()).toEqual(["Holiday", "Planning"]);
+    const mirror = await database.current!.execute("SELECT title FROM ea_calendar_search_occurrences WHERE deleted_at IS NULL ORDER BY title");
+    expect(mirror.rows).toEqual([{ title: "Holiday" }, { title: "Planning" }]);
+  });
+
   it("consumes persisted work through the real mirror and current-calendar cache", async () => {
     await requestCalendarPushSync(userId);
     expect(await drainCalendarPushSync(userId)).toBe(1);

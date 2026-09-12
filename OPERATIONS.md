@@ -50,6 +50,8 @@ Production automatically registers Calendar watches for calendar-enabled Google 
 
 The server checks watches hourly, renews them before expiry, and retries failed checks after five minutes. Calendar notifications queue durable synchronization before acknowledgement. A minute worker drains pending/retry work, and a fifteen-minute reconciliation catches missed notifications and downtime. Normal localhost development keeps periodic synchronization but never registers watches against the production URL. After a domain change, Setpoint replaces registrations using the new saved canonical origin; that HTTPS endpoint must reach the deployed server with a valid certificate.
 
+Some Google-managed calendars, including holidays, are readable but do not support push. When Google explicitly reports `pushNotSupportedForRequestedResource`, Setpoint keeps that calendar in periodic synchronization, remembers the limitation for seven days, and excludes it from required push watches. This does not create a health warning or a five-minute registration retry loop. Other authorization, request, and service errors remain visible and retry normally.
+
 Calendar cache refresh remains eligible after five minutes. The health indicator gives automatic recovery a twenty-minute window from the last successful data check; failed synchronization, expired/failed watches, reconnect requirements and browser connection failures remain visible. A working subscription by itself does not establish fresh calendar data.
 
 ## Turso semantic search verification

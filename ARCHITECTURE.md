@@ -717,7 +717,7 @@ erDiagram
 | `ea_bills_mirror_state` | `001_ea_tables.sql`, `002_bills_mirror.sql` |
 | `ea_briefing_snapshot_items` | `001_ea_tables.sql`, `018_carryover_depth_bound.sql` |
 | `ea_briefing_snapshots` | `001_ea_tables.sql` |
-| `ea_calendar_push_channels` | `074_calendar_push.sql` |
+| `ea_calendar_push_channels` | `074_calendar_push.sql`, `075_calendar_push_unsupported.sql` |
 | `ea_calendar_push_sync` | `074_calendar_push.sql` |
 | `ea_calendar_push_watch_state` | `074_calendar_push.sql` |
 | `ea_calendar_search_mirror_state` | `011_calendar_search_mirror.sql`, `049_calendar_mirror_snapshot_hash.sql` |

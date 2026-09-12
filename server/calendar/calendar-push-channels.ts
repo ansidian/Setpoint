@@ -34,6 +34,7 @@ type Channel = Row & {
   token_hash: string;
   resource_id: string | null;
   status: "pending" | "active" | "failed" | "retired";
+  push_unsupported: number;
   created_at: number;
   expires_at: number;
 };
@@ -184,6 +185,11 @@ function sanitizedFailure(error: unknown) {
   return "Google Calendar push registration could not be refreshed. Automatic retry is pending.";
 }
 
+function isPushUnsupported(error: unknown) {
+  const detail = error as { googleStatus?: number; googleReason?: string };
+  return detail?.googleStatus === 400 && detail?.googleReason === "pushNotSupportedForRequestedResource";
+}
+
 async function recordAttempt(dbClient: Client, userId: string, accountId: string, nowMs: number, error: string | null, expectedChannels: number | null = null) {
   await dbClient.execute({
     sql: `INSERT INTO ea_calendar_push_watch_state
@@ -249,8 +255,8 @@ async function registerChannel(
     return true;
   } catch (error) {
     await dbClient.execute({
-      sql: "UPDATE ea_calendar_push_channels SET status = 'failed' WHERE channel_id = ? AND status = 'pending'",
-      args: [channelId],
+      sql: "UPDATE ea_calendar_push_channels SET status = 'failed', push_unsupported = ? WHERE channel_id = ? AND status = 'pending'",
+      args: [Number(target.kind === "events" && isPushUnsupported(error)), channelId],
     });
     throw error;
   }
@@ -263,8 +269,10 @@ async function reconcile(userId: string, { dbClient = db, callbackUrl, nowMs = D
   const accounts = await configuredAccounts(userId, dbClient);
   const enabledAccounts = accounts.filter(enabled);
   const stored = await dbClient.execute({
-    sql: "SELECT * FROM ea_calendar_push_channels WHERE user_id = ? AND status IN ('active', 'pending')",
-    args: [userId],
+    sql: `SELECT * FROM ea_calendar_push_channels WHERE user_id = ?
+          AND (status IN ('active', 'pending')
+            OR (status = 'failed' AND push_unsupported = 1 AND expires_at > ?))`,
+    args: [userId, nowMs],
   });
   const channels = stored.rows as Channel[];
   for (const channel of channels) {
@@ -308,6 +316,13 @@ async function reconcile(userId: string, { dbClient = db, callbackUrl, nowMs = D
       }
       for (const target of targets) {
         const previous = accountChannels.filter((channel) => target.kind === channel.kind && target.calendar_id === channel.calendar_id);
+        // An explicit provider capability refusal is not an outage. The normal
+        // fifteen-minute data sync still includes this calendar. Recheck support
+        // after the attempted watch's seven-day lifetime, including after restart.
+        if (previous.some((channel) => channel.status === "failed" && channel.push_unsupported === 1)) {
+          expectedChannels--;
+          continue;
+        }
         if (previous.some((channel) => channel.status === "active" && channel.callback_url === callbackUrl
           && Number(channel.expires_at) > nowMs + DAY_MS)) continue;
         if (previous.some((channel) => channel.status === "pending" && Number(channel.created_at) + REGISTRATION_TIMEOUT_MS > nowMs)) continue;
@@ -324,6 +339,10 @@ async function reconcile(userId: string, { dbClient = db, callbackUrl, nowMs = D
             result.stopped++;
           }
         } catch (error) {
+          if (target.kind === "events" && isPushUnsupported(error)) {
+            expectedChannels--;
+            continue;
+          }
           failure = sanitizedFailure(error);
           result.failed++;
         }

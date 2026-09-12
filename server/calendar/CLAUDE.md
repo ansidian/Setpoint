@@ -7,7 +7,7 @@ Google Calendar integration: range reads, event mutations (including recurring s
 - `calendar.ts` — public calendar entry module: range fetch, conflicts, Google wrappers, mirror reads, and route-facing range/search/write-effect re-exports
 - `calendar-google-client.ts` — Google Calendar HTTP client: auth refresh, error translation
 - `calendar-push.ts` — public push runtime: durable queue drain, serialized mirror/current-cache refresh, SSE, fifteen-minute recovery, watch renewal/discovery scheduling, and graceful shutdown
-- `calendar-push-channels.ts` — programmatic event/calendar-list watches, hashed-token callback admission, atomic durable enqueue, overlapping renewal, and persisted watch/sync health
+- `calendar-push-channels.ts` — programmatic event/calendar-list watches, hashed-token callback admission, atomic durable enqueue, overlapping renewal, persisted watch/sync health, and a seven-day capability cache for Google's explicit unsupported-push response (those calendars retain periodic data sync)
 - `calendar-mutations.ts` — event CRUD incl. recurring scope (one/following/all), move, delete
 - `calendar-event-write-effects.ts` — successful create/update/delete follow-through: search-mirror write-through or dirty marking plus best-effort reminder reconciliation
 - `calendar-event-normalize.ts` — RRULE parse/serialize, display formatting, recurring-edit shaping (covered by `calendar-recurrence-roundtrip.test.ts`)
