@@ -139,11 +139,8 @@ async function transaction(
       || recorded.amount !== input.amountCents || recorded.transfer_id || !payee || recorded.payee !== payee.id) {
       return review("The recorded transaction identity conflicts with this event.");
     }
-    // Actual rules can replace an explicitly submitted category during import.
-    // Keep that difference reviewable while identifying the verified transaction.
-    if (categoryId && recorded.category !== categoryId) return result("needs_review",
-      "Recorded in Actual, but the category differs from the selected category. Review the category in Actual.",
-      { transactionId: recorded.id });
+    // Actual rules or owner edits may change the category. Verified transaction
+    // identity is sufficient for completion; preserve Actual's categorization.
     return result("already_present", "The transaction identity is already recorded.", { transactionId: recorded.id });
   }
   // Distinct managed event IDs prove distinct purchases even when all their
@@ -154,7 +151,6 @@ async function transaction(
     && row.account === input.accountId && row.date === input.date && row.amount === input.amountCents
     && payee && row.payee === payee.id);
   if (legacy.length === 1) {
-    if (categoryId && legacy[0]!.category !== categoryId) return review("An existing Actual transaction has a different category than this event.");
     return result("already_present", "An exact existing Actual transaction matches this event.", { transactionId: legacy[0]!.id });
   }
   if (legacy.length > 1) return review("Multiple existing Actual transactions match this event.");

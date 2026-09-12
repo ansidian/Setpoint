@@ -314,6 +314,40 @@ describe("financial event persistence", () => {
     expect((await db.execute("PRAGMA foreign_key_check")).rows).toEqual([]);
   });
 
+  it.each(["category-only", "other-conflict", "other-outcome", "different-outcome-reason", "missing-id", "empty-id", "numeric-id",
+    "nontransaction", "other-executor", "unattempted", "dismissed", "corrected", "settled"])(
+    "requeues only an obsolete attempted category review during migration: %s", async (scenario) => {
+      await associate("category-review");
+      const event = (await store().claimEvent("old-policy"))!;
+      const operation = { executor: scenario === "other-executor" ? "transfer_schedule" : "financial", input: {
+        kind: scenario === "nontransaction" ? "utility_schedule" : "transaction", budgetId: "budget",
+        identityKey: "financial-event:event-1", accountId: "card", payee: "Example Market", amountCents: -1200, date: "2026-09-06",
+      } };
+      if (scenario !== "unattempted") expect(await store().admitOperation(event, operation, authorizedPlan)).toBe(true);
+      const categoryReason = "Recorded in Actual, but the category differs from the selected category. Review the category in Actual.";
+      const reason = scenario === "other-conflict" ? "The recorded transaction identity conflicts with this event." : categoryReason;
+      await store().saveEvent(event, { plan: authorizedPlan, status: scenario === "settled" ? "settled" : "needs_review", reason,
+        outcome: { outcome: scenario === "other-outcome" ? "already_present" : "needs_review",
+          reason: scenario === "different-outcome-reason" ? "A different conflict." : reason,
+          transactionId: scenario === "missing-id" ? null : scenario === "empty-id" ? " " : scenario === "numeric-id" ? 123 : "actual-1" } });
+      if (scenario === "dismissed") await db.execute("UPDATE ea_financial_events SET dismissed_at = 1 WHERE id = 'event-1'");
+      if (scenario === "corrected") await db.execute(`INSERT INTO ea_financial_correction_guards (user_id, activity_id)
+        SELECT user_id, activity_id FROM ea_financial_activity_occurrences WHERE owner = 'event' AND record_id = 'event-1'`);
+      const before = (await db.execute("SELECT * FROM ea_financial_events WHERE id = 'event-1'")).rows[0]!;
+      await db.executeMultiple(migration("077_financial_category_completion.sql"));
+      const after = (await db.execute("SELECT * FROM ea_financial_events WHERE id = 'event-1'")).rows[0]!;
+      expect(after).toEqual(scenario === "category-only"
+        ? { ...before, status: "pending", next_attempt_at: null, updated_at: expect.any(Number) } : before);
+      await db.executeMultiple(migration("077_financial_category_completion.sql"));
+      expect((await db.execute("SELECT * FROM ea_financial_events WHERE id = 'event-1'")).rows[0]).toEqual(after);
+      if (scenario === "category-only") {
+        const recovered = (await store().claimEvent("recheck"))!;
+        expect(recovered).toMatchObject({ operation, attemptedAt: now, outcome: { outcome: "needs_review", transactionId: "actual-1" } });
+        expect(await store().admitOperation(recovered, operation, authorizedPlan)).toBe(false);
+      }
+    },
+  );
+
   it("rejects dispatch and stale event settlement after linked source evidence changes", async () => {
     await associate("receipt");
     const event = await store().claimEvent("event");

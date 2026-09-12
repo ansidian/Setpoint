@@ -21,7 +21,7 @@ afterEach(async () => {
 });
 
 describe("Actual financial operation SDK compatibility", () => {
-  it("identifies an imported transaction when an Actual rule changes only its selected category", async () => {
+  it("completes an imported transaction when an Actual rule changes only its selected category", async () => {
     dataDir = await createTestTempDir("actual-category-rule-conflict-");
     const internal = await actualApi.init({ dataDir, verbose: false });
     started = true;
@@ -49,15 +49,14 @@ describe("Actual financial operation SDK compatibility", () => {
     const transactions = await actualApi.getTransactions(accountId, operation.input.date, operation.input.date);
     expect(transactions).toEqual([expect.objectContaining({ account: accountId, payee: payeeId,
       amount: -4_852, date: operation.input.date, imported_id: operation.input.identityKey, category: ruleCategoryId })]);
-    const expected = { outcome: "needs_review", transactionId: transactions[0]!.id,
-      reason: "Recorded in Actual, but the category differs from the selected category. Review the category in Actual." };
-    expect(result).toMatchObject(expected);
+    expect(result).toMatchObject({ outcome: "added", transactionId: transactions[0]!.id });
+    const expected = { outcome: "already_present", transactionId: transactions[0]!.id };
     expect(await execute("owner", bound, "recover")).toMatchObject(expected);
     expect(await execute("owner", bound, "write_once")).toMatchObject(expected);
     expect(await actualApi.getTransactions(accountId, operation.input.date, operation.input.date)).toEqual(transactions);
   }, 30_000);
 
-  it("binds and verifies submitted payee and category through the managed operation facade", async () => {
+  it("imports the submitted category, preserves category edits, and verifies the payee through the managed facade", async () => {
     dataDir = await createTestTempDir("actual-financial-handshake-");
     const internal = await actualApi.init({ dataDir, verbose: false });
     started = true;
@@ -88,7 +87,7 @@ describe("Actual financial operation SDK compatibility", () => {
       expect(await actualApi.getTransactions(accountId, operation.input.date, operation.input.date))
         .toEqual([expect.objectContaining({ category: otherCategoryId })]);
     });
-    expect(await execute("owner", bound, "recover")).toMatchObject({ outcome: "needs_review" });
+    expect(await execute("owner", bound, "recover")).toMatchObject({ outcome: "already_present", transactionId: transaction!.id });
     const otherPayeeId = await actualApi.createPayee({ name: "Different shop" });
     await actualApi.updateTransaction(transaction!.id, { category: categoryId, payee: otherPayeeId });
     await vi.waitFor(async () => {

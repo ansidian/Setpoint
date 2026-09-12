@@ -176,7 +176,7 @@ describe("Actual financial operations", () => {
     expect(state.transactions).toEqual([expect.objectContaining({ payee: "selected-shop" })]);
   });
 
-  it.each(["payee", "category"] as const)("requires review when the synchronized transaction's %s disagrees with its admitted entry", async (field) => {
+  it.each(["payee", "category"] as const)("revalidates the synchronized transaction after its %s changes", async (field) => {
     const state = fixture();
     const input = { ...purchase, categoryId: "utilities" };
     const preview = await reconcileActualFinancialOperation(state.sdk, "budget", input, "preview", now);
@@ -186,8 +186,8 @@ describe("Actual financial operations", () => {
     state.transactions[0]![field] = "owner-edited";
     state.failCategoryRead();
     const recovered = await reconcileActualFinancialOperation(state.sdk, "budget", bound, "recover", now);
-    expect(recovered).toMatchObject({ outcome: "needs_review", reason: field === "category"
-      ? "Recorded in Actual, but the category differs from the selected category. Review the category in Actual."
+    expect(recovered).toMatchObject({ outcome: field === "category" ? "already_present" : "needs_review", reason: field === "category"
+      ? "The transaction identity is already recorded."
       : "The recorded transaction identity conflicts with this event." });
     expect(recovered.transactionId).toBe(field === "category" ? state.transactions[0]!.id : undefined);
     expect(state.transactions).toEqual([expect.objectContaining({ [field]: "owner-edited" })]);
@@ -230,14 +230,14 @@ describe("Actual financial operations", () => {
     expect(state.transactions).toHaveLength(2);
   });
 
-  it("reviews a legacy category conflict without importing a duplicate", async () => {
+  it("accepts a unique legacy transaction with a different category without importing a duplicate", async () => {
     const state = fixture();
     state.payees.push({ id: "shop", name: purchase.payee, transfer_acct: "" });
     state.transactions.push({ id: "manual", account: purchase.accountId, payee: "shop", amount: purchase.amountCents,
       date: purchase.date, imported_id: null, transfer_id: null, tombstone: false, category: "owner-selected" });
     const input = { ...purchase, categoryId: "utilities" };
-    expect(await reconcileActualFinancialOperation(state.sdk, "budget", input, "preview", now)).toMatchObject({ outcome: "needs_review" });
-    expect(await reconcileActualFinancialOperation(state.sdk, "budget", input, "write_once", now)).toMatchObject({ outcome: "needs_review" });
+    expect(await reconcileActualFinancialOperation(state.sdk, "budget", input, "preview", now)).toMatchObject({ outcome: "already_present", transactionId: "manual" });
+    expect(await reconcileActualFinancialOperation(state.sdk, "budget", input, "write_once", now)).toMatchObject({ outcome: "already_present", transactionId: "manual" });
     expect(state.transactions).toEqual([expect.objectContaining({ id: "manual", category: "owner-selected" })]);
   });
 
