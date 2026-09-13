@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { ChevronDown, Pencil, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
+import { AlertTriangle, ChevronDown, Pencil, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
 import AnimatedCollapse from "@/components/shared/AnimatedCollapse";
 import AnimatedHeight from "@/components/shared/AnimatedHeight";
 import SearchableDropdown, { type SearchableDropdownOption } from "@/components/shared/SearchableDropdown";
@@ -19,6 +19,12 @@ const LABEL = "mb-1.5 block text-[12px] font-medium text-foreground";
 const HINT = "mt-1.5 block max-w-[70ch] text-[12px] leading-relaxed text-muted-foreground";
 const GROUP = "min-w-0 border-t border-white/[0.08] pt-5";
 const LEGEND = "float-left mb-3 w-full text-[13px] font-semibold text-foreground";
+const PROFILE_GROUPS = [
+  { kind: "card_payment", label: "Card payments" },
+  { kind: "utility", label: "Utilities" },
+  { kind: "expense", label: "Expenses" },
+  { kind: "income", label: "Income / refunds" },
+] satisfies { kind: FinancialProfileTarget["kind"]; label: string }[];
 const TARGET_HINTS: Record<FinancialProfileTarget["kind"], string> = {
   utility: "Update the schedule with the bill’s amount and due date. Reminders and recorded billing cycles are skipped.",
   card_payment: "Update a payment schedule from a card statement or scheduled-payment email.",
@@ -81,6 +87,8 @@ export default function FinancialProfilesCard({ settings, setSettings, patch, me
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(!!(initialDraft?.merchantName || initialDraft?.accountLast4));
+  const [expandedGroups, setExpandedGroups] = useState<Partial<Record<FinancialProfileTarget["kind"], boolean>>>({});
+  const groupId = useId();
   const addRef = useRef<HTMLButtonElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const editingTrigger = useRef<HTMLButtonElement | null>(null);
@@ -123,6 +131,9 @@ export default function FinancialProfilesCard({ settings, setSettings, patch, me
   function saveProfiles(next: FinancialProfile[]) {
     setSettings(current => ({ ...(current || {}), financial_profiles: next }));
     patch({ financial_profiles: next });
+    if (editor && next.some(profile => profile.id === editor.profile.id)) {
+      setExpandedGroups(current => ({ ...current, [editor.profile.target.kind]: true }));
+    }
     closeEditor();
   }
 
@@ -154,6 +165,15 @@ export default function FinancialProfilesCard({ settings, setSettings, patch, me
     return profileTargetSummary(profile.target, metadata);
   }
 
+  const profileRows = profiles.map(profile => ({
+    profile,
+    summary: targetSummary(profile),
+    warning: profile.budgetId !== budgetId ? "Different budget · inactive"
+      : metadataLoading ? ""
+        : !liveMetadataAvailable || metadataError ? "Actual targets unavailable"
+          : profileTargetProblem(profile, metadata) ? "Check Actual destination" : "",
+  }));
+
   return (
     <SettingsCard
       id="financial-profiles"
@@ -182,25 +202,52 @@ export default function FinancialProfilesCard({ settings, setSettings, patch, me
           <p className="text-[12px] text-muted-foreground">No Actual accounts or schedules are available. Check the connected budget.</p>
         ) : null}
         <div hidden={!!editor}>{profiles.length ? (
-          <ul aria-label="Saved financial profiles" className="divide-y divide-white/[0.06]">
-            {profiles.map(profile => (
-              <li key={profile.id} className="flex items-start gap-3 py-3 first:pt-0">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                    <span className="break-words text-[13px] font-medium text-foreground">{profile.name}</span>
-                    <span className="text-[11px] text-muted-foreground">{profile.enabled ? "Enabled" : "Disabled"}</span>
-                    {profile.budgetId !== budgetId ? <span className="text-[11px] text-warning">Different budget · inactive</span> : null}
-                  </div>
-                  <p className="mt-1 break-words text-[12px] leading-relaxed text-muted-foreground">{targetSummary(profile)}</p>
-                  <p className="mt-1 break-words text-[11px] leading-relaxed text-muted-foreground">{profile.senderAddresses.join(", ")}</p>
-                  {profile.merchantName || profile.accountLast4 ? <p className="mt-1 break-words text-[11px] leading-relaxed text-muted-foreground">
-                    {[profile.merchantName && `Merchant: ${profile.merchantName}`, profile.accountLast4 && `Card ending ${profile.accountLast4}`].filter(Boolean).join(" · ")}
-                  </p> : null}
-                </div>
-                <button type="button" disabled={!!editor} aria-label={`Edit ${profile.name}`} onClick={event => openEditor(profile, event.currentTarget)} className={cn(BUTTON, SETTINGS_SECONDARY_BUTTON_CLASS, "shrink-0")}><Pencil size={12} /> Edit</button>
-              </li>
-            ))}
-          </ul>
+          <div role="group" aria-label="Saved financial profiles" className="divide-y divide-white/[0.06]">
+            {PROFILE_GROUPS.map(({ kind, label }) => {
+              const rows = profileRows.filter(({ profile }) => profile.target.kind === kind);
+              if (!rows.length) return null;
+              const expanded = !!expandedGroups[kind];
+              const attentionCount = rows.filter(row => row.warning).length;
+              const headingId = `${groupId}-${kind}-heading`;
+              const listId = `${groupId}-${kind}-profiles`;
+              return (
+                <section key={kind} aria-labelledby={headingId}>
+                  <h3>
+                    <button
+                      id={headingId}
+                      type="button"
+                      aria-expanded={expanded}
+                      aria-controls={expanded ? listId : undefined}
+                      onClick={() => setExpandedGroups(current => ({ ...current, [kind]: !current[kind] }))}
+                      className={cn(BUTTON, "w-full justify-start px-2 py-2.5 text-left hover:-translate-y-px hover:bg-white/[0.04] active:bg-white/[0.06]")}
+                    >
+                      <ChevronDown aria-hidden="true" size={14} className={cn("shrink-0 -rotate-90 transition-transform duration-[160ms] motion-reduce:transition-none", expanded && "rotate-0")} />
+                      <span className="text-[13px]">{label}</span>
+                      <span className="text-[11px] tabular-nums text-muted-foreground">{rows.length}</span>
+                      {attentionCount ? <span className="ml-auto flex items-center gap-1.5 text-[11px] font-normal text-warning"><AlertTriangle aria-hidden="true" size={12} className="shrink-0" />{attentionCount} need{attentionCount === 1 ? "s" : ""} attention</span> : null}
+                    </button>
+                  </h3>
+                  <AnimatedCollapse open={expanded}>
+                    <ul id={listId} aria-label={`${label} profiles`} className="divide-y divide-white/[0.06] pb-2 pl-2 sm:pl-7">
+                      {rows.map(({ profile, summary, warning }) => (
+                        <li key={profile.id} className="flex items-center gap-3 py-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                              <span className="break-words text-[13px] font-medium text-foreground">{profile.name}</span>
+                              <span className="text-[11px] text-muted-foreground">{profile.enabled ? "Enabled" : "Disabled"}</span>
+                            </div>
+                            <p className="mt-0.5 break-words text-[12px] leading-relaxed text-muted-foreground">{summary}</p>
+                            {warning ? <p className="mt-0.5 text-[11px] text-warning">{warning}</p> : null}
+                          </div>
+                          <button type="button" disabled={!!editor} aria-label={`Edit ${profile.name}`} onClick={event => openEditor(profile, event.currentTarget)} className={cn(BUTTON, SETTINGS_SECONDARY_BUTTON_CLASS, "shrink-0")}><Pencil aria-hidden="true" size={12} /> Edit</button>
+                        </li>
+                      ))}
+                    </ul>
+                  </AnimatedCollapse>
+                </section>
+              );
+            })}
+          </div>
         ) : (
           <p className="text-[12px] leading-relaxed text-muted-foreground">No profiles yet. Choose where financial activity belongs in Actual.</p>
         )}</div>

@@ -105,10 +105,8 @@ export function profileTargetSummary(target: FinancialProfileTarget, metadata: A
   }
   if (target.kind === "card_payment") {
     const route = `${account(target.fromAccountId)} → ${account(target.toAccountId)}`;
-    const schedule = target.scheduleId
-      ? scheduleExists(target.scheduleId) ? `Update ${profileScheduleName(target.scheduleId, metadata)}` : "Saved payment schedule unavailable"
-      : "Payment schedule";
-    return `${schedule} · ${route}`;
+    return target.scheduleId && !scheduleExists(target.scheduleId)
+      ? `Saved payment schedule unavailable · ${route}` : route;
   }
   const payee = metadata.payees?.find(item => item.id === target.payeeId)?.name || (target.payeeId ? "Payee unavailable" : "Choose a payee");
   const category = metadata.categories?.flatMap(group => group.categories).find(item => item.id === target.categoryId)?.name;

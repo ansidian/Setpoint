@@ -3,7 +3,6 @@ import { useLocation, useNavigate } from "react-router";
 import { getActualMetadata } from "@/api";
 import TriageSoundSettingsCard from "../cards/TriageSoundSettingsCard";
 import UtilityMappingsCard from "../cards/UtilityMappingsCard";
-import UtilityPayLinksCard from "@/components/settings/cards/UtilityPayLinksCard";
 import FinancialProfilesCard from "@/components/settings/cards/FinancialProfilesCard";
 import { profileDraftFromRouteState } from "../cards/financialProfileModel";
 import { financialProfileSeedFromRouteState } from "@/lib/financialProfileSeed";
@@ -121,19 +120,18 @@ export default function ActualBudgetSettingsSection({
         onRequestMetadata={requestMetadata}
         liveMetadataAvailable={liveMetadataAvailable}
       />
-      <UtilityMappingsCard key={budgetId} budgetId={budgetId} available={liveMetadataAvailable} settings={settings} setSettings={setSettings} patch={patch}>
-      {dependency.showSettings ? mappedScheduleIds => <UtilityPayLinksCard
-        mappedScheduleIds={mappedScheduleIds}
+      <UtilityMappingsCard
+        key={budgetId}
+        budgetId={budgetId}
+        available={liveMetadataAvailable}
+        showOtherLinks={dependency.showSettings}
         settings={settings}
         setSettings={setSettings}
-        patch={patch}
         metadata={metadata}
         metadataLoading={metadataLoading}
         metadataError={metadataError}
         onRequestMetadata={requestMetadata}
-        liveMetadataAvailable={liveMetadataAvailable}
-      /> : undefined}
-      </UtilityMappingsCard>
+      />
       <TriageSoundSettingsCard scope="finance" settings={settings} setSettings={setSettings} patch={patch} />
       <FinancialReviewNotificationsControl />
     </>

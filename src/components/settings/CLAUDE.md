@@ -35,11 +35,12 @@ The settings surface: a Connections directory plus Automation, Finance, and Syst
 - `cards/TrustedRemoteContentCard.tsx` — persisted exact-sender + receiving-account remote-image trust list and removal
 
 ### Cards: financial preferences
-- `cards/FinancialProfilesCard.tsx` — compact profile list and focused explicit editor with grouped email matching, optional merchant/card filters, and named Actual destinations; classified email seeds start enabled and leave unknown targets unset, and explicitly disabled profiles remain editable offline
+- `cards/FinancialProfilesCard.tsx` — collapsible activity groups with counts, compact profile rows and visible destination warnings; the focused explicit editor owns email matching and optional merchant/card filters; classified email seeds start enabled and leave unknown targets unset, and explicitly disabled profiles remain editable offline
 - `cards/financialProfileModel.ts` — profile form defaults, navigation-draft projection, validation, target options and destination summaries; internal target IDs never become display labels
 
-- `cards/UtilityMappingsCard.tsx` — compact budget-bound utility rows with one Actual Schedule, its derived read-only payee and inline pay URL, preserving source matching
-- `cards/UtilityPayLinksCard.tsx` — inline utility pay URL field and additional schedule links within Utility mappings; source for the calendar "Pay Online" button
+- `cards/UtilityMappingsCard.tsx` — compact utility summaries, one active utility/link editor, explicit schedule and URL saves with partial-save recovery, preserving source matching
+- `cards/UtilityPayLinksCard.tsx` — compact additional bill links with explicit add/edit/remove; shared URL field and domain summary for calendar pay links
+- `cards/utilitySettingsModel.ts` — valid utility schedule choices, pay-link URL parsing, and replacement that preserves unrelated links
 
 ### Cards: connections + security
 - `cards/GoogleWorkspaceAccountsPanel.tsx` — Gmail/Calendar account add, reconnect, edit, reorder, and removal

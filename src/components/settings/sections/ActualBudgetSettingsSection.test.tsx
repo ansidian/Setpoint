@@ -81,6 +81,7 @@ describe("ActualBudgetSettingsSection", () => {
     renderSection();
 
     await screen.findByRole("button", { name: "Try again" });
+    fireEvent.click(screen.getByRole("button", { name: /^Utilities/ }));
     fireEvent.click(screen.getByRole("button", { name: "Refresh settings snapshot" }));
     await act(async () => {});
     // The external read count proves a failed provider boundary cannot create a retry loop.
