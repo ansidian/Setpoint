@@ -15,6 +15,8 @@ Development uses `server/db/ea.db`; Turso credentials are unnecessary unless exp
 
 For the fictional frontend alone, run `npm run demo`. It needs no backend or credentials and resets mutations on refresh. To inspect the static artifact, run `npm run build:demo` then `npm run preview:demo`.
 
+The demo build adds the public title, description, canonical URL, and Open Graph/Twitter preview tags through `vite.config.ts`; normal private builds retain the plain Setpoint title. The preview image is `public/setpoint-social-preview.png` (1200 × 630), composed from the fictional public demo. Build with `VITE_EA_DEMO_BASE=/Setpoint/ npm run build:demo` for GitHub Pages; use the same environment variable with `npm run preview:demo` to preview that artifact locally. If the public hosting URL changes, update the canonical and image URL in the Vite metadata hook. Publish through the **Deploy Demo to GitHub Pages** workflow; local builds do not update the live preview.
+
 ## Production
 
 The [Render Blueprint](render.yaml) provisions an always-on Starter Node service and a persistent asset disk. Supply `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`; Render generates `EA_ENCRYPTION_KEY` and `EA_SETUP_TOKEN`. The service builds with `npm ci && npm run build`, starts with `npm start`, and checks readiness at `/healthz`.

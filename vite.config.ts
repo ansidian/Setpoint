@@ -33,7 +33,49 @@ export default defineConfig(({ mode }) => {
 
   return {
     base: demoBase || "/",
-    plugins: [tailwindcss(), react()],
+    plugins: [
+      tailwindcss(),
+      react(),
+      env.VITE_EA_DEMO === "1" && {
+        name: "setpoint-demo-social-preview",
+        apply: "build",
+        transformIndexHtml(html) {
+          const title = "Setpoint — Stop piecing your day together.";
+          const description = "A private workspace connecting Gmail, Google Calendar, Todoist, and Actual Budget—with AI email triage, summaries, semantic search, and time-to-leave reminders. Explore the demo with fictional data.";
+          const url = "https://ansidian.github.io/Setpoint/";
+          const image = `${url}setpoint-social-preview.png`;
+          const imageAlt = "Setpoint: Stop piecing your day together. A fictional dashboard alongside AI email triage, semantic search, an AI assistant, and Gmail, Google Calendar, Todoist, and Actual Budget integrations.";
+
+          // Emit static metadata for link crawlers only in the public demo build.
+          return {
+            html: html.replace("<title>Setpoint</title>", `<title>${title}</title>`),
+            tags: [
+              { tag: "link", attrs: { rel: "canonical", href: url } },
+              ...Object.entries({
+                description,
+                "twitter:card": "summary_large_image",
+                "twitter:title": title,
+                "twitter:description": description,
+                "twitter:image": image,
+                "twitter:image:alt": imageAlt,
+              }).map(([name, content]) => ({ tag: "meta", attrs: { name, content } })),
+              ...Object.entries({
+                "og:type": "website",
+                "og:site_name": "Setpoint",
+                "og:title": title,
+                "og:description": description,
+                "og:url": url,
+                "og:image": image,
+                "og:image:type": "image/png",
+                "og:image:width": "1200",
+                "og:image:height": "630",
+                "og:image:alt": imageAlt,
+              }).map(([property, content]) => ({ tag: "meta", attrs: { property, content } })),
+            ].map((tag) => ({ ...tag, injectTo: "head" as const })),
+          };
+        },
+      },
+    ],
     build: {
       // Notes is lazy-loaded and intentionally carries tldraw as one large
       // feature chunk. Keep a warning guard without forcing tldraw's circular
