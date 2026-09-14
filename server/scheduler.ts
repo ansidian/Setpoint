@@ -3,6 +3,7 @@ import type { ScheduledTask } from "node-cron";
 import db from "./db/connection.ts";
 import { loadUserConfig } from "./platform/config-service.ts";
 import { fetchAllEmails } from "./email/email-fetch.ts";
+import { recordEmailInboxCheck } from "./email/email-sync-health.ts";
 import { indexEmails } from "./email/email-index.ts";
 import {
   enqueueEmailTriageForEmails,
@@ -206,17 +207,22 @@ function sweepIndex(): Promise<void> {
         try {
           const userId = String(row.user_id ?? "");
           const { accounts } = await runtime.loadConfig(userId);
-          const hasEmail = accounts.some(
-            (a) => a.type === "gmail" || a.type === "icloud",
-          );
-          if (!hasEmail) continue;
-          const emails = await runtime.fetchEmails(
-            accounts,
-            INDEXER_LOOKBACK_HOURS,
-          );
-          if (emails.length) {
-            await runtime.indexEmailRows(userId, emails);
-            await runtime.enqueueTriage(userId, emails);
+          for (const account of accounts.filter((a) => a.type === "gmail" || a.type === "icloud")) {
+            const accountId = String(account.id);
+            try {
+              await recordEmailInboxCheck(userId, accountId, "started", { dbClient: runtime.dbClient });
+              // A per-account strict fetch keeps a failed provider distinct from
+              // a successfully checked empty inbox, without sinking other accounts.
+              const emails = await runtime.fetchEmails([account], INDEXER_LOOKBACK_HOURS, { strict: true });
+              if (emails.length) {
+                await runtime.indexEmailRows(userId, emails);
+                await runtime.enqueueTriage(userId, emails);
+              }
+              await recordEmailInboxCheck(userId, accountId, "success", { dbClient: runtime.dbClient });
+            } catch (err) {
+              await recordEmailInboxCheck(userId, accountId, "failed", { dbClient: runtime.dbClient });
+              console.error(`[EA Indexer] Inbox check failed for account ${accountId}:`, errorMessage(err));
+            }
           }
         } catch (err) {
           console.error(

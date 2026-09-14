@@ -20,6 +20,13 @@ afterEach(() => {
 });
 
 describe("fetchAllEmails", () => {
+  it("rejects strict inbox checks on account failures while accepting successful empty inboxes", async () => {
+    fetchGmailEmailsMock.mockRejectedValueOnce(new Error("provider unavailable"));
+    await expect(fetchAllEmails([{ type: "gmail", email: "g@example.com" }], 2, { strict: true })).rejects.toThrow("provider unavailable");
+    fetchGmailEmailsMock.mockResolvedValueOnce([]);
+    expect(await fetchAllEmails([{ type: "gmail", email: "g@example.com" }], 2, { strict: true })).toEqual([]);
+  });
+
   it("degrades a single iCloud decrypt failure without sinking the other accounts (P2-38)", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     fetchGmailEmailsMock.mockResolvedValue([{ uid: "gmail-1" }] as never);

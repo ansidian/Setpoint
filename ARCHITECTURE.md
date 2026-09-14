@@ -733,6 +733,7 @@ erDiagram
 | `ea_email_search_ai_usage` | `007_email_search_ai_usage.sql` |
 | `ea_email_search_embedding_state` | `006_email_search_embedding_state.sql` |
 | `ea_email_search_embeddings` | `005_email_search_embeddings.sql` |
+| `ea_email_sync_health` | `078_email_sync_health.sql` |
 | `ea_email_triage` | `001_ea_tables.sql`, `015_triage_last_decision_reason.sql`, `052_financial_email_plans.sql` |
 | `ea_finance_utilities` | `065_finance_utilities.sql` |
 | `ea_financial_activity_aliases` | `063_financial_activity.sql` |

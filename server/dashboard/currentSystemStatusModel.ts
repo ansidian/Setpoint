@@ -20,13 +20,19 @@ interface SystemStatusProviderHealthInput {
   reauth?: CurrentDashboardProviderHealth["reauth"];
   configured?: CurrentDashboardProviderHealth["configured"];
   calendarPush?: CurrentDashboardProviderHealth["calendarPush"];
+  email?: CurrentDashboardProviderHealth["email"];
 }
 
 type HealthEvidence = Pick<CurrentDashboardSystemSource, "state" | "severity" | "lastSuccessAt">;
 // Calendar keeps its five-minute read cache. Health allows the fifteen-minute
 // recovery sweep plus five minutes to finish, measured from an actual complete
 // provider read. A working watch or quiet notification stream is not freshness.
-const CALENDAR_SUCCESS_DEADLINE_MS = 20 * 60_000;
+const SUCCESS_DEADLINE_MS: Record<string, number> = {
+  weather: 60 * 60_000,
+  calendar: 20 * 60_000,
+  todoist: 20 * 60_000,
+  bills: (6 * 60 + 15) * 60_000,
+};
 const STATE_PRIORITY: Record<CurrentDashboardHealthState, number> = {
   needs_reauth: 7, unavailable: 6, degraded: 5, needs_sync: 4, stale: 4,
   refreshing: 3, syncing: 3, current: 1, unconfigured: 0,
@@ -36,7 +42,9 @@ function mirrorEvidence(health: SystemStatusProviderHealthInput["todoist"] | Sys
   const failedChecks = "failedCheckCount" in health && Number(health.failedCheckCount) > 0 && health.lastCheckFailedAt;
   // A local mirror read can succeed after its provider refresh failed. Preserve
   // that failed-check evidence, including inside Todoist's normal grace window.
+  const pendingBills = "pendingRefreshAt" in health && Boolean(health.pendingRefreshAt);
   const state = failedChecks && health.state === "current" ? "degraded"
+    : pendingBills && health.state === "current" ? "needs_sync"
     : health.state === "stale" ? "needs_sync" : health.state as CurrentDashboardHealthState;
   return {
     state,
@@ -79,11 +87,17 @@ function activeRefreshStartedAt(cache: CurrentDashboardSourceHealth | undefined,
   return timestamps.sort()[0] ?? null;
 }
 
-function calendarHealthCache(cache: CurrentDashboardSourceHealth | undefined, now: number): CurrentDashboardSourceHealth | undefined {
+function healthCache(cache: CurrentDashboardSourceHealth | undefined, now: number, key: string, mirror?: SystemStatusProviderHealthInput["todoist"] | SystemStatusProviderHealthInput["bills"]): CurrentDashboardSourceHealth | undefined {
   if (!cache?.fetchedAt) return cache;
-  const lastSuccess = Date.parse(cache.fetchedAt);
-  if (!Number.isFinite(lastSuccess)) return cache;
-  const deadline = lastSuccess + CALENDAR_SUCCESS_DEADLINE_MS;
+  // The delivered data and its upstream mirror must both have been checked.
+  // Local reads cannot renew the provider's successful-check deadline.
+  const lastSuccess = mirror
+    ? Math.min(Date.parse(cache.fetchedAt), Date.parse(mirror.lastSuccessAt || ""))
+    : Date.parse(cache.fetchedAt);
+  if (!Number.isFinite(lastSuccess)) return mirror
+    ? { ...cache, fetchedAt: null, expiresAt: null, state: "unavailable", severity: "error" }
+    : cache;
+  const deadline = lastSuccess + SUCCESS_DEADLINE_MS[key]!;
   const expiresAt = new Date(deadline).toISOString();
   const ageOnly = cache.state === "current" || cache.state === "needs_sync" || cache.state === "stale";
   const updating = cache.state === "refreshing" || cache.state === "syncing";
@@ -102,6 +116,7 @@ function domainSource({ key, label, connection, cache, mirror, configured, now }
   configured?: boolean;
   now: number;
 }): CurrentDashboardSystemSource {
+  cache = healthCache(cache, now, key, mirror);
   const cacheEvidence: HealthEvidence | undefined = cache && {
     state: cache.state === "stale" ? "needs_sync" : cache.state,
     severity: cache.severity,
@@ -152,7 +167,7 @@ export function composeSystemStatus(
   const cache = (key: CurrentDashboardSourceHealth["key"]) => cacheSources?.find((source) => source.key === key);
   const sources: CurrentDashboardSystemSource[] = cacheSources ? [
     domainSource({ now, key: "weather", label: "Weather", connection: "pirate-weather", cache: cache("weather_current"), configured: providerHealth.configured?.weather }),
-    domainSource({ now, key: "calendar", label: "Calendar", connection: "google-workspace", cache: calendarHealthCache(cache("calendar_current"), now), configured: providerHealth.configured?.calendar }),
+    domainSource({ now, key: "calendar", label: "Calendar", connection: "google-workspace", cache: cache("calendar_current"), configured: providerHealth.configured?.calendar }),
   ] : [{
     // Compatibility for callers carrying only the older aggregate contract.
     key: "currentData", label: "Current data", state: providerHealth.currentData.state,
@@ -164,6 +179,27 @@ export function composeSystemStatus(
     domainSource({ now, key: "todoist", label: "Tasks", connection: "todoist", cache: cache("deadlines_current"), mirror: providerHealth.todoist }),
     domainSource({ now, key: "bills", label: "Bills", connection: "actual-budget", cache: cache("bills_current"), mirror: providerHealth.bills }),
   );
+  if (providerHealth.email === null) {
+    sources.push({
+      key: "email", label: "Email", state: "unavailable", severity: "error", lastSuccessAt: null,
+      message: "Email sync status could not be checked. Automatic inbox checks continue.",
+      action: { label: "Check connections", href: "/settings?tab=connections" },
+    });
+  }
+  for (const email of providerHealth.email ?? []) {
+    const label = `${email.type === "icloud" ? "iCloud Mail" : "Gmail"} (${email.email})`;
+    sources.push({
+      key: `email:${email.accountId}`, label, state: email.state, severity: email.severity,
+      lastSuccessAt: email.lastSuccessAt, expiresAt: email.expiresAt,
+      refreshStartedAt: email.refreshStartedAt,
+      message: email.message || "This inbox was checked successfully.",
+      impact: "New emails or inbox changes may be missing.",
+      ...(email.state !== "current" ? { action: {
+        label: email.state === "needs_reauth" ? "Reconnect" : "Check connection",
+        href: `/settings?tab=connections#${email.type === "icloud" ? "icloud-mail" : "google-workspace"}`,
+      } } : {}),
+    });
+  }
   const calendar = sources.find((source) => source.key === "calendar");
   if (providerHealth.calendarPush?.state === "degraded" && calendar
     && calendar.state !== "unconfigured" && calendar.state !== "unavailable" && calendar.state !== "needs_reauth") {
@@ -186,12 +222,15 @@ export function composeSystemStatus(
   for (const account of providerHealth.reauth?.accounts ?? []) {
     const icloud = account.type === "icloud";
     const label = icloud ? "iCloud Mail" : "Google";
-    sources.push({
-      key: `reauth:${account.id}`, label: `${label} (${String(account.email)})`,
+    const emailSource = sources.find((source) => source.key === `email:${account.id}`);
+    const reauthSource: CurrentDashboardSystemSource = {
+      key: emailSource?.key || `reauth:${account.id}`, label: `${label} (${String(account.email)})`,
       state: "needs_reauth", severity: "error", lastSuccessAt: null,
       message: icloud ? "Reconnect this iCloud account to resume email updates." : "Reconnect this Google account to resume email and calendar updates.",
       action: { label: `Reconnect ${label}`, href: `/settings?tab=connections#${icloud ? "icloud-mail" : "google-workspace"}` },
-    });
+    };
+    if (emailSource) Object.assign(emailSource, reauthSource, { refreshStartedAt: null });
+    else sources.push(reauthSource);
   }
   return { state: summarizeSystemState(sources), sources, generatedAt };
 }

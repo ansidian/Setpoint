@@ -7,7 +7,7 @@ import {
 } from "./current-service.test-utils.ts";
 
 beforeEach(setupCurrentServiceTest);
-afterEach(cleanupCurrentServiceTest);
+afterEach(() => { vi.useRealTimers(); cleanupCurrentServiceTest(); });
 
 const savedAt = "2026-05-04T10:00:00.000Z";
 const now = new Date("2026-05-04T12:00:00.000Z");
@@ -58,6 +58,20 @@ describe("source-specific dashboard refresh", () => {
     expect(JSON.stringify(result.systemStatus)).not.toContain("private upstream failure");
   });
 
+  it("persists the provider's original success time when Weather returns a cache hit", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(now);
+    const providerFetchedAt = "2026-05-04T11:45:00.000Z";
+    testState.fetchWeather.mockResolvedValue({ temp: 72, providerFetchedAt });
+    const result = await requestCurrentDashboardRefresh("u1", { dbClient: testState.db.current, now, source: "weather_current" });
+    expect(result.systemStatus.sources.find((source) => source.key === "weather")).toMatchObject({
+      state: "current", lastSuccessAt: providerFetchedAt, expiresAt: "2026-05-04T12:45:00.000Z",
+    });
+    expect((await persistedRows())[0]?.fetched_at).toBe(providerFetchedAt);
+    const later = await getDashboardSystemHealth("u1", { dbClient: testState.db.current, now: new Date("2026-05-04T12:45:00.000Z") });
+    expect(later.systemStatus.sources.find((source) => source.key === "weather")?.state).toBe("needs_sync");
+  });
+
   it("awaits an existing refresh for the same provider", async () => {
     let finish!: (value: unknown) => void;
     testState.fetchWeather.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
@@ -81,5 +95,25 @@ describe("cold failure freshness", () => {
     const retrying = await getDashboardSystemHealth("u1", { dbClient: testState.db.current, now });
     expect(retrying.systemStatus.sources.find((source) => source.key === "calendar")).toMatchObject({ state: "unavailable", lastSuccessAt: null });
     expect((await persistedRows())[0]?.fetched_at).toBeNull();
+  });
+});
+
+
+describe("email health in the dashboard envelope", () => {
+  it("includes persisted per-account freshness and expires it without another provider request", async () => {
+    await testState.db.current.execute({
+      sql: "UPDATE ea_email_sync_health SET last_success_at = ? WHERE user_id = 'u1' AND account_id = 'gmail-a'",
+      args: [now.toISOString()],
+    });
+    const read = (at: string) => getDashboardSystemHealth("u1", { dbClient: testState.db.current, now: new Date(at) });
+    const fresh = await read("2026-05-04T12:19:59.999Z");
+    expect(fresh.systemStatus.sources.find((source) => source.key === "email:gmail-a")).toMatchObject({
+      state: "current", lastSuccessAt: now.toISOString(), expiresAt: "2026-05-04T12:20:00.000Z",
+    });
+    const overdue = await read("2026-05-04T12:20:00.000Z");
+    expect(overdue.systemStatus.sources.find((source) => source.key === "email:gmail-a")?.state).toBe("needs_sync");
+    await testState.db.current.execute("DROP TABLE ea_email_sync_health");
+    const unknown = await read("2026-05-04T12:01:00.000Z");
+    expect(unknown.systemStatus.sources.find((source) => source.key === "email")).toMatchObject({ state: "unavailable", lastSuccessAt: null });
   });
 });

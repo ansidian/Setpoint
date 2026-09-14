@@ -123,6 +123,7 @@ export async function fetchEmails(
   account: ConfiguredEmailAccount,
   password: string,
   hoursBack: number,
+  { strict = false }: { strict?: boolean } = {},
 ): Promise<NormalizedFetchedEmail[]> {
   const client = await getPooledClient(account.email, password);
   const emails: NormalizedFetchedEmail[] = [];
@@ -137,6 +138,7 @@ export async function fetchEmails(
     );
 
     const searchResults = await client.search({ since: sinceDate });
+    if (strict && searchResults === false) throw new Error("iCloud inbox search failed");
     if (!searchResults || searchResults.length === 0) return [];
 
     for await (const msg of client.fetch(searchResults, {

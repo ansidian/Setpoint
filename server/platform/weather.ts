@@ -165,13 +165,15 @@ export function normalizeWeatherPayload(data: unknown): WeatherPayload {
   };
 }
 
+type FetchedWeather = WeatherPayload & { providerFetchedAt: string };
+
 // Cache weather for 30 minutes
-let weatherCache: { data: WeatherPayload | null; ts: number; key: string } = {
+let weatherCache: { data: FetchedWeather | null; ts: number; key: string } = {
   data: null,
   ts: 0,
   key: "",
 };
-let weatherRefresh: { key: string; promise: Promise<WeatherPayload> } | null = null;
+let weatherRefresh: { key: string; promise: Promise<FetchedWeather> } | null = null;
 const CACHE_TTL = 30 * 60 * 1000;
 
 export function clearWeatherCache() {
@@ -189,18 +191,13 @@ async function refreshWeather(cacheKey: string, apiKey: string, lat: string | nu
     try {
       res = await fetchWithTimeout(url, {}, { timeoutMs: PIRATE_WEATHER_TIMEOUT_MS });
     } catch {
-      if (weatherCache.key === cacheKey && weatherCache.data) return weatherCache.data;
       throw new Error("Pirate Weather request failed");
     }
     if (!res.ok) {
-      if (weatherCache.key === cacheKey && weatherCache.data) {
-        console.warn("Pirate Weather error, returning cached data");
-        return weatherCache.data;
-      }
       throw new Error(`Pirate Weather error: ${res.status}`);
     }
     const data = await res.json();
-    const result = normalizeWeatherPayload(data);
+    const result = { ...normalizeWeatherPayload(data), providerFetchedAt: new Date().toISOString() };
     weatherCache = { data: result, ts: Date.now(), key: cacheKey };
     return result;
   })();
@@ -227,15 +224,9 @@ export async function fetchWeather(
     return weatherCache.data!;
   }
 
-  // Stale-while-revalidate (P3-17): once we have data for this location, a TTL
-  // lapse serves the stale payload immediately and refreshes in the background,
-  // so no request blocks on a cold Pirate Weather fetch. Only the very first
-  // (uncached) load for a location blocks.
-  if (cachedForKey) {
-    refreshWeather(cacheKey, apiKey, lat, lng).catch(() => {});
-    return weatherCache.data!;
-  }
-
+  // The dashboard already serves saved data while its refresh runs in the
+  // background. This layer must await the actual provider result so old data
+  // and failed refreshes cannot be recorded as a new successful check.
   return refreshWeather(cacheKey, apiKey, lat, lng);
 }
 

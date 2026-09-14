@@ -11,6 +11,10 @@ const weatherProvider: CurrentDashboardProvider = {
   key: "weather_current",
   cacheTtlMs: 30 * 60 * 1000,
   fallbackPayload: () => null,
+  fetchedAt: (payload) => {
+    const timestamp = weatherPayload(payload)?.providerFetchedAt;
+    return typeof timestamp === "string" && Number.isFinite(Date.parse(timestamp)) ? timestamp : null;
+  },
   hasUsablePayload: (payload) => {
     const value = weatherPayload(payload);
     return Boolean(value?.temp != null || value?.summary);

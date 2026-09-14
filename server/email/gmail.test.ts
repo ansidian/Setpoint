@@ -23,6 +23,7 @@ const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
 
 const {
   fetchMessages,
+  fetchEmails,
   fetchEmailsInRange,
   fetchEmailBody,
   fetchEmailAttachment,
@@ -327,5 +328,27 @@ describe("fetchEmailsInRange", () => {
       nextPageToken: "next-page",
       resultSizeEstimate: 2,
     });
+  });
+});
+
+
+describe("strict Gmail inbox checks", () => {
+  const account = { id: "work", type: "gmail" as const, email: "work@example.com", label: "Work", color: "blue", credentials_encrypted: "stub" };
+  beforeEach(() => vi.resetAllMocks());
+  it("rejects incomplete messages instead of reporting a successful inbox check", async () => {
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ messages: [{ id: "one" }] }) })
+      .mockResolvedValueOnce({ ok: false, status: 503 });
+    await expect(fetchEmails(account, 2, { strict: true })).rejects.toThrow("HTTP 503");
+  });
+  it("rejects a capped inbox listing instead of claiming complete ingestion", async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ messages: [], nextPageToken: "more" }) });
+    await expect(fetchEmails(account, 2, { strict: true })).rejects.toThrow("pagination limit");
+  });
+  it("accepts an empty inbox and messages deleted between listing and download", async () => {
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ messages: [] }) });
+    expect(await fetchEmails(account, 2, { strict: true })).toEqual([]);
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ messages: [{ id: "deleted" }] }) })
+      .mockResolvedValueOnce({ ok: false, status: 404 });
+    expect(await fetchEmails(account, 2, { strict: true })).toEqual([]);
   });
 });

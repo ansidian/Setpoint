@@ -99,13 +99,15 @@ export async function refreshRows(
           provider.fetchFresh(userId, providerConfig, { dbClient, now, force }),
           key,
         );
-        await saveCacheRow(userId, key, payload, { dbClient, now });
+        // Cached provider results retain their original successful-read time.
+        const fetchedAt = new Date(provider.fetchedAt?.(payload) || now);
+        await saveCacheRow(userId, key, payload, { dbClient, now: fetchedAt });
         refreshedRows[key] = {
           user_id: userId,
           cache_key: key,
           payload_json: JSON.stringify(payload),
-          fetched_at: now.toISOString(),
-          expires_at: expiresAtFor(key, now),
+          fetched_at: fetchedAt.toISOString(),
+          expires_at: expiresAtFor(key, fetchedAt),
           status: "current",
           error_message: null,
           last_refresh_failed_at: null,

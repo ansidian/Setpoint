@@ -349,6 +349,10 @@ function makeDemoSeed(now = new Date()) {
           { key: "calendar", label: "Calendar", state: "current", lastSuccessAt: fetchedAt, message: "Fictional demo events." },
           { key: "todoist", label: "Tasks", state: "current", lastSuccessAt: fetchedAt, message: "Fictional demo tasks." },
           { key: "bills", label: "Bills", state: "current", lastSuccessAt: fetchedAt, message: "Fictional demo bills." },
+          ...inboxSeed.accounts.accounts.map((account) => ({
+            key: `email:${account.id}`, label: `${account.type === "icloud" ? "iCloud Mail" : "Gmail"} (${account.email})`,
+            state: "current", lastSuccessAt: fetchedAt, message: "Fictional demo inbox check.",
+          })),
         ],
       },
       fetchedAt,

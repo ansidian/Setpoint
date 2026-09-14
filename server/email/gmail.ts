@@ -132,7 +132,7 @@ function formatGmailSearchDate(value: string | number | Date): string {
   return new Date(value).toISOString().slice(0, 10).replaceAll("-", "/");
 }
 
-export async function fetchEmails(account: ConfiguredEmailAccount, hoursBack: number): Promise<NormalizedFetchedEmail[]> {
+export async function fetchEmails(account: ConfiguredEmailAccount, hoursBack: number, { strict = false }: { strict?: boolean } = {}): Promise<NormalizedFetchedEmail[]> {
   const token = await getAccessToken(account);
 
   // Page through message IDs until nextPageToken is exhausted
@@ -148,9 +148,8 @@ export async function fetchEmails(account: ConfiguredEmailAccount, hoursBack: nu
     listUrl.searchParams.set("maxResults", "500");
     if (pageToken) listUrl.searchParams.set("pageToken", pageToken);
 
-    const listRes = await fetch(listUrl, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const options = { headers: { Authorization: `Bearer ${token}` } };
+    const listRes = strict ? await fetchWithTimeout(listUrl, options, { timeoutMs: 30_000 }) : await fetch(listUrl, options);
     if (!listRes.ok) throw new Error(`Gmail list failed: ${listRes.status}`);
     const listData = await listRes.json() as GmailListResponse;
 
@@ -160,6 +159,7 @@ export async function fetchEmails(account: ConfiguredEmailAccount, hoursBack: nu
     pageToken = listData.nextPageToken;
     pages++;
     if (pages >= MAX_LIST_PAGES && pageToken) {
+      if (strict) throw new Error("Gmail inbox check exceeded the pagination limit");
       console.warn(`[Gmail] ${account.email}: hit MAX_LIST_PAGES (${MAX_LIST_PAGES}), truncating list at ${messageIds.length} messages`);
       break;
     }
@@ -167,7 +167,7 @@ export async function fetchEmails(account: ConfiguredEmailAccount, hoursBack: nu
 
   if (messageIds.length === 0) return [];
 
-  const messages = await fetchMessages(token, messageIds);
+  const messages = await fetchMessages(token, messageIds, { strict });
 
   return messages.map((msg) => normalizeMessage(account, msg));
 }

@@ -1,4 +1,5 @@
 import { vi, type Mock } from "vitest";
+import { readFileSync } from "node:fs";
 import { createClient, type Client, type InStatement } from "@libsql/client";
 
 type TestMock = Mock<(...args: unknown[]) => unknown>;
@@ -228,7 +229,10 @@ async function createMigratedDb() {
       email TEXT,
       label TEXT,
       calendar_enabled INTEGER NOT NULL DEFAULT 1,
-      needs_reauth INTEGER NOT NULL DEFAULT 0
+      needs_reauth INTEGER NOT NULL DEFAULT 0,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT,
+      updated_at TEXT
     );
 
     INSERT INTO ea_accounts (id, user_id, type, email) VALUES ('gmail-a', 'u1', 'gmail', 'a@example.test');
@@ -240,6 +244,15 @@ async function createMigratedDb() {
     );
     INSERT INTO ea_settings (user_id, actual_budget_url) VALUES ('u1', 'https://actual.example.test');
   `);
+  await db.executeMultiple(readFileSync(new URL("../db/migrations/078_email_sync_health.sql", import.meta.url), "utf8"));
+  // Existing provider queues are read by the email health projection.
+  const initialMigration = readFileSync(new URL("../db/migrations/001_ea_tables.sql", import.meta.url), "utf8");
+  for (const name of ["ea_triage_jobs", "ea_gmail_watch_state"]) {
+    const statement = initialMigration.split(";").find((sql) => sql.includes(`CREATE TABLE IF NOT EXISTS ${name} (`));
+    if (!statement) throw new Error(`Missing migration table ${name}`);
+    await db.executeMultiple(statement + ";");
+  }
+  await db.execute({ sql: "INSERT INTO ea_email_sync_health (user_id,account_id,last_success_at) VALUES (?,?,?)", args: ["u1", "gmail-a", new Date().toISOString()] });
   return db;
 }
 

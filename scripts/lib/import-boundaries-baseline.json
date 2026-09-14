@@ -21,6 +21,7 @@
     ],
     "email": [
       "email-service.ts",
+      "email-sync-health.ts",
       "email-evidence.ts",
       "financial-email-intake.ts",
       "email-backfill-worker.ts",

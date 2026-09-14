@@ -107,7 +107,7 @@ describe("domain status evidence", () => {
     const result = composeSystemStatus(input);
     expect(result.state).toBe("needs_sync");
     expect(result.sources).toHaveLength(4);
-    expect(result.sources[0]).toMatchObject({ key: "weather", state: "needs_sync", severity: "info", lastSuccessAt: fetchedAt, expiresAt });
+    expect(result.sources[0]).toMatchObject({ key: "weather", state: "needs_sync", severity: "info", lastSuccessAt: fetchedAt, expiresAt: "2026-09-06T13:00:00.000Z" });
     expect(JSON.stringify(result)).not.toContain("secret provider error");
   });
 
@@ -204,10 +204,64 @@ describe("domain status evidence", () => {
     expect(unavailable.sources.find((source) => source.key === "calendar")).toMatchObject({ state: "unavailable", severity: "error", lastSuccessAt: null });
   });
 
+  it.each([
+    ["weather", "weather_current", 60],
+    ["todoist", "deadlines_current", 20],
+    ["bills", "bills_current", 375],
+  ] as const)("gives %s an age-only deadline independent of cache expiry", (key, cacheKey, minutes) => {
+    const input = baseline();
+    const cache = input.currentData.sources.find((source) => source.key === cacheKey)!;
+    cache.state = "needs_sync";
+    cache.severity = "info";
+    const deadline = Date.parse(fetchedAt) + minutes * 60_000;
+    const before = composeSystemStatus(input, { generatedAt: new Date(deadline - 1).toISOString() });
+    expect(before.sources.find((source) => source.key === key)).toMatchObject({
+      state: "current", lastSuccessAt: fetchedAt, expiresAt: new Date(deadline).toISOString(),
+    });
+    cache.state = "refreshing";
+    const due = composeSystemStatus(input, { generatedAt: new Date(deadline).toISOString() });
+    expect(due.sources.find((source) => source.key === key)?.state).toBe("needs_sync");
+    cache.state = "degraded";
+    cache.failureCount = 1;
+    const failed = composeSystemStatus(input, { generatedAt: "2026-09-06T12:01:00.000Z" });
+    expect(failed.sources.find((source) => source.key === key)?.state).toBe("degraded");
+  });
+
+  it("does not renew Tasks or Bills provider freshness by rereading local data", () => {
+    const input = baseline();
+    input.currentData.sources = input.currentData.sources.map((source) => ({ ...source, fetchedAt: "2026-09-06T19:00:00.000Z" }));
+    const result = composeSystemStatus(input, { generatedAt: "2026-09-06T19:00:00.000Z" });
+    expect(result.sources.find((source) => source.key === "todoist")).toMatchObject({ state: "needs_sync", expiresAt: "2026-09-06T12:20:00.000Z" });
+    expect(result.sources.find((source) => source.key === "bills")).toMatchObject({ state: "needs_sync", expiresAt: "2026-09-06T18:15:00.000Z" });
+  });
+
+  it("shows a known Bills change during its settle window within the age grace", () => {
+    const input = baseline();
+    const result = composeSystemStatus({ ...input, bills: { ...input.bills, pendingRefreshAt: "2026-09-06T12:02:00.000Z" } }, { generatedAt: "2026-09-06T12:01:30.000Z" });
+    expect(result.sources.find((source) => source.key === "bills")?.state).toBe("needs_sync");
+  });
+
   it("identifies iCloud reconnection and folds Todoist reauth into its existing task source", () => {
     const result = composeSystemStatus({ ...baseline(), reauth: { accounts: [{ id: "icloud-a", type: "icloud", email: "a@icloud.com" }], todoist: true } });
     expect(result.sources).toHaveLength(5);
     expect(result.sources.find((source) => source.key === "todoist")).toMatchObject({ state: "needs_reauth", action: { href: "/settings?tab=connections#todoist" } });
     expect(result.sources.find((source) => source.key === "reauth:icloud-a")).toMatchObject({ label: "iCloud Mail (a@icloud.com)", action: { href: "/settings?tab=connections#icloud-mail" } });
+  });
+});
+
+
+describe("email source composition", () => {
+  it.each(["current", "needs_sync", "degraded", "unavailable", "needs_reauth"] as const)("includes %s email health and avoids a duplicate account reconnection row", (state) => {
+    const lastSuccessAt = "2026-09-14T12:00:00.000Z";
+    const result = composeSystemStatus({
+      currentData: { state: "current" }, todoist: { state: "current" }, bills: { state: "current" },
+      email: [{ accountId: "personal", email: "personal@example.test", type: "gmail", state,
+        severity: state === "current" ? "none" : state === "needs_sync" ? "info" : state === "degraded" ? "warning" : "error",
+        lastSuccessAt, expiresAt: "2026-09-14T12:20:00.000Z", refreshStartedAt: null, message: null }],
+      reauth: { accounts: state === "needs_reauth" ? [{ id: "personal", email: "personal@example.test", type: "gmail" }] : [], todoist: false },
+    });
+    expect(result.sources.filter((source) => source.key.includes("personal"))).toHaveLength(1);
+    expect(result.sources.find((source) => source.key === "email:personal")?.state).toBe(state);
+    expect(result.state).toBe(state === "needs_reauth" ? "unavailable" : state);
   });
 });

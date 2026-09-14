@@ -12,7 +12,7 @@ Cross-cutting frontend hooks: dashboard data fetching/streaming, snapshot sync, 
 - `useNews.ts` — News tab data fetching: initial load, tab-visibility background refetch, manual refresh (server sweep + reload)
 - `useCurrentDashboard.ts` — dashboard state: fetching, polling, SSE streaming, briefing selection
 - `currentDashboardModel.ts` — briefing/live data transforms, active-refresh detection
-- `currentDashboardHealthModel.ts` — provider freshness plus browser connectivity/read-failure health projection; saved data never implies a successful health check
+- `currentDashboardHealthModel.ts` — provider successful-check deadlines (including active refreshes) plus browser connectivity/read-failure health projection; saved data never implies a successful health check
 - `dashboardEventStream.ts` — single dashboard change subscription; production SSE reconnect/auth behavior and build-time demo-only in-memory financial signals
 - `dashboardEventRefreshModel.ts` — pure SSE source-to-refresh-scope routing and strongest-scope merge rules
 - `useActiveSnapshot.ts` — active snapshot fetch and sync with processing-time polling

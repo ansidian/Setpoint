@@ -79,6 +79,18 @@ export interface CurrentDashboardReauthHealth {
   todoist: boolean;
 }
 
+export interface CurrentDashboardEmailHealth {
+  accountId: string;
+  email: string;
+  type: "gmail" | "icloud";
+  state: CurrentDashboardHealthState;
+  severity: CurrentDashboardSeverity;
+  lastSuccessAt: string | null;
+  expiresAt: string | null;
+  refreshStartedAt: string | null;
+  message: string | null;
+}
+
 export interface CurrentDashboardProviderHealth extends Record<string, unknown> {
   currentData: CurrentDashboardDataHealth;
   todoist: TodoistMirrorHealth;
@@ -90,6 +102,7 @@ export interface CurrentDashboardProviderHealth extends Record<string, unknown> 
   } | null;
   reauth?: CurrentDashboardReauthHealth;
   configured?: { weather?: boolean; calendar?: boolean };
+  email?: CurrentDashboardEmailHealth[] | null;
   calendarPush?: { state: "inactive" | "current" | "degraded"; message?: string | null };
 }
 

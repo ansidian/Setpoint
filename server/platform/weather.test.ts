@@ -105,7 +105,7 @@ describe("fetchWeather caching", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("serves stale data immediately on TTL lapse and refreshes in the background", async () => {
+  it("awaits fresh provider data on TTL lapse and preserves actual success time on cache hits", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-01T00:00:00.000Z"));
     vi.spyOn(globalThis, "fetch")
@@ -119,12 +119,23 @@ describe("fetchWeather caching", () => {
     vi.setSystemTime(new Date("2026-05-01T00:31:00.000Z")); // past the 30-min TTL
     const stale = await fetchWeather(2.02, 2.02, service as never);
 
-    // Stale payload returns immediately; once the background refresh settles,
-    // the next read observes the refreshed cache value.
-    expect(stale.temp).toBe(60);
-    await vi.waitFor(async () => {
-      expect((await fetchWeather(2.02, 2.02, service as never)).temp).toBe(75);
-    });
+    expect(first.providerFetchedAt).toBe("2026-05-01T00:00:00.000Z");
+    expect(stale.temp).toBe(75);
+    expect(stale.providerFetchedAt).toBe("2026-05-01T00:31:00.000Z");
+    vi.setSystemTime(new Date("2026-05-01T00:40:00.000Z"));
+    expect((await fetchWeather(2.02, 2.02, service as never)).providerFetchedAt).toBe(stale.providerFetchedAt);
+  });
+
+  it("exposes a failed refresh instead of returning old weather as a new success", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-01T00:00:00.000Z"));
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(okResponse(payload(60)))
+      .mockResolvedValueOnce(new Response("down", { status: 503 }));
+    const service = credentials("test-key");
+    await fetchWeather(2.02, 2.02, service as never);
+    vi.setSystemTime(new Date("2026-05-01T00:31:00.000Z"));
+    await expect(fetchWeather(2.02, 2.02, service as never)).rejects.toThrow("Pirate Weather error: 503");
   });
 
   it("throws on fetch failure when there is no cached data", async () => {

@@ -12,7 +12,7 @@ Cross-domain infrastructure: config, account canonicalization, settings validati
 - `encrypted-credential-inventory.ts` — allowlisted inventory of every encrypted database field used by audits and rotation
 - `google-places.ts` — Google Places autocomplete/details client with radius biasing
 - `google-routes.ts` — narrow Google Routes Compute Routes client for traffic-aware driving duration/distance only
-- `weather.ts` — Pirate Weather fetch and condition → lucide icon mapping
+- `weather.ts` — Pirate Weather fetch, original provider success timestamps, 30-minute request cache, and condition → lucide icon mapping
 - `fetch-with-timeout.ts` — shared timeout helper for external provider fetches and non-fetch async operations
 - `ai-usage.ts` — scoped email-AI run attribution and idempotent, best-effort production per-provider-call ledger; tagged evaluations bypass accounting writes
 - `ai-usage-diagnostics.ts` — allowlisted response measurements and normalized failure categories; never raw provider/error content

@@ -9,6 +9,7 @@ import { publishCurrentDashboardEvent } from "./current-events.ts";
 import { computeDeadlineStats } from "../tasks/deadline-helpers.ts";
 import { getActiveSnapshotView, syncActiveSnapshot } from "../snapshots/snapshot-service.ts";
 import { getTodoistSyncHealth } from "../tasks/todoist.ts";
+import { getEmailSyncHealth } from "../email/email-sync-health.ts";
 import { getCalendarPushHealth } from "../calendar/calendar.ts";
 import type { Client } from "@libsql/client";
 import type { BillsMirrorHealth, BillsMirrorPayload } from "../../shared/types/bills.ts";
@@ -112,7 +113,7 @@ async function loadProviderHealth(
     billsHealth?: BillsMirrorHealth;
   } = {},
 ): Promise<CurrentDashboardProviderHealth> {
-  const [todoist, bills, connections, calendarPush] = await Promise.all([
+  const [todoist, bills, connections, calendarPush, email] = await Promise.all([
     todoistHealth ?? getTodoistSyncHealth(userId).catch((err) => unavailableTodoistHealth(err)),
     billsHealth ?? getBillsMirrorState(userId, { dbClient })
       .then((mirror) => mirror.syncHealth).catch(() => unavailableBillsHealth()),
@@ -120,6 +121,7 @@ async function loadProviderHealth(
     getCalendarPushHealth(userId, { dbClient, nowMs: now.getTime() }).catch(() => ({
       state: "degraded" as const, message: "Calendar update checks are unavailable. Automatic checks continue.",
     })),
+    getEmailSyncHealth(userId, { dbClient, now }).catch(() => null),
   ]);
   return {
     currentData: summarizeCurrentDataHealth(rows, now), todoist,
@@ -127,7 +129,7 @@ async function loadProviderHealth(
       state: "unconfigured", configured: false, lastSuccessAt: null, lastError: null,
     },
     reauth: connections.reauth, configured: connections.configured,
-    calendarPush,
+    calendarPush, email,
   };
 }
 
@@ -556,7 +558,7 @@ export async function getDashboardSystemHealth(userId: string, {
   const providerHealth = await loadProviderHealth(userId, rows, { now, dbClient });
   return {
     providerHealth,
-    systemStatus: composeSystemStatus(providerHealth),
-    fetchedAt: new Date().toISOString(),
+    systemStatus: composeSystemStatus(providerHealth, { generatedAt: now.toISOString() }),
+    fetchedAt: now.toISOString(),
   };
 }

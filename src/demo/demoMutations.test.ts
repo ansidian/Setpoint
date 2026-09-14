@@ -45,7 +45,7 @@ describe("demo mode in-memory mutations", () => {
     vi.resetModules();
     const reloaded = await import("../api");
     expect((await reloaded.getCurrentDashboard()).systemStatus.sources.map((source) => source.lastSuccessAt))
-      .toEqual(Array(4).fill("2026-05-12T15:35:00.000Z"));
+      .toEqual(Array(before.systemStatus.sources.length).fill("2026-05-12T15:35:00.000Z"));
   });
 
   it("mutates email, task, and bill state in memory without fetch", async () => {

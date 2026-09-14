@@ -9,13 +9,15 @@ import { emailErrorMessage } from "./email-provider-types.ts";
 export async function fetchAllEmails(
   accounts: readonly Record<string, unknown>[],
   hoursBack: number,
+  { strict = false }: { strict?: boolean } = {},
 ): Promise<NormalizedFetchedEmail[]> {
   const gmailAccounts = accounts.filter((account) => account.type === "gmail") as ConfiguredEmailAccount[];
   const icloudAccounts = accounts.filter((account) => account.type === "icloud") as ConfiguredEmailAccount[];
 
   const emailPromises = [
     ...gmailAccounts.map((account) =>
-      fetchGmailEmails(account, hoursBack).catch((err) => {
+      fetchGmailEmails(account, hoursBack, { strict }).catch((err) => {
+        if (strict) throw err;
         console.error(`Gmail fetch failed for ${account.email}:`, emailErrorMessage(err));
         return [];
       }),
@@ -28,8 +30,9 @@ export async function fetchAllEmails(
           account.credentials_encrypted,
           accountCredentialContext(account.id),
         );
-        return await fetchIcloudEmails(account, password, hoursBack);
+        return await fetchIcloudEmails(account, password, hoursBack, { strict });
       } catch (err) {
+        if (strict) throw err;
         console.error(`iCloud fetch failed for ${account.email}:`, emailErrorMessage(err));
         return [];
       }

@@ -35,6 +35,7 @@ export interface CurrentDashboardProvider {
   fallbackPayload(): unknown;
   hasUsablePayload(payload: unknown): boolean;
   fetchFresh(userId: string, config: UserConfig, options?: CurrentProviderOptions): Promise<unknown>;
+  fetchedAt?(payload: unknown): string | null;
   visibleProjection?(payload: unknown): unknown;
   shouldPublishChange?(
     previousRow: CurrentDashboardCacheRow | null | undefined,

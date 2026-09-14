@@ -236,7 +236,7 @@ vi.mock("imapflow", () => ({
   },
 }));
 
-const { fetchEmailsInRange, fetchEmailBody, fetchEmailAttachment, getPooledClient } = await import("./icloud.ts");
+const { fetchEmails, fetchEmailsInRange, fetchEmailBody, fetchEmailAttachment, getPooledClient } = await import("./icloud.ts");
 
 describe("iCloud fetchEmailsInRange", () => {
   const fakeAccount = {
@@ -476,5 +476,20 @@ describe("iCloud getPooledClient concurrency/timeout (REL-06)", () => {
     expect(nextClient).toBe(activeClient);
 
     vi.useRealTimers();
+  });
+});
+
+
+describe("strict iCloud inbox checks", () => {
+  it("distinguishes a failed IMAP SEARCH from a successful empty inbox", async () => {
+    imapFlowHolder.current = FakeImapFlow;
+    const account = { id: "icloud-strict", type: "icloud" as const, email: "strict@icloud.com", label: "iCloud", color: "blue", credentials_encrypted: "stub" };
+    await getPooledClient(account.email, "password");
+    activeClient!.search.mockResolvedValueOnce(false);
+    await expect(fetchEmails(account, "password", 2, { strict: true })).rejects.toThrow("iCloud inbox search failed");
+    activeClient!.search.mockResolvedValueOnce([]);
+    expect(await fetchEmails(account, "password", 2, { strict: true })).toEqual([]);
+    activeClient!.search.mockResolvedValueOnce(false);
+    expect(await fetchEmails(account, "password", 2)).toEqual([]);
   });
 });

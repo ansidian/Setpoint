@@ -24,8 +24,8 @@ export function projectDashboardHealth(
 ): DashboardClientSystemStatus {
   const { readFailed, offline, liveUpdatesDisconnected, lastCheckedAt, now } = observation;
   const sources: DashboardClientSystemStatus["sources"] = (status?.sources || []).map((source) => {
-    const calendarUpdating = source.key === "calendar" && (source.state === "refreshing" || source.state === "syncing");
-    if ((source.state !== "current" && !calendarUpdating) || !source.expiresAt || Date.parse(source.expiresAt) > now) return source;
+    const updating = source.state === "refreshing" || source.state === "syncing";
+    if ((source.state !== "current" && !updating) || !source.expiresAt || Date.parse(source.expiresAt) > now) return source;
     if (!Number.isFinite(Date.parse(source.expiresAt))) return source;
     return {
       ...source,

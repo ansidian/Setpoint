@@ -26,8 +26,10 @@ describe("calendar client health", () => {
     });
   });
 
-  it("does not hide an overdue calendar check behind an active refresh", () => {
-    const expired = projectDashboardHealth(status("refreshing"), observation("2026-09-06T12:20:00.000Z"));
+  it.each(["calendar", "weather", "todoist", "bills", "email:account"])("does not hide an overdue %s check behind an active refresh", (key) => {
+    const input = status("refreshing");
+    input.sources[0]!.key = key;
+    const expired = projectDashboardHealth(input, observation("2026-09-06T12:20:00.000Z"));
     expect(expired.state).toBe("needs_sync");
     expect(expired.sources[0]?.state).toBe("needs_sync");
   });

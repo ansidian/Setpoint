@@ -72,8 +72,8 @@ describe("GET /api/dashboard/current", () => {
     const response = await read("u1", { dbClient: testState.db.current });
     expect(response.systemStatus.state).toBe("unavailable");
     expect(response.systemStatus.sources).toEqual(expect.arrayContaining([
-      expect.objectContaining({ key: "reauth:gmail-a", state: "needs_reauth", action: { label: "Reconnect Google", href: "/settings?tab=connections#google-workspace" } }),
-      expect.objectContaining({ key: "reauth:icloud-a", label: "iCloud Mail (a@icloud.com)", state: "needs_reauth" }),
+      expect.objectContaining({ key: "email:gmail-a", state: "needs_reauth", action: { label: "Reconnect Google", href: "/settings?tab=connections#google-workspace" } }),
+      expect.objectContaining({ key: "email:icloud-a", label: "iCloud Mail (a@icloud.com)", state: "needs_reauth" }),
       expect.objectContaining({ key: "todoist", state: "needs_reauth" }),
     ]));
   });
@@ -136,8 +136,9 @@ describe("GET /api/dashboard/current", () => {
         },
         activeSnapshot: { state: "syncing", reason: "background" },
       },
+      // This fixture has saved Bills data but no successful upstream mirror check.
       systemStatus: {
-        state: "needs_sync",
+        state: "unavailable",
       },
       refresh: {
         mode: "manual",
