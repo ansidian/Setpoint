@@ -16,6 +16,10 @@ The email triage and reading surface, desktop and mobile: active snapshots (tria
 - `InboxDesktopHeader.tsx` — list-aligned search, history and processing context
 - `InboxDesktop.css` — scoped desktop queue/rail hierarchy, responsive sizing and interaction states
 - `inboxViewTypes.ts` — shared top-level desktop/mobile pane composition contract
+- `useInboxBatchSelection.ts` — ephemeral modifier-click selection, displayed-row ranges, scope resets and pending-row reconciliation.
+- `inboxBatchModel.ts` — eligible batch targets, explicit action counts and unambiguous hotkeys.
+- `inboxBatchCommands.ts` / `useInboxBatchActions.ts` — captured per-email commands, bounded execution, optimistic projection, partial failures and grouped Undo.
+- `inboxEmailSnapshot.ts` — shared pin/undo snapshot capture for single and batch commands.
 - `useInboxController.ts` — central state machine: selection, filters, search, undo, desktop Alfred handoff
 - `inboxReadRoutingModel.ts` — read-scope routing (`resolveReadScope`) + `planMarkAllVisibleRead`; one home for the live/snapshot/indexed decision shared by mark-all and auto-mark-read
 - `useInboxActionDispatch.ts` — action handlers: trash, snooze, lane move, mark read, draft reply

@@ -1,3 +1,4 @@
+import type { InboxRowModifiers } from "./useInboxBatchSelection";
 import { formatSnoozeTime } from "./inboxSnoozedModel";
 import { memo, type CSSProperties } from "react";
 import { ArrowRight, Clock, KeyRound, Pin } from "lucide-react";
@@ -11,7 +12,8 @@ interface EmailRowProps {
   email: InboxEmailLike;
   account?: InboxAccount | null;
   selected?: boolean;
-  onOpen: (email: InboxEmailLike) => void;
+  batchMode?: boolean;
+  onOpen: (email: InboxEmailLike, modifiers?: InboxRowModifiers) => void;
   density: string;
   showPreview?: boolean;
   accent: string;
@@ -19,7 +21,7 @@ interface EmailRowProps {
   showLaneTag?: boolean;
 }
 
-function EmailRow({ email, account = null, selected = false, onOpen, density,
+function EmailRow({ email, account = null, selected = false, batchMode = false, onOpen, density,
   showPreview = false, accent, nowTick, showLaneTag = false }: EmailRowProps) {
   const lane = email._lane ? LANE[email._lane] : undefined;
   const freshCode = isVerificationCodeFresh(email, nowTick);
@@ -36,10 +38,12 @@ function EmailRow({ email, account = null, selected = false, onOpen, density,
       className="inbox-a-mail-row"
       data-unread={!email.read}
       data-density={density}
-      aria-current={selected ? "true" : undefined}
+      aria-current={!batchMode && selected ? "true" : undefined}
+      aria-pressed={batchMode ? selected : undefined}
       aria-label={`${email.from}, ${email.subject}, ${email.read ? "Read" : "Unread"}`}
       aria-busy={pending || undefined}
-      onClick={() => onOpen(email)}
+      onClick={(event) => onOpen(email, { metaKey: event.metaKey, ctrlKey: event.ctrlKey, shiftKey: event.shiftKey })}
+      onMouseDown={(event) => { if (event.shiftKey) event.preventDefault(); }}
       style={{ "--ea-accent": accent, "--inbox-lane-color": lane?.color || accent, opacity: pending || email._providerRemoved ? 0.6 : 1 } as CSSProperties}
     >
       <span className="inbox-a-row-top">
@@ -87,6 +91,7 @@ function rowKeyFields(email: InboxEmailLike): unknown[] {
 function areEqual(prev: EmailRowProps, next: EmailRowProps) {
   if (
     prev.selected !== next.selected
+    || prev.batchMode !== next.batchMode
     || prev.density !== next.density
     || prev.showPreview !== next.showPreview
     || prev.accent !== next.accent

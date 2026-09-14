@@ -1,3 +1,4 @@
+import type { PinnedEmailEntry } from "../../shared/types/email.ts";
 import {
   NO_DEMO_API_RESPONSE,
   demoNotFound,
@@ -42,7 +43,7 @@ function removeSnapshotRow(snapshot: DemoSnapshot, uid: string): void {
   refreshLaneCounts(snapshot);
 }
 
-function moveSnapshotRow(snapshot: DemoSnapshot, itemId: string, lane: DemoLane): DemoSnapshotRow | null {
+function moveSnapshotRow(snapshot: DemoSnapshot, itemId: string, lane: DemoLane, preserveClassification = false): DemoSnapshotRow | null {
   let found: DemoSnapshotRow | null = null;
   removeSnapshotRow(snapshot, `__no_match_${itemId}`);
   for (const rows of Object.values(snapshot.lanes) as DemoSnapshotRow[][]) {
@@ -50,7 +51,7 @@ function moveSnapshotRow(snapshot: DemoSnapshot, itemId: string, lane: DemoLane)
     if (index < 0) continue;
     found = rows.splice(index, 1)[0] ?? null;
     if (found) {
-      found.lane = lane;
+      if (!preserveClassification) { found.lane = lane; found.lane_at_snapshot = lane; }
       (found as DemoSnapshotRow & { _lane?: DemoLane })._lane = lane;
     }
     break;
@@ -60,7 +61,7 @@ function moveSnapshotRow(snapshot: DemoSnapshot, itemId: string, lane: DemoLane)
     if (index >= 0) {
       found = snapshot.carryover.splice(index, 1)[0] ?? null;
       if (found) {
-        found.lane = lane;
+        if (!preserveClassification) { found.lane = lane; found.lane_at_snapshot = lane; }
         (found as DemoSnapshotRow & { _lane?: DemoLane })._lane = lane;
       }
     }
@@ -112,6 +113,17 @@ export function handleDemoSnapshotRequest({ path, pathname, method, seed, body }
     mutateSnapshotRows(seed.activeSnapshot, uid, (row) => {
       (row as DemoSnapshotRow & { pinned?: boolean }).pinned = method === "POST";
     });
+    seed.activeSnapshot.pinned = seed.activeSnapshot.pinned.filter(entry => entry.uid !== uid);
+    if (method === "POST") {
+      const row = findSnapshotRow(seed.activeSnapshot, uid) || seed.snoozedEmails?.[uid]?.row;
+      const saved = (body.snapshot || {}) as Partial<PinnedEmailEntry>;
+      seed.activeSnapshot.pinned.push({
+        ...saved, uid, pinned_at: new Date().toISOString(), read: !!row?.read,
+        subject: row?.subject || saved.subject || "", from_name: row?.from_name || saved.from_name || "",
+        from_address: row?.from_address || saved.from_address || "", account_id: row?.account_id || saved.account_id || null,
+        lane: row?.lane || saved.lane || null,
+      } as PinnedEmailEntry);
+    }
     return { ok: true };
   }
 
@@ -157,14 +169,33 @@ export function handleDemoSnapshotRequest({ path, pathname, method, seed, body }
     return clone(moveSnapshotRow(seed.activeSnapshot, itemId, body.lane || "fyi") || { ok: true });
   }
 
-  if (pathname.match(/^\/api\/briefing\/snapshot\/items\/[^/]+\/(dismiss|handled)$/) && method === "POST") {
+  if (pathname.match(/^\/api\/briefing\/snapshot\/items\/[^/]+\/(dismiss|restore|handled|reopen)$/) && method === "POST") {
     const itemId = decodeURIComponent(demoPathSegment(pathname, 2));
-    return clone(moveSnapshotRow(seed.activeSnapshot, itemId, "handled") || { ok: true });
-  }
-
-  if (pathname.match(/^\/api\/briefing\/snapshot\/items\/[^/]+\/(restore|reopen)$/) && method === "POST") {
-    const itemId = decodeURIComponent(demoPathSegment(pathname, 2));
-    return clone(moveSnapshotRow(seed.activeSnapshot, itemId, "needs_attention") || { ok: true });
+    const action = pathname.split("/").slice(-1)[0];
+    const snapshot = seed.activeSnapshot;
+    const row = allSnapshotRows(snapshot).find(entry => String(entry.snapshot_item_id || entry.id) === itemId);
+    if (action === "dismiss" && row) {
+      const lane = findSnapshotRowLane(snapshot, row.uid) || row.lane;
+      seed.dismissedSnapshotEmails[itemId] = { row: clone(row), lane };
+      removeSnapshotRow(snapshot, row.uid);
+      return { ok: true };
+    }
+    if (action === "restore") {
+      const stashed = seed.dismissedSnapshotEmails[itemId];
+      if (stashed && !row) {
+        if (stashed.lane === "carryover") snapshot.carryover.push(stashed.row);
+        else snapshot.lanes[stashed.lane].push(stashed.row);
+        delete seed.dismissedSnapshotEmails[itemId];
+        refreshLaneCounts(snapshot);
+      }
+      return { ok: true };
+    }
+    if (row && (action === "handled" || action === "reopen")) {
+      const originalLane = row.lane === "handled" ? row.lane_at_snapshot || "needs_attention" : row.lane;
+      row.handled_at = action === "handled" ? new Date().toISOString() : null;
+      return clone(moveSnapshotRow(snapshot, itemId, action === "handled" ? "handled" : originalLane, true));
+    }
+    return { ok: true };
   }
 
   if (pathname === "/api/briefing/snapshot/active" || pathname === "/api/briefing/snapshot/sync") {
@@ -193,7 +224,10 @@ export function handleDemoSnapshotRequest({ path, pathname, method, seed, body }
   }
 
   if (pathname === "/api/briefing/email-search") {
-    return { emails: allSnapshotRows(seed.activeSnapshot), accountsById: {} };
+    const query = new URL(path, "http://demo.local").searchParams.get("q") || "";
+    const rows = allSnapshotRows(seed.activeSnapshot).filter(row => !query.includes("is:unread") || !row.read).filter(row => !query.includes("is:read") || row.read);
+    return { query, results: rows.map(row => ({ ...row, email_date: row.date, body_snippet: row.summary, account_label: seed.activeSnapshot.filters.accounts.find(account => account.account_id === row.account_id)?.label })), accounts: seed.activeSnapshot.filters.accounts, total: rows.length, offset: 0, has_more: false, capped: false };
+
   }
 
   return NO_DEMO_API_RESPONSE;

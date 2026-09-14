@@ -11,6 +11,7 @@ export interface IndexedSearchController {
   updateIndexedSearchRead: (uid: string, read: boolean) => void;
   markIndexedSearchReadBulk: (uids: string[]) => void;
   loadMoreIndexedSearch: () => void;
+  refreshIndexedSearch: () => Promise<void>;
 }
 
 function errorMessage(error: unknown): string {
@@ -153,6 +154,21 @@ export default function useIndexedSearch({ search, liveReadOverrides }: {
     }));
   }, []);
 
+  const refreshIndexedSearch = useCallback(async () => {
+    const term = search.trim();
+    if (term.length < 2 || term !== searchLimitTermRef.current) return;
+    const requestId = ++searchRequestRef.current;
+    searchAbortRef.current?.abort();
+    try {
+      const data = await searchEmails(term, searchLimit);
+      if (searchRequestRef.current !== requestId) return;
+      setIndexedSearch(normalizeIndexedSearchResults(data, composeReadOverrides(liveReadOverrides, searchReadOverridesRef.current)));
+    } catch (error) {
+      if (searchRequestRef.current === requestId) setIndexedSearch(previous => ({ ...previous, loading: false, error: errorMessage(error) }));
+      throw error;
+    }
+  }, [search, searchLimit, liveReadOverrides]);
+
   // Bulk variant used by "mark all visible read": record the overrides and flip
   // every matching indexed-search row read in one pass.
   const markIndexedSearchReadBulk = useCallback((uids: string[]) => {
@@ -179,5 +195,6 @@ export default function useIndexedSearch({ search, liveReadOverrides }: {
     updateIndexedSearchRead,
     markIndexedSearchReadBulk,
     loadMoreIndexedSearch,
+    refreshIndexedSearch,
   };
 }

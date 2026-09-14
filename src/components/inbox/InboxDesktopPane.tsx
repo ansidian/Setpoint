@@ -1,3 +1,4 @@
+import BatchReader from "./reader/BatchReader";
 import { ArrowLeft } from "lucide-react";
 import { useAlfredWorkspace } from "../dashboard/AlfredWorkspaceContext";
 import { memo, useState } from "react";
@@ -13,6 +14,7 @@ import { isDemoMode } from "../../demo/config";
 import useInboxDiscardPrompt from "./useInboxDiscardPrompt";
 
 function InboxDesktopPane({
+  batchSelection, batchOptions, batch,
   accent,
   collection, setCollection, snoozedCount, snoozedLoading, snoozedError, refreshSnoozed,
   nowTick,
@@ -111,9 +113,10 @@ function InboxDesktopPane({
   return (
     <div
       data-testid="inbox-desktop-view"
+      data-inbox-batch-selection={batchSelection.active || undefined}
       className="inbox-a-desktop"
       data-alfred-open={discussing}
-      data-reading={!!selectedEmail && layout !== "list-only"}
+      data-reading={batchSelection.active || (!!selectedEmail && layout !== "list-only")}
       style={{
         position: "relative",
         display: "flex",
@@ -168,7 +171,7 @@ function InboxDesktopPane({
           readOnly={readOnly}
         />
 
-        <div className="inbox-a-panes" data-list-only={layout === "list-only"} data-reading={!!selectedEmail}>
+        <div className="inbox-a-panes" data-list-only={layout === "list-only" && !batchSelection.active} data-reading={!!selectedEmail || batchSelection.active}>
           <div className="inbox-a-queue">
             <InboxList
               accent={accent}
@@ -177,6 +180,10 @@ function InboxDesktopPane({
               emails={visibleEmails}
               accountsById={rowAccountsById}
               selectedId={selectedEmail?.id || selectedEmail?.uid || null}
+              batchMode={batchSelection.active}
+              selectedKeys={batchSelection.keys}
+              onDisplayedChange={batchSelection.reportDisplayed}
+              onCollapseRows={batchSelection.remove}
               onOpen={guardedOpen}
               density={density}
               layout={indexedSearchActive ? "flat" : grouping}
@@ -202,7 +209,10 @@ function InboxDesktopPane({
               lane={lane}
             />
           </div>
-          {layout !== "list-only" && (
+          {batchSelection.active ? (
+            <BatchReader emails={batchSelection.selectedEmails} options={batchOptions} busy={batch.busy} accent={accent}
+              onAction={(action) => { void batch.execute(batchSelection.selectedEmails, action); }} onClose={batchSelection.clear} />
+          ) : layout !== "list-only" && (
             <Reader
               key={selectedEmail?.id || selectedEmail?.uid || "empty"}
               email={selectedEmail}
@@ -226,7 +236,8 @@ function InboxDesktopPane({
       </div>
       <InboxUndoToast undo={undo} onUndo={onUndo} accent={accent} />
       {discardDialog}
-      <span role="status" aria-live="polite" className="sr-only">{announcement}</span>
+      {batch.feedback && <div className="inbox-batch-feedback" role="status">{batch.feedback}</div>}
+      <span role="status" aria-live="polite" className="sr-only">{batchSelection.active ? `${batchSelection.selectedEmails.length} ${batchSelection.selectedEmails.length === 1 ? "email" : "emails"} selected` : announcement}</span>
     </div>
   );
 }

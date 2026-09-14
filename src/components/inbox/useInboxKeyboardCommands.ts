@@ -21,6 +21,7 @@ function isEditableKeyTarget(target: EventTarget | null): boolean {
 // o open-in-Gmail, and the single-key action set resolved through
 // inboxHotkeys.js (h/d/s/a/n/f…). Extracted from useInboxController (EAD-329).
 export default function useInboxKeyboardCommands({
+  batchActive = false, onBatchKey,
   undoSlotRef,
   onUndo,
   searchRef,
@@ -29,6 +30,8 @@ export default function useInboxKeyboardCommands({
   readOnly,
   onAction,
 }: {
+  batchActive?: boolean;
+  onBatchKey?: (key: string) => void;
   undoSlotRef: MutableRefObject<InboxUndoSlot | null>;
   onUndo: () => unknown;
   searchRef: RefObject<HTMLInputElement | null>;
@@ -41,10 +44,10 @@ export default function useInboxKeyboardCommands({
   // keydown listener can subscribe ONCE on mount instead of detaching and
   // re-attaching on every j/k nav or row click (selectedEmail, onAction and
   // moveBy all change identity per selection). Mirrors the undoSlotRef pattern.
-  const handlersRef = useRef({ onUndo, moveBy, selectedEmail, readOnly, onAction });
+  const handlersRef = useRef({ onUndo, moveBy, selectedEmail, readOnly, onAction, batchActive, onBatchKey });
   useEffect(() => {
-    handlersRef.current = { onUndo, moveBy, selectedEmail, readOnly, onAction };
-  }, [onUndo, moveBy, selectedEmail, readOnly, onAction]);
+    handlersRef.current = { onUndo, moveBy, selectedEmail, readOnly, onAction, batchActive, onBatchKey };
+  }, [onUndo, moveBy, selectedEmail, readOnly, onAction, batchActive, onBatchKey]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -72,6 +75,13 @@ export default function useInboxKeyboardCommands({
         return;
       }
 
+      if (handlersRef.current.batchActive && event.key === "Escape" && !isEditableKeyTarget(event.target)
+        && !(event.target instanceof Element && event.target.closest('[role="menu"], [role="dialog"]'))) {
+        event.preventDefault();
+        handlersRef.current.onBatchKey?.("escape");
+        return;
+      }
+
       if (
         shouldSuspendInboxHotkeys(event.target)
       ) {
@@ -80,6 +90,13 @@ export default function useInboxKeyboardCommands({
 
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       const key = event.key.toLowerCase();
+      if (handlersRef.current.batchActive) {
+        if (["escape", "a", "f", "n", "d", "e", "h", "p", "s", "o", "j", "k", "arrowdown", "arrowup"].includes(key)) {
+          event.preventDefault();
+          handlersRef.current.onBatchKey?.(key);
+        }
+        return;
+      }
       if (key === "j" || event.key === "ArrowDown") {
         event.preventDefault();
         moveByNow(1);

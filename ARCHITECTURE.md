@@ -251,6 +251,8 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useEmailBody` | `src/components/inbox/reader/useEmailBody.ts` |
 | `useTransactionImportStatus` | `src/components/inbox/reader/useTransactionImportStatus.ts` |
 | `useInboxActionDispatch` | `src/components/inbox/useInboxActionDispatch.ts` |
+| `useInboxBatchActions` | `src/components/inbox/useInboxBatchActions.ts` |
+| `useInboxBatchSelection` | `src/components/inbox/useInboxBatchSelection.ts` |
 | `useInboxController` | `src/components/inbox/useInboxController.ts` |
 | `useInboxDiscardPrompt` | `src/components/inbox/useInboxDiscardPrompt.tsx` |
 | `useInboxKeyboardCommands` | `src/components/inbox/useInboxKeyboardCommands.ts` |

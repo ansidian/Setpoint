@@ -54,7 +54,7 @@ export default function useDashboardShellHotkeys({
         defaultPrevented: e.defaultPrevented,
         repeat: e.repeat,
         editableTarget,
-        emailSelected: getInboxSession().selectedId != null,
+        emailSelected: getInboxSession().selectedId != null || !!document.querySelector("[data-inbox-batch-selection='true']"),
         anyBlockingOverlayOpen: anyBlockingOverlayOpen
           || Array.from(document.querySelectorAll("[role='dialog'], [role='menu'], [role='listbox']"))
             .some((overlay) => overlay.getClientRects().length > 0),

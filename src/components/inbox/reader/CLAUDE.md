@@ -13,6 +13,7 @@ The desktop and mobile email detail pane: body loading/rendering, triage context
 - `readerTypes.ts` — shared reader body, bill-resolution, and surface contracts
 
 ### Desktop
+- `BatchReader.tsx` / `BatchReader.css` — desktop hidden-selection summary and eligible batch action bar; no message body or auto-read.
 - `DesktopReaderActionBar.tsx` — desktop lifecycle actions, consolidated More menu, snooze, and adjacent-email navigation
 - `DesktopReaderActionBar.css` — container-responsive action-bar states, cluster separation, and reduced motion
 

@@ -28,6 +28,26 @@ describe("demo mode in-memory mutations", () => {
     vi.resetModules();
   });
 
+  it("preserves email classification through batch-compatible lifecycle and pin actions", async () => {
+    const api = await importDemoApi();
+    const row = snapshotRows(await api.getActiveSnapshot()).find(email => email.uid === "demo-email-budget")!;
+    const itemId = row.id;
+    await api.moveSnapshotItemLane(itemId, "fyi");
+    await api.markSnapshotItemHandled(itemId);
+    expect((await api.getActiveSnapshot()).lanes.handled.find(email => email.uid === row.uid)).toMatchObject({ lane: "fyi", handled_at: expect.any(String) });
+    await api.reopenSnapshotItem(itemId);
+    expect((await api.getActiveSnapshot()).lanes.fyi.find(email => email.uid === row.uid)).toMatchObject({ lane: "fyi", handled_at: null });
+    await api.dismissSnapshotItemForToday(itemId);
+    expect(snapshotRows(await api.getActiveSnapshot()).some(email => email.uid === row.uid)).toBe(false);
+    await api.restoreSnapshotItemForToday(itemId);
+    expect((await api.getActiveSnapshot()).lanes.fyi.some(email => email.uid === row.uid)).toBe(true);
+    await api.pinEmail(row.uid!);
+    expect((await api.getActiveSnapshot()).pinned).toContainEqual(expect.objectContaining({ uid: row.uid }));
+    await api.unpinEmail(row.uid!);
+    expect((await api.getActiveSnapshot()).pinned).toEqual([]);
+    expect(networkAttempted).toBe(false);
+  });
+
   it("retries a fictional source in memory without changing other source timestamps", async () => {
     const api = await importDemoApi();
     const before = await api.getCurrentDashboard();

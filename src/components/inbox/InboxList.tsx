@@ -1,5 +1,7 @@
+import { emailSelectionKey } from "./inboxBatchModel";
+import type { InboxRowModifiers } from "./useInboxBatchSelection";
 import Metadata from "../shared/Metadata";
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { AnimatePresence } from "motion/react";
 import type { MouseEventHandler, CSSProperties } from "react";
 import {
@@ -113,6 +115,7 @@ export default function InboxList({
   collection = "inbox", snoozedLoading = false, snoozedError = null,
   accent, nowTick, emails, accountsById,
   selectedId, onOpen, density, layout, showPreview,
+  batchMode = false, selectedKeys, onDisplayedChange, onCollapseRows,
   searchQuery, onClearSearch, onShowAllMail, onMarkAllRead, onRefresh,
   totalCount, unreadCount, noiseUnreadCount = 0,
   liveEmailsLoading = false,
@@ -135,7 +138,11 @@ export default function InboxList({
   emails: InboxEmailLike[];
   accountsById: Record<string, InboxAccount | undefined>;
   selectedId: InboxId | null;
-  onOpen: (email: InboxEmailLike) => void;
+  onOpen: (email: InboxEmailLike, modifiers?: InboxRowModifiers) => void;
+  batchMode?: boolean;
+  selectedKeys?: ReadonlySet<string>;
+  onDisplayedChange?: (keys: readonly string[], sourceKeys: readonly string[]) => void;
+  onCollapseRows?: (rows: readonly InboxEmailLike[]) => void;
   density: string;
   layout: string;
   showPreview: boolean;
@@ -167,13 +174,6 @@ export default function InboxList({
     ...collapsed,
     ...(lane !== "__all" ? { [lane]: filterDisclosure.collapsed } : {}),
   };
-  const toggleLane = (k: string) => {
-    if (k === lane && lane !== "__all") {
-      setFilterDisclosure(value => ({ ...value, collapsed: !value.collapsed }));
-      return;
-    }
-    setCollapsed((c) => ({ ...c, [k]: !c[k] }));
-  };
   const showSkeletonRows = !activeSnapshotMode && liveEmailsLoading && emails.length === 0;
   const showSearchSkeletonRows = indexedSearchActive && indexedSearchLoading;
 
@@ -193,13 +193,31 @@ export default function InboxList({
     return g;
   }, [emails, layout]);
 
+  const toggleLane = (k: string) => {
+    if (!effectiveCollapsed[k]) onCollapseRows?.(grouped[k] || []);
+    if (k === lane && lane !== "__all") {
+      setFilterDisclosure(value => ({ ...value, collapsed: !value.collapsed }));
+      return;
+    }
+    setCollapsed((c) => ({ ...c, [k]: !c[k] }));
+  };
+
   const visibleLaneKeys = Object.keys(grouped).filter(key => grouped[key]!.length > 0);
   const allLanesCollapsed = visibleLaneKeys.length > 0 && visibleLaneKeys.every(key => effectiveCollapsed[key]);
   const toggleAllLanes = () => {
     const nextCollapsed = !allLanesCollapsed;
+    if (nextCollapsed) onCollapseRows?.(emails);
     setCollapsed(current => ({ ...current, ...Object.fromEntries(visibleLaneKeys.filter(key => key !== lane).map(key => [key, nextCollapsed])) }));
     if (lane !== "__all") setFilterDisclosure(current => ({ ...current, collapsed: nextCollapsed }));
   };
+  const displayedKeys = (layout === "swimlanes"
+    ? ["pinned", "needs_attention", "fyi", "noise", "handled", "queued", "catch_up", "untriaged_read"].flatMap(key => effectiveCollapsed[key] ? [] : grouped[key] || [])
+    : emails).map(emailSelectionKey);
+  const displayedKeySignature = JSON.stringify(displayedKeys);
+  const sourceKeySignature = JSON.stringify(emails.map(emailSelectionKey));
+  useEffect(() => {
+    onDisplayedChange?.(JSON.parse(displayedKeySignature) as string[], JSON.parse(sourceKeySignature) as string[]);
+  }, [onDisplayedChange, displayedKeySignature, sourceKeySignature]);
   const laneToggleLabel = allLanesCollapsed ? "Expand all lanes" : "Collapse all lanes";
 
   // Stable across unrelated InboxList re-renders (filters, sheet toggles, hover
@@ -216,7 +234,8 @@ export default function InboxList({
         <EmailRow
           email={email}
           account={accountsById[accountKey]}
-          selected={selectedId === (email.id || email.uid)}
+          selected={batchMode ? selectedKeys?.has(emailSelectionKey(email)) : selectedId === (email.id || email.uid)}
+          batchMode={batchMode}
           onOpen={onOpen}
           density={density}
           showPreview={showPreview}
@@ -226,7 +245,7 @@ export default function InboxList({
         />
       </InboxRowTransition>
     );
-  })}</AnimatePresence>, [accountsById, selectedId, onOpen, density, showPreview, accent, nowTick, indexedSearchActive]);
+  })}</AnimatePresence>, [accountsById, selectedId, onOpen, density, showPreview, accent, nowTick, indexedSearchActive, batchMode, selectedKeys]);
 
   return (
     <div

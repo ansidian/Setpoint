@@ -20,7 +20,7 @@ Build-time fictional walkthrough (`VITE_EA_DEMO=1`). `src/api.ts` routes demo re
 ### Mail and finance
 - `inboxData.ts` — fictional email accounts, snapshot lanes, and email bodies; the Market receipt has its own UID/body, separate from the approval/PDF fixture.
 - `snapshotRows.ts` — snapshot row collection and lookup helpers.
-- `snapshotAdapter.ts` — in-memory snapshot history, mail actions, read state, and body/search responses.
+- `snapshotAdapter.ts` — in-memory snapshot history, mail actions, read state, and body/search responses; exact-item dismissal restore and preserved classification through handled/reopen.
 - `emailAttachments.ts` — local fictional attachment descriptors and content.
 - `alfredUsageData.ts` — fictional Alfred usage with provider-specific summaries; no assistant calls
 - `emailAiUsageData.ts` — fictional email-AI usage and legacy triage statistics.

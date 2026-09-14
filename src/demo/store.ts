@@ -396,6 +396,7 @@ function makeDemoSeed(now = new Date()) {
     importantSenders: inboxSeed.importantSenders,
     emailBodies: inboxSeed.emailBodies,
     snoozedEmails: inboxSeed.snoozedEmails,
+    dismissedSnapshotEmails: inboxSeed.dismissedSnapshotEmails,
   };
 }
 

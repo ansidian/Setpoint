@@ -12,6 +12,8 @@ export interface InboxUndoSlotConfig {
   commit?: InboxUndoAction;
   commitOnExit?: InboxUndoAction;
   undo?: InboxUndoAction;
+  /** Batch owners reconcile their own partial results before reporting errors. */
+  refreshOnError?: boolean;
 }
 
 export interface InboxUndoSlot extends InboxUndoSlotConfig {
@@ -77,12 +79,12 @@ export default function useInboxUndoSlot({ onActiveSnapshotRefresh }: {
         Promise.resolve(commit()).catch((err) => {
           if (!reportErrors) return;
           showError(slot, errorMessage(err, "Action failed. Refreshed inbox state."));
-          onActiveSnapshotRefresh?.();
+          if (slot.refreshOnError !== false) onActiveSnapshotRefresh?.();
         });
       } catch (err) {
         if (reportErrors) {
           showError(slot, errorMessage(err, "Action failed. Refreshed inbox state."));
-          onActiveSnapshotRefresh?.();
+          if (slot.refreshOnError !== false) onActiveSnapshotRefresh?.();
         }
       }
     }
@@ -136,7 +138,7 @@ export default function useInboxUndoSlot({ onActiveSnapshotRefresh }: {
     } catch (err) {
       undoSlotRef.current = null;
       showError(slot, errorMessage(err, "Undo failed. Refreshed inbox state."));
-      onActiveSnapshotRefresh?.();
+      if (slot.refreshOnError !== false) onActiveSnapshotRefresh?.();
     }
   }, [onActiveSnapshotRefresh, showError]);
 

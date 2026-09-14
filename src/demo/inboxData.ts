@@ -1,3 +1,4 @@
+import type { PinnedEmailEntry } from "../../shared/types/email.ts";
 import type { SnapshotVerificationCode } from "../../shared/types/snapshots.ts";
 import type { BillCandidate } from "../../shared/types/bills.ts";
 import { getDemoEmailAttachmentDescriptors } from "./emailAttachments.ts";
@@ -550,6 +551,7 @@ export function buildDemoInboxSeed(now: Date) {
   ];
 
   const activeSnapshot = {
+    pinned: [] as PinnedEmailEntry[],
     snapshot: {
       id: `demo-snapshot-${dateKey(today)}`,
       date: dateKey(today),
@@ -585,6 +587,7 @@ export function buildDemoInboxSeed(now: Date) {
       { address: "jamie@talent.example", name: "Jamie Rivera", source: "manual" },
     ],
     emailBodies: makeEmailBodies(lanes, carryover),
+    dismissedSnapshotEmails: {} as Record<string, { row: DemoSnapshotEmail; lane: DemoLaneKey | "carryover" }>,
     snoozedEmails: {} as Record<string, { row: DemoSnapshotEmail; until_ts: number; lane: DemoLaneKey | "carryover" | null }>,
   };
 }

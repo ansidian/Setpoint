@@ -122,7 +122,7 @@ function triageIcon(key: ReaderTriageItem["key"]): LucideIcon {
   return MailOpen;
 }
 
-function MenuItem({
+export function MenuItem({
   icon: Icon,
   label,
   keyHint,
@@ -164,7 +164,7 @@ function focusMenuItem(panel: HTMLDivElement | null, offset: number) {
   items[next]?.focus();
 }
 
-function MenuPanel({
+export function MenuPanel({
   anchorRef,
   panelRef,
   ariaLabel,

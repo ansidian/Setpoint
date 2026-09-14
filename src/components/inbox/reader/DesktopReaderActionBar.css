@@ -52,6 +52,7 @@
 }
 
 .desktop-reader-action-button:focus-visible:where([data-sp-keyboard-focus="true"] *) {
+  transform: translateY(-1px);
   outline: 2px solid color-mix(in srgb, var(--sp-accent) 82%, white);
   outline-offset: 2px;
   border-color: color-mix(in srgb, var(--sp-accent) 55%, transparent);
@@ -194,6 +195,7 @@
   }
 
   .desktop-reader-action-button:hover:not(:disabled),
+  .desktop-reader-action-button:focus-visible:where([data-sp-keyboard-focus="true"] *),
   .desktop-reader-action-button:active:not(:disabled),
   .desktop-reader-action-menu-item:active:not(:disabled) {
     transform: none;

@@ -1,3 +1,6 @@
+import useInboxBatchSelection, { type InboxRowModifiers } from "./useInboxBatchSelection";
+import useInboxBatchActions from "./useInboxBatchActions";
+import { batchActionOptions, batchHotkey } from "./inboxBatchModel";
 import useSnoozedEmails from "./useSnoozedEmails";
 import { collectSnoozed } from "./inboxSnoozedModel";
 import type { InboxActionDispatcher } from "./useInboxActionDispatch";
@@ -120,6 +123,7 @@ export default function useInboxController({
     updateIndexedSearchRead,
     markIndexedSearchReadBulk,
     loadMoreIndexedSearch,
+    refreshIndexedSearch,
   } = useIndexedSearch({ search, liveReadOverrides });
   const {
     undo,
@@ -136,7 +140,7 @@ export default function useInboxController({
     finalizeUndoSlot();
   }, [commitPendingUndoSignal, finalizeUndoSlot]);
 
-  const closeSelectedEmail = useInboxSelectionHistory({ selectedId, setSelectedId, enabled: !isMobile });
+  const closeSingleEmail = useInboxSelectionHistory({ selectedId, setSelectedId, enabled: !isMobile });
 
   // nowTick scheduling lives below, after `flatEmails`, so it can also fire at
   // pending-security-grace label transitions (the grace rows live in flatEmails).
@@ -288,14 +292,34 @@ export default function useInboxController({
     for (const row of snoozedRows) merged.set(row._accountKey, row._account);
     return [...merged.values()];
   }, [emailAccounts, snoozedRows]);
-  const scopedSnoozedRows = useMemo(() => snoozedRows.filter((row) => (
+  const batchScope = JSON.stringify([activeSnapshot?.snapshot?.id, collection, search]);
+  const batchSources = useMemo(() => [...flatEmails, ...indexedSearch.emails, ...snoozedRows], [flatEmails, indexedSearch.emails, snoozedRows]);
+  const updateBatchRead = useCallback((uid: string, read: boolean) => {
+    onLiveReadOverrideChange(uid, read);
+    updateIndexedSearchRead(uid, read);
+  }, [onLiveReadOverrideChange, updateIndexedSearchRead]);
+  const { refresh: refreshSnoozedBatch } = snoozed;
+  const refreshBatch = useCallback(async () => {
+    const results = await Promise.allSettled([
+      Promise.resolve().then(onActiveSnapshotRefresh),
+      ...(collection === "snoozed" ? [refreshSnoozedBatch()] : []),
+      ...(indexedSearchActive ? [refreshIndexedSearch()] : []),
+    ]);
+    if (results.some(result => result.status === "rejected")) throw new Error("Inbox refresh failed");
+  }, [onActiveSnapshotRefresh, collection, refreshSnoozedBatch, indexedSearchActive, refreshIndexedSearch]);
+  const batch = useInboxBatchActions({ sourceEmails: batchSources, scope: batchScope, readOnly, replaceUndoSlot, finalizeUndoSlot, undoSlotRef, undoing: undo?.status === "undoing", refresh: refreshBatch, updateRead: updateBatchRead });
+  const { projectRows: projectBatchRows, busy: batchBusy } = batch;
+  const projectedFlat = useMemo(() => projectBatchRows(flatEmails, !indexedSearchActive && collection === "inbox"), [projectBatchRows, flatEmails, indexedSearchActive, collection]);
+  const projectedSearch = useMemo(() => projectBatchRows(indexedSearch.emails, indexedSearchActive), [projectBatchRows, indexedSearch.emails, indexedSearchActive]);
+  const projectedSnoozed = useMemo(() => projectBatchRows(snoozedRows), [projectBatchRows, snoozedRows]);
+  const scopedSnoozedRows = useMemo(() => projectedSnoozed.filter((row) => (
     (accountId === "__all" || row._accountKey === accountId) && (!isMobile || !mobileUnreadOnly || !row.read)
-  )), [snoozedRows, accountId, isMobile, mobileUnreadOnly]);
+  )), [projectedSnoozed, accountId, isMobile, mobileUnreadOnly]);
 
   const visibleEmails = useMemo(() => !indexedSearchActive && collection === "snoozed" ? scopedSnoozedRows : selectVisibleEmails({
-    flatEmails,
+    flatEmails: projectedFlat,
     indexedSearchActive,
-    indexedSearchEmails: indexedSearch.emails,
+    indexedSearchEmails: projectedSearch,
     accountId,
     lane,
     snoozedMap: readOnly ? undefined : snoozedMap,
@@ -304,17 +328,26 @@ export default function useInboxController({
     unreadOnly: isMobile && mobileUnreadOnly,
   }), [
     collection, scopedSnoozedRows, readOnly,
-    flatEmails,
+    projectedFlat,
     accountId,
     lane,
     snoozedMap,
     nowTick,
-    indexedSearch.emails,
+    projectedSearch,
     indexedSearchActive,
     isMobile,
     mobileUnreadOnly,
   ]);
 
+  const batchSelection = useInboxBatchSelection({
+    scope: JSON.stringify([batchScope, accountId, lane, commitPendingUndoSignal]), enabled: !isMobile,
+    emails: visibleEmails, pendingEmails: batch.pendingEmails,
+  });
+  const { active: batchActive, clear: clearBatch, select: selectBatch } = batchSelection;
+  const batchOptions = batchActionOptions(batchSelection.selectedEmails, readOnly);
+  const closeSelectedEmail = useCallback(() => {
+    if (batchActive) clearBatch(); else closeSingleEmail();
+  }, [batchActive, clearBatch, closeSingleEmail]);
   const laneCounts = useMemo(
     () => computeLaneCounts(flatEmails, { accountId }),
     [flatEmails, accountId],
@@ -337,13 +370,13 @@ export default function useInboxController({
   const unreadInView = useMemo(() => computeUnreadCount(visibleEmails), [visibleEmails]);
 
   const selectedEmail = useMemo(() => {
-    if (!selectedId) return null;
-    const searchHit = indexedSearch.emails.find((email) => email.id === selectedId || email.uid === selectedId);
+    if (!selectedId || batchActive) return null;
+    const searchHit = projectedSearch.find((email) => email.id === selectedId || email.uid === selectedId);
     if (indexedSearchActive && searchHit) return searchHit;
     // Search changes the list, not the open reader or its unsaved workspace.
-    const source = collection === "snoozed" ? snoozedRows : flatEmails;
+    const source = collection === "snoozed" ? projectedSnoozed : projectedFlat;
     return source.find((email) => email.id === selectedId || email.uid === selectedId) || null;
-  }, [selectedId, flatEmails, indexedSearch.emails, indexedSearchActive, collection, snoozedRows]);
+  }, [selectedId, projectedFlat, projectedSearch, indexedSearchActive, collection, projectedSnoozed, batchActive]);
 
   // CONTEXT.md: the desktop Inbox AI entry points (Sparkles, Cmd/Ctrl+Enter)
   // hand off to Alfred — the panel opens and runs the query immediately.
@@ -360,7 +393,7 @@ export default function useInboxController({
   }, [selectedEmail, selectedId, setSelectedId]);
 
   const markAllVisibleRead = useCallback(() => {
-    if (readOnly) return;
+    if (readOnly || batchBusy) return;
     const { unread, overrideUids, allUids } = planMarkAllVisibleRead(visibleEmails);
     if (unread.length === 0) return;
 
@@ -370,14 +403,20 @@ export default function useInboxController({
       markIndexedSearchReadBulk(allUids);
       markAllEmailsAsRead(allUids).catch(() => {});
     }
-  }, [readOnly, visibleEmails, onLiveReadOverrideChange, markIndexedSearchReadBulk]);
+  }, [readOnly, visibleEmails, onLiveReadOverrideChange, markIndexedSearchReadBulk, batchBusy]);
 
   // Stable open handler so EmailRow's React.memo holds across list re-renders.
   // Previously each pane passed an inline `(email) => setSelectedId(...)` arrow,
   // a fresh reference per render that defeated the row memo.
-  const onOpen = useCallback((email: InboxEmailLike) => {
+  const onOpen = useCallback((email: InboxEmailLike, modifiers: InboxRowModifiers = {}) => {
+    if (!isMobile && (modifiers.metaKey || modifiers.ctrlKey || modifiers.shiftKey)) {
+      selectBatch(email, modifiers, selectedEmail);
+      setSelectedId(null);
+      return;
+    }
+    clearBatch();
     setSelectedId(email.id || email.uid || null);
-  }, [setSelectedId]);
+  }, [setSelectedId, isMobile, selectBatch, clearBatch, selectedEmail]);
 
   const moveBy = useCallback((direction: number) => {
     const index = visibleEmails.findIndex((email) => email.id === selectedId || email.uid === selectedId);
@@ -406,6 +445,7 @@ export default function useInboxController({
   });
 
   const onAction: InboxActionDispatcher = (kind, payload) => {
+    if (batchBusy || batchActive) return;
     if (kind !== "unsnooze") { dispatchAction(kind, payload); return; }
     const email = selectedEmail;
     if (!email?._snoozed || email._snoozedUnavailable || !email.uid) return;
@@ -420,7 +460,7 @@ export default function useInboxController({
 
   useEffect(() => {
     if (!selectedId) return undefined;
-    if (readOnly) return undefined;
+    if (readOnly || batchActive || batchBusy) return undefined;
     const timeout = setTimeout(() => {
       const email = selectedEmail;
       if (!email || email.read || email._snoozedUnavailable) return;
@@ -438,9 +478,15 @@ export default function useInboxController({
     }, 500);
 
     return () => clearTimeout(timeout);
-  }, [readOnly, selectedId, selectedEmail, onLiveReadOverrideChange, updateIndexedSearchRead]);
+  }, [readOnly, selectedId, selectedEmail, onLiveReadOverrideChange, updateIndexedSearchRead, batchActive, batchBusy]);
 
   useInboxKeyboardCommands({
+    batchActive: batchActive,
+    onBatchKey: (key) => {
+      if (key === "escape") { clearBatch(); return; }
+      const action = batchHotkey(key, batchOptions);
+      if (action) void batch.execute(batchSelection.selectedEmails, action);
+    },
     undoSlotRef,
     onUndo,
     searchRef,
@@ -459,6 +505,7 @@ export default function useInboxController({
     : emailAccounts.find((account) => (account.id || account.name) === accountId);
 
   return {
+    batchSelection, batchOptions, batch,
     collection, setCollection,
     snoozedCount: snoozedRows.filter((row) => accountId === "__all" || row._accountKey === accountId).length,
     snoozedLoading: snoozed.loading, snoozedError: snoozed.error, refreshSnoozed: snoozed.refresh,
