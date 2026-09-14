@@ -2,6 +2,7 @@ import {
   createReminder,
   deleteReminder,
 } from "@/api";
+import { calendarReminderAnchorAt } from "../../../../shared/calendar-reminder-anchor";
 import { calendarMutationCoordinator } from "./calendarMutationCoordinator";
 import type { CalendarMutationOptions, CalendarMutationPhase } from "./calendarMutationCoordinator";
 import {
@@ -409,7 +410,7 @@ export async function saveCalendarEventAction(
     ? applyUpcomingReminderState(
       savedEvent,
       projectReminderState(reminderItems, {
-        anchorAt: savedEvent?.startMs ? new Date(savedEvent.startMs).toISOString() : null,
+        anchorAt: calendarReminderAnchorAt(savedEvent),
       }),
     )
     : savedEvent;

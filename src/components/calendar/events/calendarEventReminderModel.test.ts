@@ -64,6 +64,67 @@ describe("calendarEventReminderModel", () => {
     })).toMatchObject({ blocked: true, blockReason: "past" });
   });
 
+  it("preserves an all-day custom reminder's Pacific time through the save payload", () => {
+    const reminder = createEventReminderDraftFromCustom({
+      draft: { allDay: true, startDate: "2026-09-28" },
+      reminderDate: "2026-09-25",
+      reminderTime: "20:30",
+      now: "2026-09-14T12:00:00Z",
+    });
+    const payload = buildEventReminderCreatePayload({
+      event: { id: "all-day", allDay: true, startMs: Date.parse("2026-09-28T12:00:00Z") },
+      reminder,
+    });
+    expect(reminder.offsetMinutes).toBe(-3090);
+    if (!("anchorAt" in payload)) throw new Error("Expected a fixed reminder");
+    expect(new Date(Date.parse(payload.anchorAt) + payload.offsetMinutes * 60_000).toISOString())
+      .toBe("2026-09-26T03:30:00.000Z");
+    expect(projectEventReminderChips([reminder], { allDay: true, startDate: "2026-09-28" })[0])
+      .toMatchObject({ label: "Sep 25, 8:30pm", relativeLabel: "2d 3h 30m before" });
+    const saved = { id: "saved", offset_minutes: payload.offsetMinutes, remind_at: reminder.remindAt, status: "pending" };
+    expect(projectEventReminderChips([saved], { allDay: true, startDate: "2026-09-28" })[0])
+      .toMatchObject({ label: "Sep 25, 8:30pm", relativeLabel: "2d 3h 30m before" });
+    expect(createEventReminderDraftFromCustom({
+      draft: { allDay: true, startDate: "2026-09-28" },
+      reminderDate: "2026-09-25", reminderTime: "20:30",
+      now: "2026-09-14T12:00:00Z", existingReminders: [saved],
+    })).toMatchObject({ blocked: true, blockReason: "duplicate" });
+  });
+
+  it.each([
+    ["2026-01-28", "2026-01-28T08:00:00.000Z"],
+    ["2026-03-08", "2026-03-08T08:00:00.000Z"],
+    ["2026-11-01", "2026-11-01T07:00:00.000Z"],
+  ])("uses Pacific midnight for all-day reminders on %s, including DST transition days", (date, anchorAt) => {
+    const reminder = createEventReminderDraftFromOffset({
+      draft: { allDay: true, startDate: date }, offsetMinutes: 0, now: "2025-01-01T00:00:00Z",
+    });
+    expect(reminder.remindAt).toBe(anchorAt);
+    expect(buildEventReminderCreatePayload({
+      event: { id: "all-day", allDay: true, startMs: Date.parse(`${date}T12:00:00Z`) }, reminder,
+    })).toMatchObject({ anchorAt, offsetMinutes: 0 });
+  });
+
+  it.each([
+    [-3090, "2d 3h 30m before"], [-45, "45 minutes before"], [-1, "1 minute before"],
+    [90, "1h 30m after"], [0, "At start"], [-1440, "1 day before"],
+    [-3060, "2d 3h before"], [-2885, "2d 5m before"], [2880, "2 days after"],
+  ])("formats offset %s in readable units", (offsetMinutes, label) => {
+    expect(formatEventReminderLabel({ offsetMinutes })).toBe(label);
+  });
+
+  it("updates pending chip dates with the draft while preserving sent reminder dates", () => {
+    const reminders = [
+      { id: "pending", status: "pending", offset_minutes: -3090, remind_at: "2026-09-26T03:30:00Z" },
+      { id: "sent", status: "sent", offset_minutes: -3090, remind_at: "2026-09-26T03:30:00Z" },
+    ];
+    expect(projectEventReminderChips(reminders, { allDay: true, startDate: "2026-09-29" }))
+      .toEqual([
+        expect.objectContaining({ label: "Sep 26, 8:30pm" }),
+        expect.objectContaining({ label: "Sep 25, 8:30pm", sent: true }),
+      ]);
+  });
+
   it("projects disabled preset state for duplicate offsets and past reminder times", () => {
     expect(getEventReminderPresetState({
       draft,

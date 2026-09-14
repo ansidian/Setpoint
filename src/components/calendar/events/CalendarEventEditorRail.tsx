@@ -290,6 +290,7 @@ export default function CalendarEventEditorRail({
 
               {!isBatchMode ? (
                 <CalendarEventReminderChips
+                  draft={draft}
                   reminders={eventReminders}
                   presetStates={eventReminderPresetStates}
                   reminderError={reminderError}

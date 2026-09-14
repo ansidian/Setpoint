@@ -6,4 +6,5 @@ Browser-safe values and contracts shared by server and client. Domain wire contr
 - `payment-groups.ts` — validates display-only payment organization and reconciles stable items without losing saved assignments when metadata is unavailable.
 - `billPaymentAdjustments.ts` — shared bill payment adjustment values.
 - `calendar-event-colors.ts`, `deadline-source-colors.ts` — shared event/deadline source colors.
+- `calendar-reminder-anchor.ts` — reminder event-start instants, separating Pacific all-day midnight from synthetic layout timestamps.
 - `timing.ts` — shared timing constants.

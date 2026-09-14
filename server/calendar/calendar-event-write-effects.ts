@@ -2,6 +2,7 @@ import type {
   CalendarRecurrenceScope,
   NormalizedCalendarEvent,
 } from "../../shared/types/calendar.ts";
+import { calendarReminderAnchorAt } from "../../shared/calendar-reminder-anchor.ts";
 import {
   deleteCalendarSearchMirrorOccurrence,
   markCalendarSearchMirrorDirty,
@@ -161,7 +162,7 @@ async function applyUpdateEffects(effect: Extract<CalendarEventWriteEffect, { ty
   }
   scheduleMirrorUpsert(userId, event);
 
-  const anchorAt = calendarEventAnchorAt(event);
+  const anchorAt = calendarReminderAnchorAt(event);
   if (!anchorAt) return;
   try {
     await recomputeUnsentRemindersForSource({

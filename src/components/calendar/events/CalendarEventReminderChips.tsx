@@ -1,8 +1,10 @@
 import { AlertTriangle, Bell, Car, Clock3, Route, X } from "lucide-react";
 import { ActionButton } from "./CalendarEditorControls";
 import ReminderDateTimePicker from "../reminders/ReminderDateTimePicker";
+import Tooltip from "@/components/shared/Tooltip";
 import {
   type EventReminderLike,
+  type EventReminderScheduleDraft,
   EVENT_REMINDER_PRESETS,
   projectEventReminderChips,
   projectTimeToLeaveDisplay,
@@ -20,6 +22,7 @@ interface ReminderPillProps {
 }
 
 interface CalendarEventReminderChipsProps {
+  draft: EventReminderScheduleDraft;
   reminders: EventReminderLike[];
   reminderError: string | null;
   customReminder: EventReminderDraftController["customReminder"];
@@ -49,9 +52,13 @@ function disabledPresetTitle(reason?: string | null) {
 function ReminderPill({ chip, disabled, onRemove }: ReminderPillProps) {
   const muted = chip.sent;
   return (
+    <Tooltip text={chip.relativeLabel} side="top" contentStyle={{ zIndex: 10003 }}>
     <span
       data-testid="calendar-event-reminder-chip"
       data-reminder-status={chip.status}
+      tabIndex={0}
+      aria-label={`${chip.label}, ${chip.relativeLabel}${chip.sent ? ", sent" : ""}`}
+      className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -80,7 +87,7 @@ function ReminderPill({ chip, disabled, onRemove }: ReminderPillProps) {
         aria-label={`Remove reminder ${chip.label}`}
         disabled={disabled || muted}
         onClick={() => onRemove(chip.raw)}
-        className="transition-[background-color,color,transform] duration-150 hover:-translate-y-px hover:bg-white/[0.08] active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 motion-reduce:transform-none motion-reduce:transition-none"
+        className="transition-[background-color,color,transform] duration-150 hover:-translate-y-px hover:bg-white/[0.08] active:translate-y-0 focus-visible:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 motion-reduce:transform-none motion-reduce:transition-none"
         style={{
           width: 20,
           height: 20,
@@ -97,10 +104,12 @@ function ReminderPill({ chip, disabled, onRemove }: ReminderPillProps) {
         <X size={11} aria-hidden />
       </button>
     </span>
+    </Tooltip>
   );
 }
 
 export default function CalendarEventReminderChips({
+  draft,
   reminders,
   reminderError,
   customReminder,
@@ -116,7 +125,7 @@ export default function CalendarEventReminderChips({
   onUpdateTimeToLeaveBuffer = () => {},
   onRemoveTimeToLeave = async () => {},
 }: CalendarEventReminderChipsProps) {
-  const chips = projectEventReminderChips(reminders);
+  const chips = projectEventReminderChips(reminders, draft);
   const timeToLeave = projectTimeToLeaveDisplay(timeToLeaveReminder);
   const customTimeToLeaveBufferActive = !!timeToLeave && !TIME_TO_LEAVE_BUFFER_PRESETS.some(
     (minutes) => minutes === timeToLeave.arrivalBufferMinutes,

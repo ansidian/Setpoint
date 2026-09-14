@@ -4,6 +4,8 @@ import type {
   ReminderPayloadSnapshot,
   TimeToLeaveRouteStatus,
 } from "../../../../shared/types/reminders";
+import { calendarReminderAnchorAt } from "../../../../shared/calendar-reminder-anchor";
+import { formatReminderTime } from "../reminderDisplay";
 
 const PACIFIC_TIME_ZONE = "America/Los_Angeles";
 
@@ -225,16 +227,17 @@ export function createEventReminderDraftFromCustom({
 }
 
 export function eventReminderSourceFromEvent(event: EventReminderSourceEvent | null | undefined) {
-  const anchorAt = event?.startMs
+  const occurrenceAnchor = event?.startMs
     ? new Date(event.startMs).toISOString()
     : event?.anchorAt || null;
+  const anchorAt = event ? calendarReminderAnchorAt(event) || event.anchorAt || null : null;
   return {
     sourceType: "calendar_event" as const,
     sourceAccountId: event?.accountId || null,
     sourceCalendarId: event?.calendarId || null,
     sourceItemId: event?.id,
     sourceOccurrenceId: event?.isRecurring
-      ? event?.originalStartTime || anchorAt
+      ? event?.originalStartTime || occurrenceAnchor
       : null,
     anchorKind: "event_start" as const,
     anchorAt,
@@ -356,27 +359,43 @@ export function formatEventReminderLabel(reminder: EventReminderLike) {
   const offset = normalizeOffset(reminder);
   const absolute = Math.abs(offset);
   if (absolute === 0) return "At start";
-  if (absolute % 1440 === 0) {
-    const days = absolute / 1440;
+  const days = Math.floor(absolute / 1440);
+  const hours = Math.floor((absolute % 1440) / 60);
+  const minutes = absolute % 60;
+  if (days && !hours && !minutes) {
     return `${days} day${days === 1 ? "" : "s"} ${offset < 0 ? "before" : "after"}`;
   }
-  if (absolute % 60 === 0) {
-    const hours = absolute / 60;
+  if (!days && hours && !minutes) {
     return `${hours} hour${hours === 1 ? "" : "s"} ${offset < 0 ? "before" : "after"}`;
   }
-  return `${absolute} minutes ${offset < 0 ? "before" : "after"}`;
+  const duration = days || hours
+    ? [days ? `${days}d` : null, hours ? `${hours}h` : null, minutes ? `${minutes}m` : null].filter(Boolean).join(" ")
+    : `${absolute} minute${absolute === 1 ? "" : "s"}`;
+  return `${duration} ${offset < 0 ? "before" : "after"}`;
 }
 
-export function projectEventReminderChips(reminders: EventReminderLike[] | null | undefined) {
-  return (reminders || []).filter((reminder) => reminder.reminder_kind !== "time_to_leave").map((reminder) => ({
-    key: reminder.id || reminder.clientId,
-    id: reminder.id || null,
-    label: formatEventReminderLabel(reminder),
-    status: reminder.status || "pending",
-    sent: reminder.status === "sent",
-    offsetMinutes: normalizeOffset(reminder),
-    raw: reminder,
-  }));
+export function projectEventReminderChips(
+  reminders: EventReminderLike[] | null | undefined,
+  draft?: EventReminderScheduleDraft,
+) {
+  const anchorAt = draft ? eventAnchorFromDraft(draft) : null;
+  return (reminders || []).filter((reminder) => reminder.reminder_kind !== "time_to_leave").map((reminder) => {
+    const offset = normalizeOffset(reminder);
+    const remindAt = anchorAt && Number.isFinite(offset) && reminder.status !== "sent"
+      ? computeRemindAt(anchorAt, offset)
+      : reminder.remind_at || reminder.remindAt;
+    const dateLabel = formatReminderTime(remindAt)?.replace(/\s([AP]M)$/, (_, period: string) => period.toLowerCase());
+    return {
+      key: reminder.id || reminder.clientId,
+      id: reminder.id || null,
+      label: dateLabel || formatEventReminderLabel(reminder),
+      relativeLabel: formatEventReminderLabel(reminder),
+      status: reminder.status || "pending",
+      sent: reminder.status === "sent",
+      offsetMinutes: offset,
+      raw: reminder,
+    };
+  });
 }
 
 export function isUnsavedReminder(reminder: EventReminderLike | null | undefined) {

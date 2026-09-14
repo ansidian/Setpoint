@@ -5,6 +5,7 @@ import express from "express";
 import request from "../test-utils/supertest.ts";
 import { createMigratedDb } from "../triage/triage-worker.test-utils.ts";
 import { seedOwner, seedSession } from "../test-utils/auth-db.ts";
+import { createReminder, listRemindersForSource } from "../reminders/reminder-service.ts";
 
 const testState = vi.hoisted<{ db: { current: Client | null } }>(() => ({
   db: { current: null },
@@ -159,6 +160,7 @@ describe("calendar event routes", () => {
     await testState.db.current?.close?.();
     testState.db.current = null;
     vi.clearAllMocks();
+    vi.useRealTimers();
   });
 
   it("lists writable calendar sources through the real route and calendar service", async () => {
@@ -346,6 +348,74 @@ describe("calendar event routes", () => {
       isRecurring: true,
       recurringEventId: "series-1",
     });
+  });
+
+  it("keeps all-day reminders at their selected Pacific time through event edits and date moves", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-14T19:00:00.000Z"));
+    await currentDb().execute("DELETE FROM ea_sessions");
+    await seedSession(currentDb());
+    let providerEvent = rawEvent({
+      summary: "Mercury Insurance Due!",
+      start: { date: "2026-09-28" },
+      end: { date: "2026-09-29" },
+    });
+    calendarProvider.googleCalendarFetch.mockImplementation(async (
+      _auth,
+      _path: string,
+      options: { method?: string; body?: Record<string, unknown> } = {},
+    ) => {
+      if (options.method === "PATCH") {
+        providerEvent = { ...providerEvent, ...options.body };
+      }
+      return responseJson(providerEvent);
+    });
+    await createReminder({
+      userId: "user-1",
+      sourceType: "calendar_event",
+      sourceAccountId: "gmail-main",
+      sourceCalendarId: "primary",
+      sourceItemId: "event-1",
+      anchorKind: "event_start",
+      anchorAt: "2026-09-28T07:00:00.000Z",
+      offsetMinutes: -3090,
+    }, { dbClient: currentDb(), idFactory: () => "all-day-reminder" });
+
+    for (const [date, anchorAt, remindAt] of [
+      ["2026-09-28", "2026-09-28T07:00:00.000Z", "2026-09-26T03:30:00.000Z"],
+      ["2026-09-29", "2026-09-29T07:00:00.000Z", "2026-09-27T03:30:00.000Z"],
+    ]) {
+      const res = await request(makeApp())
+        .patch("/api/calendar/events/event-1")
+        .set("Cookie", authCookie())
+        .send({
+          accountId: "gmail-main",
+          calendarId: "primary",
+          title: "Mercury Insurance Due! Updated",
+          allDay: true,
+          startDate: date,
+          endDate: date,
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.event).toMatchObject({
+        allDay: true,
+        startMs: Date.parse(`${date}T12:00:00.000Z`),
+      });
+      expect(await listRemindersForSource({
+        userId: "user-1",
+        sourceType: "calendar_event",
+        sourceItemId: "event-1",
+      }, { dbClient: currentDb() })).toEqual([
+        expect.objectContaining({
+          id: "all-day-reminder",
+          anchor_at: anchorAt,
+          offset_minutes: -3090,
+          remind_at: remindAt,
+          status: "pending",
+        }),
+      ]);
+    }
   });
 
   it("deletes an event and removes its pending durable reminder", async () => {
