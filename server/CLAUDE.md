@@ -40,6 +40,7 @@ Composition root and cross-cutting server concerns that don't belong to a single
 - `scripts/financial-email-observe-report.ts` — bounded read-only report of persisted financial-email automation gates by operation class
 - `scripts/transaction-import-equivalence-report.ts` — write-disabled Amazon/PayPal planner replay over a disposable Actual snapshot
 - `scripts/hydrate-actual-cache.ts`, `scripts/prune-actual-cache.ts` — warm and prune the local Actual Budget cache
+- `scripts/acknowledge-email-history.ts` — exact-ID Gmail history failure acknowledgment CLI; read-only preview by default, explicit reason and matching fingerprint required to apply
 - `scripts/reindex-emails.ts` — additive time-windowed email re-index
 - `scripts/reindex-email-evidence.ts` — dry-run-first refetch of one exact indexed email UID; apply refreshes body/FTS/embeddings and requeues existing managed financial documents through the index trigger; historical plans, triage and snapshots remain unchanged
 - `scripts/reindex-icloud-mime.ts` — targeted re-fetch/reindex of iCloud rows with undecoded raw MIME

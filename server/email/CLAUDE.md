@@ -16,7 +16,8 @@ Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and
 - `pinned-emails.ts` — pin-state overlay store: pin/unpin upserts + hydrated pinned-entry loads (index/triage merge, email_snapshot fallback)
 - `remote-content-trust.ts` — public owner-scoped persistence API for exact sender + receiving-account remote-content trust
 - `email-fetch.ts` — cross-account email fetching for Gmail and iCloud; strict sweep reads distinguish empty inboxes from incomplete provider results
-- `email-sync-health.ts` — per-account successful inbox-check persistence and health projection; only completed fetch/index/queue sweeps advance freshness, with unresolved Gmail history and reconnect evidence taking precedence; terminal history failures remain visible until their durable job state is resolved
+- `email-history-acknowledgment.ts` — operator-only, dry-run-first exact-job acknowledgment; preserves failure evidence, binds application to a preview fingerprint, and atomically resolves health attention without claiming ingestion recovery
+- `email-sync-health.ts` — per-account successful inbox-check persistence and health projection; only completed fetch/index/queue sweeps advance freshness, with unresolved Gmail history and reconnect evidence taking precedence; terminal history failures remain visible until their durable job state is completed or explicitly acknowledged
 - `email-provider-adapters.ts` — per-account adapters: fetch, mark-read, trash, and owner-scoped complete financial source acquisition
 - `email-provider-types.ts` — provider/account normalization contracts and adapter boundary types
 - `email-mime-attachments.ts` — shared MIME attachment descriptor and bounded byte-selection helpers

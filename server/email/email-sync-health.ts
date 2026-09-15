@@ -75,6 +75,8 @@ export async function getEmailSyncHealth(
     // Watch renewal and first-notification seeding can advance Gmail's cursor
     // without ingesting mail. Only completed jobs settle known history work;
     // a later inbox sweep cannot erase queued or terminally failed history.
+    // Explicit operator acknowledgment retains failure evidence under its own
+    // terminal status; it is excluded here without inventing successful ingestion.
     const outstanding = jobs.rows.filter((job) => job.account_id === account.id);
     const terminalFailure = outstanding.some((job) => job.status === "failed");
     const failed = Boolean(check?.last_failed_at) || outstanding.some((job) => job.status === "failed" || Boolean(job.last_error));

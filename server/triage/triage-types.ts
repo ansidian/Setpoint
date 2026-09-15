@@ -9,7 +9,7 @@ export type TriageLane = "needs_attention" | "fyi" | "noise";
 export type TriageUrgency = "high" | "medium" | "normal" | "low";
 export type TriageModelTier = "cheap" | "strong";
 export type TriagePreflightAction = "finalize" | "audit" | "route_model";
-export type TriageJobStatus = "queued" | "running" | "complete" | "failed";
+export type TriageJobStatus = "queued" | "running" | "complete" | "failed" | "acknowledged";
 
 export interface TriageDbResult {
   rows: Record<string, unknown>[];

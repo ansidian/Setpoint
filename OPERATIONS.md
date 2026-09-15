@@ -75,3 +75,18 @@ Use [AGENTS.md](AGENTS.md#verification) for targeted checks and the required pre
 - `npm run financial-email:observe` reports financial-email coverage and event outcomes.
 - `npm run triage:preflight` checks triage rules; `npm run triage:eval` evaluates models. Real evaluations need the owner's `EA_USER_ID` to load model settings and are excluded from production AI usage analytics.
 - `npm run actual -- <command>` is for ad-hoc inspection. Runtime integrations use the in-process Actual API.
+
+
+## Acknowledge historical Gmail sync failures
+
+Use this only after reviewing exact terminal failures and accepting any remaining historical uncertainty. Acknowledgment clears those jobs from current health; it does not claim their mailbox changes were recovered. Errors, payloads, attempts and original timestamps remain saved. New failures remain visible. No provider calls or mail changes occur.
+
+Set `EA_USER_ID` to the owner and select the intended database as described above. Migration `079_email_history_acknowledgment.sql` must be applied before acknowledgment. Preview first:
+
+```bash
+NODE_ENV=production npm run email:acknowledge-history -- --job-ids 123,456 --reason "Reviewed historical failures; completeness remains unknown"
+```
+
+Review the account identities and errors, then repeat the exact IDs/reason with `--apply --expect <revision>` using the returned fingerprint. Any changed job rejects the entire selection; rerun the preview. Repeating an already-applied identical acknowledgment preserves its original metadata. A different reason cannot overwrite it. The command defaults to a read-only preview; it never selects every failure implicitly.
+
+This repair does not require a restart: the existing health query excludes `acknowledged`. The dashboard reflects it on its next health read. Apply the additive migration through the normal migration runner so the migration ledger stays consistent; never mark historical failures `complete` merely to clear the indicator.

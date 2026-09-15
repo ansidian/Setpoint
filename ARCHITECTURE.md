@@ -786,7 +786,7 @@ erDiagram
 | `ea_transaction_import_mappings` | `041_email_transaction_imports.sql` |
 | `ea_transaction_import_runs` | `041_email_transaction_imports.sql` |
 | `ea_triage_feedback` | `001_ea_tables.sql` |
-| `ea_triage_jobs` | `001_ea_tables.sql` |
+| `ea_triage_jobs` | `001_ea_tables.sql`, `079_email_history_acknowledgment.sql` |
 | `ea_triage_rules` | `001_ea_tables.sql` |
 | `ea_webauthn_challenges` | `012_passkey_auth.sql`, `038_auth_security_generation.sql` |
 | `migrations` | `024_retire_legacy_ledger_rows.sql` |
