@@ -64,8 +64,8 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 ### Financial context and schedule notices
 - `finance/DashboardFinance.tsx` — unified Finance review before Money Ahead / Spending Snapshot, with exact shared financial foreground handoffs
 - `finance/useDashboardFinance.ts` — spending and canonical all-source review/completed reads, shared refresh/invalidation, and independent last-success/error retention
-- `finance/MoneyAheadCard.tsx` — Money Ahead presentation with total and bounded expandable rows
-- `finance/moneyAheadModel.ts` — unpaid scheduled expense eligibility, occurrence deduplication, date ordering, and amount completeness/totals for today through seven days ahead
+- `finance/MoneyAheadCard.tsx` — Money Ahead due-today/past-date indicators and always-visible rows, separate past-date subtotal, and bounded expandable future rows
+- `finance/moneyAheadModel.ts` — unpaid scheduled expense eligibility, occurrence deduplication, Pacific date groups (today, previous 30 days, next 7 days), and independent upcoming/past-date amount completeness/totals
 - `finance/SpendingSnapshotCard.tsx` — month-to-date comparison, matching prior dates, top categories and sync freshness
 - `finance/FinancialActivityCard.tsx` — one canonical review count and three direct records, with all-source completed activity in a quiet disclosure; source evidence lives inside the record
 - `finance/finance-cards.css` — financial grid, typography, controls and responsive/motion states
@@ -88,7 +88,7 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 ## Local patterns
 
 - One fixed layout, branched on `isMobile` inside `ThreeTierLayout` (`layout/DashboardScenePrimitives.tsx`): desktop is a no-page-scroll column (band on top, scrolling Today/finance stack + 344px scrolling context column below); mobile stacks Needs You, Today, Ahead, weather, then finance, without Inbox Peek. There are no per-user layout modes.
-- Overdue/due-today deadlines live only in the Needs-you band (the single home for "open this now"); Ahead shows future deadlines and Money Ahead shows unpaid bills from today through seven days ahead, excluding transfers and income. Actual bill posting stays in Actual and reflects through the existing sync. Today retains deadline context but future deadlines do not repeat in its later groups. `DashboardBody` passes the band `{ upcoming: deadlines }` because the band model reads the object form.
+- Overdue/due-today deadlines live only in the Needs-you band (the single home for "open this now"); Ahead shows future deadlines. Money Ahead uses `allSchedules` to show unpaid bills grouped as Due today, Past due date (previous 30 days), and Next 7 days, excluding transfers and income. Today/past-date rows stay visible; only future rows collapse. Its headline total covers today through seven days ahead, with a separate past-date subtotal. Actual bill posting stays in Actual and reflects through the existing sync; past-date labels describe dates not recorded in Actual, not confirmed payment delinquency. The dashboard's Pacific day rollover reclassifies the groups. Today retains deadline context but future deadlines do not repeat in its later groups. `DashboardBody` passes the band `{ upcoming: deadlines }` because the band model reads the object form.
 - Desktop email card and Start here bodies open the shared anchored snapshot-only preview; their Open email actions enter Inbox. Inbox Peek rows open the shared email-body modal used by financial sources, reusing Alfred's preview content; Jump to inbox enters the selected reader. Mobile email taps go directly to the reader. Previews never mutate read/handled state; Mark handled belongs in the reader.
 - Motion uses scene tokens for staggered entry; respect reduced motion.
 

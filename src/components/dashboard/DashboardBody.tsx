@@ -46,6 +46,7 @@ interface DashboardJumpPayload {
 interface DashboardBodyProps {
   liveData: {
     liveBills?: NeedsYouBill[];
+    allSchedules?: NeedsYouBill[];
     liveCalendar?: DashboardCalendarEvent[] | null;
     liveWeather?: CurrentDashboardLiveData["liveWeather"];
     liveDeadlines?: CurrentDashboardLiveData["liveDeadlines"] | Partial<DashboardDeadlineRoot>;
@@ -152,7 +153,6 @@ function DashboardBodyInner({
     },
     [allowCurrentDeadlineFallback, calendarDeadlines?.upcoming, calendarDeadlinesReady, liveUpcoming],
   );
-  const bills = liveData.liveBills || [];
   const bandLanes = useMemo(() => activeSnapshot ? Object.fromEntries(
     Object.entries({ ...activeSnapshot.lanes, carryover: activeSnapshot.carryover }).map(([lane, items]) => [
       lane, items.map((item) => ({ ...item, snapshot_item_id: item.id })),
@@ -253,7 +253,7 @@ function DashboardBodyInner({
         {timeline}
       </DashboardSurface>
       {isMobile && contextColumn}
-      <DashboardFinance bills={bills} billsLoading={liveData.billsLoading} configured={liveData.actualConfigured}
+      <DashboardFinance bills={liveData.allSchedules || []} billsLoading={liveData.billsLoading} configured={liveData.actualConfigured}
         health={liveData.billsSyncHealth} refreshing={domainRefreshing}
         onOpenBill={(bill, anchor) => handleRailJump({ kind: "bill", id: bill.id, date: bill.next_date, data: bill }, anchor)}
         onOpenTransactions={() => navigate(financesHref({view:"journal"}))} />

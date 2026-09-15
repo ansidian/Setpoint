@@ -19,7 +19,7 @@ export default function DashboardFinance({ bills, billsLoading, configured, heal
   return <div className="dashboard-finance">
     <AnimatedHeight><FinancialActivityCard review={finance.review} completed={finance.completed} loading={finance.loading} reviewError={finance.reviewError} completedError={finance.completedError} /></AnimatedHeight>
     <div className="dashboard-finance-grid">
-      <MoneyAheadCard bills={bills} loading={billsLoading} configured={configured} health={health} onOpen={onOpenBill} />
+      <AnimatedHeight><MoneyAheadCard bills={bills} loading={billsLoading} configured={configured} health={health} onOpen={onOpenBill} /></AnimatedHeight>
       <AnimatedHeight><SpendingSnapshotCard spending={finance.data?.spending} loading={finance.loading} onOpen={onOpenTransactions} /></AnimatedHeight>
     </div>
   </div>;
