@@ -1,12 +1,12 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, RefObject } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router";
-import { Activity, AlertTriangle, ArrowUpRight, CheckCircle2, CircleDashed, LoaderCircle, RefreshCw } from "lucide-react";
+import { Activity, AlertTriangle, ArrowUpRight, CheckCircle2, ChevronDown, CircleDashed, LoaderCircle, RefreshCw } from "lucide-react";
 import type { LucideProps } from "lucide-react";
 import AnimatedHeight from "../shared/AnimatedHeight";
 import {
-  isAttentionState, isBusyState, normalizeState, relativeTimestamp,
+  groupEmailSources, isAttentionState, isBusyState, normalizeState, relativeTimestamp,
   STATE_COLOR, STATE_COPY, sourceRefreshActive, statusSummary, systemState, UNKNOWN_STATUS,
 } from "./systemStatusPresentation";
 import type { StatusState, SystemStatusView, SystemStatusRetryProps, SystemStatusSourceView } from "./systemStatusPresentation";
@@ -80,6 +80,8 @@ function StatusPanel({ status, onClose, panelRef, position, refreshing, onQuickR
 
 export function SystemStatusDetails({ status, onNavigate, onRetrySource, sourceRetry, refreshing = false }: { status: SystemStatusView; onNavigate?: () => void; refreshing?: boolean } & SystemStatusRetryProps) {
   const listRef = useRef<HTMLUListElement>(null);
+  const [emailOpen, setEmailOpen] = useState(false);
+  const emailDetailsId = useId();
   const retryFocusRef = useRef<{ button: HTMLButtonElement; sourceKey?: string } | null>(null);
   useLayoutEffect(() => {
     const previous = retryFocusRef.current;
@@ -91,44 +93,55 @@ export function SystemStatusDetails({ status, onNavigate, onRetrySource, sourceR
     retryFocusRef.current = null;
   });
   const sources: SystemStatusSourceView[] = status.sources?.length ? status.sources : [{ key: "system", label: "System", state: status.state, message: "Status details are unavailable. Try syncing again." }];
-  const ordered = [...sources].sort((left, right) => Number(isAttentionState(normalizeState(right.state)) || (sourceRetry && right.retrySource === sourceRetry.source)) - Number(isAttentionState(normalizeState(left.state)) || (sourceRetry && left.retrySource === sourceRetry.source)));
+  const ordered = [...groupEmailSources(sources)].sort((left, right) => Number(isAttentionState(normalizeState(right.state)) || Boolean(sourceRetry && right.retrySource === sourceRetry.source)) - Number(isAttentionState(normalizeState(left.state)) || Boolean(sourceRetry && left.retrySource === sourceRetry.source)));
+  const renderSource = (source: SystemStatusSourceView) => {
+    const state = normalizeState(source.state);
+    const attention = isAttentionState(state);
+    const retry = source.retrySource === sourceRetry?.source && (sourceRetry?.state !== "success" || state === "current") ? sourceRetry : null;
+    const updating = retry?.state === "pending" || sourceRefreshActive(source);
+    const compact = (state === "current" || state === "unconfigured") && !retry && !updating;
+    const showRetry = source.retrySource && onRetrySource && (attention || updating || retry) && state !== "needs_reauth" && state !== "unconfigured";
+    const timestamp = source.lastSuccessAt && Number.isFinite(Date.parse(source.lastSuccessAt)) ? source.lastSuccessAt : null;
+    return <li key={source.key || source.label} className="system-status-source sp-focus-ring" tabIndex={-1} data-source-key={source.key} data-attention={attention || undefined} data-compact={compact || undefined}
+      style={{ "--status-color": STATE_COLOR[state] } as CSSProperties}>
+      <StatusIcon state={updating ? "refreshing" : state} size={14} aria-hidden="true" />
+      <div className="system-status-source-content">
+        <div className="system-status-source-title"><strong>{source.label || source.key}</strong><span>{STATE_COPY[state]}</span></div>
+        {!source.accounts && !compact && !retry && <p>{source.message || "Status details are unavailable. Try syncing again."}</p>}
+        {retry && retry.state !== "success" && <p>{source.message}</p>}
+        {(retry || updating) && <p className="system-status-result" role="status">{updating ? `Updating ${source.label?.toLowerCase() || "this source"}…` : retry?.message || (retry?.state === "success" ? `${source.label} is up to date.` : "The update did not complete. Try again.")}</p>}
+        {!source.accounts && state !== "unconfigured" && <div className="system-status-time">
+          {timestamp ? <>{source.key === "dashboard_connection" ? "Last checked " : "Updated "}<time dateTime={timestamp} title={new Date(timestamp).toLocaleString()}>{relativeTimestamp(timestamp)}</time></> : state === "checking" ? "Waiting for a status check" : "Last update unknown"}
+        </div>}
+        {source.accounts && <>
+          {source.accounts.length ? <button type="button" className="system-status-email-toggle"
+            aria-expanded={emailOpen} aria-controls={emailDetailsId} onClick={() => setEmailOpen((value) => !value)}>
+            <span>{source.message}</span><ChevronDown size={13} aria-hidden="true" />
+          </button> : <div className="system-status-time">{source.message}</div>}
+          <AnimatedHeight>{emailOpen && source.accounts.length > 0 && <ul id={emailDetailsId} className="system-status-email-accounts" aria-label="Email accounts needing attention"
+            onWheel={(event) => event.stopPropagation()}>
+            {source.accounts.map(renderSource)}
+          </ul>}</AnimatedHeight>
+        </>}
+        <div className="system-status-source-actions">
+        {showRetry && <button type="button" className="system-status-retry" aria-disabled={refreshing || sourceRetry?.state === "pending" || updating} aria-busy={updating}
+          onFocus={(event) => { retryFocusRef.current = { button: event.currentTarget, sourceKey: source.key }; }}
+          onBlur={(event) => { if (event.relatedTarget) retryFocusRef.current = null; }}
+          onClick={() => { if (source.retrySource && !refreshing && sourceRetry?.state !== "pending" && !updating) void onRetrySource?.(source.retrySource); }}>
+          <RefreshCw size={12} aria-hidden="true" className={updating ? "system-status-spinner" : undefined} />
+          {updating ? `Updating ${source.label}…` : `Retry ${source.label}`}
+        </button>}
+        {source.action && state !== "current" && <Link className="system-status-repair" to={source.action.href} onClick={onNavigate}>
+          {source.action.label}<ArrowUpRight size={12} aria-hidden="true" />
+        </Link>}
+        </div>
+      </div>
+    </li>;
+  };
   return <div className="system-status-details">
     <p className="system-status-summary" role="status">{statusSummary(status)}</p>
     <ul ref={listRef} className="system-status-sources">
-      {ordered.map((source) => {
-        const state = normalizeState(source.state);
-        const attention = isAttentionState(state);
-        const retry = source.retrySource === sourceRetry?.source && (sourceRetry?.state !== "success" || state === "current") ? sourceRetry : null;
-        const updating = retry?.state === "pending" || sourceRefreshActive(source);
-        const compact = (state === "current" || state === "unconfigured") && !retry && !updating;
-        const showRetry = source.retrySource && onRetrySource && (attention || updating || retry) && state !== "needs_reauth" && state !== "unconfigured";
-        const timestamp = source.lastSuccessAt && Number.isFinite(Date.parse(source.lastSuccessAt)) ? source.lastSuccessAt : null;
-        return <li key={source.key || source.label} className="system-status-source sp-focus-ring" tabIndex={-1} data-source-key={source.key} data-attention={attention || undefined} data-compact={compact || undefined}
-          style={{ "--status-color": STATE_COLOR[state] } as CSSProperties}>
-          <StatusIcon state={updating ? "refreshing" : state} size={14} aria-hidden="true" />
-          <div className="system-status-source-content">
-            <div className="system-status-source-title"><strong>{source.label || source.key}</strong><span>{STATE_COPY[state]}</span></div>
-            {!compact && !retry && <p>{source.message || "Status details are unavailable. Try syncing again."}</p>}
-            {retry && retry.state !== "success" && <p>{source.message}</p>}
-            {(retry || updating) && <p className="system-status-result" role="status">{updating ? `Updating ${source.label?.toLowerCase() || "this source"}…` : retry?.message || (retry?.state === "success" ? `${source.label} is up to date.` : "The update did not complete. Try again.")}</p>}
-            {state !== "unconfigured" && <div className="system-status-time">
-              {timestamp ? <>{source.key === "dashboard_connection" ? "Last checked " : "Updated "}<time dateTime={timestamp} title={new Date(timestamp).toLocaleString()}>{relativeTimestamp(timestamp)}</time></> : state === "checking" ? "Waiting for a status check" : "Last update unknown"}
-            </div>}
-            <div className="system-status-source-actions">
-            {showRetry && <button type="button" className="system-status-retry" aria-disabled={refreshing || sourceRetry?.state === "pending" || updating} aria-busy={updating}
-              onFocus={(event) => { retryFocusRef.current = { button: event.currentTarget, sourceKey: source.key }; }}
-              onBlur={(event) => { if (event.relatedTarget) retryFocusRef.current = null; }}
-              onClick={() => { if (source.retrySource && !refreshing && sourceRetry?.state !== "pending" && !updating) void onRetrySource?.(source.retrySource); }}>
-              <RefreshCw size={12} aria-hidden="true" className={updating ? "system-status-spinner" : undefined} />
-              {updating ? `Updating ${source.label}…` : `Retry ${source.label}`}
-            </button>}
-            {source.action && state !== "current" && <Link className="system-status-repair" to={source.action.href} onClick={onNavigate}>
-              {source.action.label}<ArrowUpRight size={12} aria-hidden="true" />
-            </Link>}
-            </div>
-          </div>
-        </li>;
-      })}
+      {ordered.map(renderSource)}
     </ul>
     {status.generatedAt && Number.isFinite(Date.parse(status.generatedAt)) && <p className="system-status-checked">Status checked <time dateTime={status.generatedAt} title={new Date(status.generatedAt).toLocaleString()}>{relativeTimestamp(status.generatedAt)}</time></p>}
   </div>;

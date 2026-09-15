@@ -10,6 +10,8 @@ export interface SystemStatusSourceView {
   action?: CurrentDashboardSystemSource["action"];
   retrySource?: CurrentDashboardCacheKey;
   refreshStartedAt?: string | null;
+  /** Presentation-only email group; original account health remains independent. */
+  accounts?: SystemStatusSourceView[];
 }
 export interface SystemStatusRetryProps {
   onRetrySource?: (source: CurrentDashboardCacheKey) => unknown;
@@ -56,8 +58,33 @@ export function systemState(status: SystemStatusView): StatusState {
   return status.sources?.length && status.sources.every((source) => source.state === "unconfigured")
     ? "unconfigured" : normalizeState(status.state);
 }
+/** Group only after browser freshness projection so each account keeps its deadline. */
+export function groupEmailSources(sources: SystemStatusSourceView[]): SystemStatusSourceView[] {
+  const accounts = sources.filter((source) => source.key?.startsWith("email:"));
+  if (!accounts.length) return sources;
+  const priority: Record<StatusState, number> = {
+    needs_reauth: 9, unavailable: 8, degraded: 7, needs_sync: 6,
+    checking: 5, refreshing: 4, syncing: 3, current: 2, unconfigured: 1,
+  };
+  const ordered = [...accounts].sort((a, b) => priority[normalizeState(b.state)] - priority[normalizeState(a.state)]);
+  const state = normalizeState(ordered[0]!.state);
+  const attention = ordered.filter((account) => isAttentionState(normalizeState(account.state)));
+  const count = accounts.length;
+  const group: SystemStatusSourceView = {
+    key: "email", label: "Email", state, accounts: attention,
+    message: `${count} ${count === 1 ? "account" : "accounts"}${attention.length ? ` · ${attention.length} need${attention.length === 1 ? "s" : ""} attention` : ""}`,
+  };
+  let inserted = false;
+  return sources.flatMap((source) => {
+    if (!source.key?.startsWith("email:")) return [source];
+    if (inserted) return [];
+    inserted = true;
+    return [group];
+  });
+}
+
 export function statusSummary(status: SystemStatusView): string {
-  const attention = status.sources?.filter((source) => isAttentionState(normalizeState(source.state))).length || 0;
+  const attention = groupEmailSources(status.sources || []).filter((source) => isAttentionState(normalizeState(source.state))).length;
   if (attention) return `${attention} ${attention === 1 ? "source needs" : "sources need"} attention`;
   if (status.sources?.length && status.sources.every((source) => source.state === "unconfigured")) return "No connected sources";
   const state = normalizeState(status.state);

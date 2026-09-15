@@ -78,3 +78,19 @@
 @media (prefers-reduced-motion: reduce) {
   .system-status-retry { transition: none; transform: none !important; }
 }
+
+.system-status-email-toggle { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 4px; padding: 4px 0; border: 0; border-radius: 4px; background: transparent; color: var(--sp-subtext); text-align: left; font: inherit; font-size: 11px; cursor: pointer; transition: transform 160ms ease, background 160ms ease, color 160ms ease; }
+.system-status-email-toggle > svg { margin-left: auto; flex-shrink: 0; transition: transform 160ms ease; }
+.system-status-email-toggle[aria-expanded="true"] > svg { transform: rotate(180deg); }
+.system-status-email-toggle:hover, .system-status-email-toggle:focus-visible { transform: translateY(-1px); background: #ffffff0a; color: var(--sp-text); }
+.system-status-email-toggle:focus-visible { outline: 2px solid var(--sp-accent); outline-offset: 2px; }
+.system-status-email-toggle:active { transform: translateY(0); background: #ffffff14; }
+.system-status-email-accounts { max-height: min(260px, 40dvh); overflow-y: auto; overscroll-behavior: contain; scrollbar-color: var(--sp-subtext) transparent; scrollbar-width: thin; list-style: none; margin: 8px 0 0 -22px; padding: 0; }
+.system-status-email-accounts > .system-status-source { border-top: 1px solid #ffffff12; border-radius: 0; background: transparent; }
+@media (max-width: 767px) {
+  .system-status-email-toggle { min-height: var(--sp-touch-min); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .system-status-email-toggle, .system-status-email-toggle > svg { transition: none; }
+  .system-status-email-toggle { transform: none !important; }
+}
