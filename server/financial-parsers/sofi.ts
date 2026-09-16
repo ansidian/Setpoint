@@ -1,6 +1,6 @@
-import { assessFacts, dateMatches, moneyMatches, result, text, unsupported, type ProviderParser } from "./parser-helpers.ts";
+import { accountEvidence, assessFacts, dateMatches, moneyMatches, result, text, unsupported, type ProviderParser } from "./parser-helpers.ts";
 
-export const SOFI_PARSER_VERSION = "sofi-v1";
+export const SOFI_PARSER_VERSION = "sofi-v2";
 
 export const parseSofi: ProviderParser = source => {
   if (/payment has been posted|payment is due|banking statement is available/i.test(source.subject)) return result("sofi", "payment-or-banking-notice", "nonfinancial", ["payment_notice_no_new_obligation"]);
@@ -12,6 +12,7 @@ export const parseSofi: ProviderParser = source => {
     dates: dateMatches(body, scheduled ? "Scheduled payment date" : "payment is due on", source.emailDate),
     // The observed multipart scheduled email includes an contradictory cancellation text part.
     reasons: /(?:cancelled|canceled) autopay/i.test(body) ? ["provider_event_conflict"] : [],
-    extra: { account_hint: body.includes("SoFi Unlimited 2% Credit Card") ? "SoFi Unlimited 2% Credit Card" : "SoFi Credit Card", account_hint_confidence: 1 },
+    extra: { ...accountEvidence(body, /\b(?:credit\s+)?card\s+ending(?:\s+in)?\s*[:*x•.]*\s*(\d{4})\b/i),
+      account_hint: body.includes("SoFi Unlimited 2% Credit Card") ? "SoFi Unlimited 2% Credit Card" : "SoFi Credit Card", account_hint_confidence: 1 },
   });
 };

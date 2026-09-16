@@ -27,6 +27,9 @@ export function financialProfileCardIdentity(candidate: BillCandidate, content: 
   const destination = candidate.type === "transfer" ? groundedHint(candidate, "to_account", content) : null;
   const destinationSuffix = accountSuffix(destination || "");
   if (destinationSuffix) return { suffix: destinationSuffix, evidence: destination };
+  const card = candidate.type === "transfer" ? groundedHint(candidate, "account", content) : null;
+  const cardSuffix = accountSuffix(card || "");
+  if (cardSuffix && cardSuffix !== fundingSuffix(candidate, content)) return { suffix: cardSuffix, evidence: card };
   const suffix = trustedAccountSuffix(candidate);
   return { suffix: suffix && suffix !== fundingSuffix(candidate, content) ? suffix : null,
     evidence: candidate.account_last4_evidence || null };
@@ -47,13 +50,24 @@ export function matchFinancialProfile(configuration: FinancialProfileConfigurati
   const sender = identity(input.sourceIdentity?.senderAddress);
   const content = `${input.email?.subject || ""}\n${input.email?.body || input.email?.body_snippet || ""}`;
   const { suffix, evidence } = financialProfileCardIdentity(candidate, content);
+  const kind = profileKind(candidate);
+  // Absence can use one saved issuer mapping; supplied but ungrounded/conflicting
+  // identity cannot. A payment's funding account is not its card identity.
+  const funding = fundingSuffix(candidate, content);
+  const suppliedSuffixes = [candidate.account_last4, accountSuffix(candidate.account_hint || "")]
+    .filter(value => value && value !== funding);
+  const suppliedDestination = accountSuffix(candidate.to_account_hint || "");
+  const missingCardIdentity = !suffix && candidate.account_last4_confidence !== 0
+    && !suppliedSuffixes.length && !suppliedDestination;
   const matches = configuration.profiles.filter(profile => configuration.budgetId && profile.enabled && profile.budgetId === configuration.budgetId
     && (!profile.providerId || profile.providerId === input.providerId)
-    && profile.target.kind === profileKind(candidate)
+    && profile.target.kind === kind
     && profile.senderAddresses.some(address => identity(address) === sender)
     && (!profile.merchantName || [candidate.payee_hint, candidate.payee].some(value => identity(value) === identity(profile.merchantName))
       && hasVerbatimFinancialEvidence(content, candidate.payee_hint || candidate.payee))
-    && (!profile.accountLast4 || profile.accountLast4 === suffix && hasVerbatimFinancialEvidence(content, evidence)));
+    && (kind !== "card_payment" || missingCardIdentity || !!suffix && hasVerbatimFinancialEvidence(content, evidence))
+    && (!profile.accountLast4 || profile.accountLast4 === suffix && hasVerbatimFinancialEvidence(content, evidence)
+      || kind === "card_payment" && missingCardIdentity && !!profile.providerId && profile.providerId === input.providerId));
   const profile = matches.length === 1 ? matches[0]! : null;
   return { profile, resolution: {
     status: profile ? "matched" : matches.length ? "ambiguous" : "missing",
