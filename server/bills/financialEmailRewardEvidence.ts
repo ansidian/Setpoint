@@ -1,3 +1,4 @@
+import { recognizePaypalBalanceMovement } from "../financial-parsers/index.ts";
 import type { ActualMetadata } from "../../shared/types/actual.ts";
 import type { BillCandidate } from "../../shared/types/bills.ts";
 import type { TransactionRecord } from "../../shared/types/transactions.ts";
@@ -38,22 +39,8 @@ export function semanticRewardPayeeEvidence(
     }));
 }
 
-function isPayPalBalanceMovement(candidate: BillCandidate): boolean {
-  return ["account_transfer_pending", "account_transfer_completed"].includes(String(candidate.event_kind || ""))
-    && Number(candidate.from_account_hint_confidence) >= 0.8
-    && Number(candidate.to_account_hint_confidence) >= 0.8
-    && normalizeIdentity(candidate.from_account_hint).includes("paypal balance")
-    && Boolean(normalizeIdentity(candidate.to_account_hint));
-}
-
-function usesPayPalCashbackDefault(candidate: BillCandidate): boolean {
-  if (!isPayPalBalanceMovement(candidate)) return false;
-  const source = normalizeIdentity(candidate.payee || candidate.payee_hint);
-  return !source || ["paypal", "paypal balance", "cashback", "cash back"].includes(source);
-}
-
 export function isCashbackIncome(candidate: BillCandidate): boolean {
-  if (usesPayPalCashbackDefault(candidate)) return true;
+  if (recognizePaypalBalanceMovement(candidate)?.defaultCashback) return true;
   if (candidate.event_kind !== "reward"
     || Number(candidate.event_confidence) < 0.8
     || !String(candidate.event_evidence || "").trim()) return false;
@@ -67,9 +54,12 @@ export function isCashbackIncome(candidate: BillCandidate): boolean {
 
 export function applyOwnerFinancialEmailPolicy(candidate: BillCandidate): BillCandidate {
   const next = { ...candidate };
-  if (isPayPalBalanceMovement(next)) {
+  const balanceMovement = recognizePaypalBalanceMovement(next);
+  // Owner policy: this external balance is not represented in Actual. Keep its
+  // receipts as income, defaulting to Cashback only without another named source.
+  if (balanceMovement) {
     next.type = "income";
-    if (usesPayPalCashbackDefault(next)) next.payee = "Cashback";
+    if (balanceMovement.defaultCashback) next.payee = "Cashback";
     next.settlement_kind = "balance_to_bank";
     next.settlement_confidence = Math.max(Number(next.settlement_confidence) || 0, 0.99);
     next.settlement_evidence = next.settlement_evidence || next.from_account_hint || null;

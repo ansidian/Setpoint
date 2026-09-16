@@ -1,6 +1,24 @@
+import type { BillCandidate } from "../../shared/types/bills.ts";
 import { assessFacts, DATE, dateMatches, moneyMatches, parseDate, referenceEvidence, result, text, unsupported, type ProviderParser } from "./parser-helpers.ts";
 
 export const PAYPAL_PARSER_VERSION = "paypal-v1";
+
+
+function normalizeIdentity(value: unknown): string {
+  return String(value || "").normalize("NFKC").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+/** Recognizes already grounded candidates, including retained pre-registry history.
+ * The bills owner decides how this external balance is accounted for in Actual. */
+export function recognizePaypalBalanceMovement(candidate: BillCandidate): { defaultCashback: boolean } | null {
+  if (!["account_transfer_pending", "account_transfer_completed"].includes(String(candidate.event_kind || ""))
+    || !(Number(candidate.from_account_hint_confidence) >= 0.8)
+    || !(Number(candidate.to_account_hint_confidence) >= 0.8)
+    || !normalizeIdentity(candidate.from_account_hint).includes("paypal balance")
+    || !normalizeIdentity(candidate.to_account_hint)) return null;
+  const source = normalizeIdentity(candidate.payee || candidate.payee_hint);
+  return { defaultCashback: !source || ["paypal", "paypal balance", "cashback", "cash back"].includes(source) };
+}
 
 export const parsePaypal: ProviderParser = source => {
   const body = text(source);

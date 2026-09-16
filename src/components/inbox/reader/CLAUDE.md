@@ -64,7 +64,7 @@ The desktop and mobile email detail pane: body loading/rendering, triage context
 - Shared action visibility belongs in `readerActionsModel.ts` so desktop, mobile, hotkeys, and dispatch stay aligned.
 - `Ask Alfred` is intentionally passed only to the desktop reader and hidden in demo builds; it stages context without sending a prompt or starting a model run.
 - Bill and transaction-import status are projections of durable backend state; hooks own fetching and stale-response guards.
-- **Create profile** requires a recognized triage `event_kind` other than `other`, independent of lifecycle visibility. The client-only seed uses that selected email’s exact sender and already available, source-matched financial context; unknown activity or Actual destinations remain unset. Settings opens an enabled, unsaved draft and requires explicit Save. Task/reply edits retain their discard guard. Financial completion and correction stay in Dashboard/Finances; reader status is informational.
+- **Create profile** requires a recognized triage `event_kind` other than `other`, independent of lifecycle visibility. The client-only seed uses that selected email’s exact sender and already available, source-matched financial context; unknown activity or Actual destinations remain unset. Settings opens a disabled, unsaved provider draft and requires explicit Save; automatic processing also requires a supported provider and explicit enabling. Task/reply edits retain their discard guard. Financial completion and correction stay in Dashboard/Finances; reader status is informational.
 
 ## Related
 

@@ -65,13 +65,6 @@ describe("receipt currency coverage", () => {
     expect(selectSemanticBillAmount(candidate)).toBeNull();
   });
 
-  it("does not attribute an excluded notification threshold to the tokenizer change", async () => {
-    const content = "Subject: A transaction was made on your Costco Anywhere account\nFrom: alerts@info6.citi.com\n\n"
-      + "You're receiving this email based on your custom alert settings.\n"
-      + "The transaction made on your Costco Anywhere account exceeded $2.00.\nTotal $26.52 USD";
-    expect(selectSemanticBillAmount(await verify(content, failedAudit))).toBeNull();
-  });
-
   it("keeps a saved failed audit blocked when its amount label is ungrounded", async () => {
     const candidate = await verify("Unit price   Qty   Amount\n$26.52 USD   1   $26.52 USD\nSubtotal $26.52 USD", failedAudit);
     expect(selectSemanticBillAmount(candidate)).toBeNull();

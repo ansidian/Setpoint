@@ -39,7 +39,7 @@ describe("provider financial assessment", () => {
     expect(r).toMatchObject({ status: "parsed", providerId, reasons: [], candidate: { amount, due_date, amount_kind, event_kind, currency: "USD" } });
     if (r.status !== "parsed") throw new Error("Expected parsed fixture");
     expect(r.candidate.amount_candidates?.find(a => a.kind === amount_kind)?.evidence).toBeTruthy();
-    expect(r.parserVersion).toBe(`${providerId}-v1`);
+    expect(r.parserVersion).toBe(providerId === "sofi" ? "sofi-v2" : `${providerId}-v1`);
     expect(r.policyVersion).toContain("provider-text-v1:registry-v1:");
     expect(r.policyVersion).toContain(r.parserVersion);
   });
@@ -115,6 +115,13 @@ describe("provider financial assessment", () => {
     const r = assessProviderFinancialEmail({ ...source, subject: source.subject.replace("48.52", "2.00"), body: source.body.replace(/48\.52/g, "2.00") });
     expect(r).toMatchObject({ status: "parsed", candidate: { amount: 2 } });
     if (r.status === "parsed") expect(r.candidate.amount_candidates).toHaveLength(1);
+  });
+
+  it("does not use a Citi threshold or unlabelled amount when the transaction amount row is missing", () => {
+    const source = fixture("citi-purchase");
+    expect(assessProviderFinancialEmail({ ...source, body: source.body.replace("Amount: $48.52", "") })).toMatchObject({
+      status: "review", reasons: expect.arrayContaining(["provider_amount_missing"]), candidate: { amount: null },
+    });
   });
 
   it.each([

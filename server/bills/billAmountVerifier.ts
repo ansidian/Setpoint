@@ -6,7 +6,6 @@ import {
   type BillAmountVerification,
 } from "../../shared/types/bills.ts";
 import { hasAmbiguousSemanticBillAmount, selectSemanticBillAmount } from "./billSemanticAmountPolicy.ts";
-import { CITI_CUSTOM_ALERT_THRESHOLD_INSTRUCTIONS } from "./bill-semantic-prompt.ts";
 
 const MIN_VERIFY_VALUES = 1;
 const MAX_VERIFY_VALUES = 8;
@@ -38,17 +37,6 @@ export function currencyValuesInText(content: string): number[] {
     if (value != null && key) values.set(key, value);
   }
   return [...values.values()];
-}
-
-function requiredCurrencyValues(content: string): number[] {
-  // Exclude only the configured threshold occurrence, never every $2 value.
-  const citiAlert = /^Subject:[^\n]*\nFrom:\s*alerts@info6\.citi\.com\s*\n/i.test(content)
-    && /\bcustom\s+alert\s+settings\b/i.test(content);
-  const evidence = citiAlert ? content.replace(
-    /\bThe\s+transaction\s+made\s+on\s+your\s+Costco\s+Anywhere\s+account\s+exceeded\s+\$2\.00\b/gi,
-    "Configured Citi notification threshold",
-  ) : content;
-  return currencyValuesInText(evidence);
 }
 
 function candidateValues(candidate: BillCandidate): Set<string> {
@@ -142,7 +130,7 @@ function hasSupersededCurrencyCoverage(content: string, candidate: BillCandidate
 
 export function shouldVerifyBillAmounts(content: string, candidate: BillCandidate): boolean {
   if (hasUnknownAmountRoles(candidate)) return true;
-  const sourceValues = requiredCurrencyValues(content);
+  const sourceValues = currencyValuesInText(content);
   if (sourceValues.length < MIN_VERIFY_VALUES || sourceValues.length > MAX_VERIFY_VALUES) return false;
   return hasSupersededCurrencyCoverage(content, candidate, sourceValues)
     || coveredCurrencyValueCount(sourceValues, candidate) < sourceValues.length
@@ -184,14 +172,12 @@ export async function verifyBillAmounts({
   const canonicalCandidate = withoutMinimumDueSelection(candidate);
   const removedMinimumSelection = canonicalCandidate !== candidate;
   const unknownRoles = hasUnknownAmountRoles(canonicalCandidate);
-  const sourceValues = requiredCurrencyValues(content);
+  const sourceValues = currencyValuesInText(content);
   const initialCovered = coveredCurrencyValueCount(sourceValues, canonicalCandidate);
-  const invalidThresholdSelection = sourceValues.length < currencyValuesInText(content).length
-    && !selectionIsValid(canonicalCandidate, sourceValues);
   if (sourceValues.length < MIN_VERIFY_VALUES || sourceValues.length > MAX_VERIFY_VALUES
     || !shouldVerifyBillAmounts(content, canonicalCandidate)) {
     return {
-      candidate: unknownRoles || invalidThresholdSelection
+      candidate: unknownRoles
         ? {
             ...canonicalCandidate,
             amount_verification: verificationMetadata("failed", sourceValues.length, initialCovered, providerId, model),
@@ -255,7 +241,6 @@ Return a corrected extraction using the required schema. Focus on amount, amount
 - Use only these amount roles: ${BILL_AMOUNT_KINDS.join(", ")}. Event types such as reward are not amount roles. Resolve unsupported first-pass roles from the original evidence; do not repair them by substituting a similar role name.
 - Account for every distinct numeric currency value visible in the source, up to the schema limit.
 - Include informational, promotional, projected, and legal-footer currency values as amount_candidates with kind other and verbatim evidence of their non-operational role. They count toward coverage but must not replace or invalidate a separately evidenced payable or paid amount. For example, a receipt's payment and a statutory penalty cap are separate candidates: payment_amount for the payment and other for the cap.
-- ${CITI_CUSTOM_ALERT_THRESHOLD_INSTRUCTIONS}
 - Audit each semantic label as well as each numeric value. Complete numeric coverage does not establish correct label/value associations.
 - Preserve source rows and table relationships. When several labels precede several values, use explicit structural or repeated source evidence to resolve their association; do not guess from proximity.
 - For each amount_candidate, copy one short contiguous verbatim evidence excerpt (at most 320 characters) containing its currency value and supporting label. Do not paraphrase, add ellipses, or join separate source excerpts. An informational zero balance is not a statement balance unless the source explicitly labels it as such.

@@ -41,3 +41,5 @@ export function assessProviderFinancialEmail(source: FinancialProviderEmailSourc
   return providerId ? { ...registry[providerId].parse(source), parserVersion: registry[providerId].version, policyVersion: FINANCIAL_PROVIDER_PARSER_POLICY }
     : { status: "unrecognized", providerId: null, policyVersion: FINANCIAL_PROVIDER_PARSER_POLICY, reasons: ["provider_unrecognized"] };
 }
+
+export { recognizePaypalBalanceMovement } from "./paypal.ts";
