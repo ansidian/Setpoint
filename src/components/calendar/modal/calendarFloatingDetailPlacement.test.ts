@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   clampFloatingPosition,
   resolveFloatingDetailPlacement,
+  resolveDraggedFloatingPlacement,
 } from "./calendarFloatingDetailPlacement";
 import type { CalendarRectLike } from "./calendarFloatingDetailPlacement";
 
@@ -17,6 +18,46 @@ function rect(left: number, top: number, width: number, height: number): Calenda
 }
 
 describe("resolveFloatingDetailPlacement", () => {
+  it.each(["create", "edit"])("anchors %s using rendered height and caps growth independently", (mode) => {
+    for (const panelHeight of [300, 500, 720, 2000]) {
+      const placement = resolveFloatingDetailPlacement({
+        anchorRect: rect(640, 700, 32, 28),
+        calendarRect: rect(0, 0, 1600, 1200),
+        panelHeight,
+        mode,
+      });
+      const height = Math.min(panelHeight, 720);
+      expect(placement.maxHeight).toBe(720);
+      expect(placement.top + placement.caretTop + 6).toBe(714);
+      expect(placement.caretTop).toBeLessThan(height - 12);
+      expect(placement.top).toBeGreaterThanOrEqual(16);
+      expect(placement.top + height).toBeLessThanOrEqual(1184);
+    }
+  });
+
+  it("reduces the editor cap for a short viewport and keeps the caret on the panel", () => {
+    const placement = resolveFloatingDetailPlacement({
+      anchorRect: rect(640, 480, 32, 28),
+      calendarRect: rect(0, 0, 1200, 540),
+      panelHeight: 1000,
+      mode: "edit",
+    });
+    expect(placement.maxHeight).toBe(508);
+    expect(placement.top + placement.maxHeight).toBe(524);
+    expect(placement.caretTop).toBeLessThan(placement.maxHeight - 12);
+  });
+
+  it("keeps dragged placement while limiting growth, and clamps on viewport shrink", () => {
+    const placement = resolveFloatingDetailPlacement({ mode: "edit", calendarRect: rect(0, 0, 1600, 1200) });
+    const position = { left: 600, top: 600, height: 400 };
+    const original = resolveDraggedFloatingPlacement(placement, position, rect(0, 0, 1600, 1200));
+    expect(original).toMatchObject({ left: 600, top: 600, maxHeight: 584, caretSide: null });
+    const smaller = resolveDraggedFloatingPlacement(placement, position, rect(0, 0, 1000, 700));
+    expect(smaller.top + position.height).toBeLessThanOrEqual(684);
+    expect(smaller.left + smaller.width).toBeLessThanOrEqual(984);
+    expect(smaller.caretSide).toBeNull();
+  });
+
   it("flips anchored detail panels away from the rail", () => {
     const railRect = rect(900, 60, 280, 620);
     const sourceRect = rect(620, 180, 60, 80);

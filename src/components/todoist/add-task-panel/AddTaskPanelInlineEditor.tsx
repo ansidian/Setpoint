@@ -321,6 +321,7 @@ export default function AddTaskPanelInlineEditor({
     <div
       ref={panelRef}
       data-testid="todoist-inline-editor"
+      className="todoist-inline-editor"
       data-editor-layout="slim-icon"
       data-calendar-local-scroll="true"
       data-suspend-calendar-hotkeys={active && openCompactPanel ? "blocking" : "true"}
@@ -329,98 +330,100 @@ export default function AddTaskPanelInlineEditor({
       style={buildInlineContainerStyle({ active })}
     >
       <div style={{ padding: 0, display: "flex", flexDirection: "column", gap: 0, minHeight: 0, flex: 1 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-          <div>
-            <div id="todoist-editor-title" style={{ fontSize: 14, color: "var(--sp-accent)", fontWeight: 500 }}>
-              {isEdit ? "Edit deadline" : "New deadline"}
+        <div className="todoist-inline-editor-body">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+            <div>
+              <div id="todoist-editor-title" style={{ fontSize: 14, color: "var(--sp-accent)", fontWeight: 500 }}>
+                {isEdit ? "Edit deadline" : "New deadline"}
+              </div>
+              {supportingContext && <div style={{ marginTop: 4, fontSize: 10.5, color: "var(--color-text-faint)" }}>{supportingContext}</div>}
+              <div style={{ marginTop: 3, fontSize: 11, color: "var(--color-text-faint)", lineHeight: 1.45 }}>
+                Deadline text can carry dates, priority, projects, and labels.
+              </div>
             </div>
-            {supportingContext && <div style={{ marginTop: 4, fontSize: 10.5, color: "var(--color-text-faint)" }}>{supportingContext}</div>}
-            <div style={{ marginTop: 3, fontSize: 11, color: "var(--color-text-faint)", lineHeight: 1.45 }}>
-              Deadline text can carry dates, priority, projects, and labels.
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 16, flex: 1, minHeight: 0 }}>
+            <TodoistErrorNotice error={error} compact />
+            <TodoistTaskTextSection
+              autocompleteType={autocompleteType}
+              cursorPos={cursorPos}
+              handleAutocompleteSelect={handleAutocompleteSelect}
+              handleInputChange={handleInputChange}
+              handleInputBlur={handleInputBlur}
+              handleKeyDown={handleKeyDown}
+              input={input}
+              inputRef={inputRef}
+              labels={labels}
+              projects={projects}
+              recurrenceSummary={null}
+              titleError={titleError}
+            />
+            <div style={{ flexShrink: 0 }}>
+              <TodoistDeadlineFactSheet
+                openCompactPanel={openCompactPanel}
+                setOpenCompactPanel={setOpenCompactPanel}
+                state={state}
+              />
+              {/* Keep the panel's spacing inside its collapsing height envelope. */}
+              <AnimatedCollapse open={openCompactPanel === "project" || openCompactPanel === "priority" || openCompactPanel === "labels"}>
+                <div style={{ paddingTop: 14 }}>
+                  <AnimatedHeight>
+                    <CompactDetailPanel
+                      labels={labels}
+                      openCompactPanel={openCompactPanel}
+                      priorityOptions={priorityOptions}
+                      projects={projects}
+                      resolvedLabels={resolvedLabels}
+                      resolvedPriority={resolvedPriority}
+                      resolvedProject={resolvedProject}
+                      setManualLabels={setManualLabels}
+                      setManualPriority={setManualPriority}
+                      setManualProject={setManualProject}
+                      setOpenCompactPanel={setOpenCompactPanel}
+                      setOverrides={setOverrides}
+                    />
+                  </AnimatedHeight>
+                </div>
+              </AnimatedCollapse>
             </div>
+
+            <CompactDescriptionField description={description} setDescription={setDescription} isMobile={isMobile} emailContext={descriptionVariant === "email-context"} />
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <TodoistReminderChips
+                compact
+                reminders={todoistReminders}
+                reminderError={reminderError}
+                customReminder={customReminder}
+                disabled={submitting || deleting}
+                hasAnchor={hasReminderAnchor}
+                presetStates={todoistReminderPresetStates}
+                onAddPreset={addTodoistReminderPreset}
+                onUpdateCustomReminder={updateCustomReminder}
+                onAddCustom={addCustomTodoistReminder}
+                onRemoveReminder={removeTodoistReminder}
+              />
+            </div>
+
           </div>
         </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 16, flex: 1, minHeight: 0 }}>
-          <TodoistErrorNotice error={error} compact />
-          <TodoistTaskTextSection
-            autocompleteType={autocompleteType}
-            cursorPos={cursorPos}
-            handleAutocompleteSelect={handleAutocompleteSelect}
-            handleInputChange={handleInputChange}
-            handleInputBlur={handleInputBlur}
-            handleKeyDown={handleKeyDown}
-            input={input}
-            inputRef={inputRef}
-            labels={labels}
-            projects={projects}
-            recurrenceSummary={null}
-            titleError={titleError}
+        <div className="todoist-inline-editor-actions">
+          <CompactActions
+            canSubmit={canSubmit}
+            cancelDelete={cancelDelete}
+            confirmDelete={confirmDelete}
+            confirmDiscard={confirmDiscard}
+            confirmDeleteIntent={confirmDeleteIntent}
+            confirmDiscardChanges={confirmDiscardChanges}
+            cancelDiscard={cancelDiscard}
+            deleteTask={deleteTask}
+            deleting={deleting}
+            handleSubmit={handleSubmit}
+            isEdit={isEdit}
+            requestClose={requestClose}
+            submitting={submitting}
           />
-          <div style={{ flexShrink: 0 }}>
-            <TodoistDeadlineFactSheet
-              openCompactPanel={openCompactPanel}
-              setOpenCompactPanel={setOpenCompactPanel}
-              state={state}
-            />
-            {/* Keep the panel's spacing inside its collapsing height envelope. */}
-            <AnimatedCollapse open={openCompactPanel === "project" || openCompactPanel === "priority" || openCompactPanel === "labels"}>
-              <div style={{ paddingTop: 14 }}>
-                <AnimatedHeight>
-                  <CompactDetailPanel
-                    labels={labels}
-                    openCompactPanel={openCompactPanel}
-                    priorityOptions={priorityOptions}
-                    projects={projects}
-                    resolvedLabels={resolvedLabels}
-                    resolvedPriority={resolvedPriority}
-                    resolvedProject={resolvedProject}
-                    setManualLabels={setManualLabels}
-                    setManualPriority={setManualPriority}
-                    setManualProject={setManualProject}
-                    setOpenCompactPanel={setOpenCompactPanel}
-                    setOverrides={setOverrides}
-                  />
-                </AnimatedHeight>
-              </div>
-            </AnimatedCollapse>
-          </div>
-
-          <CompactDescriptionField description={description} setDescription={setDescription} isMobile={isMobile} emailContext={descriptionVariant === "email-context"} />
-
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <TodoistReminderChips
-              compact
-              reminders={todoistReminders}
-              reminderError={reminderError}
-              customReminder={customReminder}
-              disabled={submitting || deleting}
-              hasAnchor={hasReminderAnchor}
-              presetStates={todoistReminderPresetStates}
-              onAddPreset={addTodoistReminderPreset}
-              onUpdateCustomReminder={updateCustomReminder}
-              onAddCustom={addCustomTodoistReminder}
-              onRemoveReminder={removeTodoistReminder}
-            />
-          </div>
-
-          <div style={{ marginTop: "auto", paddingTop: 6, position: "sticky", bottom: -12, zIndex: 2, background: "linear-gradient(180deg, rgba(22,22,30,0), var(--sp-panel) 18%)" }}>
-            <CompactActions
-              canSubmit={canSubmit}
-              cancelDelete={cancelDelete}
-              confirmDelete={confirmDelete}
-              confirmDiscard={confirmDiscard}
-              confirmDeleteIntent={confirmDeleteIntent}
-              confirmDiscardChanges={confirmDiscardChanges}
-              cancelDiscard={cancelDiscard}
-              deleteTask={deleteTask}
-              deleting={deleting}
-              handleSubmit={handleSubmit}
-              isEdit={isEdit}
-              requestClose={requestClose}
-              submitting={submitting}
-            />
-          </div>
         </div>
       </div>
       <TodoistDuePickerLayer

@@ -81,7 +81,7 @@ export default function useFloatingDetailDrag({
         Math.round(current.left) === Math.round(next.left) &&
         Math.round(current.top) === Math.round(next.top)
           ? current
-          : { ...next, placementKey: session.placementKey },
+          : { ...next, height: session.panelHeight, placementKey: session.placementKey },
       );
     },
     [

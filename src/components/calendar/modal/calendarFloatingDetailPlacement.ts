@@ -133,10 +133,11 @@ export function resolveFloatingDetailPlacement({
     ? clamp(DEFAULT_EDITOR_WIDTH, Math.min(MIN_EDITOR_WIDTH, bounds.width), Math.min(MAX_EDITOR_WIDTH, bounds.width))
     : clamp(DEFAULT_PANEL_WIDTH, MIN_PANEL_WIDTH, Math.min(MAX_PANEL_WIDTH, bounds.width));
   const maxHeight = isEditor
-    ? clamp(Math.min(MAX_EDITOR_HEIGHT, bounds.height), Math.min(420, bounds.height), MAX_EDITOR_HEIGHT)
+    ? Math.min(MAX_EDITOR_HEIGHT, bounds.height)
     : clamp(Math.min(MAX_PANEL_HEIGHT, bounds.height), MIN_PANEL_HEIGHT, MAX_PANEL_HEIGHT);
+  // The permitted size is not the rendered size: position the actual panel.
   const height = isEditor
-    ? maxHeight
+    ? Math.min(panelHeight || 560, maxHeight)
     : clamp(panelHeight || DEFAULT_PANEL_HEIGHT, MIN_PANEL_HEIGHT, maxHeight);
 
   const referenceRect = sourceRect || anchorRect;
@@ -202,6 +203,28 @@ export function resolveFloatingDetailPlacement({
     maxHeight,
     caretSide: selected.side === "right" ? "left" : "right",
     caretTop: clamp(caretRect.top + caretRect.height / 2 - selected.top - 6, 18, height - 18),
+  };
+}
+
+/** A dragged workspace keeps its position and grows only into the space below it. */
+export function resolveDraggedFloatingPlacement(
+  placement: FloatingDetailPlacement,
+  position: { left: number; top: number; height?: number },
+  calendarRect?: CalendarRectLike | null,
+): FloatingDetailPlacement {
+  const bounds = normalizedBounds(calendarRect);
+  const maxHeight = Math.min(placement.maxHeight, bounds.height);
+  const clamped = clampFloatingPosition(position, {
+    width: placement.width,
+    height: Math.min(position.height || DEFAULT_PANEL_HEIGHT, maxHeight),
+    maxHeight,
+  }, calendarRect);
+  return {
+    ...placement,
+    ...clamped,
+    maxHeight: Math.min(maxHeight, bounds.bottom - clamped.top),
+    caretSide: null,
+    caretTop: 0,
   };
 }
 

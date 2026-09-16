@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
-import { resolveFloatingDetailPlacement } from "./calendarFloatingDetailPlacement";
+import { heightMotionDuration } from "@/lib/motion";
+import { resolveDraggedFloatingPlacement, resolveFloatingDetailPlacement } from "./calendarFloatingDetailPlacement";
 import type { FloatingDetailPlacement, FloatingDetailSide } from "./calendarFloatingDetailPlacement";
 import type { FloatingDetailMeasuredSize } from "./calendarFloatingDetailRevealModel";
 import useFloatingDetailDrag, { rectFromElement } from "./useFloatingDetailDrag";
@@ -10,7 +11,6 @@ import {
   isManualTransitionActive,
   isSnapTransitionActive,
   resolveAnchoredPlacement,
-  resolveRenderPlacement,
   samePlacement,
 } from "./calendarFloatingDetailRevealModel";
 
@@ -55,13 +55,22 @@ export default function useFloatingDetailPlacement({
   const measuredPlacementKeysRef = useRef(new Set<string>());
   const snapNextMeasuredPlacementKeyRef = useRef<string | null>(null);
   const [measuredSize, setMeasuredSize] = useState<FloatingDetailMeasuredSize>({ width: 380, height: 0, maxHeight: 520 });
-  const [placementState, setPlacementState] = useState<{ key: string | null; placement: FloatingDetailPlacement | null }>({ key: null, placement: null });
+  const [placementState, setPlacementState] = useState<{ key: string | null; placement: FloatingDetailPlacement | null; followingHeight: boolean }>({ key: null, placement: null, followingHeight: false });
+  const heightAnimationRef = useRef<{ key?: string; at: number }>({ at: -Infinity });
   const [measuredPlacementKey, setMeasuredPlacementKey] = useState<string | null>(null);
   const [snapPlacementKey, setSnapPlacementKey] = useState<string | null>(null);
   const [snapPlacementIntent, setSnapPlacementIntent] = useState<string | null>(null);
   const [hasRevealedMeasuredPlacement, setHasRevealedMeasuredPlacement] = useState(false);
 
   const placementKey = detail?.placementKey;
+  const [sizeKey, setSizeKey] = useState(placementKey);
+  const editorSideRef = useRef<{ key?: string; side: FloatingDetailSide } | null>(null);
+  if (sizeKey !== placementKey) {
+    // A new item must never reveal using the previous item's dimensions.
+    setSizeKey(placementKey);
+    setMeasuredSize({ width: detail?.initialPlacement?.width || 380, height: 0, maxHeight: detail?.initialPlacement?.maxHeight || 520 });
+    setMeasuredPlacementKey(null);
+  }
 
   const {
     manualPosition,
@@ -82,7 +91,11 @@ export default function useFloatingDetailPlacement({
   const placement =
     placementState.key === detail?.placementKey
       ? placementState.placement
-      : detail?.initialPlacement || null;
+      : detail?.initialPlacement && hasRevealedMeasuredPlacement && placementState.placement
+        // Measure at the new width, but retain the visible position until that
+        // measurement is ready. Retargeting can then spring to the real endpoint.
+        ? { ...detail.initialPlacement, top: placementState.placement.top, left: placementState.placement.left }
+        : detail?.initialPlacement || null;
   const manualDragActive = !!detail?.userDragged;
   const manualPlacementActive = manualPosition?.placementKey === placementKey;
 
@@ -96,11 +109,11 @@ export default function useFloatingDetailPlacement({
       const sourceRect = rectFromElement(detail.sourceCellElement);
       const exclusionRect = rectFromElement(detail.exclusionElement);
 
-      if (!anchorRect) {
+      if (!anchorRect && !manualPlacementActive) {
         return null;
       }
 
-      return resolveFloatingDetailPlacement({
+      const next = resolveFloatingDetailPlacement({
         anchorRect,
         sourceRect,
         exclusionRect,
@@ -108,10 +121,14 @@ export default function useFloatingDetailPlacement({
         railRect,
         panelHeight: measuredSize.height,
         mode,
-        preferredSide: detail.preferredSide || null,
+        preferredSide: (mode !== "detail" && editorSideRef.current?.key === placementKey
+          ? editorSideRef.current?.side : detail.preferredSide) || null,
         forcedSide: detail.forcedSide || null,
         allowRailOverlap: detail.sideIntent === "user-flip",
       });
+      return manualPlacementActive && manualPosition
+        ? resolveDraggedFloatingPlacement(next, manualPosition, calendarRect)
+        : next;
     },
     [
       calendarPanelRef,
@@ -119,20 +136,34 @@ export default function useFloatingDetailPlacement({
       measuredSize.height,
       mode,
       railRef,
+      manualPlacementActive,
+      manualPosition,
+      placementKey,
     ],
   );
 
   const updatePlacement = useCallback(
     () => {
       if (
-        !open ||
-        detail?.userDragged ||
-        draggingRef.current ||
-        manualPlacementActive
+        !open || (typeof ResizeObserver !== "undefined" && measuredPlacementKey !== placementKey) ||
+        dragging || draggingRef.current
       )
         return;
       const next = computePlacement();
       if (!next) return;
+      const now = performance.now();
+      const heightAnimating = panelRef.current?.getAnimations?.({ subtree: true }).some((animation) =>
+        animation.playState === "running" && animation.effect instanceof KeyframeEffect &&
+        animation.effect.getKeyframes().some((frame) =>
+          ["height", "minHeight", "maxHeight", "gridTemplateRows"].some((property) => property in frame)),
+      );
+      if (heightAnimating) heightAnimationRef.current = { key: placementKey, at: now };
+      // Include the final ResizeObserver measurement after the child's last frame.
+      const followingHeight = heightAnimationRef.current.key === placementKey
+        && now - heightAnimationRef.current.at <= heightMotionDuration * 1000;
+      if (next.caretSide && mode !== "detail") {
+        editorSideRef.current = { key: detail?.placementKey, side: next.caretSide === "left" ? "right" : "left" };
+      }
       if (snapNextMeasuredPlacementKeyRef.current === detail?.placementKey) {
         snapNextMeasuredPlacementKeyRef.current = null;
         setSnapPlacementKey(detail?.placementKey || null);
@@ -144,18 +175,20 @@ export default function useFloatingDetailPlacement({
       );
       setPlacementState((current) =>
         current.key === detail?.placementKey &&
-        samePlacement(current.placement, next)
+        samePlacement(current.placement, next) && current.followingHeight === followingHeight
           ? current
-          : { key: detail?.placementKey || null, placement: next },
+          : { key: detail?.placementKey || null, placement: next, followingHeight },
       );
     },
     [
       computePlacement,
       detail?.placementKey,
-      detail?.userDragged,
       draggingRef,
-      manualPlacementActive,
+      dragging,
+      mode,
       open,
+      measuredPlacementKey,
+      placementKey,
     ],
   );
 
@@ -241,10 +274,9 @@ export default function useFloatingDetailPlacement({
   }, [cancelPendingDrag, open, schedulePlacement]);
 
   const anchoredPlacement = resolveAnchoredPlacement(placement, measuredSize);
-  const resolvedPlacement = resolveRenderPlacement(anchoredPlacement, {
-    manualPlacementActive,
-    manualPosition,
-  });
+  const resolvedPlacement = manualPlacementActive && manualPosition && dragging
+    ? { ...anchoredPlacement, left: manualPosition.left, top: manualPosition.top, caretSide: null, caretTop: 0 }
+    : anchoredPlacement;
   const manualTransitionActive = isManualTransitionActive({
     manualPlacementActive,
     dragging,
@@ -265,7 +297,8 @@ export default function useFloatingDetailPlacement({
     hasRevealedMeasuredPlacement,
     measuredPlacementKey,
   });
-  const instantPlacementTransition = isInstantPlacementTransition({
+  // Editor size already animates. Follow its measured frames without a trailing spring.
+  const instantPlacementTransition = (placementState.key === placementKey && placementState.followingHeight) || isInstantPlacementTransition({
     manualTransitionActive,
     snapTransitionActive,
     awaitingMeasuredPlacement,

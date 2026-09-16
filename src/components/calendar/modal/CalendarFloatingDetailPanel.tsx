@@ -11,7 +11,7 @@ import type { FloatingDetailPlacementTarget } from "./useFloatingDetailPlacement
 import type { CalendarFloatingDetail } from "../../../hooks/calendar/useCalendarFloatingDetail";
 
 function shellTransition(reducedMotion: boolean | null, instantPosition: boolean): Transition {
-  if (reducedMotion || instantPosition) return { duration: 0.01 };
+  if (reducedMotion || instantPosition) return { duration: 0 };
   return {
     type: "spring",
     stiffness: 420,
@@ -202,6 +202,7 @@ export default function CalendarFloatingDetailPanel({
         ) : null}
         <div
           data-testid="calendar-floating-detail-shell"
+          className={editorMode ? "calendar-editor-workspace" : undefined}
           data-calendar-floating-editor-feedback={
             feedbackVisible ? "active" : undefined
           }
@@ -241,6 +242,7 @@ export default function CalendarFloatingDetailPanel({
               justifyContent: "space-between",
               gap: 10,
               minHeight: 43,
+              flexShrink: 0,
               padding: "6px 12px 5px 14px",
               cursor: dragging ? "grabbing" : "grab",
               userSelect: "none",
@@ -265,20 +267,19 @@ export default function CalendarFloatingDetailPanel({
             style={{
               position: "relative",
               zIndex: 1,
-              display: eventEditorMode ? "flex" : "block",
-              flexDirection: eventEditorMode ? "column" : undefined,
-              flex: eventEditorMode ? 1 : undefined,
-              overflowY: eventEditorMode ? "hidden" : "auto",
+              display: editorMode ? "flex" : "block",
+              flexDirection: editorMode ? "column" : undefined,
+              flex: editorMode ? 1 : undefined,
+              overflowY: editorMode ? "hidden" : "auto",
               overscrollBehavior: "contain",
               padding: editorMode ? 12 : "0 8px 8px",
               minHeight: 0,
               maxHeight: Math.max(120, resolvedPlacement.maxHeight - 43),
-              scrollbarGutter: editorMode ? "stable" : undefined,
             }}
           >
             <div
               key={contentKey}
-              style={eventEditorMode ? {
+              style={editorMode ? {
                 display: "flex",
                 flex: 1,
                 minHeight: 0,

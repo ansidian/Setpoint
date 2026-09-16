@@ -23,6 +23,7 @@ export interface FloatingDetailManualPosition {
   top: number;
   left: number;
   placementKey?: string;
+  height?: number;
 }
 
 export function samePlacement(a: FloatingDetailPlacement | null | undefined, b: FloatingDetailPlacement | null | undefined): boolean | null | undefined {
@@ -46,22 +47,6 @@ export function resolveAnchoredPlacement(placement: FloatingDetailPlacement | nu
     caretSide: null,
     caretTop: 0,
   };
-}
-
-// When a manual drag owns the position, override top/left and drop the caret.
-// `manualPosition` is guarded because the hosting hook computes this every render
-// (even while the panel is closed, before the component's open-gate), where a null
-// placement key can make `manualPlacementActive` true with no manual position yet.
-export function resolveRenderPlacement(anchoredPlacement: FloatingDetailPlacement, { manualPlacementActive, manualPosition }: { manualPlacementActive: boolean; manualPosition: FloatingDetailManualPosition | null }): FloatingDetailPlacement {
-  return manualPlacementActive && manualPosition
-    ? {
-        ...anchoredPlacement,
-        top: manualPosition.top,
-        left: manualPosition.left,
-        caretSide: null,
-        caretTop: 0,
-      }
-    : anchoredPlacement;
 }
 
 export function isManualTransitionActive({ manualPlacementActive, dragging, manualDragActive }: { manualPlacementActive: boolean; dragging: boolean; manualDragActive: boolean }): boolean {
