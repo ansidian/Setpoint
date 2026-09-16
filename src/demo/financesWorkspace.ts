@@ -119,24 +119,7 @@ export function handleDemoFinances(url:URL,method:string,seed:DemoSeed,body:Reco
     return structuredClone(savedOrganization);
   }
   if (url.pathname.startsWith('/api/briefing/finances/utility-mappings')) {
-    const utilities = demoFinances(seed).utilities.map(row => row.identity);
-    const schedules = seed.bills.filter(row => row.type === 'bill').map(row => ({id:row.scheduleId,name:row.name,type:'bill' as const,completed:false,conditions:[{field:'payee',op:'is',value:row.scheduleId}]}));
-    const payees = schedules.map(row => ({id:row.id,name:row.name}));
-    if (url.pathname === '/api/briefing/finances/utility-mappings' && method === 'GET') return {budgetId:'demo-budget',metadataAvailable:true,utilities,payees,schedules};
-    const id = decodeURIComponent(url.pathname.slice('/api/briefing/finances/utility-mappings/'.length));
-    if (method === 'PUT') {
-      const utility = utilities.find(row => row.id === id);
-      const scheduleIds = Array.isArray(body.scheduleIds) ? body.scheduleIds.filter((value):value is string => typeof value === 'string') : [];
-      if (!utility || body.budgetId !== 'demo-budget' || !payees.some(row => row.id === body.payeeId) || scheduleIds.length !== 1 || utilities.some(row => row.id !== id && row.scheduleIds.some(scheduleId => scheduleIds.includes(scheduleId))) || scheduleIds.some(scheduleId => !schedules.some(row => row.id === scheduleId && row.conditions[0]?.value === body.payeeId))) throw new Error('Choose an available payee and one bill schedule.');
-      const update = {budgetId:'demo-budget',payeeId:String(body.payeeId),scheduleIds:[...new Set(scheduleIds)]};
-      const connection = seed.financialConnections.connections.find(row => row.utility?.id === id);
-      if (connection?.utility && 'scheduleId' in connection.target) {
-        connection.target.scheduleId = scheduleIds[0]!;
-        connection.utility.payeeId = String(body.payeeId);
-        seed.financialConnections.revision += 1;
-      }
-      return {...utility,...update};
-    }
+    throw Object.assign(new Error('Use Financial providers to update financial configuration.'), { status: 410 });
   }
   if(url.pathname==='/api/briefing/finances'&&method==='GET')return demoFinances(seed);
   if(url.pathname==='/api/briefing/finances/journal'&&method==='GET')return demoJournal(seed,url);

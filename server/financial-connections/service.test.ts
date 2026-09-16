@@ -6,7 +6,6 @@ import { previewFinancialConnectionMigration, applyFinancialConnectionMigration 
 import { readFinancialConnections, saveFinancialConnections } from './service.ts';
 import { readFinancialProfiles } from '../bills/financial-profiles.ts';
 import { connectionPayLinks, readConfiguredUtilities } from './storage.ts';
-import { updateUtilityMapping } from '../finances/utility-mappings.ts';
 
 let dbClient:Client;
 let tempDir:string;
@@ -37,8 +36,18 @@ describe('canonical financial provider configuration',()=>{
     expect(connectionPayLinks(after.connections)).toEqual([{scheduleId:'sce-schedule',label:'Electricity',url:'https://sce.example/pay'}]);
     expect(JSON.parse(String((await dbClient.execute("SELECT financial_profiles_json FROM ea_settings WHERE user_id='owner'")).rows[0]?.financial_profiles_json))).toEqual([utilityProfile,cardProfile]);
     expect((await migrate()).revision).toBe(8);
-    await expect(updateUtilityMapping('owner','electricity',{budgetId:'budget',payeeId:'sce',scheduleIds:['sce-schedule']},{dbClient})).rejects.toMatchObject({status:409});
   });
+  it('initializes an empty fresh installation through explicit migration without adopting authority', async () => {
+    await dbClient.execute("DELETE FROM ea_finance_utilities");
+    await dbClient.execute("UPDATE ea_settings SET financial_profiles_json='[]',utility_pay_links_json='[]',financial_profiles_revision=0");
+    const before = await readFinancialConnections('owner', { dbClient });
+    expect(before).toMatchObject({ connections: [], migrated: false, revision: 0 });
+    await expect(saveFinancialConnections('owner', { budgetId: 'budget', revision: 0, connections: [] }, { dbClient })).rejects.toMatchObject({ status: 409 });
+    await migrate();
+    expect(await saveFinancialConnections('owner', { budgetId: 'budget', revision: 1, connections: [] }, { dbClient })).toMatchObject({ connections: [], migrated: true, revision: 2 });
+    expect((await readFinancialProfiles('owner', { dbClient })).profiles).toEqual([]);
+  });
+
   it('rejects stale migration previews and leaves no partial configuration',async()=>{
     const preview=await previewFinancialConnectionMigration('owner',dbClient);
     await dbClient.execute("UPDATE ea_settings SET utility_pay_links_json='[]' WHERE user_id='owner'");

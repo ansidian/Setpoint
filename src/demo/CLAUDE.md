@@ -29,8 +29,8 @@ Build-time fictional walkthrough (`VITE_EA_DEMO=1`). `src/api.ts` routes demo re
 - `financeProjection.ts` — exact-ID fictional Actual objects and settled in-memory ledger/bill projections shared by correction, Calendar and spending consumers; emits the demo-only financial-change event after owner settlement.
 - `financialCorrections.ts` — in-memory fictional inspection, exact previews, confirmation and effective result projection; no SDK or network.
 - `financialCompletion.ts` — fictional managed review plan with an unsaved mapping suggestion, owner-completion and candidate-dismissal mutations.
-- `financialConnections.ts` — fictional unified provider setup and revision-bound saves, with matching settings/pay-link projections; stored in the in-memory seed only
-- `financialProfiles.ts` — fictional owner-approved profiles, review suggestions and metadata destinations; profile Settings mutations remain in memory
+- `financialConnections.ts` — fictional canonical provider setup and revision-bound saves; initial and saved settings/pay-link projections share production’s pure helpers
+- `financialProfiles.ts` — fictional unsaved review suggestions and ordinary in-memory Settings updates; retired profile/pay-link writes are rejected
 - `financialReceipt.ts` — one fictional Market receipt UID, sender, source row and body shared by Inbox, managed review and profile suggestion fixtures
 - `financeData.ts` — shared fictional transactions, confirmed-import mutation, and calendar Bills range projection.
 - `dashboardFinance.ts` — spending comparisons and category totals derived from the shared seed plus import activity.
@@ -50,4 +50,4 @@ Tests are not listed here; follow `AGENTS.md` behavior-ownership guidance.
 - Demo connection flags describe simulated state only. Keep real passwords, tokens, provider operations, and persistent settings out of this directory.
 - Canonical product behavior and provider writes remain in their production domains; this directory supplies only the walkthrough contract.
 
-- `financesWorkspace.ts` — Payments/Journal from preserved fictional utility/card statements and exact shared ledger relationships; utility mapping and revision-checked display organization edits stay in memory
+- `financesWorkspace.ts` — Payments/Journal from preserved fictional utility/card statements and exact shared ledger relationships; utilities derive from canonical connections; revision-checked display organization edits stay in memory and retired mapping writes are rejected

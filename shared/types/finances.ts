@@ -1,5 +1,5 @@
 import type { PaymentItem, PaymentOrganization } from './payment-groups.ts';
-import type { ActualBillOccurrence, ActualPayee, ActualSchedule } from './actual.ts';
+import type { ActualBillOccurrence } from './actual.ts';
 import type { FinancialActivityReference } from './financial-activity.ts';
 
 export interface JournalTransaction {
@@ -39,18 +39,6 @@ export interface UtilityIdentity {
   scheduleIds: string[];
   sourceSenders: string[];
   sourceIdentityText?: string;
-}
-export interface UtilityMappingSettings {
-  budgetId: string | null;
-  utilities: UtilityIdentity[];
-  payees: ActualPayee[];
-  schedules: ActualSchedule[];
-  metadataAvailable: boolean;
-}
-export interface UtilityMappingUpdate {
-  budgetId: string;
-  payeeId: string;
-  scheduleIds: string[];
 }
 export interface PaymentStatement {
   id: string;

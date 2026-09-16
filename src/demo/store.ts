@@ -2,8 +2,7 @@ import { buildDemoNews } from "./newsData.ts";
 import { buildDemoTransactions } from "./financeData.ts";
 import { buildDemoWeather } from "./weatherData.ts";
 import { buildDemoInboxSeed } from "./inboxData.ts";
-import { demoFinancialProfiles } from "./financialProfiles.ts";
-import { demoFinancialConnections } from "./financialConnections";
+import { demoFinancialConnections, demoFinancialSettings } from "./financialConnections";
 import type { Reminder } from "../../shared/types/reminders.ts";
 import type { ActualPayee } from "../../shared/types/actual.ts";
 const WORK_COLOR = "#89b4fa";
@@ -305,6 +304,7 @@ function makeDemoSeed(now = new Date()) {
     activeSnapshot: { state: "current", reason: "demo_seed" },
   };
 
+  const financialConnections = demoFinancialConnections();
   const settings = {
     demo: true,
     email_triage_mode: "auto",
@@ -317,8 +317,7 @@ function makeDemoSeed(now = new Date()) {
     actual_budget_sync_id: "demo-budget",
     actual_configured: true,
     actual_budget_configured: true,
-    financial_profiles: demoFinancialProfiles(),
-    financial_profiles_revision: 1,
+    ...demoFinancialSettings(financialConnections),
     home_location_label: null,
     home_location_address: null,
     home_location_place_id: null,
@@ -364,7 +363,7 @@ function makeDemoSeed(now = new Date()) {
     transactions,
     activeSnapshot: inboxSeed.activeSnapshot,
     settings,
-    financialConnections: demoFinancialConnections(),
+    financialConnections,
     reminders: [] as Reminder[],
     accounts: inboxSeed.accounts,
     actualMetadata: {

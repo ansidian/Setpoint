@@ -31,7 +31,7 @@ The HTTP surface: Express routers that validate input, apply auth, and delegate 
 - `tldraw.ts` — authenticated Notes bootstrap, revisioned document saves, and private content-addressed media
 - `news.ts` — News tab: topics/sources CRUD, starter-catalog import, add-source preview, seen-marker, manual refresh
 - `reminders.ts` — Discord reminder testing and configuration
-- `settings.ts` — user settings, model selection, and active integration configs; legacy Bill Pay mappings are retained only in storage and are not exposed
+- `settings.ts` — user settings, model selection, and active integration configs; legacy financial configuration writes return 410 and Bill Pay mappings remain archived
 - `gmail-push.ts` — Gmail Pub/Sub push intake, queues history syncs
 - `calendar-push.ts` — bodyless Google Calendar callback, admitted by persisted channel identity/token before browser CSRF middleware; acknowledges only durable work
 - `todoist-webhook.ts` — Todoist webhook deliveries with signature verification
@@ -53,4 +53,4 @@ The HTTP surface: Express routers that validate input, apply auth, and delegate 
 - `server/<domain>/` directories — service layers these routes delegate to (see their maps)
 - `dashboard.ts` SSE stream is the push channel the frontend caches listen to
 
-- `briefing/finances.ts` — authenticated Payments/Journal reads, utility membership repair, and revision-checked payment display organization
+- `briefing/finances.ts` — authenticated Payments/Journal reads and revision-checked payment display organization; retired utility mapping routes return 410

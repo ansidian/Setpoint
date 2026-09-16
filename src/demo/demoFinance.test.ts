@@ -348,6 +348,30 @@ describe('shared fictional financial settlement', () => {
 });
 
 describe('demo unified financial providers', () => {
+  it('derives initial settings and utility destinations from canonical connections', async () => {
+    const api = await demo();
+    const canonical = await api.getFinancialConnections();
+    const settings = await api.getSettings();
+    const electricity = canonical.connections.find(row => row.utility?.id === 'electricity')!;
+    expect(settings.financial_profiles?.find(row => row.id === electricity.id)).toMatchObject({ target: electricity.target, providerId: electricity.providerId });
+    expect(settings.financial_profiles_revision).toBe(canonical.revision);
+    expect(settings.utility_pay_links).toEqual([]);
+    expect((await api.getFinances()).utilities.find(row => row.identity.id === 'electricity')?.identity.scheduleIds).toEqual(['demo-shared-schedule']);
+  });
+
+  it('rejects obsolete writers without partially changing canonical configuration or settings', async () => {
+    const api = await demo();
+    const { apiFetch } = await import('../lib/apiFetch');
+    const before = await api.getFinancialConnections();
+    const settings = await api.getSettings();
+    for (const update of [{ financial_profiles: [] }, { utility_pay_links: [] }]) {
+      await expect(api.updateSettings({ ...update, email_triage_mode: 'paused' })).rejects.toMatchObject({ status: 410 });
+      expect(await api.getSettings()).toEqual(settings);
+    }
+    await expect(apiFetch('/api/briefing/finances/utility-mappings/electricity', { method: 'PUT', body: JSON.stringify({ budgetId: 'demo-budget', payeeId: 'demo-electric', scheduleIds: ['demo-electric'] }) })).rejects.toMatchObject({ status: 410 });
+    expect(await api.getFinancialConnections()).toEqual(before);
+  });
+
   it('keeps revision-bound provider, utility and pay-link edits in memory and projects the same utility destination', async () => {
     const api = await demo();
     const original = await api.getFinancialConnections();

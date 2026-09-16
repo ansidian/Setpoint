@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import type { SettingsCardStateProps } from "../settingsTypes";
 import type { ActualMetadataResponse } from "../../../../shared/types/bills";
 import type { FinancialConnection as FinancialProfile } from "../../../../shared/types/financial-connections";
+import { connectionProfiles, connectionPayLinks } from "../../../../shared/financial-connection-projections";
 import { FINANCIAL_PROVIDER_CATALOG } from "../../../../shared/types/financial-parsers";
 import { getFinancialConnections, saveFinancialConnections } from "@/api";
 import type { FinancialConnectionsResponse } from "@/lib/financesApi";
@@ -157,14 +158,8 @@ export default function FinancialProfilesCard({ settings, setSettings, metadata,
     try {
       const saved = await saveFinancialConnections({ budgetId, revision: configuration.revision, connections: next });
       setConfiguration(saved);
-      const financialProfiles = saved.connections.flatMap(connection => {
-        if (connection.target.kind === "schedule_link") return [];
-        return [{ id: connection.id, name: connection.name, enabled: connection.enabled, budgetId: connection.budgetId,
-          senderAddresses: connection.senderAddresses, merchantName: connection.merchantName, accountLast4: connection.accountLast4, target: connection.target }];
-      });
-      const links = saved.connections.flatMap(connection => connection.payLink && "scheduleId" in connection.target && connection.target.scheduleId
-        ? [{ scheduleId: connection.target.scheduleId, label: connection.utility?.label || connection.name, url: connection.payLink }] : []);
-      setSettings(current => ({ ...current, financial_profiles: financialProfiles, financial_profiles_revision: saved.revision, utility_pay_links: links }));
+      setSettings(current => ({ ...current, financial_profiles: connectionProfiles(saved.connections),
+        financial_profiles_revision: saved.revision, utility_pay_links: connectionPayLinks(saved.connections) }));
       window.dispatchEvent(new Event("ea-settings-changed"));
       window.dispatchEvent(new Event("ea-actual-metadata-invalidated"));
       if (editor) setExpandedGroups(current => ({ ...current, [editor.profile.target.kind]: true }));
@@ -204,9 +199,9 @@ export default function FinancialProfilesCard({ settings, setSettings, metadata,
 
   const original = profiles.find(profile => profile.id === normalized?.id);
   const authorityChanged = normalized?.enabled && (!original || profileAuthority(original) !== profileAuthority(normalized));
-  const saveProblem = configuration?.budgetId !== budgetId ? "Reload providers for the current Actual budget." : !configuration?.migrated ? "Financial provider setup must be completed before editing." : loading || loadError ? "Reload financial providers before saving." : !normalized ? "" : editor?.kindUnset ? "Choose the financial activity for this profile."
+  const saveProblem = configuration?.budgetId !== budgetId ? "Reload providers for the current Actual budget." : !configuration?.migrated ? "Financial provider setup must be completed before editing." : loading || loadError ? "Reload financial providers before saving." : !normalized ? "" : editor?.kindUnset ? "Choose the financial activity for this provider."
     : profileValidation(normalized)
-      || (authorityChanged ? !sameBudget ? "Choose a target in the current budget, or save this profile as disabled."
+      || (authorityChanged ? !sameBudget ? "Choose a target in the current budget, or save this provider as disabled."
         : metadataLoading ? "Wait for Actual targets to finish loading before enabling or changing this mapping. You can still save it as disabled."
           : !liveMetadataAvailable || !hasMetadata || metadataError ? "Actual targets are unavailable. Retry or repair the connection before enabling this mapping. You can still save it as disabled."
             : targetProblem : "");

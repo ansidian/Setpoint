@@ -1,4 +1,4 @@
-import { readCanonicalConnections, connectionPayLinks, financialConnectionsMigrated } from '../financial-connections/storage.ts';
+import { readCanonicalConnections, connectionPayLinks } from '../financial-connections/storage.ts';
 import { Router } from "express";
 import type { RequestHandler } from "express";
 import type { Value } from "@libsql/client";
@@ -8,7 +8,6 @@ import { settingsCredentialContext } from "../platform/credential-encryption-con
 import { geocodeLocation } from "../platform/weather.ts";
 import { initScheduler } from "../scheduler.ts";
 import { requestEmailTriageDrainAt } from "../scheduler-email-triage-drain.ts";
-import { requestTransactionImportDrain } from "../transaction-imports/transaction-import-runtime.ts";
 import {
   billExtractAvailability,
   isAllowedBillExtractModel,
@@ -43,15 +42,13 @@ import { storeTodoistOAuthTokenResponse } from "../tasks/todoist-token.ts";
 import { clearTodoistNeedsReauth } from "../platform/provider-reauth.ts";
 import { requireRecentPasswordAuth } from "../middleware/auth.ts";
 import { scheduleTimeToLeaveRefreshForUser } from "../reminders/reminder-service.ts";
-import { readActualMetadataProjection } from "../actual/actual.ts";
-import { readFinancialProfiles, validateFinancialProfiles } from "../bills/financial-profiles.ts";
+import { readFinancialProfiles } from "../bills/financial-profiles.ts";
 import {
   validateDiscordWebhookUrl,
   validateEmailInterests,
   validateHomeLocation,
   validateImportantSenders,
   validateSchedules,
-  validateUtilityPayLinks,
 } from "../platform/settings-schemas.ts";
 import type {
   BriefingSchedule,
@@ -199,10 +196,10 @@ router.get<Record<string, never>, SettingsResponse | ErrorResponse>("/settings",
     safe.email_triage_classify_read_arrivals = !!safe.email_triage_classify_read_arrivals;
     safe.triage_sound_settings = parseTriageSoundSettingsJson(triage_sound_settings_json);
     safe.triage_notification_sounds = TRIAGE_NOTIFICATION_SOUNDS;
-    safe.utility_pay_links = utility_pay_links_json ? JSON.parse(String(utility_pay_links_json)) : [];
     const financialProfiles = await readFinancialProfiles(userId);
     const canonicalConnections = await readCanonicalConnections(userId);
-    if (canonicalConnections) safe.utility_pay_links = connectionPayLinks(canonicalConnections.connections);
+    safe.utility_pay_links = canonicalConnections ? connectionPayLinks(canonicalConnections.connections)
+      : utility_pay_links_json ? JSON.parse(String(utility_pay_links_json)) : [];
     safe.financial_profiles = financialProfiles.profiles;
     safe.financial_profiles_revision = financialProfiles.revision;
 
@@ -252,12 +249,13 @@ router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, Sett
     if (todoist_api_token !== undefined) {
       return res.status(400).json({ message: "Use the Todoist Save & verify connection endpoint" });
     }
+    if (utility_pay_links !== undefined || financial_profiles !== undefined) {
+      return res.status(410).json({ message: 'Use Financial providers to update financial configuration.' });
+    }
     await db.execute({ sql: "INSERT OR IGNORE INTO ea_settings (user_id) VALUES (?)", args: [userId] });
     const updates: string[] = [];
     const args: Value[] = [];
     let homeMutationAvailable: boolean | null = null;
-    let financialProfilesBudgetId: string | null = null;
-    let financialProfilesRevision = 0;
 
     if (schedules_json !== undefined) {
       const validation = validateSchedules(schedules_json);
@@ -374,32 +372,6 @@ router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, Sett
       updates.push("triage_sound_settings_json = ?");
       args.push(JSON.stringify(triage_sound_settings));
     }
-    if ((utility_pay_links !== undefined || financial_profiles !== undefined) && await financialConnectionsMigrated(userId)) {
-      return res.status(409).json({message:'Use Financial providers to update financial configuration.'});
-    }
-    if (utility_pay_links !== undefined) {
-      const validation = validateUtilityPayLinks(utility_pay_links);
-      if (!validation.valid) {
-        return res.status(400).json({ message: validation.message! });
-      }
-      updates.push("utility_pay_links_json = ?");
-      args.push(JSON.stringify(validation.value));
-    }
-    if (financial_profiles !== undefined) {
-      const configuration = await readFinancialProfiles(userId);
-      const projected = Array.isArray(financial_profiles) && financial_profiles.some((profile) => profile?.enabled === true)
-        ? await readActualMetadataProjection(userId).catch(() => null) : null;
-      const validation = validateFinancialProfiles(financial_profiles, {
-        budgetId: configuration.budgetId,
-        metadata: projected?.syncHealth.state === "current" ? projected : null,
-        existingProfiles: configuration.profiles,
-      });
-      if (!validation.valid) return res.status(400).json({ message: validation.message });
-      financialProfilesBudgetId = configuration.budgetId;
-      financialProfilesRevision = configuration.revision;
-      updates.push("financial_profiles_json = ?", "financial_profiles_revision = financial_profiles_revision + 1");
-      args.push(JSON.stringify(validation.value));
-    }
     if (discord_webhook_url !== undefined) {
       const validation = validateDiscordWebhookUrl(discord_webhook_url);
       if (!validation.valid) {
@@ -430,13 +402,7 @@ router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, Sett
 
     if (updates.length > 0) {
       args.push(userId);
-      const budgetGuard = financial_profiles !== undefined ? " AND actual_budget_sync_id IS ? AND financial_profiles_revision = ?" : "";
-      if (financial_profiles !== undefined) args.push(financialProfilesBudgetId, financialProfilesRevision);
-      const result = await db.execute({ sql: `UPDATE ea_settings SET ${updates.join(", ")} WHERE user_id = ?${budgetGuard}`, args });
-      if (financial_profiles !== undefined && result.rowsAffected !== 1) {
-        return res.status(409).json({ message: "Financial profiles or the Actual budget changed while saving. Refresh Settings and try again." });
-      }
-      if (financial_profiles !== undefined) requestTransactionImportDrain();
+      await db.execute({ sql: `UPDATE ea_settings SET ${updates.join(", ")} WHERE user_id = ?`, args });
     }
     if (homeMutationAvailable !== null) {
       await scheduleTimeToLeaveRefreshForUser({

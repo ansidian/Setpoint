@@ -42,4 +42,4 @@ Shared, mostly-pure helpers with no owning feature directory — cross-cutting u
 
 (Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)
 
-- `financesApi.ts` — Payments/Journal reads, revision-bound unified financial-provider configuration, budget-bound utility mapping and staged payment-organization saves
+- `financesApi.ts` — Payments/Journal reads, revision-bound unified financial-provider configuration, staged payment-organization saves

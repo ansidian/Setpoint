@@ -68,7 +68,7 @@ The settings surface: a Connections directory plus Automation, Finance, and Syst
 
 ## Local patterns
 
-- Sections share a sentence-style heading, muted icon, bounded description, and stronger divider; local form state synced via patch(). Finance puts profiles and utility mappings before notification preferences.
+- Sections share a sentence-style heading, muted icon, bounded description, and stronger divider; local form state synced via patch(). Finance puts unified Financial providers before notification preferences. Legacy profile route seeds and anchor IDs remain compatibility entry points.
 - Finance feedback uses SettingsNotice for a labeled icon + message, with danger for errors and warning for incomplete setup. The global danger/warning utilities map to the existing rose/cream tokens.
 - Provider/model pairs degrade through fallback chains when an API key is unconfigured.
 
