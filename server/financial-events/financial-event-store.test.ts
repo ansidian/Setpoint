@@ -47,6 +47,8 @@ async function database(includeWorkflow = true): Promise<Client> {
     await client.executeMultiple(migration("068_financial_candidate_dismissal.sql"));
     await client.executeMultiple(migration("067_financial_event_ai_requests.sql"));
     await addFinancialCorrectionSchema(client);
+    await client.executeMultiple(migration("080_financial_connections.sql"));
+    await client.executeMultiple(migration("081_provider_financial_assessments.sql"));
     await client.execute({ sql: "UPDATE ea_financial_workflow_state SET cutover_at = ?", args: [CUTOVER] });
   }
   return client;
@@ -165,6 +167,8 @@ describe("financial event persistence", () => {
     await db.executeMultiple(migration("068_financial_candidate_dismissal.sql"));
     await db.executeMultiple(migration("067_financial_event_ai_requests.sql"));
     await addFinancialCorrectionSchema(db);
+    await db.executeMultiple(migration("080_financial_connections.sql"));
+    await db.executeMultiple(migration("081_provider_financial_assessments.sql"));
     await db.execute({ sql: "UPDATE ea_financial_workflow_state SET cutover_at = ?", args: [CUTOVER] });
     expect(await store().getNextWakeAt()).toBeNull();
     expect(await store().isManagedEmail("owner", "already-indexed")).toBe(false);

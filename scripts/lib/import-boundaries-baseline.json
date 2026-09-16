@@ -57,7 +57,8 @@
       "financial-event-intake.ts",
       "financial-event-completion.ts",
       "financial-event-review.ts",
-      "financial-event-status.ts"
+      "financial-event-status.ts",
+      "financial-provider-policy.ts"
     ]
   },
   "edges": [

@@ -1,3 +1,4 @@
+import type { FinancialProviderId } from './financial-parsers.ts';
 /** Stable owner context. Amounts and operation dates always come from the source. */
 export type FinancialProfileTarget =
   | { kind: "utility"; scheduleId: string }
@@ -5,6 +6,7 @@ export type FinancialProfileTarget =
   | { kind: "expense" | "income"; accountId: string; payeeId: string; categoryId?: string | null };
 
 export interface FinancialProfile {
+  providerId?: FinancialProviderId;
   id: string;
   name: string;
   enabled: boolean;

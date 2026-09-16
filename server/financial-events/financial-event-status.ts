@@ -48,10 +48,10 @@ export function projectManagedFinancialPlan(document: FinancialDocument, event: 
     && (hasPendingFinancialPlan(event) || sourcePending);
   const currentCandidate = sourcePending ? null : document.candidate;
   const reviewingDetails = !dismissed && !document.correction && !document.correctedEntry
-    && canReviewKnownDetails(event, currentCandidate);
+    && canReviewKnownDetails(event, currentCandidate, document.providerAssessment?.status === "review");
   const state = dismissed ? "settled" : sourcePending ? "pending" : reviewingDetails ? "needs_review" : event?.status === "processing" ? "pending" : event?.status
     || (document.status === "ignored" ? "settled" : document.status === "retry" ? "waiting" : "pending");
-  const reason = dismissed ? "Candidate dismissed by owner." : sourcePending ? "Checking updated source details." : reviewingDetails ? "Review the details before recording in Actual." : event?.reason || document.error || (state === "settled" ? "No financial entry is needed."
+  const reason = dismissed ? "Candidate dismissed by owner." : sourcePending ? "Checking updated source details." : reviewingDetails ? document.providerAssessment?.status === "review" ? document.error || "Review this provider email." : "Review the details before recording in Actual." : event?.reason || document.error || (state === "settled" ? "No financial entry is needed."
     : document.status === "associated" ? "Preparing financial details." : "Checking this email for financial activity.");
   const plan: FinancialEmailPlan = event?.plan && !pendingPlan ? structuredClone(event.plan) : {
     version: 1, identity: { version: 1, status: "resolved", key: event?.id || `financial-document:${document.id}` },

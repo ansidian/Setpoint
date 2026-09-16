@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { getActualMetadata } from "@/api";
 import TriageSoundSettingsCard from "../cards/TriageSoundSettingsCard";
-import UtilityMappingsCard from "../cards/UtilityMappingsCard";
 import FinancialProfilesCard from "@/components/settings/cards/FinancialProfilesCard";
 import { profileDraftFromRouteState } from "../cards/financialProfileModel";
 import { financialProfileSeedFromRouteState } from "@/lib/financialProfileSeed";
@@ -98,13 +97,13 @@ export default function ActualBudgetSettingsSection({
       {!dependency.showSettings ? (
         <ConnectionDependencyPrompt
           title="Connect Actual Budget"
-          description="Finance tools become available after Actual Budget is connected. Existing profiles and pay links remain saved while disconnected."
+          description="Finance tools become available after Actual Budget is connected. Existing financial providers and pay links remain saved while disconnected."
           actions={[{ connectionId: "actual-budget", label: "Set up Actual Budget" }]}
         />
       ) : dependency.actual === "needs_attention" ? (
         <ConnectionDependencyPrompt
           title="Actual Budget needs attention"
-          description="Profiles and pay links stay available for review. Repair the connection to refresh Actual accounts, payees, categories, and schedules."
+          description="Providers and pay links stay available for review. Repair the connection to refresh Actual accounts, payees, categories, and schedules."
           attention
           actions={[{ connectionId: "actual-budget", label: "Repair connection" }]}
         />
@@ -119,18 +118,6 @@ export default function ActualBudgetSettingsSection({
         metadataError={metadataError}
         onRequestMetadata={requestMetadata}
         liveMetadataAvailable={liveMetadataAvailable}
-      />
-      <UtilityMappingsCard
-        key={budgetId}
-        budgetId={budgetId}
-        available={liveMetadataAvailable}
-        showOtherLinks={dependency.showSettings}
-        settings={settings}
-        setSettings={setSettings}
-        metadata={metadata}
-        metadataLoading={metadataLoading}
-        metadataError={metadataError}
-        onRequestMetadata={requestMetadata}
       />
       <TriageSoundSettingsCard scope="finance" settings={settings} setSettings={setSettings} patch={patch} />
       <FinancialReviewNotificationsControl />

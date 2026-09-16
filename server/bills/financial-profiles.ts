@@ -1,3 +1,5 @@
+import { FINANCIAL_PROVIDER_CATALOG } from '../../shared/types/financial-parsers.ts';
+import { readCanonicalConnections, connectionProfiles } from '../financial-connections/storage.ts';
 import type { InStatement } from "@libsql/client";
 import db from "../db/connection.ts";
 import type { ActualMetadata, ActualSchedule } from "../../shared/types/actual.ts";
@@ -12,7 +14,7 @@ interface ProfileDb {
   execute(statement: InStatement): Promise<{ rows: Array<Record<string, unknown>> }>;
 }
 
-const PROFILE_KEYS = ["id", "name", "enabled", "budgetId", "senderAddresses", "merchantName", "accountLast4", "target"];
+const PROFILE_KEYS = ["providerId","id", "name", "enabled", "budgetId", "senderAddresses", "merchantName", "accountLast4", "target"];
 const EMAIL_ADDRESS = /^[a-z0-9.!#$%&'+/=?^_`{|}~-]+@(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
 
 function object(value: unknown): value is Record<string, unknown> {
@@ -87,11 +89,13 @@ function profileShapes(value: unknown): ProfileValidation {
     }
     if (raw.merchantName !== undefined && !boundedString(raw.merchantName, 200)) return invalid("merchantName must be an exact name of at most 200 characters");
     if (raw.accountLast4 !== undefined && (typeof raw.accountLast4 !== "string" || !/^\d{4}$/.test(raw.accountLast4))) return invalid("accountLast4 must contain exactly four digits");
+    if (raw.providerId !== undefined && !FINANCIAL_PROVIDER_CATALOG.some(provider=>provider.id===raw.providerId)) return invalid("unknown provider identity");
     const target = targetShape(raw.target);
     if (!target) return invalid("each target must contain exactly the fields required for its kind");
     profiles.push({
       id: raw.id.trim(), name: raw.name.trim(), enabled: raw.enabled, budgetId: raw.budgetId.trim(),
       senderAddresses: [...senders], target,
+      ...(raw.providerId !== undefined ? {providerId: raw.providerId as FinancialProfile["providerId"]} : {}),
       ...(typeof raw.merchantName === "string" ? { merchantName: raw.merchantName.trim() } : {}),
       ...(typeof raw.accountLast4 === "string" ? { accountLast4: raw.accountLast4 } : {}),
     });
@@ -138,7 +142,7 @@ function unavailableTarget(profile: FinancialProfile, metadata: ActualMetadata):
 
 function authority(profile: FinancialProfile): string {
   return JSON.stringify([
-    profile.budgetId, [...profile.senderAddresses].sort(), profile.merchantName ?? null,
+    profile.providerId ?? null, profile.budgetId, [...profile.senderAddresses].sort(), profile.merchantName ?? null,
     profile.accountLast4 ?? null, profile.target,
   ]);
 }
@@ -177,6 +181,8 @@ export function financialProfilesFromSettingsRow(row: Record<string, unknown> | 
 }
 
 export async function readFinancialProfiles(userId: string, { dbClient = db }: { dbClient?: ProfileDb } = {}): Promise<FinancialProfileConfiguration> {
+  const canonical = await readCanonicalConnections(userId, dbClient);
+  if (canonical) return {budgetId:canonical.budgetId,revision:canonical.revision,profiles:connectionProfiles(canonical.connections)};
   const result = await dbClient.execute({
     sql: "SELECT actual_budget_sync_id, financial_profiles_json, financial_profiles_revision FROM ea_settings WHERE user_id = ?",
     args: [userId],

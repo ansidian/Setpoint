@@ -372,3 +372,27 @@ describe("loadTriageModelConfig", () => {
     expect(config.strong).toEqual({ provider: "openai", model: "gpt-5.4" });
   });
 });
+
+describe('provider-owned Inbox classification',()=>{
+  it.each(['openai','anthropic'] as const)('keeps %s requests limited to routing and discards unsolicited financial extraction',async(provider)=>{
+    process.env.OPENAI_API_KEY='test-openai-key';process.env.ANTHROPIC_API_KEY='test-anthropic-key';
+    const payloads:Record<string,unknown>[]=[];
+    const unsolicited={...decision,bill_candidate:{type:'transfer',amount:900,event_kind:'statement_issued'}};
+    const client=createTriageModelClient({
+      config:{cheap:{provider,model:provider==='openai'?'gpt-5.4-nano':'claude-sonnet-4-6'},strong:{provider,model:provider==='openai'?'gpt-5.4-nano':'claude-sonnet-4-6'}},
+      fetchImpl:async(_url:unknown,options:RequestInit)=>{
+        payloads.push(JSON.parse(String(options.body)));
+        return {ok:true,json:async()=>provider==='openai'
+          ? {output:[{type:'function_call',name:'submit_email_triage',arguments:JSON.stringify(unsolicited)}],usage:{}}
+          : {content:[{type:'tool_use',name:'submit_email_triage',input:unsolicited}],usage:{}}};
+      },
+    });
+    const result=await client.classify({tier:'cheap',email:{...email,from_address:'citicards@info6.citi.com'},reason:'provider_statement'});
+    expect(result.decision).toMatchObject({lane:'needs_attention',bill_candidate:null});
+    expect(payloads.length).toBe(1);
+    const payload=payloads[0]!;
+    const tools=payload.tools as Array<{parameters?:{properties:object};input_schema?:{properties:object}}>;
+    expect((tools[0]?.parameters || tools[0]?.input_schema)?.properties).not.toHaveProperty('bill_candidate');
+    expect(JSON.stringify(payload)).not.toContain(BILL_SEMANTIC_EXTRACTION_INSTRUCTIONS);
+  });
+});

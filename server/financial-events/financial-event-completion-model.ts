@@ -65,8 +65,8 @@ export function completionBlocker(event: Pick<FinancialEvent, "attemptedAt" | "o
 }
 
 /** The legacy collection flag identifies sources needing review before planning. */
-export function canReviewKnownDetails(event: Pick<FinancialEvent, "attemptedAt" | "operation" | "outcome" | "plan" | "ownerCompletion" | "status" | "dismissedAt" | "collectionRequired"> | null, candidate: BillCandidate | null): boolean {
-  return !!candidate && (!event || (event.collectionRequired && !event.ownerCompletion
+export function canReviewKnownDetails(event: Pick<FinancialEvent, "attemptedAt" | "operation" | "outcome" | "plan" | "ownerCompletion" | "status" | "dismissedAt" | "collectionRequired"> | null, candidate: BillCandidate | null, explicitReview = false): boolean {
+  return (!!candidate || explicitReview) && (!event || (event.collectionRequired && !event.ownerCompletion
     && ["pending", "processing", "waiting"].includes(event.status))) && !completionBlocker(event);
 }
 
@@ -79,7 +79,7 @@ export function hasPendingFinancialPlan(event: Pick<FinancialEvent, "status" | "
 export function dismissalBlocker(document: FinancialDocument, event: FinancialEvent | null): string | null {
   if (document.dismissedAt != null || event?.dismissedAt != null) return "This candidate was dismissed.";
   if (document.correction || document.correctedEntry || event?.ownerCompletion) return "This entry has already been submitted and cannot be dismissed.";
-  if (!document.candidate && !event?.plan) return "This email has no financial candidate to dismiss.";
+  if (!document.candidate && !event?.plan && document.providerAssessment?.status !== "review") return "This email has no financial candidate to dismiss.";
   return completionBlocker(event);
 }
 

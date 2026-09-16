@@ -1,5 +1,6 @@
 {
   "entrypoints": [
+    "server/scripts/migrate-financial-connections.ts",
     "src/main.tsx",
     "server/index.ts",
     "server/actual/actual-worker-child.ts",
@@ -31,7 +32,8 @@
     "eslint.config.ts",
     "playwright.config.ts",
     "vite.config.ts",
-    "vitest.config.ts"
+    "vitest.config.ts",
+    "server/scripts/activate-financial-provider-parsers.ts"
   ],
   "exemptions": {
     "server/financial-events/financial-event-service.test-utils.ts": "Fictional receipt and sender-authentication fixtures for the real worker replay suite; keeps scenario coverage below the test size limit",

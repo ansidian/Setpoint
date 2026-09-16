@@ -1,3 +1,5 @@
+import { assessProviderFinancialEmail } from "../financial-parsers/index.ts";
+import { FINANCIAL_PROVIDER_CATALOG, type FinancialProviderAssessment } from "../../shared/types/financial-parsers.ts";
 import { randomUUID } from "node:crypto";
 import { readFinancialProfiles } from "../bills/financial-profiles.ts";
 import { assessFinancialDocument, canAssessFinancialDocuments } from "../triage/financial-document-classifier.ts";
@@ -89,12 +91,23 @@ export function createFinancialEventWorker({
     return candidate;
   }
 
+  async function acquireOriginal(document: FinancialDocument): Promise<FinancialDocument> {
+    if (document.acquiredSource) return document;
+    if (!await store.reserveDocumentSource(document)) throw new Error("Source acquisition retry limit reached. Review the original email.");
+    const source = await sourceAcquirer(document.userId, document.emailUid);
+    if (!await store.saveDocumentSource(document, source)) throw new Error("The email changed during source acquisition.");
+    const refreshed = await store.getDocumentForEmail(document.userId, document.emailUid);
+    if (!refreshed || refreshed.revision !== document.revision || refreshed.claimToken !== document.claimToken) throw new Error("The email changed during source acquisition.");
+    return refreshed;
+  }
+
   async function processNextDocument(): Promise<boolean> {
     let document = await store.claimDocument(randomUUID());
     if (!document) return false;
     let contentHash = financialDocumentContentHash(document);
     try {
-      if (document.eventId && (await store.getEventForEmail(document.userId, document.emailUid))?.ownerCompletion) {
+      const linkedEvent = document.eventId ? await store.getEventForEmail(document.userId, document.emailUid) : null;
+      if (linkedEvent?.ownerCompletion || linkedEvent?.attemptedAt != null) {
         // The owner supplied the financial facts. Source changes still wake the
         // event, but paused AI or the original incomplete extraction cannot undo
         // that confirmation or keep an admitted operation from recovery.
@@ -103,7 +116,31 @@ export function createFinancialEventWorker({
         publish(document.userId);
         return true;
       }
-      let assessedCandidate = await assessSource(document, contentHash);
+      let assessment: FinancialProviderAssessment | undefined;
+      if (document.processingPolicy === "provider_v1") {
+        const senderAddress = document.fromAddress.trim().toLowerCase();
+        const knownSender = FINANCIAL_PROVIDER_CATALOG.some(provider => (provider.senderAddresses as readonly string[]).includes(senderAddress));
+        if (knownSender) document = await acquireOriginal(document);
+        contentHash = financialDocumentContentHash(document);
+        assessment = assessProviderFinancialEmail({ fromAddress: document.fromAddress, subject: document.subject, body: document.body, emailDate: document.emailDate });
+        if (!await store.saveProviderAssessment(document, assessment)) throw new Error("The source changed during provider assessment.");
+        document = { ...document, providerAssessment: assessment };
+        if (assessment.status === "review" || assessment.status === "nonfinancial") {
+          await store.settleDocument(document, { candidate: assessment.candidate || null, contentHash, assessment,
+            status: assessment.status === "nonfinancial" ? "ignored" : "retry", nextAttemptAt: null,
+            error: assessment.status === "review" ? "Review the amount, date and account in this email before recording in Actual." : null });
+          publish(document.userId);
+          return true;
+        }
+      }
+      let assessedCandidate = assessment?.status === "parsed" ? assessment.candidate : await assessSource(document, contentHash);
+      if (assessment?.status === "unrecognized") {
+        await store.settleDocument(document, { candidate: assessedCandidate, contentHash, assessment,
+          status: assessedCandidate ? "retry" : "ignored", nextAttemptAt: null,
+          error: assessedCandidate ? "This provider has no dedicated parser. Review the details before recording in Actual." : null });
+        publish(document.userId);
+        return true;
+      }
       if (assessedCandidate && !isIgnoredFinancialNotice(assessedCandidate) && !document.acquiredSource
         && (assessedCandidate.type === "bill" || assessedCandidate.type === "income" || assessedCandidate.event_kind === "payment_scheduled"
           || (assessedCandidate.type === "transfer" && assessedCandidate.event_kind === "statement_issued")
@@ -149,7 +186,7 @@ export function createFinancialEventWorker({
       const profileReference = document.senderAuthentication?.status === "pass"
         && financialDocumentSupportsDate(source, candidate, new Date(now()))
         ? financialProfileCycleKey(configuration, {
-          sourceIdentity: { senderAddress: document.fromAddress }, email: { subject: document.subject, body: document.body },
+          providerId: document.providerAssessment?.providerId ?? undefined, sourceIdentity: { senderAddress: document.fromAddress }, email: { subject: document.subject, body: document.body },
         }, candidate) : null;
       const referenceKeys = [...new Set([referenceKey, profileReference].filter((key): key is string => !!key))];
       const aliases = [...new Set((await Promise.all(referenceKeys.map(key => store.findEventsByReference(source.userId, key)))).flat())];
@@ -164,8 +201,20 @@ export function createFinancialEventWorker({
         publish(document.userId);
         return true;
       }
+      if (correlation.eventId && document.processingPolicy === "provider_v1") {
+        const existingDocument = previous.find(item => item.eventId === correlation.eventId);
+        // Alias lookup is permanent; read it directly even outside the five-minute correlation window.
+        const existing = await store.getEventById(document.userId, correlation.eventId);
+        if (existing && existing.attemptedAt === null && !existing.ownerCompletion
+          && (existingDocument?.processingPolicy === "legacy" || existing.documents.some(item => item.processingPolicy !== "provider_v1"))) {
+          await store.settleDocument(document, { candidate, contentHash, status: "retry", nextAttemptAt: null,
+            error: "This reference belongs to a historical financial event. Review the existing entry in Actual." });
+          publish(document.userId);
+          return true;
+        }
+      }
       const profile = matchFinancialProfile(configuration, {
-        sourceIdentity: { senderAddress: document.fromAddress }, email: { subject: document.subject, body: document.body },
+        providerId: document.providerAssessment?.providerId ?? undefined, sourceIdentity: { senderAddress: document.fromAddress }, email: { subject: document.subject, body: document.body },
       }, candidate).profile;
       const independent = !!profile && referenceKeys.length > 0 && document.senderAuthentication?.status === "pass"
         && candidate.currency === "USD" && !!selectSemanticBillAmount(candidate)
@@ -176,8 +225,12 @@ export function createFinancialEventWorker({
         error: "Review this candidate alongside similar purchases.", nextAttemptAt: null });
       publish(document.userId);
     } catch (error) {
+      const providerReview = document.processingPolicy === "provider_v1" && /Source acquisition retry limit/.test(errorText(error));
+      const failedAssessment = providerReview ? assessProviderFinancialEmail({fromAddress: document.fromAddress, subject: document.subject, body: document.body, emailDate: document.emailDate}) : null;
+      const reviewAssessment = failedAssessment && failedAssessment.status !== "unrecognized"
+        ? { ...failedAssessment, status: "review" as const, reasons: ["original_source_unavailable"] } : undefined;
       await store.settleDocument(document, { candidate: document.candidate, contentHash: document.contentHash || "", status: "retry",
-        error: `Financial assessment will retry: ${errorText(error)}`, nextAttemptAt: retryAt(now(), document.attempts) });
+        assessment: reviewAssessment, error: providerReview ? "The original source could not be acquired. Review this email manually." : `Financial assessment will retry: ${errorText(error)}`, nextAttemptAt: providerReview ? null : retryAt(now(), document.attempts) });
     }
     return true;
   }
@@ -228,7 +281,7 @@ export function createFinancialEventWorker({
         }
         const current = event.ownerCompletion ? null : combineFinancialEventEvidence(event.documents);
         const changed = event.ownerCompletion ? await confirmedSourceChanged(event)
-          : current!.conflict || financialEvidenceChangedAfterAttempt(current!.candidate, plan?.candidate || null);
+          : event.documents.some(document => document.ownerConfirmationConflict || document.processedRevision < document.revision) || current!.conflict || financialEvidenceChangedAfterAttempt(current!.candidate, plan?.candidate || null);
         // A verified schedule cycle stays handled after Actual advances to later
         // cycles. Unchanged duplicate mail cannot reopen or roll back that work.
         if (!changed && verified && ["added", "updated", "already_present"].includes(verified.outcome)) {
@@ -252,7 +305,12 @@ export function createFinancialEventWorker({
         plan = ownerCompletionPlan(event.id, event.ownerCompletion.entry);
         operation = ownerCompletionOperation(event.id, event.ownerCompletion.entry);
       } else {
-        if (!await canRun(event.userId)) {
+        const deterministic = event.documents.length > 0 && event.documents.every(document => document.processingPolicy === "provider_v1");
+        if (deterministic && event.documents.some(document => document.providerAssessment?.status !== "parsed" && document.status !== "ignored")) {
+          await settle(event, null, "needs_review", "The provider template needs manual review before recording in Actual.");
+          return true;
+        }
+        if (!deterministic && !await canRun(event.userId)) {
           await settle(event, plan, "waiting", "Financial processing is paused while email AI is disabled.");
           return true;
         }
@@ -267,7 +325,7 @@ export function createFinancialEventWorker({
           return true;
         }
         const primary = event.documents.find((document) => document.candidate && document.senderAuthentication?.status === "pass")!;
-        plan = await planner(event.userId, { candidate: evidence.candidate, source: "financial_event", providerMessageId: event.id,
+        plan = await planner(event.userId, { ...(deterministic ? { assessmentMode: "deterministic" as const, providerId: primary.providerAssessment?.providerId ?? undefined } : {}), candidate: evidence.candidate, source: "financial_event", providerMessageId: event.id,
           email: { from: primary.fromAddress, subject: primary.subject, body: evidence.body },
           sourceIdentity: financialEmailSourceIdentity({ account_id: primary.accountId, from_address: primary.fromAddress,
             sender_authentication_json: primary.senderAuthentication }) }, store.createAiRequestRunner(event));

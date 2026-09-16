@@ -1,3 +1,4 @@
+import financialConnections from './financial-connections.ts';
 import finances from './finances.ts';
 import financialCorrections from './financial-corrections.ts';
 import { Router } from "express";
@@ -24,6 +25,7 @@ router.use(snapshot);
 router.use(transactionImports);
 router.use(financialActivity);
 router.use(finances);
+router.use(financialConnections);
 router.use(financialCorrections);
 
 export default router;

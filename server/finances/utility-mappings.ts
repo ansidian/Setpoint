@@ -1,28 +1,27 @@
-import type { Client, Row } from '@libsql/client';
+import { readConfiguredUtilities, financialConnectionsMigrated } from '../financial-connections/storage.ts';
+import type { Client } from '@libsql/client';
 import db from '../db/connection.ts';
 import { readActualMetadataProjection } from '../actual/actual.ts';
 import type { UtilityIdentity, UtilityMappingSettings } from '../../shared/types/finances.ts';
 
 type MappingDb = Pick<Client, 'execute'>;
 const fail = (status: number, message: string): never => { throw Object.assign(new Error(message), { status }); };
-const project = (row: Row): UtilityIdentity => ({ id: String(row.id), label: String(row.label), provider: String(row.provider),
-  budgetId: String(row.budget_id), payeeId: String(row.payee_id), scheduleIds: JSON.parse(String(row.schedule_ids_json)),
-  sourceSenders: JSON.parse(String(row.source_senders_json)), sourceIdentityText: String(row.source_identity_text || '') });
 
 export async function readUtilityMappings(userId: string, { dbClient = db }: { dbClient?: MappingDb } = {}): Promise<UtilityMappingSettings> {
   const settings = await dbClient.execute({ sql: 'SELECT actual_budget_sync_id FROM ea_settings WHERE user_id=?', args: [userId] });
   const budgetId = settings.rows[0]?.actual_budget_sync_id ? String(settings.rows[0].actual_budget_sync_id) : null;
   if (!budgetId) return { budgetId, utilities: [], payees: [], schedules: [], metadataAvailable: false };
   const [membership, metadata] = await Promise.all([
-    dbClient.execute({ sql: 'SELECT * FROM ea_finance_utilities WHERE user_id=? AND budget_id=? ORDER BY rowid', args: [userId, budgetId] }),
+    readConfiguredUtilities(userId,budgetId,dbClient),
     readActualMetadataProjection(userId, { dbClient }),
   ]);
-  return { budgetId, utilities: membership.rows.map(project), payees: metadata?.payees || [],
+  return { budgetId, utilities: membership, payees: metadata?.payees || [],
     schedules: (metadata?.schedules || []).filter(row => !row.completed && row.type === 'bill'), metadataAvailable: !!metadata };
 }
 
 /** Edits only Setpoint's existing membership. Provider/source evidence and Actual objects are untouched. */
 export async function updateUtilityMapping(userId: string, id: string, input: unknown, { dbClient = db }: { dbClient?: MappingDb } = {}): Promise<UtilityIdentity> {
+  if (await financialConnectionsMigrated(userId,dbClient)) fail(409,'Use Financial providers to update utility mappings.');
   if (!input || typeof input !== 'object' || Array.isArray(input)) fail(400, 'Choose a budget, payee and schedule.');
   const body = input as Record<string, unknown>;
   if (Object.keys(body).some(key => !['budgetId', 'payeeId', 'scheduleIds'].includes(key))

@@ -346,3 +346,25 @@ describe('shared fictional financial settlement', () => {
     expect(left.snapshot.dates).toEqual(right.snapshot.dates);
   });
 });
+
+describe('demo unified financial providers', () => {
+  it('keeps revision-bound provider, utility and pay-link edits in memory and projects the same utility destination', async () => {
+    const api = await demo();
+    const original = await api.getFinancialConnections();
+    const connections = structuredClone(original.connections);
+    const electricity = connections.find(row => row.utility?.id === 'electricity')!;
+    electricity.target = { kind: 'utility', scheduleId: 'demo-electric' };
+    electricity.utility!.payeeId = 'demo-electric';
+    electricity.payLink = 'https://billing.example.test/pay';
+    const saved = await api.saveFinancialConnections({ budgetId: 'demo-budget', revision: original.revision, connections });
+    expect(saved.revision).toBe(original.revision + 1);
+    expect((await api.getFinances()).utilities.find(row => row.identity.id === 'electricity')?.identity)
+      .toMatchObject({ payeeId: 'demo-electric', scheduleIds: ['demo-electric'] });
+    expect((await api.getSettings()).utility_pay_links).toContainEqual({ scheduleId: 'demo-electric', label: 'Electricity', url: 'https://billing.example.test/pay' });
+    await expect(api.saveFinancialConnections({ budgetId: 'demo-budget', revision: original.revision, connections })).rejects.toMatchObject({ status: 409 });
+    saved.connections[0]!.name = 'Caller-only edit';
+    expect((await api.getFinancialConnections()).connections[0]!.name).not.toBe('Caller-only edit');
+    const refreshed = await demo();
+    expect((await refreshed.getFinancialConnections()).connections).toEqual(original.connections);
+  });
+});

@@ -1,0 +1,254 @@
+[
+  {
+    "name": "sce",
+    "source": {
+      "fromAddress": "sce@message.sce.com",
+      "subject": "Bill is Ready",
+      "body": "View in browser ALEX Customer Account XXXXXXX10001 | Your Bill is Due Soon Your current bill is now available for viewing. Please allow 3 days for payment processing, or 10 days for customers on auto pay. Statement Date 08/25/2026 Amount Due $301.11 Due Date 09/14/2026 VIEW YOUR BILL For an easier way to budget your bill, visit Budget Billing Plan (BBP) . Don’t have My Account? View your bill here . Note: Your monthly bill may include one or more bill inserts providing notice of actions that may affect your electricity rates. Check for notices . ",
+      "emailDate": "2026-08-26T22:11:34.000Z"
+    }
+  },
+  {
+    "name": "sce-earlier",
+    "source": {
+      "fromAddress": "sce@message.sce.com",
+      "subject": "Bill is Ready",
+      "body": "View in browser ALEX Customer Account XXXXXXX10001 | Your Bill is Due Soon Your current bill is now available for viewing. Please allow 3 days for payment processing, or 10 days for customers on auto pay. Statement Date 05/27/2026 Amount Due $144.11 Due Date 06/16/2026 VIEW YOUR BILL For an easier way to budget your bill, visit Budget Billing Plan (BBP) . Don’t have My Account? View your bill here . Note: Your monthly bill may include one or more bill inserts providing notice of actions that may affect your electricity rates. Check for notices . ",
+      "emailDate": "2026-05-28T22:23:54.000Z"
+    }
+  },
+  {
+    "name": "socalgas",
+    "source": {
+      "fromAddress": "customerservice@socalgas.com",
+      "subject": "Your bill from SoCalGas is now available",
+      "body": "SoCalGas Bill Ready Notification Dear Alex, Your current bill is available on My Account. Log in to view and pay your bill. If you feel that you have received this email in error, call us at 1-877-238-0092 . Please do not reply to this email. Total Balance $47.26 due 08/11/2026 Account Number ******10002 (EXAMPLE AVE 100) Retrieve your account number Pay Bill Log in to My Account Note: Your monthly bill may include bill inserts providing notice of actions that may affect your gas rates and important information on natural gas safety. View the latest bill inserts to check for these important notices. Warning: Proposition 65 Warning. Get more information here (PDF) . Gas Usage History Usage Projected Usage Measurements in Therms* Therm is a unit of measurement of heat and is indicative of quantity of natural gas. We&rsquo;re here to help Did you know there are options to sign up for Level Pay Plan, request a payment extension, and enroll in weekly Bill Tracker Alerts? Qualifying customers can also apply for Assistance Programs that could help with bill discounts or forgiveness and energy-efficient home upgrades. Learn more at socalgas.com/Assistance . ",
+      "emailDate": "2026-07-22T15:59:02.000Z"
+    }
+  },
+  {
+    "name": "socalgas-credit",
+    "source": {
+      "fromAddress": "customerservice@socalgas.com",
+      "subject": "Your bill from SoCalGas is now available",
+      "body": "SoCalGas Bill Ready Notification Dear Alex, Your current bill is available on My Account. Log in to view and pay your bill. If you feel that you have received this email in error, call us at 1-877-238-0092 . Please do not reply to this email. Total Balance $0.29 Credit due No Payment Required (Credit Balance) Account Number ******10002 (EXAMPLE AVE 100) Retrieve your account number Pay Bill Log in to My Account Note: Your monthly bill may include bill inserts providing notice of actions that may affect your gas rates and important information on natural gas safety. View the latest bill inserts to check for these important notices. Warning: Proposition 65 Warning. Get more information here (PDF) . Gas Usage History Usage Projected Usage Measurements in Therms* Therm is a unit of measurement of heat and is indicative of quantity of natural gas. We&rsquo;re here to help Did you know there are options to sign up for Level Pay Plan, request a payment extension, and enroll in weekly Bill Tracker Alerts? Qualifying customers can also apply for Assistance Programs that could help with bill discounts or forgiveness and energy-efficient home upgrades. Learn more at socalgas.com/Assistance . ",
+      "emailDate": "2026-04-21T15:58:10.000Z"
+    }
+  },
+  {
+    "name": "sgv-water",
+    "source": {
+      "fromAddress": "no-reply@invoicecloud.net",
+      "subject": "San Gabriel Valley Water Company Invoice# 10000000 Notification",
+      "body": "[Image omitted]\n\n[Image omitted: San Gabriel Valley Water Company]\nYou have a new invoice from San Gabriel Valley Water Company!   OneClickPay using \"XX1234\"\n                                                                (https://example.test/link)\n                                                                 \n\n                                                                View Invoice or Pay Now\n                                                                (https://example.test/link)\n                                                                Want to be reminded later? Click here.\n                                                                (https://example.test/link)\nDear Alex Example                                                                                                                Account Information\n\n----------------------------------------\n                                                                                                                              [Image omitted]   Account Number:   [Image omitted]\n                                                                                                                                                10000000-100000\nA new invoice is now available to view online.\n                                                                                                                              [Image omitted]   Invoice Number:   [Image omitted]\nSan Gabriel Valley Water Company has implemented a convenient online billing and payment system for you to access and                           10000000\npay your bills. Simply click on the View Invoice or Pay Now button to get started. You can review and print your\ninvoice, pay electronically now, or schedule the date your invoice will be paid.                                              [Image omitted]   Invoice Due Date:   [Image omitted]\n                                                                                                                                                9/28/2026\nYou may also access your invoice via our Customer Portal at https://example.test/link\n                                                                                                                              [Image omitted]   Balance Due:   [Image omitted]\nIf you have any questions regarding your account, please contact us at (626) 774-2789 or email us at                                            $67.97\nowner@example.test Be sure to include your first name, last name, and account number.\n\nThank you for choosing to view and pay online,\n\nSan Gabriel Valley Water Company\n\nPlease Note: To ensure delivery of account-related email notifications, please add this email to your safe senders list.\n   [Image omitted]\n\nPlease consider the environment before printing this email\n© 2010-2026 InvoiceCloud. All rights reserved.",
+      "emailDate": "2026-09-12T22:04:31.000Z"
+    }
+  },
+  {
+    "name": "sgv-water-earlier",
+    "source": {
+      "fromAddress": "no-reply@invoicecloud.net",
+      "subject": "San Gabriel Valley Water Company Invoice# 10000000 Notification",
+      "body": "San Gabriel Valley Water Company Invoicing You have a new invoice from San Gabriel Valley Water Company! OneClickPay using \"XX1234\" View Invoice or Pay Now Want to be reminded later? Click here. Dear Alex Example A new invoice is now available to view online. San Gabriel Valley Water Company has implemented a convenient online billing and payment system for you to access and pay your bills. Simply click on the View Invoice or Pay Now button to get started. You can review and print your invoice, pay electronically now, or schedule the date your invoice will be paid. You may also access your invoice via our Customer Portal at https://example.test/link If you have any questions regarding your account, please contact us at (626) 774-2789 or email us at owner@example.test Be sure to include your first name, last name, and account number. Thank you for choosing to view and pay online, San Gabriel Valley Water Company Please Note: To ensure delivery of account-related email notifications, please add this email to your safe senders list. Account Information Account Number: 10000000-100000 Invoice Number: 10000000 Invoice Due Date: 6/28/2026 Balance Due: $65.82 Please consider the environment before printing this email © 2010-2026 InvoiceCloud. All rights reserved.",
+      "emailDate": "2026-06-12T05:52:54.000Z"
+    }
+  },
+  {
+    "name": "spectrum",
+    "source": {
+      "fromAddress": "MyAccount@spectrumemails.com",
+      "subject": "Your Spectrum Statement is Ready",
+      "body": "Spectrum Alert &#847;&#8204; &#847;&#8204; &#847;&#8204; &#847;&#8204; &#847;&#8204; &#847;&#8204; &#847;&#8204; &#847;&#8204; &#847;&#8204; &#847;&#8204; &#847;&#8204; &#847;&#8204; &#847;&#8204; View in Browser En espa&#241;ol Your Spectrum Statement is Ready Hello Alex, Your most recent Spectrum bill is available online or on the My Spectrum App. If you've already made this payment, no further action is required. Your Account at a Glance Account Number: Ending in 8036 Statement Amount: $110.00 Payment Due: August 1, 2026 Pay / View Bill Service Address: 100 Example Ave Example City, CA 90000 ",
+      "emailDate": "2026-07-19T16:24:57.000Z"
+    }
+  },
+  {
+    "name": "sofi",
+    "source": {
+      "fromAddress": "SoFi@o.sofi.org",
+      "subject": "Your SoFi Credit Card September statement is ready.",
+      "body": "[Image omitted: SoFi]                            \n\n    Log in › (https://example.test/link)\n\n    Hi Alex,                                                                                                                  \n    Your September SoFi Credit Card statement is now available. The statement balance is: $207.43, minimum due is: $35.00,    \n    and the payment is due on 10/05.\n\n    View your statement (https://example.test/link)    \n\n    Thanks,          \n    The SoFi Team\n\n        Take a closer look at SoFi Credit Card (https://example.test/link).        \n\n    [Image omitted: chat bubble] (https://example.test/link)       Have questions? Contact us (https://example.test/link)    \n\n    [Image omitted: mobile phone] (https://example.test/link)       Download the SoFi app (https://example.test/link)\n\n    SoFi Bank, N.A. values your privacy and the security of your personal information so please do not include your social    \n    security number in any email or letter that you send to us.\n    SoFi Bank, N.A. 2750 East Cottonwood Parkway #300, Cottonwood Heights, Utah 84121.                                        \n    Legal (https://example.test/link)  |  Privacy (https://example.test/link)  |  Contact Us                \n    (https://example.test/link)\n    © 2024 SoFi Bank, N.A. Member FDIC. Equal Housing Lender. All rights reserved.                                            \n\n[Image omitted]",
+      "emailDate": "2026-09-11T22:58:57.000Z"
+    }
+  },
+  {
+    "name": "sofi-conflicting-autopay",
+    "source": {
+      "fromAddress": "no-reply@o.sofi.org",
+      "subject": "Your SoFi Credit Card autopay is scheduled for 09/05/2026",
+      "body": "Future payments won’t be made automatically. Here’s what to know. SoFi Hi Alex, You've cancelled autopay for your SoFi Credit Card. What does this mean for you? * Future payments won't be made automatically * You'll Manage autopay ( https://example.test/link ) — The SoFi Team chat bubble ( https://example.test/link ) Have questions? Contact us ( https://example.test/link ) mobile phone ( https://example.test/link ) Download the SoFi app ( https://example.test/link ) SoFi Smart Cards are issued by SoFi Bank, N.A. pursuant to license by Mastercard® International Incorporated and can be used everywhere Mastercard is accepted. Mastercard is a registered trademark, and the circles design is a trademark of Mastercard International Incorporated. SoFi Bank values your privacy and the security of your personal information, so please do not include your Social Security number in any email or letter that you send to us. SoFi Bank, N.A. 2750 East Cottonwood Parkway #300, Cottonwood Heights, Utah 84121 Legal ( https://example.test/link ) | Privacy ( https://example.test/link ) | Contact Us ( https://example.test/link ) © 2026 SoFi Bank, N.A. Member FDIC. Equal Housing Lender. All rights reserved. WF: 3215502 SoFi We’ll process your payment automatically. ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ Hi Alex, Just a heads up that your SoFi Unlimited 2% Credit Card autopay is coming up on 09/05/2026. Here are the details: Payment amount: Full statement balance Scheduled payment date: 09/05/2026 Pay from: SoFi Savings • 9876 We'll process your payment automatically, so no action is needed from you. If you'd like to make a change, do so by 5:00 PM CT the day before your payment due date. Manage autopay What to expect: Your payment is scheduled to post on your autopay date. If that date falls on a weekend or holiday, your payment will be processed on the next available business day. There's no need to submit an additional payment. If your balance is $0 when autopay processes, no payment will be made. —The SoFi Team Have questions? Contact us Download the SoFi app Please do not reply to this message, as this email inbox is not monitored. SoFi Bank, N.A. values the privacy and security of your personal information so please do not include any sensitive personal information, such as your Social Security number, in any email or letter that you send to us. Legal | Privacy | Contact Us SoFi Bank, N.A. 2750 East Cottonwood Parkway #300, Cottonwood Heights, Utah 84121 © 2026 SoFi Bank, N.A. Member FDIC. Equal Housing Lender. All rights reserved.",
+      "emailDate": "2026-08-26T17:57:33.000Z"
+    }
+  },
+  {
+    "name": "chase",
+    "source": {
+      "fromAddress": "no.reply.alerts@chase.com",
+      "subject": "Your credit card statement is available",
+      "body": "[Image omitted]   [Image omitted: Chase Logo]               [Image omitted]\n                  Statement ready\n                  Your credit card statement is available\n[Image omitted]   Account   Chase Credit Card (...5678)                                                                                     [Image omitted]\n                  Due date   10/09/2026\n                  Minimum payment due   $35.00\n                  Statement balance   $306.80\n                  [Image omitted]   Auto-pay enabled\n                  You're already enrolled in automatic payments. We'll pay the amount you scheduled from your account.\n\n                  Visit our Resource Center (https://example.test/link) to manage your account.\n                  View statement (https://example.test/link)\n                  Securely access your accounts with the Chase Mobile® app (https://example.test/link) or chase.com\n                  (https://example.test/link).\n                  ",
+      "emailDate": "2026-09-12T11:54:44.000Z"
+    }
+  },
+  {
+    "name": "chase-earlier",
+    "source": {
+      "fromAddress": "no.reply.alerts@chase.com",
+      "subject": "Your credit card statement is available",
+      "body": "Statement ready Your credit card statement is available Account Chase Credit Card (...2468) Due date 06/28/2026 Minimum payment due $40.00 Statement balance $181.44 Auto-pay enabled You're already enrolled in automatic payments. We'll pay the amount you scheduled from your account. Visit our Resource Center to manage your account. View statement Securely access your accounts with the Chase Mobile &reg; app or chase.com . ",
+      "emailDate": "2026-06-04T08:24:51.000Z"
+    }
+  },
+  {
+    "name": "chase-reward",
+    "source": {
+      "fromAddress": "chase@e.chase.com",
+      "subject": "Your cash back is on the way!",
+      "body": "You're confirmed to attend an amazing event! Hi, Alex. You'll get your cash back soon. Cash back Your cash back is on the way, Alex! Here are your Chase Rewards details: Chase Rewards order summary Account ...5678 Order date 04/17/2026 Order number SCGI-WAEYJ-T1G7 Statement credit $35.47 Points redeemed 3,547 What to expect &bull; Your statement credit should be applied to your account by 04/20/2026 . &bull; Remember, statement credits will reduce your balance, but you are still required to make at least your minimum payment. Get rewarded on every purchase. Earn 5% back at Amazon.com , Whole Foods Market and on Chase Travel purchases with an eligible Prime membership, 2% back at restaurants, gas stations, and on local transit and commuting, and 1% back on all other purchases.* Learn More . Es posible que esta comunicaci&oacute;n contenga informaci&oacute;n acerca de usted o su cuenta. Si tiene alguna pregunta, por favor, llame al n&uacute;mero que aparece en el reverso de su tarjeta. Email Security Information: Email intended for: Alex Example If you have concerns about the authenticity of this message, please visit chase.com/CustomerService for options on how to contact us. * terms and conditions Click to see more terms and conditions Earning in the Rewards Program: See your Card Rewards Program Agreement for details on earning and redeeming points. Amazon, the Amazon.com logo, the smile logo, and all related logos are trademarks of Amazon.com , Inc. or its affiliates. ",
+      "emailDate": "2026-04-17T05:18:55.000Z"
+    }
+  },
+  {
+    "name": "citi",
+    "source": {
+      "fromAddress": "citicards@info6.citi.com",
+      "subject": "Your statement is now available online",
+      "body": "Citi(R) Add owner@example.test to your address book to ensure delivery. =============================================================== ALEX EXAMPLE Please visit the following link to view your message: https://example.test/link ================================================================ Privacy https://example.test/link Security https://example.test/link This email is to keep you informed about your Citibank credit card, including service updates and other information about your account. Have questions? Please do not reply to this service email. Instead, just Contact Us https://example.test/link Citibank Customer Service P. O. Box 6500 Sioux Falls, SD 57117 ©2026 Citibank, N.A. Your statement is now available online Access your Costco Anywhere Visa ® statement. UPDATE Alex Example Cardmember since 2024 Card ending in 4321 View your statement now Hi, Alex . Your statement ending on May 14, 2026 is ready. View Statement Statement Summary Payment Due Date: Wednesday, June 10, 2026 Statement Balance: $240.88 Minimum Payment Due: $41.00 Your payment's already scheduled with AutoPay . Would you rather receive emails without your balance and Minimum Payment Due? Click Here Citi is at your side before, during and after every purchase. Your Citi Team ",
+      "emailDate": "2026-05-16T13:14:51.000Z"
+    }
+  },
+  {
+    "name": "citi-purchase",
+    "source": {
+      "fromAddress": "alerts@info6.citi.com",
+      "subject": "A $48.52 transaction was made on your Costco Anywhere account",
+      "body": "View the transaction details.\n[Image omitted]   CUSTOM ALERT\n\n[Image omitted: Citi Costco Wholesale]    Alex Example                [Image omitted]\n                                         Cardmember since 2024\n                                         Card ending in  4321\nA transaction of $48.52 was made on your account\nYou're receiving this email based on your custom alert settings.\nHi, Alex. The transaction made on your Costco Anywhere account exceeded $2.00. The transaction details are listed below.\nAmount: $48.52\nCard Ending In   4321\n\nMerchant         COSTCO GAS #1318 MONTEREY PARKUS\n\nDate             09/11/2026\n\nTime             06:31 PM ET\nTo view transactions\n(https://example.test/link) on\nyour account or modify your custom alerts\n(https://example.test/link), simply visit\nthe Citi Mobile® App or Citi® Online.\n\nCiti is at your side before, during and after every purchase.\nYour Citi Team\n",
+      "emailDate": "2026-09-11T22:31:56.000Z"
+    }
+  },
+  {
+    "name": "paypal-statement",
+    "source": {
+      "fromAddress": "ppv@mail.synchronybank.com",
+      "subject": "Your PayPal Cashback World Mastercard® statement is ready.",
+      "body": "[Image omitted: PayPal]\n\n[Image omitted: Display images to show real-time content] (https://example.test/link)\n\nYour PayPal Cashback World Mastercard®\nstatement is ready.\n\nHi Alex,\nWe want to let you know the new billing statement for your PayPal Cashback World Mastercard® account is ready.\n\nHere are the details.\nStatement balance     $ 121.30\nMinimum payment due   $ 29.00\nPayment due date      10/07/2026\n\nYou can view your statement, make a payment or manage your account in the PayPal app or visit paypal.com\n(https://example.test/link).\nSign in now (https://example.test/link)\n\n",
+      "emailDate": "2026-09-15T21:32:49.000Z"
+    }
+  },
+  {
+    "name": "paypal-autopay",
+    "source": {
+      "fromAddress": "ppv@mail.synchronybank.com",
+      "subject": "An autopay is coming up soon for your PayPal Cashback World Mastercard®",
+      "body": "Venmo An autopay is coming up soon for your PayPal Cashback World Mastercard® An autopay is coming up soon for your PayPal Cashback World Mastercard® Hi Alex, We want to make sure you&rsquo;re in the loop. See the details below about your upcoming autopay for your PayPal Cashback World Mastercard®. Monthly autopay option Statement Balance Payment date 09/07/2026 Payment Amount $74.49 *This amount may be less if credits or payments have posted to your account after your statement was prepared and before your payment due date. If this amount has already been paid, no autopay payment will be made. This email confirms your authorization to debit the above amount for an electronics funds transfer from your funding account for this payment. Open the PayPal app or visit paypal.com to view your account. Sign in now Sign in now ",
+      "emailDate": "2026-09-02T21:45:30.000Z"
+    }
+  },
+  {
+    "name": "paypal-refund",
+    "source": {
+      "fromAddress": "ppv@mail.synchronybank.com",
+      "subject": "A refund or credit has posted to your PayPal Cashback World Mastercard® account.",
+      "body": "Venmo A refund or credit has posted to your PayPal Cashback World Mastercard® account. A refund or credit has posted to your PayPal Cashback World Mastercard® account. Hi Alex, This is to let you know your refund or credit from PAYPAL PURCHASE SAN JOSE CA for $17.99 was applied to your account on August 22&#44; 2026 . Here are the details. Refund/credit amount $17.99 Refund/credit date August 22&#44; 2026 Open the PayPal app or visit paypal.com to view your account. Sign in now Sign in now ",
+      "emailDate": "2026-08-25T02:04:08.000Z"
+    }
+  },
+  {
+    "name": "paypal-merchant",
+    "source": {
+      "fromAddress": "service@paypal.com",
+      "subject": "Apple Services: $0.99 USD",
+      "body": "Apple Services: $0.99 USD Payment details are inside. Hello, Alex Example You paid $0.99 USD to Apple Services You've made 5 PayPal purchases in 3 months. Here's to many more! Transaction ID REFERENCE00000001 Transaction date Aug 18, 2026 Merchant Apple Services https://example.test/link +1 800-275-2273 Invoice ID MX5XVQ3V57a0 View Payment Details Subtotal $0.99 Total $0.99 USD Paid Apple Services with PayPal Mastercard $0.99 USD Transaction ID: REFERENCE00000001 Need some help? Contact Apple Services for questions or issues with this purchase. Email Call Still need help? Visit the PayPal Help Center New Track all your subscriptions in one place Manage and update all your subs at once using the PayPal App. Get Started Your payment was sent from owner@example.test ",
+      "emailDate": "2026-08-18T20:35:56.000Z"
+    }
+  },
+  {
+    "name": "paypal-receipt-columns",
+    "source": {
+      "fromAddress": "service@paypal.com",
+      "subject": "Receipt for your PayPal payment",
+      "body": "Alex Example - Here's your receipt.\n   [Image omitted: PayPal]\n\n   Thanks for paying with PayPal\n\n   To see the payment details, log in to your PayPal account\n   (https://example.test/link).\n\n   Payment from\n   Alex Example\n   owner@example.test\n\n   Payment to           Note to payment recipient\n   Xsolla Inc.          You haven't included a note.\n   owner@example.test\n   Transaction ID       Date\n   REFERENCE00000001    September 6, 2026\n   Payment Status\n   COMPLETED\n\n   Shipping and handling   $0.00 USD\n   Total                   $30.00 USD\n   Payment                 $30.00 USD\n   This transaction will appear on your statement as XSOLLA PATHOFEXILE\n\n   ----------------------------------------\n\n   Transaction Summary\n\n   Total amount of this Transaction:   $30.00 USD\n\n   Payment method:   PayPal MasterCard\n\n   Payment to recipient   $30.00 USD\n   Amount you'll pay      $30.00 USD\n\n   ----------------------------------------\n   [Image omitted: PayPal]\n\n   ----------------------------------------\n\n   ",
+      "emailDate": "2026-09-06T17:53:04.000Z"
+    }
+  },
+  {
+    "name": "paypal-receipt-inline",
+    "source": {
+      "fromAddress": "service@paypal.com",
+      "subject": "Receipt for your PayPal payment",
+      "body": "Receipt for your PayPal payment Alex Example, thanks for paying with PayPal. Alex Example - Here's your receipt. Thanks for paying with PayPal To see the payment details, log in to your PayPal account . Payment from Alex Example owner@example.test Payment to Xsolla Inc. owner@example.test Note to payment recipient You haven't included a note. Transaction ID REFERENCE00000001 Date June 6, 2026 Payment Status COMPLETED Shipping and handling $0.00 USD Total $90.00 USD Payment $90.00 USD This transaction will appear on your statement as XSOLLA PATHOFEXILE Transaction Summary Total amount of this Transaction: $90.00 USD Payment method: PayPal MasterCard Payment to recipient $90.00 USD Amount you'll pay $90.00 USD ",
+      "emailDate": "2026-06-07T04:43:43.000Z"
+    }
+  },
+  {
+    "name": "paypal-authorization",
+    "source": {
+      "fromAddress": "service@paypal.com",
+      "subject": "You have authorized a payment to eBay Commerce Inc.",
+      "body": "Hello, Alex Example\n   [Image omitted: PayPal]\n\n   You authorized a payment of $26.52 USD to eBay Commerce Inc. (https://example.test/link)\n\n   View or Manage Transaction\n   (https://example.test/link)\n\n   This purchase will appear as a pending transaction until eBay Commerce Inc. processes your order. To see the full\n   transaction details, log in to your PayPal account. Keep in mind, it may take a few moments for this transaction to\n   appear. Thanks for using PayPal.\n\n   Transaction ID                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              Transaction date\n   REFERENCE00000001                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           Sep 12, 2026\n   (https://example.test/link)\n\n   Merchant                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    Instructions to merchant\n   eBay Commerce Inc.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          Order Number : 21-15138-11981\n   https://example.test/link\n   Invoice ID\n   v2_cc70e7c9-c730-4313-91c1-d918b9d809d0_2_22\n   Shipping address - confirmed\n\n   Alex Example\n   100 Example Ave\n   Example City, CA 90000\n   United States\n\n   Description       Unit price   Qty   Amount\n   Purchase amount   $26.52 USD   1     $26.52 USD\n\n   Subtotal   $26.52 USD\n   Total      $26.52 USD\n   Sent to https://example.test/link\n   Sent from owner@example.test\n\n   The amount shown above may not be the final payment amount. If the merchant completes the transaction and the final\n   amount is greater than the above, we’ll send you an additional receipt that shows the final payment amount. Otherwise,\n   this will be your final receipt.\n\n   View or Manage Transaction\n   (https://example.test/link)\n\n   Issues with this transaction?\n\n   You have 180 days from the date of the transaction to open a dispute in the Resolution Center.\n   [Image omitted: PayPal]\n\n   ----------------------------------------\n\n   ",
+      "emailDate": "2026-09-12T22:02:27.000Z"
+    }
+  },
+  {
+    "name": "paypal-merchant-refund",
+    "source": {
+      "fromAddress": "service@paypal.com",
+      "subject": "You have a refund from Valve Corp.",
+      "body": "You have a refund from Valve Corp. Valve Corp. sent you a refund of $39.99 USD. Hello, Alex Example Valve Corp. issued a $39.99 USD refund The money has been refunded to your plan. It may take a few days for it to appear in your account. Your refund summary Transaction ID REFERENCE00000001 Transaction date February 27, 2026 01:48:44 EST Total purchase amount $39.99 USD Amount refunded $39.99 USD Refund to $39.99 USD Refund paid by Valve Corp. owner@example.test 10000000 Invoice ID: REFERENCE00000001 Refund paid to Alex Example owner@example.test ",
+      "emailDate": "2026-02-27T06:49:05.000Z"
+    }
+  },
+  {
+    "name": "paypal-transfer",
+    "source": {
+      "fromAddress": "service@paypal.com",
+      "subject": "Your transfer request is processing",
+      "body": "Your transfer request is processing Alex, we&#x27;re transferring $22.25 USD to your bank per your request Hello, Alex Example We're transferring money to your bank You asked us to transfer $22.25 USD to your bank account, and we're processing this transaction now. Estimated arrival: 1 business day Transfers made after 7:00 PM ET or on weekends or holidays take longer. All transfers are subject to review and could be delayed or stopped if we identify an issue. Transfer details Transaction ID: REFERENCE00000001 September 3, 2026 Total amount transferred $22.25 USD Bank account SOFI BANK, NATIONAL ASSOCIATION, x-9876 ",
+      "emailDate": "2026-09-04T00:46:40.000Z"
+    }
+  },
+  {
+    "name": "us-bank",
+    "source": {
+      "fromAddress": "usbank@notifications.usbank.com",
+      "subject": "Your latest credit card statement is ready.",
+      "body": "[Image omitted: US Bank] (https://example.test/link)   Log in (https://example.test/link)\nYour latest credit card statement is ready.\nHi Alex,\nThe latest statement for your credit card ending in 1234 is now available. Review your statement balance or manage\nautopay.\nAccount                        credit card ending in 1234\nDue date                       October 10, 2026\nMinimum payment                $40.00\n\nAvoid late fees\nRemaining statement balance    $501.47\n\nAvoid interest and late fees\nAutopay                        October 10, 2026\n\nOn\nView Statement (https://example.test/link)   Manage autopay (https://example.test/link)\n\n \n\n[Image omitted: manage your alerts]   Manage your alerts.\n                                      You are receiving this email because you signed up for U.S. Bank email alerts. Log in to your account to:\n                                      •   Disable or delete this alert.\n                                      •   Manage alert settings.\n                                      •   Activate new alerts for low balances, payment due dates and more.\n                                      Log in now › (https://example.test/link)\n\n \n\n[Image omitted: Need help]   Need help?\n                             Just ask U.S. Bank Smart Assistant® or find answers to your questions in the Help sections of mobile and online banking.\n                             Log in now › (https://example.test/link)\n[Image omitted: Facebook] (https://example.test/link)   [Image omitted: Twitter] (https://example.test/link)   [Image omitted: Instagram] (https://example.test/link)   Get the app (https://example.test/link)   [Image omitted: Mobile App] (https://example.test/link)\nEmail intended for: owner@example.test\n    [Image omitted]    \n                       \n\nThis email was sent from an unmonitored mailbox. Please visit usbank.com/contactus\n(https://example.test/link) for options on how to reach us.\n\nYou are receiving this email as a service based on your relationship with U.S. Bank. To ensure continued delivery,\nplease add owner@example.test to your address book.\n\nYour security is our priority. If you would rather not follow links from this email, information about our products and\nservices is available online at usbank.com (https://example.test/link).\n\nPrivacy page (https://example.test/link) | Fraud help\n(https://example.test/link) | Contact us (https://example.test/link)\n\n[Image omitted: Equal Housing Lender]        \n                                            Equal Housing Lender, Member FDIC. ©2026 U.S. Bank.\n                                            U.S. Bank, EP-MN-L20D, 200 South 6th Street, Minneapolis, MN 55402\n\n[Image omitted]",
+      "emailDate": "2026-09-15T18:12:54.000Z"
+    }
+  },
+  {
+    "name": "us-bank-lossy",
+    "source": {
+      "fromAddress": "usbank@notifications.usbank.com",
+      "subject": "Your latest credit card statement is ready.",
+      "body": "Log in to mobile or online banking to view your statement.\n\nUS Bank ( https://example.test/link )\n\nLog in ( https://example.test/link )\n\nYour latest credit card statement is ready. Hi Alex,  The latest statement for your credit card ending in 1234 is now available. Review your statement balance or manage autopay.           \n\nAccount * credit card ending in 1234 * *credit card* Due date *September 10, 2026* Minimum payment\n\nAvoid late fees\n\n*$40.00*\n\nPlan adjusted balance\n\nAvoid interest and late fees for your ExtendPay plan\n\nRemaining statement balance\n\nAvoid interest and late fees\n\n*$0.00*\n\n*$472.32*\n\nAutopay\n\nOn\n\n*September 10, 2026*\n\n\nView Statement ( https://example.test/link )\n\n\nManage autopay ( https://example.test/link )\n\n\nManage your alerts. You are receiving this email because you signed up for U.S. Bank email alerts. Log in to your account to:\n\n• Disable or delete this alert. • Manage alert settings. • Activate new alerts for low balances, payment due dates and more.\n\nLog in now › ( https://example.test/link )\n\nNeed help? Just ask U.S. Bank Smart Assistant ® or find answers to your questions in the Help sections of mobile and online banking.\n\nLog in now › ( https://example.test/link )\n\nLogin ( https://example.test/link )\n\n( https://example.test/link ) ( https://example.test/link ) ( https://example.test/link )\n\nGet the app ( https://example.test/link )\nMobile App ( https://example.test/link )\n\nEmail intended for: owner@example.test\n\nThis email was sent from an unmonitored mailbox. Please visit usbank.com/contactus ( https://example.test/link ) for options on how to reach us.\n\nYou are receiving this email as a service based on your relationship with U.S. Bank. To ensure continued delivery, please add owner@example.test to your address book.\n\nYour security is our priority. If you would rather not follow links from this email, information about our products and services is available online at usbank.com ( https://example.test/link ).\n\nPrivacy page ( https://example.test/link ) | Fraud help ( https://example.test/link ) | Contact us ( https://example.test/link )\n\nEqual Housing Lender, Member FDIC. ©2026 U.S. Bank.\nU.S. Bank, EP-MN-L20D, 200 South 6th Street, Minneapolis, MN 55402",
+      "emailDate": "2026-08-15T18:17:14.000Z"
+    }
+  },
+  {
+    "name": "amazon",
+    "source": {
+      "fromAddress": "auto-confirm@amazon.com",
+      "subject": "Ordered 1 item: Personal Care",
+      "body": "Your Orders\n\nhttps://example.test/link\n\nYour Account\n\nhttps://example.test/link\n\nBuy Again\n\nhttps://example.test/link\n\n    Thanks for your order!\nOrdered\n\nShipped\n\nOut for delivery\n\nDelivered\n\nArriving tomorrow\n\nAlex - EXAMPLE CITY, CA\n\nOrder #\n111-1000000-1000000\n\nView or edit order\nhttps://example.test/link\n\nGrand Total:\n9.77 USD\n\n",
+      "emailDate": "2026-09-08T19:56:01.000Z"
+    }
+  },
+  {
+    "name": "amazon-multiple-orders",
+    "source": {
+      "fromAddress": "auto-confirm@amazon.com",
+      "subject": "Ordered: \"Sensodyne Clinical White...\" and ⁦1⁩ more item",
+      "body": "Thanks for your order! Ordered Shipped Out for delivery Delivered Arriving overnight 7 AM – 11 AM Alex - EXAMPLE CITY, CA Order # 111-1000000-1000001 View or edit order https://example.test/link * Sensodyne Clinical White Toothpaste Clinically Proven Whitening for Sensitive Teeth, Stain Protector, 3.4 oz x 3 Quantity: 1 24.47 USD Grand Total: 27.04 USD Arriving overnight 4 AM – 8 AM Alex - EXAMPLE CITY, CA Order # 111-1000000-1000002 View or edit order https://example.test/link * Simply Lemonade with Strawberry, 52 Fl Oz Bottle Quantity: 1 2.97 USD Grand Total: 3.07 USD ",
+      "emailDate": "2026-05-16T04:44:30.000Z"
+    }
+  },
+  {
+    "name": "valley-vista",
+    "source": {
+      "fromAddress": "donotreply@valleyvistaservices.com",
+      "subject": "Your Valley Vista Invoice for Account VV-10001 3",
+      "body": "[THIS IS AN AUTOMATED MESSAGE - PLEASE DO NOT REPLY DIRECTLY TO THIS EMAIL]\n\nAttached is your latest invoice for your Valley Vista Services account VV-10001 3.\nYou may also make a payment & manage your account by logging in to our online portal, www.valleyvistaservices.com/pay.\n\nFor Customer Service assistance, please contact us at 800-442-6454 or email us at owner@example.test\n\nRegards,\nValley Vista Services\n\n[Begin extracted PDF text]\n[Page 1 of 2]\nAccount Number | Page\nVV-10001 3 | 1\nValley Vista Services, Inc.\n17445 Railroad St. | Invoice Number: | 1000001\nCity of Industry, CA 91748-1026\nTotal Payments Received: | -112.38\n(626) 961-6291\nTotal Amount Past Due: | 0.00\n100 EXAMPLE AVE\nService Address: | EXAMPLE CITY CA 90000\nDue Date: | 08/07/2026\nInvoice Period:\n07/01/26-09/30/26\nCurrent Invoice Due: | 119.01\nThank you for your prompt payment.\nALEX EXAMPLE\n100 EXAMPLE AVE\nEXAMPLE CITY CA 90000\nUSA\nScan QR code to pay\nyour bill online.\nYour account is subject to late fee(s) and possible interruption of service if\npayment is not received by the due date.\nDate | Description | Quantity | Rate | Amount\n* PAYMENTS RECEIVED THIS PERIOD *\n05/07/26 | PMT: VISA | -112.38\n07/01/26 | RESI SERVICE SUBSCRIPTION | 1.00 | 119.01\nSign up for AUTOPAY\nat valleyvistaservices.com/pay\nEasily manage your account online\nAnytime, anywhere\nLogin to valleyvistaservices.com/pay | Total Invoice: | 119.01\nCurrent Due | Over 30 Due | Over 60 Due | Over 90 Due | Balance Due\n119.01 | 0.00 | 0.00 | 0.00 | 119.01\n DETACH AND RETURN THE REMITTANCE STUB BELOW WITH YOUR PAYMENT. \nValley Vista Services, Inc.\nAccount Number: | VV-10001 3\n17445 Railroad St.\nCity of Industry, CA 91748-1026\nStatement Period: | 07/01/26-09/30/26\n(626) 961-6291\nInvoice Total Due: | 119.01\nBILLING ADDRESS CHANGE? SIGNING UP FOR AUTOPAY? | Amount Paid: | $\nCheck the box and fill out the form on the back.\nTO FACILITATE CHECK PAYMENTS, PLEASE INCLUDE YOUR\nACCOUNT NUMBER ON THE CHECK.\nVALLEY VISTA SERVICES, INC.\nALEX EXAMPLE | 17445 RAILROAD ST.\n100 EXAMPLE AVE | CITY OF INDUSTRY, CA 91748-1026\nEXAMPLE CITY CA 90000 | (626) 961-6291\nUSA\n00000000000000000000\n\n",
+      "emailDate": "2026-07-04T21:17:27.000Z"
+    }
+  }
+]

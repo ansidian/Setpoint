@@ -211,7 +211,7 @@ describe("resolveFinancialEmailSeed", () => {
     await dbClient.close();
   });
 
-  it("re-extracts a stale blocked candidate once under the current semantic contract", async () => {
+  it("preserves historical registered-provider decisions without reassessing or staging them", async () => {
     const dbClient = await createMigratedDb();
     await queueEmail(dbClient, {
       subject: "Your transfer request is processing",
@@ -238,30 +238,12 @@ describe("resolveFinancialEmailSeed", () => {
             WHERE user_id = ? AND account_id = ? AND email_id = ?`,
       args: [JSON.stringify(candidate), JSON.stringify(stale), "user-1", "gmail-work", "msg-1"],
     });
-    const refreshed = reviewPlan({
-      ...candidate,
-      event_kind: "account_transfer_pending" as BillCandidate["event_kind"],
-    });
-    const planner = vi.fn(async (_userId: string, input: { candidate?: BillCandidate | null }) => {
-      expect(input.candidate).toBeNull();
-      return refreshed;
-    });
-
-    const first = await resolveFinancialEmailSeed(
-      "user-1",
-      { emailId: "msg-1", accountId: "gmail-work", dbClient },
-      { planner: planner as never },
-    );
-    const second = await resolveFinancialEmailSeed(
-      "user-1",
-      { emailId: "msg-1", accountId: "gmail-work", dbClient },
-      { planner: planner as never },
-    );
-
-    expect(first).toEqual(refreshed);
-    expect(second).toEqual(refreshed);
-    // test-architecture: allow-boundary-interaction -- the planner is the outbound AI/Actual boundary; one-time persisted semantic adoption is observable only by proving the second read avoided that boundary.
-    expect(planner).toHaveBeenCalledTimes(1);
+    const first = await resolveFinancialEmailSeed("user-1", { emailId:"msg-1",accountId:"gmail-work",dbClient });
+    const second = await resolveFinancialEmailSeed("user-1", { emailId:"msg-1",accountId:"gmail-work",dbClient });
+    expect(first).toEqual(stale);
+    expect(second).toEqual(stale);
+    const saved=await dbClient.execute("SELECT financial_email_plan_json FROM ea_email_triage WHERE email_id='msg-1'");
+    expect(JSON.parse(String(saved.rows[0]!.financial_email_plan_json))).toEqual(stale);
     await dbClient.close();
   });
 

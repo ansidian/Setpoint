@@ -381,3 +381,15 @@ describe("extractBill (OpenAI)", () => {
     ).rejects.toMatchObject({ status: 503, message: /OPENAI_API_KEY not set/ });
   });
 });
+
+describe('manual extraction for registered providers',()=>{
+  it('uses complete provider evidence with AI credentials unavailable',async()=>{
+    delete process.env.OPENAI_API_KEY;delete process.env.ANTHROPIC_API_KEY;
+    const result=await extractBillCandidate('owner',{from:'SCE <sce@message.sce.com>',subject:'Bill is ready',body:'Amount Due: $64.12 Due Date: September 30, 2026'},dependencies());
+    expect(result).toMatchObject({provider:'deterministic',candidate:{type:'bill',amount:64.12,due_date:'2026-09-30'}});
+  });
+  it('requires manual review for unsupported company templates without AI fallback',async()=>{
+    delete process.env.OPENAI_API_KEY;delete process.env.ANTHROPIC_API_KEY;
+    await expect(extractBillCandidate('owner',{from:'sce@message.sce.com',subject:'A new statement template',body:'Please see your new bill.'},dependencies())).rejects.toMatchObject({status:422,code:'FINANCIAL_PROVIDER_REVIEW_REQUIRED'});
+  });
+});

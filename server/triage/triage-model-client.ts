@@ -1,3 +1,4 @@
+import { identifyFinancialProvider } from '../financial-parsers/index.ts';
 import db from "../db/connection.ts";
 import { requireCompleteEmailEvidence } from "../email/email-evidence.ts";
 import { resolveEmailAiModelConfig, inferEmailAiProviderFromModel } from "../email/email-ai-models.ts";
@@ -165,6 +166,15 @@ Rules:
 ${BILL_SEMANTIC_EXTRACTION_INSTRUCTIONS}
 - Be compact. Summary and action should each be short enough for a dense dashboard row.`;
 
+const { bill_candidate: _financialSchema, ...routingProperties } = TRIAGE_TOOL.input_schema.properties;
+const ROUTING_TOOL = { ...TRIAGE_TOOL, input_schema: { ...TRIAGE_TOOL.input_schema,
+  properties:routingProperties,required:TRIAGE_TOOL.input_schema.required.filter(key=>key!=="bill_candidate") } };
+const ROUTING_PROMPT = TRIAGE_SYSTEM_PROMPT.slice(0,TRIAGE_SYSTEM_PROMPT.indexOf("- Decide whether"))
+  + "- Classify Inbox attention only. Financial document parsing is handled separately. Do not extract financial candidate fields.\n- Keep summary and action compact.";
+function providerOwnsFinancialParsing(email:Partial<TriageEmail>):boolean {
+  return identifyFinancialProvider(String(email.from_address || ""),{subject:String(email.subject || ""),body:String(email.body_text || email.body_snippet || "")}) !== null;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -247,6 +257,8 @@ const OPENAI_MAX_OUTPUT_TOKENS = 1600;
 const ANTHROPIC_MAX_OUTPUT_TOKENS = 1400;
 
 function buildOpenAITriageRequestBody({ model, email, reason, cacheKey, includeCacheFields = true }: { model: string; email: Partial<TriageEmail>; reason: string; cacheKey: string; includeCacheFields?: boolean }): Record<string, unknown> {
+  const routingOnly=providerOwnsFinancialParsing(email);
+  const tool=routingOnly ? ROUTING_TOOL : TRIAGE_TOOL;
   return {
     model,
     store: false,
@@ -256,7 +268,7 @@ function buildOpenAITriageRequestBody({ model, email, reason, cacheKey, includeC
           prompt_cache_retention: "24h",
         }
       : {}),
-    instructions: TRIAGE_SYSTEM_PROMPT,
+    instructions: routingOnly ? ROUTING_PROMPT : TRIAGE_SYSTEM_PROMPT,
     input: compactEmailForPrompt(email, reason),
     max_output_tokens: OPENAI_MAX_OUTPUT_TOKENS,
     reasoning: { effort: "low" },
@@ -264,7 +276,7 @@ function buildOpenAITriageRequestBody({ model, email, reason, cacheKey, includeC
       type: "function",
       name: TRIAGE_TOOL.name,
       description: TRIAGE_TOOL.description,
-      parameters: TRIAGE_TOOL.input_schema,
+      parameters: tool.input_schema,
       strict: false,
     }],
     tool_choice: { type: "function", name: TRIAGE_TOOL.name },
@@ -367,6 +379,7 @@ export function createTriageModelClient({
     email: Partial<TriageEmail>,
     tier: TriageModelTier,
   ) => {
+    if (providerOwnsFinancialParsing(email)) return Promise.resolve({...decision,bill_candidate:null});
     const choice = config[tier];
     const providerId = choice.provider === "openai" ? "openai" : "anthropic";
     return verifyTriageBillAmounts({
@@ -489,10 +502,10 @@ export function createTriageModelClient({
               // below that it is a harmless no-op (cache_read stays 0).
               system: [{
                 type: "text",
-                text: TRIAGE_SYSTEM_PROMPT,
+                text: providerOwnsFinancialParsing(email) ? ROUTING_PROMPT : TRIAGE_SYSTEM_PROMPT,
                 cache_control: { type: "ephemeral" },
               }],
-              tools: [{ ...TRIAGE_TOOL, cache_control: { type: "ephemeral" } }],
+              tools: [{ ...(providerOwnsFinancialParsing(email) ? ROUTING_TOOL : TRIAGE_TOOL), cache_control: { type: "ephemeral" } }],
               tool_choice: { type: "tool", name: "submit_email_triage" },
               messages: [{
                 role: "user",

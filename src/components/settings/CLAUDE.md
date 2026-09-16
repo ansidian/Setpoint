@@ -21,7 +21,7 @@ The settings surface: a Connections directory plus Automation, Finance, and Syst
 
 ### Sections (one per tab)
 - `sections/ConnectionsSettingsSection.tsx` — directory shell that binds projected service rows, onboarding progress, and advanced deep links to connection panels
-- `sections/ActualBudgetSettingsSection.tsx` — Finance preferences: saved financial profiles, browser alerts and utility pay links, with automatic budget-scoped Actual metadata, explicit failure retry, and one-time unsaved review-draft or partial email-seed navigation
+- `sections/ActualBudgetSettingsSection.tsx` — Finance preferences: unified financial providers and browser alerts, with automatic budget-scoped Actual metadata, explicit failure retry, and one-time unsaved review-draft or partial email-seed navigation
 - `sections/EmailAutomationSettingsSection.tsx` — triage mode, sounds, AI models, extraction, interests
 - `sections/SystemSettingsSection.tsx` — passkeys and API tokens
 
@@ -35,12 +35,11 @@ The settings surface: a Connections directory plus Automation, Finance, and Syst
 - `cards/TrustedRemoteContentCard.tsx` — persisted exact-sender + receiving-account remote-image trust list and removal
 
 ### Cards: financial preferences
-- `cards/FinancialProfilesCard.tsx` — collapsible activity groups with counts, compact profile rows and visible destination warnings; the focused explicit editor owns email matching and optional merchant/card filters; classified email seeds start enabled and leave unknown targets unset, and explicitly disabled profiles remain editable offline
-- `cards/financialProfileModel.ts` — profile form defaults, navigation-draft projection, validation, target options and destination summaries; internal target IDs never become display labels
+- `cards/FinancialProfilesCard.tsx` — unified financial-provider setup with revision-checked awaited saves, migration readiness, dedicated provider choices, email authority, utility grouping and payment links; preserves unsaved email seeds and shows destination/migration warnings
+- `cards/financialProfileModel.ts` — unified connection form defaults, legacy navigation-draft projection, validation, target options and destination summaries; payment-link-only entries grant no automation authority
 
-- `cards/UtilityMappingsCard.tsx` — compact utility summaries, one active utility/link editor, explicit schedule and URL saves with partial-save recovery, preserving source matching
-- `cards/UtilityPayLinksCard.tsx` — compact additional bill links with explicit add/edit/remove; shared URL field and domain summary for calendar pay links
-- `cards/utilitySettingsModel.ts` — valid utility schedule choices, pay-link URL parsing, and replacement that preserves unrelated links
+- `cards/UtilityPayLinksCard.tsx` — shared payment-URL field and domain summary used by the unified financial-provider editor
+- `cards/utilitySettingsModel.ts` — payment-URL parsing shared by the financial-provider form and summary
 
 ### Cards: connections + security
 - `cards/GoogleWorkspaceAccountsPanel.tsx` — Gmail/Calendar account add, reconnect, edit, reorder, and removal

@@ -1,3 +1,4 @@
+import { readConfiguredUtilities } from '../financial-connections/storage.ts';
 import type { Client } from '@libsql/client';
 import db from '../db/connection.ts';
 import type { BillCandidate } from '../../shared/types/bills.ts';
@@ -5,7 +6,8 @@ import { projectStatement } from './finance-statement-model.ts';
 
 /** Original bill sources only. Reads never acquire email or revisit financial intake. */
 export async function readUtilityStatements(userId: string, budgetId: string, start: string, dbClient: Pick<Client, 'execute'> = db) {
-  const result = await dbClient.execute({ sql: `WITH sources AS (
+  const utilities = await readConfiguredUtilities(userId,budgetId,dbClient);
+  const result = await dbClient.execute({ sql: `WITH utility_members AS (SELECT json_extract(value,'$.id') AS id, json_extract(value,'$.sourceSenders') AS source_senders_json, COALESCE(json_extract(value,'$.sourceIdentityText'),'') AS source_identity_text FROM json_each(?)), sources AS (
     SELECT d.id, d.email_uid, d.event_id,
       CASE WHEN receipt.record_id IS NOT NULL THEN json_extract(saved.value, '$.candidate') ELSE d.candidate_json END AS candidate,
       COALESCE(json_extract(d.acquired_source_json, '$.subject'), e.subject, '') AS subject,
@@ -28,11 +30,10 @@ export async function readUtilityStatements(userId: string, budgetId: string, st
   ), matched AS (
     SELECT originals.*, utility.id AS utility_id,
       row_number() OVER (PARTITION BY utility.id, COALESCE(event_id, 'document:' || originals.id) ORDER BY originals.id) AS source_order
-    FROM originals JOIN ea_finance_utilities utility ON utility.user_id=? AND utility.budget_id=?
-      AND EXISTS (SELECT 1 FROM json_each(utility.source_senders_json) sender WHERE lower(sender.value)=lower(originals.sender))
+    FROM originals JOIN utility_members utility ON EXISTS (SELECT 1 FROM json_each(utility.source_senders_json) sender WHERE lower(sender.value)=lower(originals.sender))
       AND (utility.source_identity_text='' OR instr(lower(originals.subject || ' ' || originals.body), lower(utility.source_identity_text))>0)
   ) SELECT * FROM matched WHERE source_order=1 AND julianday(received_at)>=julianday(?)
-    ORDER BY received_at DESC, id DESC LIMIT 501`, args: [userId, userId, budgetId, start] });
+    ORDER BY received_at DESC, id DESC LIMIT 501`, args: [JSON.stringify(utilities), userId, start] });
   return {
     truncated: result.rows.length > 500,
     statements: result.rows.slice(0, 500).map(source => projectStatement({

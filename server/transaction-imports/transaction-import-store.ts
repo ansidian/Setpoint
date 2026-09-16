@@ -15,6 +15,8 @@ import {
   projectTransactionImportRun as projectRun,
 } from "./transaction-import-store-projections.ts";
 
+import { LEGACY_IMPORT_ELIGIBLE, FINANCIAL_PROFILE_REVISION, PROVIDER_EPOCH_INACTIVE } from "../financial-events/financial-provider-policy.ts";
+
 const ARRIVAL_ITEM = `EXISTS (SELECT 1 FROM ea_transaction_import_runs run WHERE run.user_id = ea_transaction_import_items.user_id AND run.id = ea_transaction_import_items.run_id AND run.trigger = 'arrival')`;
 const ORIGINAL_UNGUARDED = `NOT EXISTS (SELECT 1 FROM ea_financial_corrected_sources g WHERE g.user_id=ea_transaction_import_items.user_id AND g.owner='import' AND g.record_id=ea_transaction_import_items.id)`;
 
@@ -152,7 +154,7 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
               claim_token = NULL, claimed_at = NULL, next_attempt_at = NULL, updated_at = ?
             WHERE user_id = ? AND run_id = ? AND id = ?
               AND status IN ('needs_review', 'paused', 'failed', 'ready')
-              AND original_attempted_at IS NULL AND ${ORIGINAL_UNGUARDED} AND ${ARRIVAL_ITEM}
+              AND original_attempted_at IS NULL AND ${ORIGINAL_UNGUARDED} AND ${LEGACY_IMPORT_ELIGIBLE} AND ${ARRIVAL_ITEM}
               AND NOT EXISTS (SELECT 1 FROM ea_financial_identity_conflicts conflict WHERE conflict.user_id = ea_transaction_import_items.user_id AND conflict.record_id = ea_transaction_import_items.id)`,
       args: [
         input.date, input.amountCents, input.payee, input.notes, input.actualAccountId,
@@ -264,7 +266,7 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
     const timestamp = now();
     const selected = await dbClient.execute({
       sql: `SELECT * FROM ea_transaction_import_items
-            WHERE ${ARRIVAL_ITEM} AND ${ORIGINAL_UNGUARDED} AND status IN ('queued', 'ready') AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
+            WHERE ${ARRIVAL_ITEM} AND ${ORIGINAL_UNGUARDED} AND ${LEGACY_IMPORT_ELIGIBLE} AND status IN ('queued', 'ready') AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
               AND NOT EXISTS (SELECT 1 FROM ea_financial_identity_conflicts conflict WHERE conflict.user_id = ea_transaction_import_items.user_id AND conflict.record_id = ea_transaction_import_items.id)
             ORDER BY created_at, id LIMIT 1`,
       args: [timestamp],
@@ -275,7 +277,7 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
     const claimed = await dbClient.execute({
       sql: `UPDATE ea_transaction_import_items
             SET status = ?, claim_token = ?, claimed_at = ?, attempts = attempts + 1, updated_at = ?
-            WHERE id = ? AND status = ? AND claim_token IS NULL AND ${ORIGINAL_UNGUARDED} AND ${ARRIVAL_ITEM}`,
+            WHERE id = ? AND status = ? AND claim_token IS NULL AND ${ORIGINAL_UNGUARDED} AND ${LEGACY_IMPORT_ELIGIBLE} AND ${ARRIVAL_ITEM}`,
       args: [nextStatus, claimToken, timestamp, timestamp, String(row.id), String(row.status)],
     });
     if (Number(claimed.rowsAffected || 0) !== 1) return null;
@@ -290,7 +292,7 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
     const result = await dbClient.execute({
       sql: `UPDATE ea_transaction_import_items
             SET financial_email_plan_json = json_set(financial_email_plan_json, '$.transferExecution.attemptedAt', ?), updated_at = ?
-            WHERE user_id = ? AND id = ? AND claim_token = ? AND status = 'importing' AND ${ORIGINAL_UNGUARDED} AND ${ARRIVAL_ITEM}
+            WHERE user_id = ? AND id = ? AND claim_token = ? AND status = 'importing' AND ${ORIGINAL_UNGUARDED} AND ${LEGACY_IMPORT_ELIGIBLE} AND ${ARRIVAL_ITEM}
               AND source = 'generic'
               AND json_extract(financial_email_plan_json, '$.operation.intended') = 'create_transfer_schedule'
               AND json_extract(financial_email_plan_json, '$.transferExecution.budgetId') IS NOT NULL
@@ -298,7 +300,7 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
               AND (confirmed_at IS NOT NULL OR (json_extract(financial_email_plan_json, '$.profile.status') = 'matched'
                 AND EXISTS (SELECT 1 FROM ea_settings settings WHERE settings.user_id = ea_transaction_import_items.user_id
                   AND settings.actual_budget_sync_id = json_extract(financial_email_plan_json, '$.profile.budgetId')
-                  AND settings.financial_profiles_revision = json_extract(financial_email_plan_json, '$.profile.revision'))))`,
+                  AND ${FINANCIAL_PROFILE_REVISION} = json_extract(financial_email_plan_json, '$.profile.revision'))))`,
       args: [attemptedAt, now(), userId, itemId, claimToken],
     });
     return Number(result.rowsAffected || 0) === 1;
@@ -320,7 +322,7 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
                 automatic_safe = COALESCE(?, automatic_safe),
                 actual_result_json = COALESCE(?, actual_result_json),
                 claim_token = NULL, claimed_at = NULL, updated_at = ?
-            WHERE user_id = ? AND id = ? AND claim_token = ? AND ${ORIGINAL_UNGUARDED} AND ${ARRIVAL_ITEM}`,
+            WHERE user_id = ? AND id = ? AND claim_token = ? AND ${ORIGINAL_UNGUARDED} AND ${LEGACY_IMPORT_ELIGIBLE} AND ${ARRIVAL_ITEM}`,
       args: [
         input.status, input.reconciliationStatus ?? null, input.lastError ?? null,
         input.nextAttemptAt ?? null, input.financialPlan ? JSON.stringify(input.financialPlan) : null,
@@ -335,10 +337,10 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
   async function admitOriginalImport(item: ClaimedItem, evidence: FinancialWriteEvidence): Promise<boolean> {
     const result = await dbClient.execute({
       sql: `UPDATE ea_transaction_import_items SET prepared_actual_json = ?, original_attempted_at = ?
-        WHERE user_id = ? AND id = ? AND claim_token = ? AND status = 'importing' AND ${ORIGINAL_UNGUARDED} AND ${ARRIVAL_ITEM} AND original_attempted_at IS NULL
+        WHERE user_id = ? AND id = ? AND claim_token = ? AND status = 'importing' AND ${ORIGINAL_UNGUARDED} AND ${LEGACY_IMPORT_ELIGIBLE} AND ${ARRIVAL_ITEM} AND original_attempted_at IS NULL
           AND (confirmed_at IS NOT NULL OR (? = 'matched' AND EXISTS (SELECT 1 FROM ea_settings settings
             WHERE settings.user_id = ea_transaction_import_items.user_id AND settings.actual_budget_sync_id = ?
-              AND settings.financial_profiles_revision = ?)))`,
+              AND ${FINANCIAL_PROFILE_REVISION} = ?)))`,
       args: [JSON.stringify(evidence), now(), item.userId, item.id, item.claimToken,
         item.financialPlan?.profile?.status ?? null, item.financialPlan?.profile?.budgetId ?? null, item.financialPlan?.profile?.revision ?? null],
     });
@@ -390,7 +392,7 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
     const timestamp = now();
     const result = await dbClient.execute({
       sql: `SELECT MIN(COALESCE(next_attempt_at, ?)) AS next_wake_at FROM ea_transaction_import_items
-            WHERE ${ARRIVAL_ITEM} AND ${ORIGINAL_UNGUARDED} AND status IN ('queued', 'ready')`,
+            WHERE ${ARRIVAL_ITEM} AND ${ORIGINAL_UNGUARDED} AND ${LEGACY_IMPORT_ELIGIBLE} AND status IN ('queued', 'ready')`,
       args: [timestamp],
     });
     const value = result.rows[0]?.next_wake_at;
@@ -398,6 +400,7 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
     return Number.isFinite(nextWakeAt) ? nextWakeAt : null;
   }
   return {
+    async isProviderEpochActive() { return Number((await dbClient.execute(`SELECT NOT (${PROVIDER_EPOCH_INACTIVE}) AS active`)).rows[0]?.active) === 1; },
     createRun,
     getRun,
     getItem,

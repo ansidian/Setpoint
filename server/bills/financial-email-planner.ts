@@ -362,6 +362,10 @@ async function resolveCandidate(
   dependencies: Required<Pick<FinancialEmailPlannerDependencies, "candidateExtractor" | "candidateVerification" | "modelChoiceReader">>,
   runProviderRequest?: BillProviderRequestRunner,
 ): Promise<CandidateResolution> {
+  if (input.assessmentMode === "deterministic") {
+    if (!input.candidate) throw new TypeError("A deterministic assessment requires a parsed candidate");
+    return {candidate:{...input.candidate},providerUnavailable:false};
+  }
   if (!input.candidate) {
     try {
       const extracted = await dependencies.candidateExtractor(userId, {
@@ -475,7 +479,7 @@ export function createFinancialEmailPlanner({
         : { transactions: [] };
       const historyAvailable = !historyResult.error && !historyResult.sync_state;
       const history = historyAvailable ? historyResult.transactions || [] : [];
-      const defaultRanker: FinancialTargetBundleRanker | undefined = candidateVerification.rankEmailTargetBundles
+      const defaultRanker: FinancialTargetBundleRanker | undefined = input.assessmentMode !== "deterministic" && candidateVerification.rankEmailTargetBundles
         ? async ({ candidate, options }) => {
             try {
               const choice = await modelChoiceReader(userId);
@@ -498,7 +502,7 @@ export function createFinancialEmailPlanner({
         intended: policy.intended,
         metadata: metadataAvailable ? metadata : unavailableMetadata(),
         history,
-        rankBundles: targetRanker || defaultRanker,
+        rankBundles: input.assessmentMode === "deterministic" ? undefined : targetRanker || defaultRanker,
         evidenceText: String(input.email?.body || input.email?.body_snippet || ""),
         allowNewPayee: input.source === "financial_event",
       });

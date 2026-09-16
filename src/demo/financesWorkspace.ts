@@ -1,11 +1,10 @@
 import type { DemoSeed } from './store';
-import type { FinanceWorkspace, JournalRange, JournalTransaction, RecurringStatement, UtilityStatement, UtilityMappingUpdate } from '../../shared/types/finances';
+import type { FinanceWorkspace, JournalRange, JournalTransaction, RecurringStatement, UtilityStatement } from '../../shared/types/finances';
 import type { PaymentItem, PaymentOrganization } from '../../shared/types/payment-groups';
 import { initializePaymentOrganization, reconcilePaymentOrganization, validatePaymentOrganization } from '../../shared/payment-groups';
 import { getDemoFinancialActivities } from './financialActivity';
 import { NO_DEMO_API_RESPONSE } from './apiHandler';
 
-const mappingOverrides = new Map<string, UtilityMappingUpdate>();
 let savedOrganization: PaymentOrganization | null = null;
 const prior = (date:string) => {const value=new Date(`${date.slice(0,7)}-01T12:00:00Z`);value.setUTCMonth(value.getUTCMonth()-1);return value.toISOString().slice(0,10);};
 
@@ -47,7 +46,10 @@ export function demoFinances(seed:DemoSeed):FinanceWorkspace {
     internet:{provider:'Fiber Co-op',dueDate:shifted(-1),amountCents:7999},
   };
   const definitions=[['electricity','Electricity','demo-shared-schedule'],['water','Water','demo-water'],['internet','Internet','demo-internet'],['gas','Gas','demo-gas'],['trash','Trash','demo-trash']];
-  const utilities=definitions.map(([id,label,scheduleId])=>{
+  const utilities=definitions.flatMap(([id,label,defaultScheduleId])=>{
+    const connection = seed.financialConnections.connections.find(row => row.utility?.id === id);
+    if (!connection?.utility || !("scheduleId" in connection.target)) return [];
+    const scheduleId = connection.target.scheduleId || defaultScheduleId;
     const occurrence=seed.bills.find(row=>row.scheduleId===scheduleId);
     const provider=billed[id!]?.provider || (id==='gas'?'County Gas':'Valley Collection');
     const source=(dueDate:string|null,amountCents:number,sourceId:string,nothingDue=false):UtilityStatement=>{
@@ -70,9 +72,8 @@ export function demoFinances(seed:DemoSeed):FinanceWorkspace {
       }
     }
     for(const statement of statements){const payment=seed.transactions.find(row=>row.scheduleId===scheduleId&&row.date===statement.dueDate);if(payment){statement.paymentRecorded=true;statement.paymentTransactionIds=[payment.id];statement.paymentDate=payment.date;statement.recordedTotalCents=Math.round(payment.amount*100);}}
-    const override = mappingOverrides.get(id!);
-    const mappedOccurrences = override ? seed.bills.filter(row => override.scheduleIds.includes(row.scheduleId)) : occurrence ? [occurrence] : [];
-    return {identity:{id:id!,label:label!,provider,budgetId:'demo-budget',payeeId:override?.payeeId || scheduleId!,scheduleIds:override?.scheduleIds || [scheduleId!],sourceSenders:[`billing@${id}.example.test`]},statements,occurrences:mappedOccurrences.map(row => ({...row,type:row.type as "bill"|"transfer"|"income"}))};
+    const mappedOccurrences = occurrence ? [occurrence] : [];
+    return [{identity:{...connection.utility,label:connection.utility.label || label!,budgetId:'demo-budget',payeeId:connection.utility.payeeId,scheduleIds:[scheduleId!]},statements,occurrences:mappedOccurrences.map(row => ({...row,type:row.type as "bill"|"transfer"|"income"}))}];
   });
   const ids=new Set(utilities.flatMap(row=>row.identity.scheduleIds));
   const start=`${Number(seed.dateKey.slice(0,4))-1}${seed.dateKey.slice(4)}`;
@@ -128,7 +129,12 @@ export function handleDemoFinances(url:URL,method:string,seed:DemoSeed,body:Reco
       const scheduleIds = Array.isArray(body.scheduleIds) ? body.scheduleIds.filter((value):value is string => typeof value === 'string') : [];
       if (!utility || body.budgetId !== 'demo-budget' || !payees.some(row => row.id === body.payeeId) || scheduleIds.length !== 1 || utilities.some(row => row.id !== id && row.scheduleIds.some(scheduleId => scheduleIds.includes(scheduleId))) || scheduleIds.some(scheduleId => !schedules.some(row => row.id === scheduleId && row.conditions[0]?.value === body.payeeId))) throw new Error('Choose an available payee and one bill schedule.');
       const update = {budgetId:'demo-budget',payeeId:String(body.payeeId),scheduleIds:[...new Set(scheduleIds)]};
-      mappingOverrides.set(id,update);
+      const connection = seed.financialConnections.connections.find(row => row.utility?.id === id);
+      if (connection?.utility && 'scheduleId' in connection.target) {
+        connection.target.scheduleId = scheduleIds[0]!;
+        connection.utility.payeeId = String(body.payeeId);
+        seed.financialConnections.revision += 1;
+      }
       return {...utility,...update};
     }
   }

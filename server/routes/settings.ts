@@ -1,3 +1,4 @@
+import { readCanonicalConnections, connectionPayLinks, financialConnectionsMigrated } from '../financial-connections/storage.ts';
 import { Router } from "express";
 import type { RequestHandler } from "express";
 import type { Value } from "@libsql/client";
@@ -43,7 +44,7 @@ import { clearTodoistNeedsReauth } from "../platform/provider-reauth.ts";
 import { requireRecentPasswordAuth } from "../middleware/auth.ts";
 import { scheduleTimeToLeaveRefreshForUser } from "../reminders/reminder-service.ts";
 import { readActualMetadataProjection } from "../actual/actual.ts";
-import { financialProfilesFromSettingsRow, readFinancialProfiles, validateFinancialProfiles } from "../bills/financial-profiles.ts";
+import { readFinancialProfiles, validateFinancialProfiles } from "../bills/financial-profiles.ts";
 import {
   validateDiscordWebhookUrl,
   validateEmailInterests,
@@ -199,7 +200,9 @@ router.get<Record<string, never>, SettingsResponse | ErrorResponse>("/settings",
     safe.triage_sound_settings = parseTriageSoundSettingsJson(triage_sound_settings_json);
     safe.triage_notification_sounds = TRIAGE_NOTIFICATION_SOUNDS;
     safe.utility_pay_links = utility_pay_links_json ? JSON.parse(String(utility_pay_links_json)) : [];
-    const financialProfiles = financialProfilesFromSettingsRow(row);
+    const financialProfiles = await readFinancialProfiles(userId);
+    const canonicalConnections = await readCanonicalConnections(userId);
+    if (canonicalConnections) safe.utility_pay_links = connectionPayLinks(canonicalConnections.connections);
     safe.financial_profiles = financialProfiles.profiles;
     safe.financial_profiles_revision = financialProfiles.revision;
 
@@ -370,6 +373,9 @@ router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, Sett
       }
       updates.push("triage_sound_settings_json = ?");
       args.push(JSON.stringify(triage_sound_settings));
+    }
+    if ((utility_pay_links !== undefined || financial_profiles !== undefined) && await financialConnectionsMigrated(userId)) {
+      return res.status(409).json({message:'Use Financial providers to update financial configuration.'});
     }
     if (utility_pay_links !== undefined) {
       const validation = validateUtilityPayLinks(utility_pay_links);

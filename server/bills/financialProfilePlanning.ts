@@ -48,6 +48,7 @@ export function matchFinancialProfile(configuration: FinancialProfileConfigurati
   const content = `${input.email?.subject || ""}\n${input.email?.body || input.email?.body_snippet || ""}`;
   const { suffix, evidence } = financialProfileCardIdentity(candidate, content);
   const matches = configuration.profiles.filter(profile => configuration.budgetId && profile.enabled && profile.budgetId === configuration.budgetId
+    && (!profile.providerId || profile.providerId === input.providerId)
     && profile.target.kind === profileKind(candidate)
     && profile.senderAddresses.some(address => identity(address) === sender)
     && (!profile.merchantName || [candidate.payee_hint, candidate.payee].some(value => identity(value) === identity(profile.merchantName))

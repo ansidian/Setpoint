@@ -79,7 +79,7 @@ export function createFinancialActivityReader(dbClient: Pick<Client, "batch"> = 
     }
     const managed = (row: Row, sourceRows: Row[], isDocument: boolean): FinancialActivity | null => {
       if (!includeInactive && row.dismissed_at != null) return null;
-      if (!includeInactive && isDocument && (!row.candidate_json || row.status === "ignored")) return null;
+      if (!includeInactive && isDocument && ((!row.candidate_json && parse<{status: string}>(row.provider_assessment_json)?.status !== "review") || row.status === "ignored")) return null;
       const { documents: docs, event } = hydrateManagedFinancialActivity(isDocument ? null : row, sourceRows);
       const reference: FinancialActivityReference = { owner: isDocument ? "document" : "event", id: String(row.id) };
       const id = String(occurrenceMap.get(key(reference))?.activity_id || JSON.stringify([reference.owner, reference.id]));
@@ -90,7 +90,7 @@ export function createFinancialActivityReader(dbClient: Pick<Client, "batch"> = 
       const inactive = row.dismissed_at != null || row.status === "ignored" || (row.status === "settled" && !successful);
       const source = sourceRows[0];
       const review = projectReviewItem({ ...row, ...(source ? { email_uid: source.email_uid, subject: source.subject,
-        from_name: source.from_name, candidate_json: source.candidate_json, received_at: source.email_date_utc } : {}),
+        from_name: source.from_name, candidate_json: source.candidate_json, provider_assessment_json: source.provider_assessment_json, received_at: source.email_date_utc } : {}),
         sources_current: docs.every(doc => doc.dismissedAt != null || doc.processedRevision === doc.revision || (isDocument && doc.status === "retry")) ? 1 : 0,
         entity_id: key(reference), state: row.status === "retry" ? "waiting" : row.status,
         reason: row.reason || row.last_error, related_emails: sourceRows.length });

@@ -1,3 +1,5 @@
+import { requireCompleteEmailEvidence } from '../email/email-evidence.ts';
+import { assessProviderFinancialEmail } from '../financial-parsers/index.ts';
 import { validateFinancialSemanticIdentity } from "./financialEmailClassificationPolicy.ts";
 import db from "../db/connection.ts";
 import { withAiUsageContext } from "../platform/ai-usage.ts";
@@ -69,6 +71,11 @@ export async function extractBillCandidate(
     providers = PROVIDERS,
   }: BillExtractionDependencies = {},
 ): Promise<BillCandidateExtractionResult> {
+  const assessment = assessProviderFinancialEmail({fromAddress:String(from || ""),subject:String(subject || ""),body:requireCompleteEmailEvidence(String(body || ""))});
+  if (assessment.status !== "unrecognized") {
+    if (assessment.status !== "parsed") throw Object.assign(new Error(assessment.status === "nonfinancial" ? "This provider message contains no supported financial event." : "Review the amount, date and account in this email before recording in Actual."), {status:422,code:"FINANCIAL_PROVIDER_REVIEW_REQUIRED"});
+    return {candidate:assessment.candidate,provider:"deterministic",model:`${assessment.providerId}:${assessment.parserVersion}`,metadata:await metadataReader(userId).catch(()=>EMPTY_ACTUAL_METADATA)};
+  }
   return withAiUsageContext({ userId, origin: "manual_extraction" }, async () => {
     const metadata = await metadataReader(userId).catch(() => EMPTY_ACTUAL_METADATA);
     const categories = metadata.categories || [];

@@ -29,6 +29,7 @@ Build-time fictional walkthrough (`VITE_EA_DEMO=1`). `src/api.ts` routes demo re
 - `financeProjection.ts` — exact-ID fictional Actual objects and settled in-memory ledger/bill projections shared by correction, Calendar and spending consumers; emits the demo-only financial-change event after owner settlement.
 - `financialCorrections.ts` — in-memory fictional inspection, exact previews, confirmation and effective result projection; no SDK or network.
 - `financialCompletion.ts` — fictional managed review plan with an unsaved mapping suggestion, owner-completion and candidate-dismissal mutations.
+- `financialConnections.ts` — fictional unified provider setup and revision-bound saves, with matching settings/pay-link projections; stored in the in-memory seed only
 - `financialProfiles.ts` — fictional owner-approved profiles, review suggestions and metadata destinations; profile Settings mutations remain in memory
 - `financialReceipt.ts` — one fictional Market receipt UID, sender, source row and body shared by Inbox, managed review and profile suggestion fixtures
 - `financeData.ts` — shared fictional transactions, confirmed-import mutation, and calendar Bills range projection.

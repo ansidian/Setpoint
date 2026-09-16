@@ -1,15 +1,21 @@
 import type { ActualMetadataResponse } from "../../../../shared/types/bills";
 import type { FinancialProfile, FinancialProfileDraft, FinancialProfileTarget } from "../../../../shared/types/financial-profiles";
 
+import type { FinancialConnection } from "../../../../shared/types/financial-connections";
+import { payLinkHost } from "./utilitySettingsModel";
+type EditableProfile = FinancialProfile | FinancialConnection;
+type EditableTarget = FinancialConnection["target"];
+
 export const PROFILE_KINDS = [
   { id: "utility", name: "Utility bill" },
   { id: "card_payment", name: "Scheduled card payment" },
   { id: "expense", name: "Expense" },
   { id: "income", name: "Income / refund" },
-] satisfies { id: FinancialProfileTarget["kind"]; name: string }[];
+  { id: "schedule_link", name: "Payment link only" },
+] satisfies { id: EditableTarget["kind"]; name: string }[];
 
-export function emptyProfileTarget(kind: FinancialProfileTarget["kind"]): FinancialProfileTarget {
-  if (kind === "utility") return { kind, scheduleId: "" };
+export function emptyProfileTarget(kind: EditableTarget["kind"]): EditableTarget {
+  if (kind === "utility" || kind === "schedule_link") return { kind, scheduleId: "" };
   if (kind === "card_payment") return { kind, fromAccountId: "", toAccountId: "" };
   return { kind, accountId: "", payeeId: "" };
 }
@@ -46,9 +52,13 @@ export function profileDraftFromRouteState(state: unknown): FinancialProfileDraf
   return profileValidation({ ...draft, id: "draft", enabled: false }) ? undefined : draft;
 }
 
-export function profileValidation(profile: FinancialProfile): string {
+export function profileValidation(profile: EditableProfile): string {
   if (!profile.name.trim()) return "Give this profile a name.";
   if (!profile.budgetId) return "Connect an Actual budget before saving a profile.";
+  if ("payLink" in profile && profile.payLink && (!payLinkHost(profile.payLink) || !("scheduleId" in profile.target) || !profile.target.scheduleId)) return "Choose an exact schedule and enter an http or https payment URL.";
+  if ("utility" in profile && profile.utility && (!profile.utility.payeeId || !profile.utility.sourceSenders.length)) return "Choose a utility schedule and add its sender email address.";
+  if (profile.target.kind === "schedule_link") return profile.target.scheduleId ? "" : "Choose a schedule for this payment link.";
+  if ("providerId" in profile && profile.enabled && !profile.providerId) return "Choose a supported provider before enabling automatic processing.";
   if (!profile.senderAddresses.length) return "Add at least one exact sender email address.";
   if (profile.senderAddresses.some(address => !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(address))) {
     return "Use full sender email addresses, separated by commas or new lines.";
@@ -66,9 +76,10 @@ export function profileValidation(profile: FinancialProfile): string {
   return "";
 }
 
-export function profileTargetProblem(profile: FinancialProfile, metadata: ActualMetadataResponse): string {
+export function profileTargetProblem(profile: EditableProfile, metadata: ActualMetadataResponse): string {
   const target = profile.target;
   const accountExists = (id: string) => metadata.accounts?.some(account => account.id === id && !account.closed);
+  if (target.kind === "schedule_link") return availableProfileSchedules("schedule_link", metadata).some(schedule => schedule.id === target.scheduleId) ? "" : "The saved schedule is unavailable.";
   if (target.kind === "utility") {
     return availableProfileSchedules("utility", metadata).some(schedule => schedule.id === target.scheduleId)
       ? "" : "The saved utility schedule is unavailable. Choose an existing utility schedule.";
@@ -86,8 +97,8 @@ export function profileTargetProblem(profile: FinancialProfile, metadata: Actual
   return "";
 }
 
-export function profileAuthority(profile: FinancialProfile): string {
-  return JSON.stringify([profile.budgetId, profile.enabled, profile.senderAddresses, profile.merchantName || null, profile.accountLast4 || null, profile.target]);
+export function profileAuthority(profile: EditableProfile): string {
+  return JSON.stringify(["providerId" in profile ? profile.providerId : null, profile.budgetId, profile.enabled, profile.senderAddresses, profile.merchantName || null, profile.accountLast4 || null, profile.target]);
 }
 
 export function profileScheduleName(id: string, metadata: ActualMetadataResponse): string {
@@ -96,9 +107,10 @@ export function profileScheduleName(id: string, metadata: ActualMetadataResponse
   return schedule?.name || (typeof payeeId === "string" && metadata.payeeMap?.[payeeId]) || (schedule ? "Unnamed schedule" : "Schedule unavailable");
 }
 
-export function profileTargetSummary(target: FinancialProfileTarget, metadata: ActualMetadataResponse): string {
+export function profileTargetSummary(target: EditableTarget, metadata: ActualMetadataResponse): string {
   const account = (id: string) => metadata.accounts?.find(item => item.id === id)?.name || (id ? "Account unavailable" : "Choose an account");
   const scheduleExists = (id: string) => metadata.schedules?.some(schedule => schedule.id === id);
+  if (target.kind === "schedule_link") return `Pay link · ${profileScheduleName(target.scheduleId, metadata)}`;
   if (target.kind === "utility") {
     if (!target.scheduleId) return "Choose a utility schedule";
     return scheduleExists(target.scheduleId) ? `Update ${profileScheduleName(target.scheduleId, metadata)}` : "Saved utility schedule unavailable";
@@ -113,8 +125,8 @@ export function profileTargetSummary(target: FinancialProfileTarget, metadata: A
   return `${target.kind === "income" ? "Income" : "Expense"} · ${account(target.accountId)} · ${payee}${target.categoryId ? ` · ${category || "Category unavailable"}` : " · Uncategorized"}`;
 }
 
-export function availableProfileSchedules(kind: "utility" | "card_payment", metadata: ActualMetadataResponse) {
+export function availableProfileSchedules(kind: "utility" | "card_payment" | "schedule_link", metadata: ActualMetadataResponse) {
   return (metadata.schedules || []).filter(schedule => schedule.id && !schedule.completed && (
-    kind === "card_payment" ? schedule.type === "transfer" : schedule.type !== "transfer" && schedule.type !== "income"
+    kind === "schedule_link" ? schedule.type !== "income" : kind === "card_payment" ? schedule.type === "transfer" : schedule.type !== "transfer" && schedule.type !== "income"
   )).map(schedule => ({ id: schedule.id!, name: profileScheduleName(schedule.id!, metadata) }));
 }

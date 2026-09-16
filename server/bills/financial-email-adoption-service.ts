@@ -1,3 +1,5 @@
+import { assessProviderFinancialEmail, identifyFinancialProvider } from '../financial-parsers/index.ts';
+import { requireCompleteEmailEvidence } from '../email/email-evidence.ts';
 import db from "../db/connection.ts";
 import { withAiUsageContext } from "../platform/ai-usage.ts";
 import { planFinancialEmail } from "./financial-email-planner.ts";
@@ -211,6 +213,27 @@ export async function resolveFinancialEmailSeed(
       if (managed) return managed;
     }
     const stored = await loadStoredFinancialContext(userId, payload, dbClient);
+    const requestEmail: BillEmailContext = {
+      ...(stored?.email || {}),
+      ...(payload.email || {}),
+      ...(payload.subject !== undefined ? { subject: payload.subject } : {}),
+      ...(payload.from !== undefined ? { from: payload.from } : {}),
+      ...(payload.body !== undefined ? { body: payload.body } : {}),
+      ...(payload.snippet !== undefined ? { snippet: payload.snippet } : {}),
+    };
+    const providerId=identifyFinancialProvider(String(requestEmail.from_address || requestEmail.from || ""), {
+      subject:String(requestEmail.subject || ""),body:String(requestEmail.body || requestEmail.body_snippet || ""),
+    });
+    if(providerId) {
+      // Historical reader visits cannot refresh AI decisions or stage new automatic work.
+      if(stored?.plan) return stored.plan;
+      const assessment=assessProviderFinancialEmail({fromAddress:String(requestEmail.from_address || requestEmail.from || ""),
+        subject:String(requestEmail.subject || ""),body:requireCompleteEmailEvidence(String(requestEmail.body || requestEmail.body_snippet || ""))});
+      if(assessment.status!=="parsed") throw Object.assign(new Error("This provider document needs manual review."),{status:422,code:"FINANCIAL_PROVIDER_REVIEW_REQUIRED"});
+      return planner(userId,{email:requestEmail,candidate:assessment.candidate,assessmentMode:"deterministic",providerId,
+        source:payload.source || "triage",providerMessageId:payload.providerMessageId || stored?.emailId || payload.emailId || null,
+        sourceIdentity:{...(stored?.sourceIdentity || {}),senderAuthentication:"unavailable"}});
+    }
     const stage = async (plan: FinancialEmailPlan): Promise<void> => {
       if (!stored) return;
       await stagePreflight(userId, {
@@ -235,14 +258,6 @@ export async function resolveFinancialEmailSeed(
       return stored.plan;
     }
 
-    const requestEmail: BillEmailContext = {
-      ...(stored?.email || {}),
-      ...(payload.email || {}),
-      ...(payload.subject !== undefined ? { subject: payload.subject } : {}),
-      ...(payload.from !== undefined ? { from: payload.from } : {}),
-      ...(payload.body !== undefined ? { body: payload.body } : {}),
-      ...(payload.snippet !== undefined ? { snippet: payload.snippet } : {}),
-    };
     const plan = await planner(userId, {
       email: requestEmail,
       candidate: refreshCandidateSemantics ? null : stored?.candidate || payload.candidate || null,

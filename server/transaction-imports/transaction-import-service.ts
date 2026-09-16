@@ -123,7 +123,7 @@ export function createTransactionImportService({
   planItems?: typeof planTransactionImportItems;
 } = {}) {
   async function ingestArrivals(userId: string, emails: TransactionEmailInput[]): Promise<{ queued: number; review: number; runId: string | null }> {
-    if (!emails.length) return { queued: 0, review: 0, runId: null };
+    if (!emails.length || await store.isProviderEpochActive()) return { queued: 0, review: 0, runId: null };
     const managed = new Set(await store.listManagedEmailUids(userId, emails.map((email) => email.uid)));
     const legacyEmails = emails.filter((email) => !managed.has(email.uid));
     if (!legacyEmails.length) return { queued: 0, review: 0, runId: null };

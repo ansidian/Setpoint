@@ -1,3 +1,4 @@
+import type { FinancialProviderId } from './financial-parsers.ts';
 import type { FinancialActivity } from "./financial-activity.ts";
 import type {
   ActualBillOccurrence,
@@ -221,6 +222,8 @@ export interface FinancialEmailSourceIdentity {
 }
 
 export interface FinancialEmailInput {
+  assessmentMode?: "deterministic";
+  providerId?: FinancialProviderId;
   email?: BillEmailContext;
   candidate?: BillCandidate | null;
   source?: BillPaySource;

@@ -19,7 +19,7 @@ const REVIEW_ROWS = `WITH review AS (
     (SELECT COUNT(*) FROM ea_financial_documents related
       WHERE related.user_id = event.user_id AND related.event_id = event.id) AS related_emails,
     event.created_at, event.updated_at, event.next_attempt_at, event.attempted_at,
-    event.operation_json, event.outcome_json, event.plan_json, event.owner_completion_json, source.candidate_json,
+    event.operation_json, event.outcome_json, event.plan_json, event.owner_completion_json, source.candidate_json, source.provider_assessment_json,
     event.collection_required,
     NOT EXISTS (SELECT 1 FROM ea_financial_documents changed WHERE changed.user_id = event.user_id
       AND changed.event_id = event.id AND changed.dismissed_at IS NULL AND changed.processed_revision < changed.revision) AS sources_current
@@ -35,10 +35,10 @@ const REVIEW_ROWS = `WITH review AS (
     email.subject, email.from_name, email.from_address, email.email_date_utc,
     'waiting', source.last_error, 1,
     source.created_at, source.updated_at, source.next_attempt_at, NULL,
-    NULL, NULL, NULL, NULL, source.candidate_json, NULL, 1
+    NULL, NULL, NULL, NULL, source.candidate_json, source.provider_assessment_json, NULL, 1
   FROM ea_financial_documents source
   JOIN ea_email_index email ON email.user_id = source.user_id AND email.uid = source.email_uid
-  WHERE source.user_id = ? AND source.dismissed_at IS NULL AND source.event_id IS NULL AND source.status = 'retry' AND source.candidate_json IS NOT NULL
+  WHERE source.user_id = ? AND source.dismissed_at IS NULL AND source.event_id IS NULL AND source.status = 'retry' AND (source.candidate_json IS NOT NULL OR json_extract(source.provider_assessment_json,'$.status')='review')
 )`;
 
 const DETAILS_REASONS = new Set([
@@ -120,7 +120,7 @@ export function projectReviewItem(row: Record<string, unknown>): FinancialEventR
   const canComplete = !completedBlocker && !sourcePending;
   if (!completedBlocker && (hasPendingFinancialPlan(event) || sourcePending)) plan = null;
   const savedCandidate = sourcePending ? null : objectJson<BillCandidate>(row.candidate_json);
-  const reviewingDetails = canReviewKnownDetails(String(row.entity_id).startsWith("document:") ? null : event, savedCandidate);
+  const reviewingDetails = canReviewKnownDetails(String(row.entity_id).startsWith("document:") ? null : event, savedCandidate, !sourcePending && objectJson<{status: string}>(row.provider_assessment_json)?.status === "review");
   const candidate = plan?.candidate || savedCandidate || {};
   const amount = confirmed?.entry?.amount ?? selectSemanticBillAmount(candidate)?.amount;
   return {
@@ -130,7 +130,7 @@ export function projectReviewItem(row: Record<string, unknown>): FinancialEventR
     amount: typeof amount === "number" && Number.isFinite(amount) && amount > 0 ? amount : null,
     currency: confirmed?.entry ? "USD" : nonempty(candidate.currency),
     state: reviewingDetails || row.state === "needs_review" ? "needs_review" : "waiting",
-    reason: sourcePending ? "Checking updated source details." : reviewingDetails ? "Review the details before recording in Actual." : String(row.reason || "Checking the financial entry."), relatedEmails: Number(row.related_emails),
+    reason: sourcePending ? "Checking updated source details." : reviewingDetails ? objectJson<{status:string}>(row.provider_assessment_json)?.status === "review" ? String(row.reason || "Review this provider email.") : "Review the details before recording in Actual." : String(row.reason || "Checking the financial entry."), relatedEmails: Number(row.related_emails),
     createdAt: Number(row.created_at), nextAttemptAt: row.next_attempt_at == null ? null : Number(row.next_attempt_at),
     canComplete, attention: sourcePending ? "retrying" : attentionFor(row, canComplete, plan, reviewingDetails),
   };

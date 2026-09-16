@@ -12,7 +12,7 @@ const mockApi = vi.hoisted(() => ({
 // test-architecture: allow-boundary-mock -- Actual metadata crosses the authenticated provider HTTP boundary while the real Finance controls render.
 vi.mock("@/api", () => ({
   getActualMetadata: mockApi.getActualMetadata,
-  getUtilityMappings: async () => ({budgetId:"sync-id",metadataAvailable:true,utilities:[],payees:[],schedules:[]}),
+  getFinancialConnections: async () => ({ budgetId: "sync-id", revision: 1, migrated: true, connections: connectedSettings.financial_profiles!.map(profile => ({ ...profile, providerId: null })) }),
 }));
 
 const { default: ActualBudgetSettingsSection } = await import("./ActualBudgetSettingsSection");

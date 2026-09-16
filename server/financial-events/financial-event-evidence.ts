@@ -14,6 +14,7 @@ export interface FinancialEvidenceDocument {
   eventId: string | null;
   candidate: BillCandidate | null;
   senderAuthentication: { status: string } | null;
+  processingPolicy?: "legacy" | "provider_v1";
   ownerConfirmedEntry?: FinancialEventCompletionEntry | null;
 }
 

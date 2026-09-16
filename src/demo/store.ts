@@ -3,6 +3,7 @@ import { buildDemoTransactions } from "./financeData.ts";
 import { buildDemoWeather } from "./weatherData.ts";
 import { buildDemoInboxSeed } from "./inboxData.ts";
 import { demoFinancialProfiles } from "./financialProfiles.ts";
+import { demoFinancialConnections } from "./financialConnections";
 import type { Reminder } from "../../shared/types/reminders.ts";
 import type { ActualPayee } from "../../shared/types/actual.ts";
 const WORK_COLOR = "#89b4fa";
@@ -363,6 +364,7 @@ function makeDemoSeed(now = new Date()) {
     transactions,
     activeSnapshot: inboxSeed.activeSnapshot,
     settings,
+    financialConnections: demoFinancialConnections(),
     reminders: [] as Reminder[],
     accounts: inboxSeed.accounts,
     actualMetadata: {

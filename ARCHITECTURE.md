@@ -137,8 +137,11 @@ server/
 │   └── test-utils/
 ├── finances/
 ├── financial-activity/
+├── financial-connections/
 ├── financial-corrections/
 ├── financial-events/
+├── financial-parsers/
+│   └── fixtures/
 ├── middleware/
 ├── news/
 ├── platform/
@@ -741,6 +744,8 @@ erDiagram
 | `ea_financial_activity_aliases` | `063_financial_activity.sql` |
 | `ea_financial_activity_occurrences` | `063_financial_activity.sql` |
 | `ea_financial_actual_bindings` | `063_financial_activity.sql` |
+| `ea_financial_connection_state` | `080_financial_connections.sql` |
+| `ea_financial_connections` | `080_financial_connections.sql` |
 | `ea_financial_correction_guards` | `064_financial_corrections.sql` |
 | `ea_financial_correction_keep_previews` | `066_financial_correction_keep.sql` |
 | `ea_financial_correction_observations` | `064_financial_corrections.sql` |
@@ -748,7 +753,7 @@ erDiagram
 | `ea_financial_correction_steps` | `064_financial_corrections.sql` |
 | `ea_financial_corrections` | `064_financial_corrections.sql` |
 | `ea_financial_document_ai_attempts` | `067_financial_event_ai_requests.sql` |
-| `ea_financial_documents` | `062_financial_events.sql`, `068_financial_candidate_dismissal.sql`, `070_financial_document_sources.sql` |
+| `ea_financial_documents` | `062_financial_events.sql`, `068_financial_candidate_dismissal.sql`, `070_financial_document_sources.sql`, `081_provider_financial_assessments.sql` |
 | `ea_financial_event_ai_requests` | `067_financial_event_ai_requests.sql` |
 | `ea_financial_event_references` | `062_financial_events.sql` |
 | `ea_financial_events` | `062_financial_events.sql`, `068_financial_candidate_dismissal.sql`, `071_financial_event_readiness.sql` |
@@ -756,7 +761,7 @@ erDiagram
 | `ea_financial_identity_conflicts` | `063_financial_activity.sql` |
 | `ea_financial_intake_state` | `062_financial_events.sql` |
 | `ea_financial_original_receipts` | `063_financial_activity.sql` |
-| `ea_financial_workflow_state` | `062_financial_events.sql` |
+| `ea_financial_workflow_state` | `062_financial_events.sql`, `081_provider_financial_assessments.sql` |
 | `ea_gmail_pubsub_config` | `035_gmail_pubsub_config.sql` |
 | `ea_gmail_watch_state` | `001_ea_tables.sql` |
 | `ea_instance_credentials` | `033_instance_credentials.sql`, `040_pending_credential_lifecycle.sql` |
@@ -920,6 +925,8 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | GET | `/api/briefing/financial-activity` | `server/routes/briefing/financial-activity.ts` |
 | GET | `/api/briefing/financial-activity/:owner/:id` | `server/routes/briefing/financial-activity.ts` |
 | POST | `/api/briefing/financial-activity/binding` | `server/routes/briefing/financial-activity.ts` |
+| GET | `/api/briefing/financial-connections` | `server/routes/briefing/financial-connections.ts` |
+| PUT | `/api/briefing/financial-connections` | `server/routes/briefing/financial-connections.ts` |
 | GET | `/api/briefing/financial-corrections/:id` | `server/routes/briefing/financial-corrections.ts` |
 | POST | `/api/briefing/financial-corrections/confirm` | `server/routes/briefing/financial-corrections.ts` |
 | POST | `/api/briefing/financial-corrections/inspect` | `server/routes/briefing/financial-corrections.ts` |

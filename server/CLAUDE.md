@@ -41,6 +41,7 @@ Composition root and cross-cutting server concerns that don't belong to a single
 - `scripts/transaction-import-equivalence-report.ts` — write-disabled Amazon/PayPal planner replay over a disposable Actual snapshot
 - `scripts/hydrate-actual-cache.ts`, `scripts/prune-actual-cache.ts` — warm and prune the local Actual Budget cache
 - `scripts/acknowledge-email-history.ts` — exact-ID Gmail history failure acknowledgment CLI; read-only preview by default, explicit reason and matching fingerprint required to apply
+- `scripts/migrate-financial-connections.ts` — read-only unified financial configuration preview; explicit fingerprint-guarded apply changes configuration without Actual writes or parser activation
 - `scripts/reindex-emails.ts` — additive time-windowed email re-index
 - `scripts/reindex-email-evidence.ts` — dry-run-first refetch of one exact indexed email UID; apply refreshes body/FTS/embeddings and requeues existing managed financial documents through the index trigger; historical plans, triage and snapshots remain unchanged
 - `scripts/reindex-icloud-mime.ts` — targeted re-fetch/reindex of iCloud rows with undecoded raw MIME
@@ -68,3 +69,5 @@ Composition root and cross-cutting server concerns that don't belong to a single
 - [Authentication map](auth/CLAUDE.md) — owner setup, credentials, passkeys and session support
 - Domain background-worker modules such as `server/email/email-backfill-worker.ts` and `server/reminders/reminder-scheduler.ts` — the individual stop functions `index.ts` passes into `shutdown.ts`'s `stopFns`
 - `server/db/migrations/` — SQL files run by `db/migrate.ts`
+
+- `scripts/activate-financial-provider-parsers.ts` — guarded explicit provider parser epoch activation after configuration migration and verification; never backfills financial work

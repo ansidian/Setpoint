@@ -1,3 +1,4 @@
+import { identifyFinancialProvider } from '../financial-parsers/index.ts';
 export { extractBillCandidate } from './bill-extraction-service.ts';
 import {
   sendBill as actualSendBill,
@@ -223,6 +224,7 @@ export async function extractFinancialEmail(
     const plan = await planFinancialEmailCore(userId, {
       email: { subject: input.subject, from: input.from, body: input.body },
       candidate: extracted.candidate,
+      ...(extracted.provider === "deterministic" ? {assessmentMode:"deterministic" as const,providerId:identifyFinancialProvider(String(input.from || ""),{subject:String(input.subject || ""),body:String(input.body || "")}) || undefined} : {}),
       source: "extract",
       sourceIdentity: { senderAuthentication: "unavailable" },
     });

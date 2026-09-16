@@ -2,6 +2,8 @@ import type { BillCandidate } from "../../shared/types/bills.ts";
 import { hasExplicitDateForYmd, hasStrongFinancialType, hasVerbatimFinancialEvidence } from "../bills/financial-email-planner.ts";
 import type { FinancialEvidenceDocument } from "./financial-event-evidence.ts";
 
+import { assessProviderFinancialEmail } from "../financial-parsers/index.ts";
+
 const TIME_ZONE = "America/Los_Angeles";
 
 /** Interpret an authenticated initial confirmation's original email timestamp.
@@ -40,6 +42,13 @@ export function resolveFinancialDocumentDate(document: FinancialEvidenceDocument
 /** Both document assessment and immutable write admission use the same proof. */
 export function financialDocumentSupportsDate(document: FinancialEvidenceDocument, planned: BillCandidate, now = new Date()): boolean {
   if (hasExplicitDateForYmd(`${document.subject}\n${document.body}`, planned.due_date)) return true;
+  if (document.processingPolicy === "provider_v1") {
+    const assessment = assessProviderFinancialEmail({fromAddress: document.fromAddress, subject: document.subject,
+      body: document.body, emailDate: document.emailDate});
+    // Provider-specific year inference is bound to the original email date and
+    // must reproduce the planned date from source; persisted facts are not proof.
+    if (assessment.status === "parsed" && assessment.candidate.due_date && assessment.candidate.due_date === planned.due_date) return true;
+  }
   const candidate = resolveFinancialDocumentDate(document, now);
   const revalidated = resolveFinancialDocumentDate({ ...document, candidate: planned }, now);
   return !!candidate?.operation_date_source && !!revalidated?.operation_date_source
