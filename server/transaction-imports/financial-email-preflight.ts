@@ -1,8 +1,7 @@
 import { transferPaymentIdentity } from "./financial-email-transfer.ts";
 import { createHash } from "node:crypto";
 import { financialEmailAutomationEnabled, selectSemanticBillAmount } from "../bills/financial-email-planner.ts";
-import { redactTransactionImportPlan } from "./transaction-import-planner-adapter.ts";
-import { isTransactionParserOwnedEmail } from "./parsers/parser-registry.ts";
+import { identifyFinancialProvider } from "../financial-parsers/index.ts";
 import {
   transactionImportStore,
   type InsertItemInput,
@@ -11,9 +10,43 @@ import {
 import type {
   FinancialAutomationGateKind,
   FinancialEmailPlan,
+  FinancialPlanTarget,
   FinancialPlanReasonCode,
 } from "../../shared/types/bills.ts";
 import type { ActualImportItemOutcome } from "../../shared/types/transaction-imports.ts";
+
+function redactTarget(target: FinancialPlanTarget): FinancialPlanTarget {
+  return {
+    ...target,
+    provenance: target.provenance.map(({ evidence: _evidence, ...entry }) => entry),
+  };
+}
+
+function redactTransactionImportPlan(plan: FinancialEmailPlan): FinancialEmailPlan {
+  const {
+    event_evidence: _eventEvidence,
+    type_evidence: _typeEvidence,
+    account_last4_evidence: _accountEvidence,
+    target_evidence: _targetEvidence,
+    ...candidate
+  } = plan.candidate;
+  return {
+    ...plan,
+    candidate: {
+      ...candidate,
+      amount_candidates: candidate.amount_candidates?.map(({ evidence: _evidence, ...amount }) => amount),
+    },
+    classification: { ...plan.classification, evidence: undefined },
+    targets: {
+      account: redactTarget(plan.targets.account),
+      payee: redactTarget(plan.targets.payee),
+      category: redactTarget(plan.targets.category),
+      fromAccount: redactTarget(plan.targets.fromAccount),
+      toAccount: redactTarget(plan.targets.toAccount),
+      schedule: redactTarget(plan.targets.schedule),
+    },
+  };
+}
 
 const REQUIRED_GATES: FinancialAutomationGateKind[] = [
   "profile",
@@ -49,8 +82,8 @@ export function financialEmailPreflightItem(
   context: FinancialEmailPreflightContext,
   plan: FinancialEmailPlan,
 ): InsertItemInput | null {
-  if (isTransactionParserOwnedEmail({
-    from: context.emailFrom || "", subject: context.emailSubject || "", text: context.emailBody,
+  if (identifyFinancialProvider(context.emailFrom || "", {
+    subject: context.emailSubject || "", body: context.emailBody || "",
   })) return null;
   const transfer = plan.automation.operationClass === "transfer_schedule" && plan.operation.intended === "create_transfer_schedule";
   const transaction = ["one_time_expense", "income"].includes(plan.automation.operationClass);
@@ -133,7 +166,7 @@ export async function stageFinancialEmailPreflight(
   plan: FinancialEmailPlan,
   store: TransactionImportStore = transactionImportStore,
 ): Promise<{ staged: boolean; runId: string | null }> {
-  if (!plan.identity.key) return { staged: false, runId: null };
+  if (!plan.identity.key || await store.isProviderEpochActive()) return { staged: false, runId: null };
   if (await store.isManagedEmail(userId, context.emailId)) return { staged: false, runId: null };
   const executionId = plan.automation.operationClass === "transfer_schedule"
     ? transferPaymentIdentity(userId, plan)
@@ -148,7 +181,7 @@ export async function stageFinancialEmailPreflight(
     plan,
   );
   if (!item) return { staged: false, runId: null };
-  await store.createRun({
+  const run = await store.createRun({
     id: runId,
     userId,
     trigger: "arrival",
@@ -156,6 +189,7 @@ export async function stageFinancialEmailPreflight(
     gmailAccountIds: [context.accountId],
     sources: ["generic"],
   });
+  if (!run) return { staged: false, runId: null };
   const inserted = await store.insertItem(item);
   if (inserted) {
     await store.updateRunProgress(userId, runId, {

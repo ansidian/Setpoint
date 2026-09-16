@@ -1,3 +1,4 @@
+import { PROVIDER_DOCUMENT_ELIGIBLE, PROVIDER_EVENT_ELIGIBLE } from "../financial-events/financial-provider-policy.ts";
 import db from "../db/connection.ts";
 import type { InStatement } from "@libsql/client";
 import type {
@@ -85,10 +86,14 @@ async function readWorkflowSummary(dbClient: ObserveReportDb, userId: string, st
   // must neither hide a failure nor inflate a ledger outcome.
   const result = await dbClient.execute({
     sql: `WITH documents AS (
-            SELECT d.*, e.plan_json AS event_plan_json
-            FROM ea_financial_documents d LEFT JOIN ea_financial_events e
-              ON e.user_id = d.user_id AND e.id = d.event_id
-            WHERE d.user_id = ? AND d.created_at >= ? AND d.created_at < ?
+            SELECT next.*, e.plan_json AS event_plan_json,
+              NOT ${PROVIDER_DOCUMENT_ELIGIBLE} AS retired,
+              next.status = 'retry' AND next.next_attempt_at IS NULL AND (
+                json_extract(next.provider_assessment_json, '$.status') = 'review'
+                OR json_type(next.candidate_json) = 'object') AS expected_review
+            FROM ea_financial_documents next LEFT JOIN ea_financial_events e
+              ON e.user_id = next.user_id AND e.id = next.event_id
+            WHERE next.user_id = ? AND next.created_at >= ? AND next.created_at < ?
           ), document_counts AS (
             SELECT COUNT(*) AS documents_indexed,
               SUM(processed_revision > 0 OR json_type(candidate_json) = 'object') AS documents_assessed,
@@ -97,11 +102,15 @@ async function readWorkflowSummary(dbClient: ObserveReportDb, userId: string, st
               SUM(status = 'pending') AS documents_pending,
               SUM(status = 'processing') AS documents_processing,
               SUM(status = 'retry') AS documents_retry,
-              SUM(NULLIF(TRIM(last_error), '') IS NOT NULL) AS documents_failed,
-              SUM(NULLIF(TRIM(last_error), '') IS NOT NULL AND COALESCE(json_type(event_plan_json), '') <> 'object') AS documents_unplannedFailures
+              SUM(retired) AS documents_retiredHistorical,
+              SUM(NOT retired AND COALESCE(expected_review, 0)) AS documents_expectedReview,
+              SUM(NOT retired AND NOT COALESCE(expected_review, 0) AND NULLIF(TRIM(last_error), '') IS NOT NULL) AS documents_failed,
+              SUM(NOT retired AND NOT COALESCE(expected_review, 0) AND NULLIF(TRIM(last_error), '') IS NOT NULL AND COALESCE(json_type(event_plan_json), '') <> 'object') AS documents_unplannedFailures
             FROM documents
           ), events AS (
-            SELECT *, json_extract(outcome_json, '$.outcome') AS outcome,
+            SELECT *, NOT ${PROVIDER_EVENT_ELIGIBLE} AS retired,
+              status = 'needs_review' AND next_attempt_at IS NULL AS expected_review,
+              json_extract(outcome_json, '$.outcome') AS outcome,
               json_type(plan_json) = 'object' AS has_plan,
               json_type(outcome_json, '$.transactionId') = 'text'
                 AND NULLIF(TRIM(json_extract(outcome_json, '$.transactionId')), '') IS NOT NULL AS has_transaction,
@@ -117,7 +126,9 @@ async function readWorkflowSummary(dbClient: ObserveReportDb, userId: string, st
               SUM(status = 'settled') AS events_settled,
               SUM(COALESCE(has_plan, 0)) AS events_planned,
               SUM(NOT COALESCE(has_plan, 0)) AS events_unplanned,
-              SUM(NOT COALESCE(has_plan, 0) AND status IN ('waiting', 'needs_review')) AS events_unplannedFailures,
+              SUM(retired) AS events_retiredHistorical,
+              SUM(NOT retired AND expected_review) AS events_expectedReview,
+              SUM(NOT retired AND NOT expected_review AND NOT COALESCE(has_plan, 0) AND status IN ('waiting', 'needs_review')) AS events_unplannedFailures,
               SUM(attempted_at IS NOT NULL) AS events_attempted,
               SUM(outcome = 'added') AS events_added,
               SUM(outcome = 'updated') AS events_updated,
@@ -129,15 +140,30 @@ async function readWorkflowSummary(dbClient: ObserveReportDb, userId: string, st
           ) SELECT document_counts.*, event_counts.* FROM document_counts, event_counts`,
     args: [userId, start, end, userId, start, end],
   });
+  const parserRows = await dbClient.execute({
+    sql: `SELECT processing_policy, json_extract(provider_assessment_json, '$.providerId') AS provider,
+      json_extract(provider_assessment_json, '$.templateId') AS template,
+      json_extract(provider_assessment_json, '$.parserVersion') AS parser_version,
+      COALESCE(json_extract(provider_assessment_json, '$.status'), 'unassessed') AS disposition, COUNT(*) AS count
+      FROM ea_financial_documents WHERE user_id = ? AND created_at >= ? AND created_at < ?
+      GROUP BY processing_policy, provider, template, parser_version, disposition
+      ORDER BY processing_policy, provider, template, parser_version, disposition`,
+    args: [userId, start, end],
+  });
   const row = result.rows[0] || {};
   const counts = <T extends Record<string, number>>(prefix: string, keys: string[]): T => Object.fromEntries(
     keys.map((key) => [key, Number(row[`${prefix}_${key}`] || 0)]),
   ) as T;
   return {
     window: { start: new Date(start).toISOString(), end: new Date(end).toISOString() },
-    documents: counts("documents", ["indexed", "assessed", "financial", "ignored", "pending", "processing", "retry", "failed", "unplannedFailures"]),
+    byParser: parserRows.rows.map(row => ({
+      processingPolicy: String(row.processing_policy), providerId: row.provider == null ? null : String(row.provider),
+      templateId: row.template == null ? null : String(row.template), parserVersion: row.parser_version == null ? null : String(row.parser_version),
+      disposition: String(row.disposition), count: Number(row.count),
+    })),
+    documents: counts("documents", ["indexed", "assessed", "financial", "ignored", "pending", "processing", "retry", "failed", "expectedReview", "retiredHistorical", "unplannedFailures"]),
     events: counts("events", ["total", "pending", "processing", "waiting", "needsReview", "settled", "planned", "unplanned",
-      "unplannedFailures", "attempted", "added", "updated", "alreadyPresent", "recorded", "scheduled", "noWrite"]),
+      "unplannedFailures", "expectedReview", "retiredHistorical", "attempted", "added", "updated", "alreadyPresent", "recorded", "scheduled", "noWrite"]),
   };
 }
 

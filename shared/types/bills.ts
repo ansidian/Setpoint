@@ -405,6 +405,15 @@ export interface FinancialEmailObserveCounts {
 export interface FinancialWorkflowObserveSummary {
   /** Cohort creation time, inclusive start and exclusive end. */
   window: { start: string; end: string };
+  /** Persisted assessments, grouped without source bodies or candidate facts. */
+  byParser: Array<{
+    processingPolicy: string;
+    providerId: string | null;
+    templateId: string | null;
+    parserVersion: string | null;
+    disposition: string;
+    count: number;
+  }>;
   documents: {
     indexed: number;
     /** Documents with any persisted successful assessment, including negatives. */
@@ -414,8 +423,10 @@ export interface FinancialWorkflowObserveSummary {
     pending: number;
     processing: number;
     retry: number;
-    /** Documents with a current processing error, including unresolved correlation. */
+    /** Active operational failures; excludes expected review and retired history. */
     failed: number;
+    expectedReview: number;
+    retiredHistorical: number;
     unplannedFailures: number;
   };
   /** Each event is counted once, regardless of its number of supporting emails. */
@@ -428,6 +439,8 @@ export interface FinancialWorkflowObserveSummary {
     settled: number;
     planned: number;
     unplanned: number;
+    expectedReview: number;
+    retiredHistorical: number;
     unplannedFailures: number;
     attempted: number;
     added: number;

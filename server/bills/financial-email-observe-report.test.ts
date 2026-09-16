@@ -154,9 +154,10 @@ describe("financial email observe report", () => {
       expect(report).toMatchObject({ sampled: 1, truncated: true, writesEnabled: false });
       expect(report.workflow).toEqual({
         window: { start: new Date(start).toISOString(), end: new Date(end).toISOString() },
-        documents: { indexed: 12, assessed: 9, financial: 8, ignored: 1, pending: 1, processing: 1, retry: 2, failed: 2, unplannedFailures: 2 },
+        byParser: [{ processingPolicy: "legacy", providerId: null, templateId: null, parserVersion: null, disposition: "unassessed", count: 12 }],
+        documents: { indexed: 12, assessed: 9, financial: 8, ignored: 1, pending: 1, processing: 1, retry: 2, failed: 1, expectedReview: 1, retiredHistorical: 0, unplannedFailures: 1 },
         events: { total: 9, pending: 1, processing: 1, waiting: 1, needsReview: 2, settled: 4, planned: 5, unplanned: 4,
-          unplannedFailures: 2, attempted: 3, added: 1, updated: 1, alreadyPresent: 2, recorded: 3, scheduled: 1, noWrite: 1 },
+          unplannedFailures: 1, expectedReview: 2, retiredHistorical: 0, attempted: 3, added: 1, updated: 1, alreadyPresent: 2, recorded: 3, scheduled: 1, noWrite: 1 },
       });
       // Reading again preserves the durable result; this report never advances
       // queues, re-assesses documents, or performs Actual work.
@@ -164,6 +165,42 @@ describe("financial email observe report", () => {
     } finally {
       await db.close();
     }
+  });
+
+  it("separates unsupported review without candidate facts, operational failure, and retired history", async () => {
+    const db = await createMigratedDb();
+    const start = Date.parse("2026-09-16T00:00:00Z");
+    try {
+      await db.execute("UPDATE ea_financial_workflow_state SET provider_parser_cutover_at = '2026-09-16T00:00:00Z'");
+      const entries = [
+        { uid: "unsupported", policy: "provider_v1", assessment: { status: "review", providerId: "citi", templateId: "unsupported", parserVersion: "citi-v1" }, candidate: null, error: "Review the details" },
+        { uid: "unknown", policy: "provider_v1", assessment: { status: "unrecognized", providerId: null }, candidate: { amount: 10 }, error: "Review unknown provider" },
+        { uid: "unavailable", policy: "provider_v1", assessment: null, candidate: null, error: "Source unavailable" },
+        { uid: "retired", policy: "legacy", assessment: null, candidate: null, error: "Old extraction failure" },
+      ];
+      for (const entry of entries) {
+        await db.execute({
+          sql: `INSERT INTO ea_financial_documents (user_id, account_id, email_uid, status,
+            processing_policy, provider_assessment_json, candidate_json, last_error, created_at, updated_at)
+            VALUES ('user-1', 'mail', ?, 'retry', ?, ?, ?, ?, ?, ?)`,
+          args: [entry.uid, entry.policy, entry.assessment ? JSON.stringify(entry.assessment) : null,
+            entry.candidate ? JSON.stringify(entry.candidate) : null, entry.error, start, start],
+        });
+      }
+      for (const [id, attempted, confirmed] of [["retired-event", false, false], ["recovering", true, false], ["owner-confirmed", false, true]] as const) {
+        await db.execute({
+          sql: `INSERT INTO ea_financial_events (id, user_id, status, attempted_at, operation_json, owner_completion_json, created_at, updated_at)
+            VALUES (?, 'user-1', 'waiting', ?, ?, ?, ?, ?)`,
+          args: [id, attempted ? start : null, attempted ? '{}' : null, confirmed ? '{}' : null, start, start],
+        });
+      }
+      const report = await readFinancialEmailObserveReport("user-1", { dbClient: db, start, end: start + 1000 });
+      expect(report.workflow?.events).toMatchObject({ total: 3, retiredHistorical: 1, unplannedFailures: 2 });
+      expect(report.workflow?.documents).toMatchObject({ indexed: 4, expectedReview: 2, retiredHistorical: 1, failed: 1, unplannedFailures: 1 });
+      expect(report.workflow?.byParser).toContainEqual({ processingPolicy: "provider_v1", providerId: "citi", templateId: "unsupported", parserVersion: "citi-v1", disposition: "review", count: 1 });
+      expect(JSON.stringify(report)).not.toContain("Source unavailable");
+      expect((await readFinancialEmailObserveReport("user-1", { dbClient: db, start, end: start + 1000 })).workflow).toEqual(report.workflow);
+    } finally { await db.close(); }
   });
 
   it("defaults to a 30-day workflow window and rejects invalid windows", async () => {

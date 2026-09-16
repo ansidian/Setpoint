@@ -1,38 +1,27 @@
 # Transaction Import Domain Map
 
-Deterministic Gmail email-to-transaction parsing for arriving receipts. This domain emits normalized candidates; durable orchestration and Actual writes remain separate concerns.
+Saved transaction-import history, bounded legacy recovery, and the shared financial worker runtime. New provider parsing belongs to `server/financial-parsers/`; modern document/event intake belongs to `server/financial-events/`.
 
 ## Files
 
-- `transaction-import-types.ts` — parser, candidate, evidence, warning, and automatic-safety contracts
-- `parsers/parser-utils.ts` — bounded normalization helpers shared by source parsers
-- `parsers/fixtures.ts` — sanitized parser fixtures shared by focused tests
-- `parsers/amazon.ts` — pure Amazon order-confirmation parser
-- `parsers/paypal.ts` — pure PayPal payment/order parser
-- `parsers/parser-registry.ts` — source routing, deterministic receipt ownership, and public parser entry point
 - `transaction-import-store.ts` — durable run, item, item claim, recovery, and per-email status persistence; bounded redacted dashboard activity; Inbox reads expose latest correction status and last verified effective results without rewriting original owner fields; no mapping-table access
 - `transaction-import-activity.ts` — existing bounded dashboard activity read projections, including verified corrected amounts/payees
 - `transaction-import-store-projections.ts` — database-row projections for durable runs and items, including historical captured targets/modes
-- `transaction-import-planner-adapter.ts` — parser-candidate adaptation into the shared financial planner, planner-owned targets/rollout for new items, and redacted historical equivalence projection
-- `transaction-import-equivalence-report.ts` — read-only historical replay and redacted gate summary
-- `financial-email-preflight.ts` — stages exact generic USD expenses and transfer schedules, preserves their rollout mode, and applies expense preview outcomes and unattended eligibility
+- `financial-email-preflight.ts` — pre-activation generic USD staging with atomic retirement fences; owns redacted saved plans and expense preview eligibility
 - `financial-email-transfer.ts` — shared payment identity across reminder emails, separate transfer preview/commit/recovery, durable attempt admission and schedule-aware outcomes
-- `transaction-import-service.ts` — arrival preparation and saved-item confirmation
+- `transaction-import-service.ts` — supported saved-item confirmation, retry, dismissal, and inspection
 - `transaction-import-worker.ts` — Actual preview/commit drains; settled batches publish the shared financial signal and recovered original imports reuse Actual invalidation
-- `transaction-import-arrivals.ts` — transient Gmail normalized-email adapter used by the non-blocking sync hook
 - `transaction-import-runtime.ts` — shared bounded financial-document/event and legacy-import drains, startup stale recovery, ready-event priority between provider work, durable recovery deadlines, and graceful shutdown
 
-- `transaction-import.test-utils.ts` — shared saved-state reader and profile-authorized receipt fixture preparation for ephemeral import behavior tests
+- `transaction-import.test-utils.ts` — shared saved-state reader and explicit profile-authorized saved-item fixtures for ephemeral import behavior tests
 
 ## Local patterns
 
-- Parsers are pure: no configuration, persistence, logging, or network calls.
 - Amounts are signed integer cents and dates are `YYYY-MM-DD`.
-- Parser warnings carry an explicit `blocking` flag; automatic safety is projected centrally.
-- New source-specific items use planner targets and profile-based eligibility; `candidate.transaction_import.executionOwner = "planner"` distinguishes them from historical items whose captured targets and modes remain intact. Provider references supply lifecycle-stable imported identities when grounded; provider-message identity is the fallback. No live path reads legacy mapping configuration.
-- Post-cutoff managed emails belong only to `server/financial-events/`; triage planning, generic staging, parser arrivals check that ownership. Older deterministic Amazon/PayPal receipts remain with the source importer and are excluded from generic staging.
+- New legacy run/item insertion is atomically fenced after the provider epoch. Registered providers never enter generic preflight. Unsubmitted legacy rows retain source evidence and history but do not advertise or accept original execution actions.
+- Saved confirmed items and immutable admitted operations retain recovery authority. Retry, claim and attention projections share epoch eligibility; correction and duplicate guards remain in force.
 - Transfer jobs share a stable identity for owner, source, destination, cents and date across reminder messages. Preview binds the Actual budget; a conditional persisted attempt marker admits one create call. Every later claim with that marker only reconciles, including manual retry and stale-claim recovery. Today/past notices without a match stay review. Transfers never enter expense import groups.
-- Generic financial-email items require a matching enabled profile for an unconfirmed first write. Profile revision and budget are checked again at atomic admission; queued pre-profile plans become review-only. Already attempted operations retain their captured recovery authority. New enabled USD expenses and income transactions enter automatic mode with `automatic_safe = 0`; only a would-add preview plus a previously passed current-Actual duplicate check and all plan gates can promote them to ready/automatic-safe. Income cents stay positive and the Actual import Adapter writes every imported transaction uncleared. Existing observe-only items still require confirmation, and updates remain review-only.
+- Generic financial-email items require a matching enabled profile for an unconfirmed first write. Profile revision and budget are checked again at atomic admission; queued pre-profile plans become review-only. Already attempted operations retain their captured recovery authority. Before activation, enabled USD expenses and income transactions enter automatic mode with `automatic_safe = 0`; only a would-add preview plus a previously passed current-Actual duplicate check and all plan gates can promote them to ready/automatic-safe. Income cents stay positive and the Actual import Adapter writes every imported transaction uncleared. Existing observe-only items still require confirmation, and updates remain review-only.
 - Planner no-write outcomes never enter generic preflight, including duplicates matched to existing Actual activity without a generic imported ID.
 - Durable plan JSON must omit model/body evidence excerpts while retaining target provenance, reconciliation, and eligibility reasons.
 - Raw Gmail message IDs remain distinct from RFC Message-ID headers.
@@ -41,7 +30,7 @@ Deterministic Gmail email-to-transaction parsing for arriving receipts. This dom
 
 ## Boundaries
 
-- Gmail provider calls belong in `server/email/gmail.ts`; this domain consumes normalized arrivals.
-- Actual Budget access belongs under `server/actual/`; parsers must never import it.
+- Gmail provider calls belong in `server/email/gmail.ts`; indexed arrivals wake the shared runtime directly.
+- Actual Budget access belongs under `server/actual/`.
 
 Historical scan admission and execution are retired. Only arrival-owned items may be claimed, confirmed, retried or admitted for an original Actual write. Saved historical records remain inspectable and eligible for exact corrections.

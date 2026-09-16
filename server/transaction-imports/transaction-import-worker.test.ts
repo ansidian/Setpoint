@@ -1,4 +1,4 @@
-import { readImportRun, seedProfileAuthorizedImportItems } from './transaction-import.test-utils.ts';
+import { readImportRun, seedProfileAuthorizedImportItems, savedImportFixture } from './transaction-import.test-utils.ts';
 import { subscribeCurrentDashboardEvents, clearCurrentDashboardEventSubscribers } from "../dashboard/current-events.ts";
 import { createClient, type Client } from "@libsql/client";
 import { readFileSync } from "fs";
@@ -8,12 +8,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ActualImportAccountGroup, ActualImportBatchResult } from "../../shared/types/transaction-imports.ts";
 import type { FinancialEmailPlan } from "../../shared/types/bills.ts";
 import { readFinancialProfiles } from "../bills/financial-profiles.ts";
-import { emailFixture, paypalPaidText } from "./parsers/fixtures.ts";
 import { createTransactionImportService } from "./transaction-import-service.ts";
 import { createTransactionImportStore } from "./transaction-import-store.ts";
 import { createTransactionImportWorker } from "./transaction-import-worker.ts";
 import { financialEmailPreflightItem, stageFinancialEmailPreflight } from "./financial-email-preflight.ts";
-import type { TransactionEmailInput } from "./transaction-import-types.ts";
+import type { InsertItemInput } from "./transaction-import-store.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(here, "..", "db", "migrations");
@@ -48,7 +47,7 @@ describe("transaction import worker", () => {
 
   function setup(now = () => 1_000) {
     const store = createTransactionImportStore(db, now);
-    const service = createTransactionImportService({ store, createId });
+    const service = createTransactionImportService({ store });
     return { store, service };
   }
 
@@ -58,12 +57,12 @@ describe("transaction import worker", () => {
 
   async function seedAuthorizedItems(
     store: ReturnType<typeof setup>["store"],
-    emails: TransactionEmailInput[] = [emailFixture()],
+    items: InsertItemInput[] = [savedImportFixture()],
     automationMode: "observe" | "automatic" = "automatic",
     accounts: { amazon: string; paypal: string } = { amazon: "actual-1", paypal: "actual-1" },
   ) {
     return seedProfileAuthorizedImportItems({
-      db, store, userId: "owner-1", createId, emails, automationMode, accounts, plan: enabledGenericPlan(),
+      db, store, userId: "owner-1", createId, items, automationMode, accounts, plan: enabledGenericPlan(),
     });
   }
 
@@ -284,7 +283,7 @@ describe("transaction import worker", () => {
 
   it("honors a historical observe snapshot by dry-running without committing", async () => {
     const { store } = setup();
-    const arrival = await seedAuthorizedItems(store, [emailFixture()], "observe");
+    const arrival = await seedAuthorizedItems(store, [savedImportFixture()], "observe");
     const importGroups = vi.fn(async (_userId, groups, dryRun) => actualResult(groups, dryRun));
     const invalidateAfterCommit = vi.fn();
     const worker = createWorker({ store, importGroups, invalidateAfterCommit, createId });
@@ -367,13 +366,12 @@ describe("transaction import worker", () => {
   it("automatic dry-runs before one grouped commit and one invalidation fan-out", async () => {
     const { store } = setup();
     const arrival = await seedAuthorizedItems(store, [
-      emailFixture(),
-      emailFixture({
-        uid: "gmail-personal-paypal-1",
-        gmailMessageId: "paypal-1",
-        from: "service@paypal.com",
-        subject: "You paid $5.00 USD to Valve Corp.",
-        text: paypalPaidText,
+      savedImportFixture(),
+      savedImportFixture({
+        emailUid: "gmail-personal-paypal-1", gmailMessageId: "paypal-1", source: "paypal",
+        emailSubject: "You paid $5.00 USD to Valve Corp.", parserVersion: "paypal-v1",
+        candidateKey: "paypal-1AB23456CD789012E", importedId: "paypal-1AB23456CD789012E",
+        externalId: "1AB23456CD789012E", amountCents: -500, payee: "Valve Corp.",
       }),
     ], "automatic", { amazon: "actual-checking", paypal: "actual-card" });
     const importGroups = vi.fn(async (_userId, groups, dryRun) => actualResult(groups, dryRun));
@@ -522,12 +520,10 @@ describe("transaction import worker", () => {
 
   it("keeps unsafe automatic candidates in review after Actual preview", async () => {
     const { store } = setup();
-    const arrival = await seedAuthorizedItems(store, [emailFixture({
-      uid: "gmail-personal-paypal-cad",
-      gmailMessageId: "paypal-cad",
-      from: "service@paypal.com",
-      subject: "You paid $5.00 CAD to Merchant",
-      text: "Transaction ID: 1AB23456CD789012E",
+    const arrival = await seedAuthorizedItems(store, [savedImportFixture({
+      emailUid: "gmail-personal-paypal-cad", gmailMessageId: "paypal-cad", source: "paypal",
+      emailSubject: "You paid $5.00 CAD to Merchant", currency: "CAD", amountCents: -500,
+      blockingWarnings: [{ code: "unsupported_currency", blocking: true }],
     })]);
     const importGroups = vi.fn(async (_userId, groups, dryRun) => actualResult(groups, dryRun));
     const worker = createWorker({ store, importGroups, invalidateAfterCommit: vi.fn(), createId });
@@ -555,11 +551,11 @@ describe("transaction import worker", () => {
 
   it("honors owner confirmation without a profile and uses the legacy raw Gmail ID fallback", async () => {
     const { store, service } = setup();
-    const arrival = await seedAuthorizedItems(store, [emailFixture({
+    const arrival = await seedAuthorizedItems(store, [savedImportFixture({
       gmailMessageId: "raw-gmail-message-id",
-      uid: "gmail-personal-raw-gmail-message-id",
-      subject: "Order confirmation",
-      text: "Order Total: $12.00",
+      emailUid: "gmail-personal-raw-gmail-message-id", emailSubject: "Order confirmation",
+      amountCents: -1200, importedId: null, externalId: null,
+      blockingWarnings: [{ code: "missing_external_id", blocking: true }],
     })], "observe");
     await db.execute({ sql: "UPDATE ea_transaction_import_items SET financial_email_plan_json = NULL WHERE run_id = ?", args: [arrival.runId] });
     await db.execute("UPDATE ea_settings SET financial_profiles_json = '[]', financial_profiles_revision = 2 WHERE user_id = 'owner-1'");

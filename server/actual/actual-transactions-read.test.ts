@@ -4,7 +4,6 @@ import path from "path";
 import { createClient } from "@libsql/client";
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  readImportedTransactionStates,
   readTransactionsRange,
 } from "./actual-transactions-read.ts";
 
@@ -216,21 +215,4 @@ describe("readTransactionsRange", () => {
     })]);
   });
 
-  it("reads live and tombstoned imported-ID state for a write-disabled replay", async () => {
-    await fixture();
-    const states = await readImportedTransactionStates(
-      "u1",
-      ["amazon-order-1", "missing"],
-      opts(),
-    );
-
-    expect(states).toEqual({
-      "amazon-order-1": {
-        importedId: "amazon-order-1",
-        tombstoned: false,
-        accountId: "acct-1",
-        categoryId: "c-grocery",
-      },
-    });
-  });
 });

@@ -1,7 +1,9 @@
 import type { Client } from "@libsql/client";
 import type { DashboardFinanceActivity, DashboardFinanceActivityItem } from "../../shared/types/dashboard-finance.ts";
 
-const DASHBOARD_REVIEW_FILTER = `EXISTS (SELECT 1 FROM ea_transaction_import_runs run WHERE run.user_id = ea_transaction_import_items.user_id AND run.id = ea_transaction_import_items.run_id AND run.trigger = 'arrival') AND (status IN ('needs_review', 'failed', 'paused') OR
+import { LEGACY_IMPORT_ELIGIBLE } from "../financial-events/financial-provider-policy.ts";
+
+const DASHBOARD_REVIEW_FILTER = `${LEGACY_IMPORT_ELIGIBLE} AND EXISTS (SELECT 1 FROM ea_transaction_import_runs run WHERE run.user_id = ea_transaction_import_items.user_id AND run.id = ea_transaction_import_items.run_id AND run.trigger = 'arrival') AND (status IN ('needs_review', 'failed', 'paused') OR
   (status = 'ready' AND confirmed_at IS NULL AND (automation_mode = 'observe' OR automatic_safe = 0)))`;
 
 export function createTransactionImportActivity(dbClient: Pick<Client, "execute">) {

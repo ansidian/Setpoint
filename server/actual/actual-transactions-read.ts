@@ -11,13 +11,6 @@ import type {
 
 const DEFAULT_LIMIT = 50;
 
-export interface ImportedTransactionState {
-  importedId: string;
-  tombstoned: boolean;
-  accountId: string | null;
-  categoryId: string | null;
-}
-
 // Escape LIKE wildcards so a literal % or _ in the search term is matched literally.
 function escapeLike(value: string): string {
   return value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
@@ -136,35 +129,6 @@ export async function readTransactionsRange(
     });
     const truncated = all.length > limit;
     return { transactions: truncated ? all.slice(0, limit) : all, truncated };
-  } finally {
-    await client.close();
-  }
-}
-
-export async function readImportedTransactionStates(
-  userId: string,
-  importedIds: string[],
-  options: Parameters<typeof openLocalBudgetClient>[1] = {},
-): Promise<Record<string, ImportedTransactionState>> {
-  const ids = [...new Set(importedIds.filter(Boolean))];
-  if (!ids.length) return {};
-  const client = await openLocalBudgetClient(userId, options);
-  try {
-    const result = await client.execute({
-      sql: `SELECT imported_id, tombstone, account, category
-            FROM v_transactions_internal
-            WHERE imported_id IN (${ids.map(() => "?").join(", ")})`,
-      args: ids,
-    });
-    return Object.fromEntries(result.rows.map((row) => {
-      const importedId = String(row.imported_id);
-      return [importedId, {
-        importedId,
-        tombstoned: Number(row.tombstone || 0) === 1,
-        accountId: row.account ? String(row.account) : null,
-        categoryId: row.category ? String(row.category) : null,
-      }];
-    }));
   } finally {
     await client.close();
   }

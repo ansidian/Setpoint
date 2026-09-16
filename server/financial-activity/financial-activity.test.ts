@@ -428,4 +428,19 @@ describe("shared financial activity history", () => {
     expect(await store.admitOriginalImport(recovery, { budgetId: "different-budget", objects: [] })).toBe(false);
   });
 
+  it("keeps retired arrival history inspectable without unavailable actions or attention", async () => {
+    await item("retired-arrival");
+    await item("recovery");
+    await db.execute("UPDATE ea_transaction_import_items SET status='failed'");
+    await db.execute("UPDATE ea_transaction_import_items SET original_attempted_at=123 WHERE id='recovery'");
+    await db.execute("UPDATE ea_financial_workflow_state SET provider_parser_cutover_at='2026-09-16T03:02:18.469Z'");
+    const retired = await reader().detail("owner", { owner: "import", id: "retired-arrival", runId: "run-retired-arrival" });
+    expect(retired).toMatchObject({ status: "dismissed", actions: { complete: false, retry: false, inspect: true }, importItem: { executionEligible: false } });
+    expect(retired?.sourceEvidence).toHaveLength(1);
+    const recovery = await reader().detail("owner", { owner: "import", id: "recovery", runId: "run-recovery" });
+    expect(recovery).toMatchObject({ status: "needs_attention", actions: { complete: false, retry: true } });
+    expect((await reader().list("owner", { view: "needs_attention" })).items.map(value => value.reference.id)).toEqual(["recovery"]);
+    expect(await createTransactionImportStore(db).retryItem("owner", "retired-arrival")).toBe(false);
+  });
+
 });

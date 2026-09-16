@@ -1,6 +1,6 @@
 import type { Client } from "@libsql/client";
 import db from "../db/connection.ts";
-import { isManagedEmail, listManagedEmailUids } from "../financial-events/financial-event-status.ts";
+import { isManagedEmail } from "../financial-events/financial-event-status.ts";
 import type {
   TransactionImportItem, TransactionImportItemStatus,
   TransactionImportPlanShadow, TransactionImportReconciliationStatus,
@@ -71,13 +71,13 @@ function numberValue(value: unknown): number {
 
 export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.now) {
   const { readDashboardActivity } = createTransactionImportActivity(dbClient);
-  async function createRun(input: CreateRunInput): Promise<{ run: TransactionImportRunSummary; created: boolean }> {
+  async function createRun(input: CreateRunInput): Promise<{ run: TransactionImportRunSummary; created: boolean } | null> {
     const timestamp = now();
     const result = await dbClient.execute({
       sql: `INSERT OR IGNORE INTO ea_transaction_import_runs
               (id, user_id, trigger, options_key, gmail_account_ids_json, sources_json,
                start_date, end_date, status, cursor_json, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', '{}', ?, ?)`,
+            SELECT ?, ?, ?, ?, ?, ?, ?, ?, 'queued', '{}', ?, ? WHERE ${PROVIDER_EPOCH_INACTIVE}`,
       args: [
         input.id,
         input.userId,
@@ -97,7 +97,7 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
     }
     const existing = await getRun(input.userId, input.id);
     if (existing) return { run: existing, created: false };
-    throw new Error("Transaction import run could not be created");
+    return null;
   }
 
   async function getRun(userId: string, runId: string): Promise<TransactionImportRunSummary | null> {
@@ -110,7 +110,7 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
 
   async function getItem(userId: string, itemId: string): Promise<TransactionImportItem | null> {
     const result = await dbClient.execute({
-      sql: `SELECT * FROM ea_transaction_import_items WHERE user_id = ? AND id = ?`,
+      sql: `SELECT *, COALESCE(${LEGACY_IMPORT_ELIGIBLE}, 0) AS execution_eligible FROM ea_transaction_import_items WHERE user_id = ? AND id = ?`,
       args: [userId, itemId],
     });
     return result.rows[0] ? projectItem(result.rows[0]) : null;
@@ -118,14 +118,14 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
 
   async function listItemsForEmail(userId: string, emailUid: string): Promise<TransactionImportItem[]> {
     const result = await dbClient.execute({
-      sql: `SELECT items.*, (SELECT run.trigger FROM ea_transaction_import_runs run WHERE run.user_id = items.user_id AND run.id = items.run_id) AS run_trigger, (SELECT c.effective_result_json FROM ea_financial_effective_corrections c
+      sql: `SELECT ea_transaction_import_items.*, COALESCE(${LEGACY_IMPORT_ELIGIBLE}, 0) AS execution_eligible, (SELECT run.trigger FROM ea_transaction_import_runs run WHERE run.user_id = ea_transaction_import_items.user_id AND run.id = ea_transaction_import_items.run_id) AS run_trigger, (SELECT c.effective_result_json FROM ea_financial_effective_corrections c
               JOIN ea_financial_activity_occurrences o ON o.user_id=c.user_id AND o.activity_id=c.activity_id
-              WHERE o.user_id=items.user_id AND o.owner='import' AND o.record_id=items.id) AS effective_result_json,
+              WHERE o.user_id=ea_transaction_import_items.user_id AND o.owner='import' AND o.record_id=ea_transaction_import_items.id) AS effective_result_json,
             (SELECT json_object('id', c.id, 'state', c.state, 'revision', c.revision) FROM ea_financial_corrections c
               JOIN ea_financial_activity_occurrences o ON o.user_id=c.user_id AND o.activity_id=c.activity_id
-              WHERE o.user_id=items.user_id AND o.owner='import' AND o.record_id=items.id
+              WHERE o.user_id=ea_transaction_import_items.user_id AND o.owner='import' AND o.record_id=ea_transaction_import_items.id
               ORDER BY c.rowid DESC LIMIT 1) AS correction_json
-            FROM ea_transaction_import_items items
+            FROM ea_transaction_import_items
             WHERE user_id = ? AND email_uid = ?
             ORDER BY updated_at DESC, created_at DESC, id DESC
             LIMIT 20`,
@@ -154,7 +154,7 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
               claim_token = NULL, claimed_at = NULL, next_attempt_at = NULL, updated_at = ?
             WHERE user_id = ? AND run_id = ? AND id = ?
               AND status IN ('needs_review', 'paused', 'failed', 'ready')
-              AND original_attempted_at IS NULL AND ${ORIGINAL_UNGUARDED} AND ${LEGACY_IMPORT_ELIGIBLE} AND ${ARRIVAL_ITEM}
+              AND original_attempted_at IS NULL AND json_extract(financial_email_plan_json, '$.transferExecution.attemptedAt') IS NULL AND ${ORIGINAL_UNGUARDED} AND ${LEGACY_IMPORT_ELIGIBLE} AND ${ARRIVAL_ITEM}
               AND NOT EXISTS (SELECT 1 FROM ea_financial_identity_conflicts conflict WHERE conflict.user_id = ea_transaction_import_items.user_id AND conflict.record_id = ea_transaction_import_items.id)`,
       args: [
         input.date, input.amountCents, input.payee, input.notes, input.actualAccountId,
@@ -172,7 +172,9 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
                 ELSE 'queued'
               END,
               last_error = NULL, next_attempt_at = NULL, claim_token = NULL, claimed_at = NULL, updated_at = ?
-            WHERE user_id = ? AND id = ? AND ${ARRIVAL_ITEM} AND status IN ('failed', 'paused')`,
+            WHERE user_id = ? AND id = ? AND ${ARRIVAL_ITEM} AND ${LEGACY_IMPORT_ELIGIBLE} AND ${ORIGINAL_UNGUARDED}
+              AND NOT EXISTS (SELECT 1 FROM ea_financial_identity_conflicts conflict WHERE conflict.user_id = ea_transaction_import_items.user_id AND conflict.record_id = ea_transaction_import_items.id)
+              AND status IN ('failed', 'paused')`,
       args: [now(), userId, itemId],
     });
     return Number(result.rowsAffected || 0) === 1;
@@ -246,7 +248,7 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
                actual_account_id, actual_category_id, automation_mode, automatic_safe,
                blocking_warnings_json, evidence_json, financial_email_plan_json,
                financial_plan_shadow_json, status, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE ${PROVIDER_EPOCH_INACTIVE}`,
       args: [
         input.id, input.runId, input.userId, input.gmailAccountId, input.gmailMessageId,
         input.emailUid, input.emailSubject ?? "", input.internetMessageId ?? null, input.candidateKey, input.source,
@@ -420,7 +422,6 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
     recoverStaleClaims,
     getNextWakeAt,
     isManagedEmail: (userId: string, uid: string) => isManagedEmail(userId, uid, { dbClient }),
-    listManagedEmailUids: (userId: string, uids: string[]) => listManagedEmailUids(userId, uids, { dbClient }),
   };
 }
 

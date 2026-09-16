@@ -154,7 +154,6 @@ server/
 ├── test-utils/
 ├── tldraw/
 ├── transaction-imports/
-│   └── parsers/
 ├── transactions/
 └── triage/
 ```
@@ -920,8 +919,6 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | GET | `/api/briefing/finances` | `server/routes/briefing/finances.ts` |
 | GET | `/api/briefing/finances/journal` | `server/routes/briefing/finances.ts` |
 | PUT | `/api/briefing/finances/payment-groups` | `server/routes/briefing/finances.ts` |
-| GET | `/api/briefing/finances/utility-mappings` | `server/routes/briefing/finances.ts` |
-| PUT | `/api/briefing/finances/utility-mappings/:id` | `server/routes/briefing/finances.ts` |
 | GET | `/api/briefing/financial-activity` | `server/routes/briefing/financial-activity.ts` |
 | GET | `/api/briefing/financial-activity/:owner/:id` | `server/routes/briefing/financial-activity.ts` |
 | POST | `/api/briefing/financial-activity/binding` | `server/routes/briefing/financial-activity.ts` |

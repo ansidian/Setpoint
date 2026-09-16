@@ -11,3 +11,5 @@ Migration 063 owns permanent source occurrence aliases and append-only original 
 Needs attention includes processing rows for the Pending section until verified settlement. `attentionTotal` counts actionable rows separately across the current source/context/run scope, before pagination; dashboard and badges use it. Explicitly dismissed managed candidates are omitted from lists while exact detail remains inspectable.
 
 Assessed, unsubmitted managed review candidates are actionable immediately, including during background planning. Shared managed-review eligibility drives their completion action and attention count; known facts populate the existing form without a collection wait. Independent automatic events and submitted/attempted entries remain in Pending.
+
+Legacy arrival rows that have no confirmation or admitted attempt become inspection-only history after the provider epoch. Their actions and attention counts use the same eligibility predicate as durable queue claims; completed history and exact corrections remain available.

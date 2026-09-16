@@ -10,7 +10,7 @@
     "server/scripts/email-search-embedding-status.ts",
     "server/scripts/email-search-retrieval-eval.ts",
     "server/scripts/financial-email-observe-report.ts",
-    "server/scripts/transaction-import-equivalence-report.ts",
+    "server/scripts/financial-provider-replay.ts",
     "server/scripts/hydrate-actual-cache.ts",
     "server/scripts/prune-actual-cache.ts",
     "server/scripts/reindex-emails.ts",
@@ -53,7 +53,6 @@
     "src/components/calendar/CalendarModal.test-utils.tsx": "Shared calendar DashboardProvider, interaction, and animation-frame helpers with multiple active consumers",
     "src/components/inbox/test-utils/inboxFixtures.ts": "Shared inbox email and snapshot factories with multiple active model and component consumers",
     "src/components/inbox/test-utils/mobileInboxActions.test-utils.ts": "Shared mobile action-sheet and search drivers used by both rendered Inbox behavior suites",
-    "server/transaction-imports/parsers/fixtures.ts": "Sanitized parser fixtures are test-only support data",
-    "server/transaction-imports/transaction-import.test-utils.ts": "Shared ephemeral import-state reader used by store, worker, ownership, and cutover behavior suites"
+    "server/transaction-imports/transaction-import.test-utils.ts": "Shared saved-state reader and explicit legacy fixtures used by store, worker, and cutover behavior suites"
   }
 }

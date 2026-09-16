@@ -1,16 +1,5 @@
-import { randomUUID } from "crypto";
-import { parseTransactionEmail } from "./parsers/parser-registry.ts";
-import { type TransactionEmailInput } from "./transaction-import-types.ts";
-import { transactionImportStore, type InsertItemInput, type TransactionImportStore } from "./transaction-import-store.ts";
-import type {
-  TransactionImportConfirmation,
-  TransactionImportSource,
-} from "../../shared/types/transaction-imports.ts";
-import { planTransactionImportItems } from "./transaction-import-planner-adapter.ts";
-
-function normalizedUnique(values: string[]): string[] {
-  return [...new Set(values.map((value) => value.trim()).filter(Boolean))].sort();
-}
+import { transactionImportStore, type TransactionImportStore } from "./transaction-import-store.ts";
+import type { TransactionImportConfirmation } from "../../shared/types/transaction-imports.ts";
 
 function isValidYmd(value: string): boolean {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
@@ -22,145 +11,9 @@ function isValidYmd(value: string): boolean {
   return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
 }
 
-interface PreparedItems {
-  items: InsertItemInput[];
-  parsed: number;
-  review: number;
-  queued: number;
-}
-
-export function prepareTransactionImportItems(
-  userId: string,
-  runId: string,
-  emails: TransactionEmailInput[],
-  createId: () => string = randomUUID,
-): PreparedItems {
-  const items: InsertItemInput[] = [];
-  let parsed = 0;
-  let review = 0;
-  const queued = 0;
-
-  for (const email of emails) {
-    const result = parseTransactionEmail(email);
-    if (result.kind === "unmatched") continue;
-    const source = result.source;
-    if (!source) continue;
-    parsed++;
-
-    if (result.kind === "rejected") {
-      review++;
-      items.push({
-        id: createId(),
-        runId,
-        userId,
-        gmailAccountId: email.gmailAccountId,
-        gmailMessageId: email.gmailMessageId,
-        emailUid: email.uid,
-        emailSubject: email.subject.slice(0, 500),
-        internetMessageId: email.internetMessageId ?? null,
-        candidateKey: `rejected:${source}:${email.gmailMessageId}`,
-        source,
-        parserVersion: `${source}-rejected-v1`,
-        externalId: null,
-        importedId: null,
-        date: null,
-        amountCents: null,
-        currency: "USD",
-        payee: null,
-        notes: "",
-        actualAccountId: null,
-        actualCategoryId: null,
-        automationMode: "automatic",
-        automaticSafe: false,
-        blockingWarnings: result.reasons.map((reason) => ({ code: reason, blocking: true })),
-        evidence: result.reasons.map((reason) => ({ code: "parse_failure", value: reason })),
-        status: "needs_review",
-      });
-      continue;
-    }
-
-    result.candidates.forEach((candidate, candidateIndex) => {
-      review++;
-      items.push({
-        id: createId(),
-        runId,
-        userId,
-        gmailAccountId: candidate.gmailAccountId,
-        gmailMessageId: candidate.gmailMessageId,
-        emailUid: candidate.emailUid,
-        emailSubject: email.subject.slice(0, 500),
-        internetMessageId: candidate.internetMessageId,
-        candidateKey: candidate.importedId || `candidate:${candidate.gmailMessageId}:${candidateIndex}`,
-        source: candidate.source,
-        parserVersion: candidate.parserVersion,
-        externalId: candidate.externalId,
-        importedId: candidate.importedId,
-        date: candidate.date,
-        amountCents: candidate.amountCents,
-        currency: candidate.currency,
-        payee: candidate.payee,
-        notes: candidate.notes,
-        actualAccountId: null,
-        actualCategoryId: null,
-        automationMode: "automatic",
-        automaticSafe: false,
-        blockingWarnings: candidate.warnings,
-        evidence: candidate.evidence,
-        status: "needs_review",
-      });
-    });
-  }
-  return { items, parsed, review, queued };
-}
-
 export function createTransactionImportService({
   store = transactionImportStore,
-  createId = randomUUID,
-  planItems = planTransactionImportItems,
-}: {
-  store?: TransactionImportStore;
-  createId?: () => string;
-  planItems?: typeof planTransactionImportItems;
-} = {}) {
-  async function ingestArrivals(userId: string, emails: TransactionEmailInput[]): Promise<{ queued: number; review: number; runId: string | null }> {
-    if (!emails.length || await store.isProviderEpochActive()) return { queued: 0, review: 0, runId: null };
-    const managed = new Set(await store.listManagedEmailUids(userId, emails.map((email) => email.uid)));
-    const legacyEmails = emails.filter((email) => !managed.has(email.uid));
-    if (!legacyEmails.length) return { queued: 0, review: 0, runId: null };
-    const runId = createId();
-    const prepared = prepareTransactionImportItems(userId, runId, legacyEmails, createId);
-    if (!prepared.items.length) return { queued: 0, review: 0, runId: null };
-    const plannedItems = await planItems(userId, prepared.items);
-    await store.createRun({
-      id: runId,
-      userId,
-      trigger: "arrival",
-      optionsKey: `arrival:${runId}`,
-      gmailAccountIds: normalizedUnique(legacyEmails.map((email) => email.gmailAccountId)),
-      sources: normalizedUnique(prepared.items.map((item) => item.source)) as TransactionImportSource[],
-    });
-    let queued = 0;
-    let review = 0;
-    let duplicate = 0;
-    for (const item of plannedItems) {
-      if (await store.insertItem(item)) {
-        if (item.status === "queued") queued++;
-        else if (item.status === "already_present") duplicate++;
-        else review++;
-      }
-    }
-    await store.updateRunProgress(userId, runId, {
-      cursor: { complete: true },
-      status: "completed",
-      discovered: legacyEmails.length,
-      parsed: prepared.parsed,
-      review,
-      queued,
-    });
-    if (duplicate) await store.incrementRunOutcomes(userId, runId, { duplicate });
-    return { queued, review, runId };
-  }
-
+}: { store?: TransactionImportStore } = {}) {
   async function commitItems(
     userId: string,
     runId: string,
@@ -227,7 +80,6 @@ export function createTransactionImportService({
   }
 
   return {
-    ingestArrivals,
     listItemsForEmail: store.listItemsForEmail,
     commitItems,
     retryItem,

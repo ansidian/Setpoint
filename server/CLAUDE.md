@@ -38,7 +38,7 @@ Composition root and cross-cutting server concerns that don't belong to a single
 - `scripts/email-search-embedding-backfill.ts`, `scripts/email-search-embedding-status.ts` — batch (re)compute and report embedding coverage for email search
 - `scripts/email-search-retrieval-eval.ts`, `scripts/seed-email-search-retrieval-eval.ts` — email search retrieval quality eval and its fixture seeding
 - `scripts/financial-email-observe-report.ts` — bounded read-only report of persisted financial-email automation gates by operation class
-- `scripts/transaction-import-equivalence-report.ts` — write-disabled Amazon/PayPal planner replay over a disposable Actual snapshot
+- `scripts/financial-provider-replay.ts` — write-disabled pure company-registry replay of local JSON evidence; redacted provider/template/version/disposition report with no database or Actual connection
 - `scripts/hydrate-actual-cache.ts`, `scripts/prune-actual-cache.ts` — warm and prune the local Actual Budget cache
 - `scripts/acknowledge-email-history.ts` — exact-ID Gmail history failure acknowledgment CLI; read-only preview by default, explicit reason and matching fingerprint required to apply
 - `scripts/migrate-financial-connections.ts` — read-only unified financial configuration preview; explicit fingerprint-guarded apply changes configuration without Actual writes or parser activation

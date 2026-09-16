@@ -8,6 +8,8 @@ import { FINANCIAL_EVENT_STATUS_SELECT, hydrateManagedFinancialActivity, project
 import { projectTransactionImportItem, projectTransactionImportRun,
   transactionImportActivityActions } from "../transaction-imports/transaction-import-store-projections.ts";
 
+import { LEGACY_IMPORT_ELIGIBLE } from "../financial-events/financial-provider-policy.ts";
+
 function parse<T>(value: unknown): T | null {
   if (typeof value !== "string") return null;
   try { return JSON.parse(value) as T; } catch { return null; }
@@ -27,7 +29,7 @@ export function createFinancialActivityReader(dbClient: Pick<Client, "batch"> = 
         FROM ea_financial_documents d LEFT JOIN ea_email_index e ON e.user_id = d.user_id AND e.uid = d.email_uid
         LEFT JOIN ea_financial_events event ON event.user_id = d.user_id AND event.id = d.event_id
         WHERE d.user_id = ? ORDER BY d.id`, args: [userId] },
-      { sql: "SELECT * FROM ea_transaction_import_items WHERE user_id = ?", args: [userId] },
+      { sql: `SELECT *, COALESCE(${LEGACY_IMPORT_ELIGIBLE}, 0) AS execution_eligible FROM ea_transaction_import_items WHERE user_id = ?`, args: [userId] },
       { sql: "SELECT * FROM ea_transaction_import_runs WHERE user_id = ?", args: [userId] },
       { sql: "SELECT * FROM ea_financial_activity_occurrences WHERE user_id = ?", args: [userId] },
       { sql: "SELECT * FROM ea_financial_identity_conflicts WHERE user_id = ?", args: [userId] },
@@ -130,6 +132,7 @@ export function createFinancialActivityReader(dbClient: Pick<Client, "batch"> = 
       const item = projectTransactionImportItem(selected);
       const policy = transactionImportActivityActions(item);
       const arrival = runMap.get(item.runId)?.trigger === "arrival";
+      const retired = !arrival || item.executionEligible === false;
       const identityConflict = conflicts!.some((conflict) => rows.some((row) => row.id === conflict.record_id));
       const reference: FinancialActivityReference = { owner: "import", id: item.id, runId: item.runId };
       const activityRuns = [...new Set(rows.map((row) => String(row.run_id)))].flatMap((id) => runMap.get(id) || []);
@@ -140,8 +143,8 @@ export function createFinancialActivityReader(dbClient: Pick<Client, "batch"> = 
         payee: item.payee, amountCents: item.amountCents, currency: item.currency,
         ...(successful ? capturedActivityDisplay(originalReceipts[0]) : {}),
         createdAt: Math.min(...rows.map((row) => Number(row.created_at))), updatedAt: Math.max(...rows.map((row) => Number(row.updated_at))),
-        status: successful ? "completed" : !arrival ? "dismissed" : identityConflict ? "needs_attention" : policy.attention ? "needs_attention" : item.status === "dismissed" ? "dismissed" : "processing",
-        reason: !arrival && !successful ? "History import was retired. This saved record remains available for inspection." : identityConflict ? "Original financial identity aliases conflict; resolve the exact source before importing." : item.lastError || item.status.replaceAll("_", " "),
+        status: successful ? "completed" : retired ? "dismissed" : identityConflict ? "needs_attention" : policy.attention ? "needs_attention" : item.status === "dismissed" ? "dismissed" : "processing",
+        reason: retired && !successful ? "History import was retired. This saved record remains available for inspection." : identityConflict ? "Original financial identity aliases conflict; resolve the exact source before importing." : item.lastError || item.status.replaceAll("_", " "),
         actions: { complete: arrival && !identityConflict && !successful && policy.complete, retry: arrival && !identityConflict && !successful && policy.retry, inspect: true, correct: false },
         originalReceipts, sourceEvidence: rows.map((row) => parse(occurrenceMap.get(`import:${row.id}`)?.source_snapshot_json)), targetBindings: targets(id), liveState: "not_checked", effectiveResult: originalReceipts[0]?.result || null,
         completionPlan: item.financialPlan, importItem: item, runs: activityRuns });

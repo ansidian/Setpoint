@@ -1,7 +1,7 @@
 import { financialHref } from "../../financial/financialNavigation";
 import type { TransactionImportItem } from "../../../../shared/types/transaction-imports";
 
-export type TransactionImportStatusItem = Pick<TransactionImportItem, "status" | "automationMode"> & Partial<Pick<TransactionImportItem, "runTrigger" | "financialPlan" | "effectiveResult" | "correction" | "id" | "runId">>;
+export type TransactionImportStatusItem = Pick<TransactionImportItem, "status" | "automationMode"> & Partial<Pick<TransactionImportItem, "executionEligible" | "runTrigger" | "financialPlan" | "effectiveResult" | "correction" | "id" | "runId">>;
 
 export type TransactionImportStatusTone = "success" | "warning" | "danger" | "active";
 
@@ -17,7 +17,7 @@ export interface TransactionImportStatusView {
 const ACTIVE = new Set(["queued", "reconciling", "importing"]);
 
 export function hasActiveTransactionImport(items: readonly TransactionImportStatusItem[]): boolean {
-  return items.some((item) => (item.runTrigger === "arrival" && ACTIVE.has(item.status)) || (item.correction && !['completed','superseded','attention'].includes(item.correction.state)));
+  return items.some((item) => (item.executionEligible !== false && item.runTrigger === "arrival" && ACTIVE.has(item.status)) || (item.correction && !['completed','superseded','attention'].includes(item.correction.state)));
 }
 
 export function resolveTransactionImportStatus(items: readonly TransactionImportStatusItem[]): TransactionImportStatusView | null {
@@ -41,7 +41,7 @@ export function resolveTransactionImportStatus(items: readonly TransactionImport
       detail: corrected.effectiveResult?.entry?.type === 'bill' ? 'The corrected schedule is saved in Actual.' : 'The corrected entry is recorded in Actual.',
       review: false, active: false, recordHref: recordHref(corrected) };
   }
-  const arrivals = items.filter(item => item.runTrigger === "arrival");
+  const arrivals = items.filter(item => item.executionEligible !== false && item.runTrigger === "arrival");
   const transfer = items.some((item) => item.financialPlan?.operation.intended === "create_transfer_schedule");
   if (transfer) {
     const review = arrivals.find((item) => ["failed", "paused", "needs_review", "ready"].includes(item.status));
@@ -61,7 +61,7 @@ export function resolveTransactionImportStatus(items: readonly TransactionImport
     return { tone: "danger", title: "Couldn’t sync", detail: "Open Financial activity to retry this transaction.", review: true, active: false };
   }
   if (arrivals.some((item) => item.status === "paused" || item.status === "needs_review" || item.status === "ready")) {
-    const observed = items.some((item) => item.status === "ready" && item.automationMode === "observe");
+    const observed = arrivals.some((item) => item.status === "ready" && item.automationMode === "observe");
     return {
       tone: "warning",
       title: "Needs review",
@@ -82,6 +82,6 @@ export function resolveTransactionImportStatus(items: readonly TransactionImport
   if (items.some((item) => item.status === "already_present")) {
     return { tone: "success", title: "Already in Actual", detail: "No duplicate transaction was created.", review: false, active: false };
   }
-  const saved = items.find(item => item.runTrigger !== "arrival");
+  const saved = items.find(item => item.executionEligible === false || item.runTrigger !== "arrival");
   return saved ? { tone: "warning", title: "Saved receipt", detail: "View the saved record and its source evidence.", review: false, active: false, recordHref: recordHref(saved) } : null;
 }

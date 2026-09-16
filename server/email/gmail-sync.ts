@@ -53,7 +53,7 @@ import type {
   GmailSyncError,
 } from "./email-sync-types.ts";
 import { syncErrorMessage } from "./email-sync-types.ts";
-import { ingestGmailTransactionArrivals } from "../transaction-imports/transaction-import-arrivals.ts";
+import { requestTransactionImportDrain } from "../transaction-imports/transaction-import-runtime.ts";
 interface GmailHistorySyncSummary {
   account_id?: string;
   start_history_id?: string | null;
@@ -187,7 +187,7 @@ export async function syncGmailHistoryForAccount(account: GmailSyncAccount, {
   now = new Date(),
   timingNow = () => new Date(),
   requestEmailTriageDrainAtFn = requestEmailTriageDrainAt,
-  ingestTransactionArrivalsFn = ingestGmailTransactionArrivals,
+  requestFinancialDrainFn = requestTransactionImportDrain,
 }: {
   dbClient?: Partial<EmailWriteDb> | null;
   fetchHistoryPage?: (input: { account: GmailSyncAccount; startHistoryId: string; pageToken: string | null }) => Promise<GmailHistoryPage>;
@@ -201,7 +201,7 @@ export async function syncGmailHistoryForAccount(account: GmailSyncAccount, {
   now?: Date;
   timingNow?: () => Date;
   requestEmailTriageDrainAtFn?: (deadline: string) => unknown;
-  ingestTransactionArrivalsFn?: (userId: string, accountId: string, emails: NormalizedFetchedEmail[]) => Promise<unknown>;
+  requestFinancialDrainFn?: () => unknown;
 } = {}): Promise<GmailHistorySyncSummary> {
   const database = dbClient as EmailWriteDb;
   const startHistoryId = await getStoredHistoryId(account, database);
@@ -270,9 +270,7 @@ export async function syncGmailHistoryForAccount(account: GmailSyncAccount, {
     const emails = await fetchEmailsFn(account as ConfiguredEmailAccount, GMAIL_HISTORY_RECOVERY_LOOKBACK_HOURS);
     if (emails.length) {
       await indexEmailsFn(account.user_id, emails);
-      void ingestTransactionArrivalsFn(account.user_id, account.id, emails).catch((error) => {
-        console.error("[Transaction Imports] Gmail recovery arrival ingestion failed:", syncErrorMessage(error));
-      });
+      requestFinancialDrainFn();
     }
     const statements: InStatement[] = emails.flatMap((email) =>
       triageStatementsForEmail(account.user_id, account.id, email, { arrivalGrace: false, now }),
@@ -308,9 +306,7 @@ export async function syncGmailHistoryForAccount(account: GmailSyncAccount, {
   }
   if (emails.length) {
     await indexEmailsFn(account.user_id, emails);
-    void ingestTransactionArrivalsFn(account.user_id, account.id, emails).catch((error) => {
-      console.error("[Transaction Imports] Gmail arrival ingestion failed:", syncErrorMessage(error));
-    });
+    requestFinancialDrainFn();
   }
   let readStateReconciled = 0;
   try {

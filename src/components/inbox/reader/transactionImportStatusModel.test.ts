@@ -49,6 +49,18 @@ describe("transaction import inbox status model", () => {
     }
   });
 
+  it('keeps epoch-retired arrivals as history while corrections retain their own recovery', () => {
+    for (const status of ['queued', 'reconciling', 'importing', 'failed', 'paused', 'needs_review', 'ready'] as const) {
+      const retired = item(status, { executionEligible: false });
+      expect(hasActiveTransactionImport([retired])).toBe(false);
+      expect(resolveTransactionImportStatus([retired])).toMatchObject({ title: 'Saved receipt', active: false, review: false, recordHref: expect.any(String) });
+      retired.correction = { id: 'correction', state: 'recovering', revision: 1 };
+      expect(hasActiveTransactionImport([retired])).toBe(true);
+      expect(resolveTransactionImportStatus([retired])).toMatchObject({ title: 'Checking correction progress', active: true });
+    }
+    expect(resolveTransactionImportStatus([item('added', { executionEligible: false })])).toMatchObject({ title: 'Added to Actual' });
+  });
+
   it('uses the completed correction type without hiding another pending receipt', () => {
     const corrected = item('added', { effectiveResult: { correctionId:'correction-1', entry: { type:'payment', amountCents:1200, date:'2026-09-07', accountId:'account-1' } } });
     expect(resolveTransactionImportStatus([corrected])).toMatchObject({ title:'Corrected in Actual', detail:'The corrected entry is recorded in Actual.', review:false });

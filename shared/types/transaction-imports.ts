@@ -2,10 +2,7 @@ import type { FinancialEmailPlan, FinancialOperationKind, FinancialPlanReasonCod
 import type { FinancialCorrectionDraft } from "./financial-corrections.ts";
 import type { FinancialActivity, FinancialWriteEvidence } from "./financial-activity.ts";
 
-export const TRANSACTION_IMPORT_PARSER_SOURCES = ["amazon", "paypal"] as const;
-export type TransactionImportParserSource = typeof TRANSACTION_IMPORT_PARSER_SOURCES[number];
-export const TRANSACTION_IMPORT_SOURCES = [...TRANSACTION_IMPORT_PARSER_SOURCES, "generic"] as const;
-export type TransactionImportSource = typeof TRANSACTION_IMPORT_SOURCES[number];
+export type TransactionImportSource = "amazon" | "paypal" | "generic";
 
 export type TransactionImportExecutionMode = "observe" | "automatic";
 
@@ -76,6 +73,8 @@ export interface TransactionImportRunSummary {
 
 export interface TransactionImportItem {
   runTrigger?: TransactionImportRunTrigger;
+  /** Original execution eligibility; saved history and corrections remain available. */
+  executionEligible?: boolean;
   correction?: FinancialActivity["correction"];
   /** Latest verified correction for read-only consumers; original import fields remain immutable history. */
   effectiveResult?: { correctionId: string; resolution?: 'kept_actual'; entry?: FinancialCorrectionDraft & { payee?: string }; scheduleId?: string; transactionId?: string };
