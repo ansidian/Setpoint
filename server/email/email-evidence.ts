@@ -41,6 +41,25 @@ function visibleTableContent(node: DomNode): DomNode {
   };
 }
 
+function isTableWhitespace(node: DomNode): boolean {
+  return node.type === "comment" || node.type === "directive"
+    || (node.type === "text" && !node.data?.trim());
+}
+
+/** The grid formatter ignores all structural content outside these containers.
+ * Cell contents use the normal walker, including any nested table formatter. */
+function supportsDataTable(nodes: DomNode[]): boolean {
+  return nodes.every((node) => {
+    if (isTableWhitespace(node)) return true;
+    if (node.type !== "tag") return false;
+    if (["thead", "tbody", "tfoot", "center"].includes(node.name || "")) {
+      return supportsDataTable(node.children || []);
+    }
+    return node.name === "tr" && (node.children || []).every((cell) => isTableWhitespace(cell)
+      || (cell.type === "tag" && ["td", "th"].includes(cell.name || "")));
+  });
+}
+
 const convertHtml = compile({
   wordwrap: false,
   preserveNewlines: false,
@@ -60,7 +79,9 @@ const convertHtml = compile({
       builder.addInline(alt ? `[Image omitted: ${alt}]` : "[Image omitted]");
     },
     evidenceTable(element, walk, builder, options) {
-      builder.options.formatters.dataTable!(visibleTableContent(element), walk, builder, options);
+      const visible = visibleTableContent(element);
+      const format = supportsDataTable(visible.children || []) ? "dataTable" : "block";
+      builder.options.formatters[format]!(visible, walk, builder, options);
     },
     evidenceLink(element, walk, builder) {
       walk(element.children, builder);
@@ -71,8 +92,8 @@ const convertHtml = compile({
   selectors: [
     { selector: "a", format: "evidenceLink" },
     { selector: "img", format: "evidenceImage" },
-    // Email layout tables also carry label/value relationships. Keep their rows
-    // and column alignment instead of converting every cell into one paragraph.
+    // Preserve grid alignment where supported; traverse malformed layout tables
+    // normally so content outside rows/cells cannot silently disappear.
     { selector: "table", format: "evidenceTable", options: { uppercaseHeaderCells: false, maxColumnWidth: 120 } },
     { selector: "[style]", format: "evidenceVisibility" },
     { selector: "[aria-hidden]", format: "evidenceVisibility" },

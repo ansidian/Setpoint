@@ -18,6 +18,40 @@ describe("email evidence", () => {
     expect(text).toContain("Autopay on");
   });
 
+  it("preserves statement rows in a table nested directly inside a layout section", () => {
+    const text = emailEvidenceText(`<table><tbody>
+      <tr><td><img alt="Display images to show real-time content"></td></tr>
+      <!-- A provider layout can contain a table outside a row/cell. -->
+      <table><tbody>
+        <tr><td>Statement balance</td><td>$238.80</td></tr>
+        <tr><td>Minimum payment due</td><td>$25.00</td></tr>
+        <tr><td>Payment due date</td><td>10/24/2026</td></tr>
+      </tbody></table>
+      <tr><td>Account servicing footer</td></tr>
+    </tbody></table>`);
+    expect(text).toMatch(/Statement balance\s+\$238\.80\nMinimum payment due\s+\$25\.00\nPayment due date\s+10\/24\/2026/);
+    expect(text.indexOf("[Image omitted:")).toBeLessThan(text.indexOf("Statement balance"));
+    expect(text.indexOf("Payment due date")).toBeLessThan(text.indexOf("Account servicing footer"));
+    expect(text.match(/\$238\.80/g)).toHaveLength(1);
+    expect(text.match(/\$25\.00/g)).toHaveLength(1);
+  });
+
+  it("retains visible content outside rows without reviving hidden facts or duplicating content", () => {
+    const text = emailEvidenceText(`<table><tbody>
+      <p>Before the statement</p>
+      <div hidden>Wrong balance $0.00</div>
+      <table><tr><td aria-hidden="true">Cancelled payment</td><td>Statement balance</td><td>$238.80</td></tr></table>
+      <p style="visibility: hidden">Wrong due date</p>
+      <p>After the statement</p>
+    </tbody></table>`);
+    expect(text.split(/\n+/)).toEqual(["Before the statement", "Statement balance   $238.80", "After the statement"]);
+  });
+
+  it("retains visible non-cell content inside a row", () => {
+    const text = emailEvidenceText('<table><tr><td><p>Payment notice</p></td><p>Payment cancelled; do not pay.</p></tr></table>');
+    expect(text.split(/\n+/)).toEqual(["Payment notice", "Payment cancelled; do not pay."]);
+  });
+
   it("excludes hidden table columns without introducing an apparent zero balance", () => {
     const text = emailEvidenceText('<table><tr><td style="display: none">Plan balance</td><td>Statement balance</td></tr><tr><td hidden>$0.00</td><td>$472.32</td></tr></table>');
     expect(text).toBe("Statement balance\n$472.32");

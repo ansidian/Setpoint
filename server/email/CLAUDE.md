@@ -58,6 +58,7 @@ Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and
 - Verification-code detection runs locally in that shared index path; it never calls a provider/model and persists no surrounding evidence.
 - Provider differences are absorbed in `email-provider-adapters.ts`; consumers see one account-shaped interface.
 - Indexing and complete financial acquisition prefer readable HTML over an alternative plain body. Gmail/iCloud previews derive from that selected body so triage cannot reintroduce stale alternative text through a provider snippet. Independent mixed parts and attachments retain their existing boundaries.
+- HTML evidence keeps aligned grids only for supported table sections, rows and cells. Malformed layout tables use the converter's ordinary traversal after visibility filtering, retaining visible content outside that structure.
 
 ## Related
 

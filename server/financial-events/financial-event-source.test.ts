@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { Client } from "@libsql/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createMigratedDb } from "../triage/triage-worker.test-utils.ts";
@@ -47,6 +48,22 @@ describe("durable financial source acquisition", () => {
       : "UPDATE ea_email_index SET sender_authentication_json='{\"status\":\"fail\"}' WHERE uid='invoice'");
     expect((await store().getDocumentForEmail("owner", "invoice"))?.acquiredSource).toBeNull();
     expect(await store().saveDocumentSource(claim, source)).toBe(false);
+  });
+
+  it("reacquires unchanged input normalized by the old table policy with a fresh acquisition budget", async () => {
+    const claim = (await store().claimDocument("old-parser"))!;
+    // Historical v2 snapshot identity, before layout-table evidence was retained.
+    const oldKey = createHash("sha256").update(JSON.stringify([
+      "financial-source-v2", "invoice", "Utility", "bill@utility.example", "New invoice",
+      "Invoice attached.", arrival, null, null, { status: "pass" },
+    ])).digest("hex");
+    await db.execute({ sql: `UPDATE ea_financial_documents SET acquired_source_json=?, acquired_source_key=?,
+      source_attempt_key=?, source_attempts=3 WHERE id=?`, args: [JSON.stringify(source), oldKey, oldKey, claim.id] });
+    const refreshed = (await store().getDocumentForEmail("owner", "invoice"))!;
+    expect(refreshed).toMatchObject({ body: "Invoice attached.", acquiredSource: null, revision: claim.revision });
+    expect(await store().reserveDocumentSource(refreshed)).toBe(1);
+    expect(await store().saveDocumentSource(refreshed, source)).toBe(true);
+    expect(await store().getDocumentForEmail("owner", "invoice")).toMatchObject({ body: source.body, acquiredSource: source });
   });
 
   it("charges failed or interrupted source requests across restarts and resets only for changed source evidence", async () => {

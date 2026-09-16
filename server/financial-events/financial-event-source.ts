@@ -11,8 +11,8 @@ export function projectFinancialDocumentSource(document: FinancialDocument, row:
   const authentication = document.senderAuthentication ? { ...document.senderAuthentication } : null;
   if (authentication) delete (authentication as Partial<typeof authentication>).evaluatedAt;
   const sourceInputHash = createHash("sha256").update(JSON.stringify([
-    // v2 selects reader HTML instead of combining contradictory MIME alternatives.
-    "financial-source-v2", document.emailUid, document.fromName, document.fromAddress, document.subject,
+    // v3 retains layout-table content that the old grid formatter skipped.
+    "financial-source-v3", document.emailUid, document.fromName, document.fromAddress, document.subject,
     document.body, document.emailDate, document.threadId, document.messageId, authentication,
   ])).digest("hex");
   let acquiredSource: FinancialEmailSource | null = null;
