@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Activity } from "react";
 import { MemoryRouter } from "react-router";
 import Reader from "./Reader";
@@ -29,6 +29,14 @@ vi.mock("../../../api", async () => {
   };
 });
 
+beforeEach(() => {
+  // jsdom has no layout observer; the real notes field still mounts with Reader.
+  vi.stubGlobal("ResizeObserver", class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  });
+});
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 function Harness({ mobile = false }: { mobile?: boolean }) {
