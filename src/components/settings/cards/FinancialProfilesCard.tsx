@@ -238,7 +238,14 @@ export default function FinancialProfilesCard({ settings, setSettings, metadata,
       <AnimatedHeight><div className="flex flex-col gap-4">
         {loading && <p role="status" className={HINT}>Loading financial providers…</p>}
         {loadError && <SettingsNotice tone="danger" title="Couldn’t load financial providers">{loadError}<button type="button" disabled={saving} onClick={refreshConnections} className={cn(BUTTON, SETTINGS_SECONDARY_BUTTON_CLASS, "mt-2")}>Reload providers</button></SettingsNotice>}
-        {configuration && !configuration.migrated && <SettingsNotice title="Financial provider setup is pending">Your existing settings are shown below. Editing becomes available after the saved configuration has been migrated.<button type="button" onClick={refreshConnections} className={cn(BUTTON, SETTINGS_SECONDARY_BUTTON_CLASS, "mt-2")}>Check readiness</button></SettingsNotice>}
+        {configuration && !configuration.migrated && (
+          <SettingsNotice title="Financial provider setup is pending">
+            <div className="flex flex-col items-start gap-2">
+              <p>Your existing settings are shown below. Editing becomes available after the saved configuration has been migrated.</p>
+              <button type="button" onClick={refreshConnections} className={cn(BUTTON, SETTINGS_SECONDARY_BUTTON_CLASS)}>Check readiness</button>
+            </div>
+          </SettingsNotice>
+        )}
 
         {!liveMetadataAvailable ? (
           <p className="text-[12px] leading-relaxed text-muted-foreground">Saved providers remain available. Connect or repair Actual Budget to choose accounts, payees, categories, and schedules.</p>
