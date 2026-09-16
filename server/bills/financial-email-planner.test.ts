@@ -477,6 +477,7 @@ describe("financial email planner contract", () => {
       candidate: candidate("payment_scheduled", {
         type: "transfer",
         payee: "Everyday Card",
+        event_evidence: "Your payment of $42.25 is scheduled for September 10, 2026",
         amount_kind: "payment_amount",
         amount_candidates: [{ kind: "payment_amount", value: 42.25, confidence: 0.99,
           evidence: "Your payment of $42.25 is scheduled for September 10, 2026" }],
@@ -485,6 +486,8 @@ describe("financial email planner contract", () => {
         account_last4_evidence: "Card ending in 4242",
       }),
       sourceIdentity: { senderAddress: "payments@card.example", senderAuthentication: "pass" },
+      email: { subject: "Your card payment is scheduled",
+        body: "Your payment of $42.25 is scheduled for September 10, 2026. Card ending in 4242." },
     });
 
     expect(result.operation).toEqual({ intended: "create_transfer_schedule", kind: "create_transfer_schedule", reasons: [] });
