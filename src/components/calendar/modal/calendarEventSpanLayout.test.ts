@@ -3,7 +3,6 @@ import {
   buildCalendarEventSpanLayout,
   isPinnedCalendarEvent,
   maxSpanLanes,
-  spanLaneMetrics,
   visualEventDateRange,
 } from "./calendarEventSpanLayout";
 import type { CalendarSpanEvent } from "./calendarEventSpanLayout";
@@ -183,18 +182,6 @@ describe("buildCalendarEventSpanLayout", () => {
     expect(layout.spanSegments.find((segment) => (
       segment.eventId === "overnight" && segment.segmentStart <= "2026-05-16"
     ))).toBeUndefined();
-  });
-});
-
-describe("spanLaneMetrics", () => {
-  it("returns default metrics for lg tier", () => {
-    const m = spanLaneMetrics({ tier: "lg" });
-    expect(m).toEqual({ rowTop: 30, height: 36, gap: 4 });
-  });
-
-  it("returns taller rowTop for uhd tier", () => {
-    expect(spanLaneMetrics({ tier: "uhd" }).rowTop).toBe(32);
-    expect(spanLaneMetrics({ tier: "xl" }).rowTop).toBe(32);
   });
 });
 

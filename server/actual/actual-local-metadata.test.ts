@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, utimes, writeFile } from "fs/promises";
+import { mkdir, readFile, writeFile } from "fs/promises";
 import { createTestTempDir, removeTempDir } from "../test-utils/temp-dir.ts";
 import path from "path";
 import { createClient } from "@libsql/client";
@@ -19,8 +19,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   describeLocalActualCache,
   hydrateLocalActualCache,
-  pruneActualBudgetBackups,
-  pruneLocalActualBackups,
   readLocalActualMetadata,
 } from "./actual-local-metadata.ts";
 import { syncDownloadedBudget } from "./actualMetadataSync.ts";
@@ -441,31 +439,6 @@ describe("readLocalActualMetadata", () => {
     expect(result.dbSizeBytes).toBeGreaterThan(0);
   });
 
-  it("keeps only the newest local Actual zip backup for a budget", async () => {
-    tempDir = await createTestTempDir("actual-local-");
-    const budgetDir = path.join(tempDir!, "My-Finances-d8e502a");
-    const backupDir = path.join(budgetDir, "backups");
-    await mkdir(backupDir, { recursive: true });
-    await writeFile(path.join(budgetDir, "metadata.json"), JSON.stringify({
-      id: "My-Finances-d8e502a",
-      cloudFileId: "file-1",
-      groupId: "sync-123",
-    }));
-    await writeFile(path.join(backupDir, "old.zip"), "old");
-    await writeFile(path.join(backupDir, "new.zip"), "new");
-    await writeFile(path.join(backupDir, "db.latest.sqlite"), "latest");
-    await utimes(path.join(backupDir, "old.zip"), new Date("2026-05-01T00:00:00Z"), new Date("2026-05-01T00:00:00Z"));
-    await utimes(path.join(backupDir, "new.zip"), new Date("2026-05-02T00:00:00Z"), new Date("2026-05-02T00:00:00Z"));
-
-    const result = await pruneActualBudgetBackups(budgetDir, { keep: 1 });
-
-    expect(result).toEqual({ removed: 1, kept: 1 });
-    await expect(readdir(backupDir).then((files) => files.sort())).resolves.toEqual([
-      "db.latest.sqlite",
-      "new.zip",
-    ]);
-  });
-
   it("openLocalBudgetClient opens the on-disk budget for direct queries", async () => {
     const { openLocalBudgetClient } = await import("./actual-local-metadata.ts");
     await createActualBudgetFixture();
@@ -489,25 +462,5 @@ describe("readLocalActualMetadata", () => {
     })).rejects.toMatchObject({ status: 503 });
   });
 
-  it("prunes backups across local Actual budget folders", async () => {
-    tempDir = await createTestTempDir("actual-local-");
-    const budgetDir = path.join(tempDir!, "My-Finances-d8e502a");
-    const backupDir = path.join(budgetDir, "backups");
-    await mkdir(backupDir, { recursive: true });
-    await mkdir(path.join(tempDir!, "not-a-budget", "backups"), { recursive: true });
-    await writeFile(path.join(budgetDir, "metadata.json"), JSON.stringify({
-      id: "My-Finances-d8e502a",
-      cloudFileId: "file-1",
-      groupId: "sync-123",
-    }));
-    await writeFile(path.join(backupDir, "old.zip"), "old");
-    await writeFile(path.join(backupDir, "new.zip"), "new");
-    await utimes(path.join(backupDir, "old.zip"), new Date("2026-05-01T00:00:00Z"), new Date("2026-05-01T00:00:00Z"));
-    await utimes(path.join(backupDir, "new.zip"), new Date("2026-05-02T00:00:00Z"), new Date("2026-05-02T00:00:00Z"));
 
-    const result = await pruneLocalActualBackups({ dataDir: tempDir!, keep: 1 });
-
-    expect(result).toEqual({ removed: 1, kept: 1, budgets: 1 });
-    await expect(readdir(backupDir).then((files) => files.sort())).resolves.toEqual(["new.zip"]);
-  });
 });

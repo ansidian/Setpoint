@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { installDashboardCalendarLayoutFixtures } from "./support/dashboard-fixtures.ts";
+import { installDashboardShellFixtures } from "./support/dashboard-fixtures.ts";
 
 test.describe.configure({ timeout: 60_000 });
 
@@ -11,7 +11,7 @@ async function openCalendar(page: Page) {
 }
 
 test("navigates the calendar month from vertical wheel input on the grid", async ({ page }) => {
-  await installDashboardCalendarLayoutFixtures(page);
+  await installDashboardShellFixtures(page);
   await page.setViewportSize({ width: 1900, height: 1200 });
 
   await openCalendar(page);

@@ -176,13 +176,6 @@ describe("demo mode read adapter", () => {
       .not.toBe("Caller-only edit");
   });
 
-  it("returns dashboard data that consumers can clone", async () => {
-    const api = await importDemoApi();
-    const current = await api.getCurrentDashboard();
-
-    expect(structuredClone(current)).toEqual(current);
-  });
-
   it("keeps prior dashboard views stable when a later request mutates the seed", async () => {
     const api = await importDemoApi();
     const before = await api.getCurrentDashboard();

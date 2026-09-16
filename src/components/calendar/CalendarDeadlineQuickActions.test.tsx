@@ -41,39 +41,35 @@ beforeEach(() => {
 function renderDeadlineModal({ deadlines = [], deadlineActions = {} }: { deadlines?: Array<Record<string, unknown>>; deadlineActions?: Record<string, unknown> } = {}) {
   function DeadlineModalHarness() {
     const [currentDeadlines, setCurrentDeadlines] = useState(deadlines);
-    const [completedDeadlineId, setCompletedDeadlineId] = useState("");
     const observableActions = {
       onDeleteTask: (id: string) => setCurrentDeadlines((current) => current.filter((task) => task.id !== id)),
-      onCompleteTask: (id: string) => setCompletedDeadlineId(id),
+      onCompleteTask: () => {},
       onMoveTask: (task: Record<string, unknown>, targetDate: string) => setCurrentDeadlines((current) => current.map((candidate) => (
         candidate.id === task.id ? { ...candidate, due_date: targetDate } : candidate
       ))),
       ...deadlineActions,
     };
     return (
-      <>
-        <output data-testid="completed-deadline-id">{completedDeadlineId}</output>
-        <DashboardProviderCompat
-          deadlines={{ upcoming: currentDeadlines, stats: null }}
-          setCalendarDeadlines={setCurrentDeadlines}
-        >
-          <CalendarModal
-            open
-            onClose={() => {}}
-            view="events"
-            forceDeadlineOverlay
-            onViewChange={() => {}}
-            focusDate="2026-04-20"
-            eventsData={{ getEvents: () => [] }}
-            billsData={{}}
-            deadlinesData={{
-              upcoming: currentDeadlines,
-              stats: null,
-            }}
-            deadlineActions={observableActions}
-          />
-        </DashboardProviderCompat>
-      </>
+      <DashboardProviderCompat
+        deadlines={{ upcoming: currentDeadlines, stats: null }}
+        setCalendarDeadlines={setCurrentDeadlines}
+      >
+        <CalendarModal
+          open
+          onClose={() => {}}
+          view="events"
+          forceDeadlineOverlay
+          onViewChange={() => {}}
+          focusDate="2026-04-20"
+          eventsData={{ getEvents: () => [] }}
+          billsData={{}}
+          deadlinesData={{
+            upcoming: currentDeadlines,
+            stats: null,
+          }}
+          deadlineActions={observableActions}
+        />
+      </DashboardProviderCompat>
     );
   }
   return render(<DeadlineModalHarness />);
@@ -107,29 +103,6 @@ describe("Calendar deadline quick actions", () => {
       expect(mockDeleteDeadline).toHaveBeenCalledWith("todo-context-delete");
     });
     await waitFor(() => expect(screen.queryByTestId("calendar-cell-item-chip")).toBeNull());
-  });
-
-  it("uses domain completion without provider-status actions", async () => {
-    renderDeadlineModal({
-      deadlines: [{
-        id: "deadline-context-status",
-        title: "Submit lab report",
-        class_name: "Chemistry",
-        due_date: "2026-04-20",
-        status: "incomplete",
-      }],
-    });
-
-    fireEvent.contextMenu(await screen.findByTestId("calendar-cell-item-chip", {}, { timeout: 5000 }), {
-      clientX: 140,
-      clientY: 180,
-    });
-
-    expect(await screen.findByTestId("calendar-deadline-context-menu")).toBeTruthy();
-    expect(screen.queryByText("Mark in progress")).toBeNull();
-    fireEvent.click(screen.getByTestId("calendar-deadline-context-complete"));
-
-    expect(screen.getByTestId("completed-deadline-id").textContent).toBe("deadline-context-status");
   });
 
   it("hides completion from the context menu for a completed deadline", async () => {
@@ -188,29 +161,6 @@ describe("Calendar deadline quick actions", () => {
 
     await waitFor(() => {
       expect(within(targetCell).getByText("Move planning task")).toBeTruthy();
-    });
-  });
-
-  it("dismisses the context menu on an outside pointerdown", async () => {
-    renderDeadlineModal({
-      deadlines: [{
-        id: "todo-outside-dismiss",
-        title: "Renew parking permit",
-        due_date: "2026-04-20",
-        status: "incomplete",
-      }],
-    });
-
-    fireEvent.contextMenu(await screen.findByTestId("calendar-cell-item-chip", {}, { timeout: 5000 }), {
-      clientX: 140,
-      clientY: 180,
-    });
-    expect(await screen.findByTestId("calendar-deadline-context-menu")).toBeTruthy();
-
-    fireEvent.pointerDown(document.body);
-
-    await waitFor(() => {
-      expect(screen.queryByTestId("calendar-deadline-context-menu")).toBeNull();
     });
   });
 

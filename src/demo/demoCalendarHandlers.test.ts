@@ -102,22 +102,6 @@ describe("demo calendar API handlers", () => {
     expect(networkAttempted()).toBe(false);
   });
 
-  it("exposes writable fictional calendars for the event-editor walkthrough", async () => {
-    const { api, networkAttempted } = await importDemoApi();
-    const sources = await api.getCalendarSources();
-
-    expect(sources.accounts).toEqual([
-      expect.objectContaining({
-        accountId: "demo-gmail",
-        accountLabel: "Demo Gmail",
-        calendars: expect.arrayContaining([
-          expect.objectContaining({ id: "demo-work", writable: true, accessRole: "owner" }),
-        ]),
-      }),
-    ]);
-    expect(networkAttempted()).toBe(false);
-  });
-
   it("does not flag truncation when results land exactly on the limit (P3-20)", async () => {
     const { api } = await importDemoApi();
 

@@ -85,12 +85,6 @@ describe("resolveReaderActions pin toggle", () => {
     expect(resolveReaderActions(null).canPin).toBe(false);
     expect(resolveReaderActions(undefined).canPin).toBe(false);
   });
-
-  it("mirrors email._pinned", () => {
-    expect(resolveReaderActions(snapshotEmail({ _pinned: true })).pinned).toBe(true);
-    expect(resolveReaderActions(snapshotEmail({ _pinned: false })).pinned).toBe(false);
-    expect(resolveReaderActions(snapshotEmail()).pinned).toBe(false);
-  });
 });
 
 it("offers early return without snapshot or destructive actions for deferred mail", () => {

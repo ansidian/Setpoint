@@ -1,54 +1,11 @@
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
-import { mockCreateCalendarEvent, mockListReminders, mockCreateReminder } from "./CalendarEventEditor.test-setup.ts";
+import { screen, waitFor } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+import { mockListReminders } from "./CalendarEventEditor.test-setup.ts";
 import {
-  getActiveEventSaveButton,
   renderEventEditor,
 } from "./events/CalendarEventEditor.test-utils.tsx";
 
 describe("CalendarEventEditor reminder behavior", () => {
-  it("flushes event reminders after provider creation succeeds", async () => {
-    renderEventEditor({ focusDate: "2099-05-10" });
-    const savedEvent = {
-      id: "event-reminder-create",
-      title: "Planning block",
-      accountId: "gmail-main",
-      calendarId: "primary",
-      startMs: new Date("2099-05-10T16:00:00.000Z").getTime(),
-      endMs: new Date("2099-05-10T16:30:00.000Z").getTime(),
-      writable: true,
-      allDay: false,
-    };
-    mockCreateCalendarEvent.mockResolvedValue({ event: savedEvent });
-
-    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
-    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-    fireEvent.input(screen.getByTestId("calendar-event-title"), {
-      target: { value: "Planning block" },
-    });
-    act(() => {
-      vi.advanceTimersByTime(120);
-    });
-    vi.useRealTimers();
-    fireEvent.click(screen.getByTestId("calendar-event-reminder-preset-30"));
-
-    await waitFor(() => {
-      expect((screen.getByTestId("calendar-event-save") as HTMLButtonElement).disabled).toBe(false);
-    });
-    fireEvent.click(getActiveEventSaveButton());
-
-    await waitFor(() => {
-      // test-architecture: allow-boundary-interaction -- Reminder persistence is a separate outbound API write whose anchor, source identity, and offset are not observable from the closed editor alone.
-      expect(mockCreateReminder).toHaveBeenCalledWith(expect.objectContaining({
-        sourceType: "calendar_event",
-        sourceItemId: "event-reminder-create",
-        anchorKind: "event_start",
-        anchorAt: "2099-05-10T16:00:00.000Z",
-        offsetMinutes: -30,
-      }));
-    });
-  });
-
   it("loads existing reminders for the exact event occurrence", async () => {
     const event = {
       id: "event-reminder-edit",

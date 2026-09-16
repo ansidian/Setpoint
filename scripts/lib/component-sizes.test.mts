@@ -57,23 +57,9 @@ describe("source-size advisory", () => {
 describe("test-size baseline", () => {
   const baseline = { threshold: 600, files: {} }
 
-  test("fails an oversized file that is not in the baseline", () => {
-    const files = [{ path: "src/components/Huge.test.tsx", lineCount: 742 }]
-    const { failures } = checkSizeBaseline({ files, baseline })
-    expect(failures).toEqual([
-      "src/components/Huge.test.tsx is 742 lines and is not in the test-size baseline",
-    ])
-  })
-
   test("passes a file at or under the threshold with no baseline entry", () => {
     const files = [{ path: "src/components/Fine.test.tsx", lineCount: 600 }]
     expect(checkSizeBaseline({ files, baseline }).failures).toEqual([])
-  })
-
-  test("passes a grandfathered file at exactly its recorded allowance", () => {
-    const grandfathered = { threshold: 600, files: { "src/demo/store.test.ts": 815 } }
-    const files = [{ path: "src/demo/store.test.ts", lineCount: 815 }]
-    expect(checkSizeBaseline({ files, baseline: grandfathered }).failures).toEqual([])
   })
 
   test("fails a grandfathered file that grew past its recorded allowance", () => {

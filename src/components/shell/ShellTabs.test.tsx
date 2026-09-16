@@ -24,6 +24,7 @@ describe("ShellTabs WAI-ARIA tabs pattern", () => {
     fireEvent.keyDown(dashboardTab, { key: "ArrowRight" });
 
     expect(screen.getByRole("tab", { name: /Inbox/ }).getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(screen.getByRole("tab", { name: /Inbox/ }));
   });
 
   it("ArrowLeft from the first tab wraps to the last tab", () => {
@@ -46,15 +47,5 @@ describe("ShellTabs WAI-ARIA tabs pattern", () => {
 
     fireEvent.keyDown(screen.getByRole("tab", { name: /Finances/ }), { key: "Home" });
     expect(screen.getByRole("tab", { name: /Dashboard/ }).getAttribute("aria-selected")).toBe("true");
-  });
-
-  it("moves DOM focus to the newly-activated tab button", () => {
-    renderTabs({ tab: "dashboard" });
-
-    const dashboardTab = screen.getByRole("tab", { name: /Dashboard/ });
-    dashboardTab.focus();
-    fireEvent.keyDown(dashboardTab, { key: "ArrowRight" });
-
-    expect(document.activeElement).toBe(screen.getByRole("tab", { name: /Inbox/ }));
   });
 });

@@ -167,14 +167,6 @@ function todayParts() {
   };
 }
 
-function formatYmd(date: Date): string {
-  return [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, "0"),
-    String(date.getDate()).padStart(2, "0"),
-  ].join("-");
-}
-
 function buildBriefing({
   events = [],
   emailAccounts = [],
@@ -678,77 +670,6 @@ async function installCalendarCrudFixtures(
 
 export async function installDashboardShellFixtures(page: Page, options: DashboardFixtureOptions = {}): Promise<void> {
   await installBaseDashboardFixtures(page, options);
-}
-
-export async function installDashboardCalendarLayoutFixtures(page: Page) {
-  const today = todayParts();
-  const eventDate = new Date(today.year, today.month, today.day + 1);
-  const deadlineDate = new Date(today.year, today.month, today.day + 2);
-  const eventStart = new Date(
-    eventDate.getFullYear(),
-    eventDate.getMonth(),
-    eventDate.getDate(),
-    11,
-    0,
-    0,
-    0,
-  ).getTime();
-  const eventEnd = new Date(
-    eventDate.getFullYear(),
-    eventDate.getMonth(),
-    eventDate.getDate(),
-    12,
-    0,
-    0,
-    0,
-  ).getTime();
-  const eventDay = eventDate.getDate();
-  const eventTitle = "Design review";
-  const deadlineTitle = "Ship planning memo";
-
-  await installBaseDashboardFixtures(page, {
-    initialEvents: [
-      {
-        id: "layout-event-1",
-        etag: '"layout-etag-1"',
-        title: eventTitle,
-        accountId: "gmail-main",
-        calendarId: "primary",
-        startMs: eventStart,
-        endMs: eventEnd,
-        writable: true,
-        isRecurring: false,
-        allDay: false,
-        htmlLink: "https://calendar.google.com/calendar/u/0/r",
-        color: "#4285f4",
-      },
-    ],
-    briefing: {
-      deadlines: {
-        upcoming: [
-          {
-            id: "layout-deadline-1",
-            title: deadlineTitle,
-            due_date: formatYmd(deadlineDate),
-            due_time: "5:00 PM",
-            source: "todoist",
-            class_name: "Inbox",
-            status: "open",
-            url: "https://todoist.com/showTask?id=layout-deadline-1",
-          },
-        ],
-        stats: { incomplete: 1, dueToday: 0, dueThisWeek: 1, totalPoints: 0 },
-      },
-    },
-  });
-
-  return {
-    todayDay: today.day,
-    eventDay,
-    eventTitle,
-    deadlineDay: deadlineDate.getDate(),
-    deadlineTitle,
-  };
 }
 
 export async function installDashboardCalendarFixtures(page: Page) {

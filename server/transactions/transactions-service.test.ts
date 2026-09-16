@@ -1,4 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { createClient } from "@libsql/client";
+import { createTestTempDir, removeTempDir } from "../test-utils/temp-dir.ts";
+import { readTransactionsRange } from "../actual/actual-transactions-read.ts";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { queryTransactions, summarizeTransactions } from "./transactions-service.ts";
 import type { TransactionFilters, TransactionRecord } from "../../shared/types/transactions.ts";
 
@@ -11,29 +16,72 @@ const ROWS: TransactionRecord[] = [
 const reader = (rows: TransactionRecord[] = ROWS, truncated = false) => vi.fn(async (_userId: string, _filters: TransactionFilters) => ({ transactions: rows, truncated }));
 const stateCurrent = vi.fn(async (_userId: string) => ({ syncHealth: { state: "current" } }));
 
+let tempDir: string | null = null;
+
+afterEach(async () => {
+  await removeTempDir(tempDir);
+  tempDir = null;
+});
+
+describe("transaction facade filtering", () => {
+  it.each([
+    { label: "default expenses", direction: undefined, id: "coffee-expense", amount: 6 },
+    { label: "income", direction: "income" as const, id: "coffee-refund", amount: 2 },
+  ])("queries and summarizes notes-matching $label from the local budget", async ({ direction, id, amount }) => {
+    tempDir = await createTestTempDir("transaction-service-");
+    const budgetDir = path.join(tempDir, "Budget-1");
+    await mkdir(budgetDir);
+    await writeFile(path.join(budgetDir, "metadata.json"), JSON.stringify({
+      id: "Budget-1", cloudFileId: "file-1", groupId: "sync-123",
+    }));
+    const client = createClient({ url: `file:${path.join(budgetDir, "db.sqlite")}` });
+    try {
+      await client.executeMultiple(`
+        CREATE TABLE accounts (id TEXT, name TEXT, tombstone INTEGER);
+        CREATE TABLE payees (id TEXT, name TEXT, transfer_acct TEXT, tombstone INTEGER);
+        CREATE TABLE categories (id TEXT, name TEXT, tombstone INTEGER);
+        CREATE TABLE v_transactions (
+          id TEXT, imported_id TEXT, date INTEGER, amount INTEGER, payee TEXT,
+          category TEXT, account TEXT, notes TEXT, tombstone INTEGER
+        );
+        INSERT INTO accounts VALUES ('checking', 'Checking', 0);
+        INSERT INTO payees VALUES ('cafe', 'Cafe', NULL, 0);
+        INSERT INTO categories VALUES ('dining', 'Dining', 0);
+        INSERT INTO v_transactions VALUES
+          ('coffee-expense', NULL, 20260505, -600, 'cafe', 'dining', 'checking', 'Coffee', 0),
+          ('lunch', NULL, 20260506, -1500, 'cafe', 'dining', 'checking', 'Lunch', 0),
+          ('coffee-refund', NULL, 20260507, 200, 'cafe', 'dining', 'checking', 'Coffee refund', 0),
+          ('other-refund', NULL, 20260508, 1000, 'cafe', 'dining', 'checking', 'Lunch refund', 0);
+      `);
+    } finally {
+      client.close();
+    }
+    const options = {
+      dataDir: tempDir,
+      localOnly: true,
+      dbClient: { execute: async () => ({ rows: [{
+        actual_budget_url: "https://actual.example.test",
+        actual_budget_password_encrypted: null,
+        actual_budget_sync_id: "sync-123",
+      }] }) },
+    };
+    const deps = {
+      readRange: (userId: string, filters: TransactionFilters) => readTransactionsRange(userId, filters, options),
+      mirrorState: stateCurrent,
+    };
+    const filters = { start: "2026-05-01", end: "2026-05-31", notes: "coffee", direction };
+
+    const query = await queryTransactions("u1", filters, deps);
+    expect(query.total).toBe(1);
+    expect(query.transactions).toEqual([expect.objectContaining({ id, amount, direction: direction ?? "expense" })]);
+
+    const summary = await summarizeTransactions("u1", filters, deps);
+    expect(summary.total).toBe(amount);
+    expect(summary.buckets).toEqual([{ label: "Dining", amount, count: 1 }]);
+  });
+});
+
 describe("queryTransactions", () => {
-  it("forwards notes filter to readRange", async () => {
-    const readRange = vi.fn(async (_userId: string, filters: TransactionFilters) => ({
-      transactions: filters.notes === "coffee" ? ROWS : [],
-      truncated: false,
-    }));
-    const result = await queryTransactions("u1", { start: "2026-05-01", end: "2026-05-31", notes: "coffee" }, {
-      readRange, mirrorState: stateCurrent,
-    });
-    expect(result.transactions).toEqual(ROWS);
-  });
-
-  it("forwards direction:'income' to readRange", async () => {
-    const readRange = vi.fn(async (_userId: string, filters: TransactionFilters) => ({
-      transactions: filters.direction === "income" ? ROWS : [],
-      truncated: false,
-    }));
-    const result = await queryTransactions("u1", { start: "2026-05-01", end: "2026-05-31", direction: "income" }, {
-      readRange, mirrorState: stateCurrent,
-    });
-    expect(result.transactions).toEqual(ROWS);
-  });
-
   it("returns the list with total and no sync_state when current", async () => {
     const result = await queryTransactions("u1", { start: "2026-04-01", end: "2026-05-31" }, {
       readRange: reader(), mirrorState: stateCurrent,
@@ -68,28 +116,6 @@ describe("queryTransactions", () => {
 });
 
 describe("summarizeTransactions", () => {
-  it("forwards notes filter to readRange", async () => {
-    const readRange = vi.fn(async (_userId: string, filters: TransactionFilters) => ({
-      transactions: filters.notes === "coffee" ? ROWS : [],
-      truncated: false,
-    }));
-    const result = await summarizeTransactions("u1", { start: "2026-05-01", end: "2026-05-31", notes: "coffee" }, {
-      readRange, mirrorState: stateCurrent,
-    });
-    expect(result.total).toBe(142);
-  });
-
-  it("forwards direction:'income' to readRange", async () => {
-    const readRange = vi.fn(async (_userId: string, filters: TransactionFilters) => ({
-      transactions: filters.direction === "income" ? ROWS : [],
-      truncated: false,
-    }));
-    const result = await summarizeTransactions("u1", { start: "2026-05-01", end: "2026-05-31", direction: "income" }, {
-      readRange, mirrorState: stateCurrent,
-    });
-    expect(result.total).toBe(142);
-  });
-
   it("aggregates by category with total", async () => {
     const result = await summarizeTransactions("u1", { start: "2026-04-01", end: "2026-05-31", group_by: "category" }, {
       readRange: reader(), mirrorState: stateCurrent,

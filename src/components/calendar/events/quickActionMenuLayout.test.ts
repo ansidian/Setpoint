@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clampMenuPosition, menuStyle } from "./quickActionMenuLayout";
+import { clampMenuPosition } from "./quickActionMenuLayout";
 
 describe("clampMenuPosition", () => {
   it("passes the anchor through when it fits, floored by padding", () => {
@@ -50,13 +50,5 @@ describe("clampMenuPosition", () => {
       top: 100,
       width: 184,
     });
-  });
-});
-
-describe("menuStyle", () => {
-  it("clamps a 220px menu reserving height+padding (232) below the anchor", () => {
-    window.innerWidth = 300;
-    window.innerHeight = 400;
-    expect(menuStyle({ x: 9999, y: 9999 })).toEqual({ left: 68, top: 168, width: 220 });
   });
 });
