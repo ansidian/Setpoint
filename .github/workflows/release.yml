@@ -1,0 +1,123 @@
+name: Release production and demo
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [master]
+
+permissions:
+  contents: read
+
+# Finish an active release; never cancel while publishing a tag or Pages artifact.
+concurrency:
+  group: release-master
+  cancel-in-progress: false
+
+jobs:
+  eligible:
+    name: Check verified master commit
+    if: >-
+      github.repository_id == '1376484785' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'master' &&
+      github.event.workflow_run.head_repository.id == github.event.repository.id
+    runs-on: ubuntu-latest
+    outputs:
+      current: ${{ steps.head.outputs.current }}
+    steps:
+      - name: Skip a superseded commit
+        id: head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERIFIED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          head=$(gh api repos/ansidian/Setpoint/git/ref/heads/master --jq .object.sha)
+          if [ "$head" = "$VERIFIED_SHA" ]; then
+            echo 'current=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'current=false' >> "$GITHUB_OUTPUT"
+            echo 'A newer master commit exists; this release is superseded.'
+          fi
+
+  image:
+    name: Publish Debian image
+    needs: eligible
+    if: needs.eligible.outputs.current == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+      - name: Build Linux image from verified commit
+        env:
+          VERIFIED_SHA: ${{ github.event.workflow_run.head_sha }}
+          CI_RUN_ID: ${{ github.event.workflow_run.id }}
+          CI_RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
+        run: |
+          docker build --platform linux/amd64 \
+            --label org.opencontainers.image.source=https://github.com/ansidian/Setpoint \
+            --label "org.opencontainers.image.revision=$VERIFIED_SHA" \
+            --label "io.setpoint.ci-run-id=$CI_RUN_ID" \
+            --label "io.setpoint.ci-run-number=$CI_RUN_NUMBER" \
+            -t "ghcr.io/ansidian/setpoint:$VERIFIED_SHA" .
+      - name: Test container startup with disposable data and no network
+        env:
+          VERIFIED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: python3 deploy/smoke-image.py "ghcr.io/ansidian/setpoint:$VERIFIED_SHA"
+      - name: Publish immutable revision and production candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERIFIED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          echo "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          docker push "ghcr.io/ansidian/setpoint:$VERIFIED_SHA"
+          # Check again after building: an older run must not replace a newer head.
+          head=$(gh api repos/ansidian/Setpoint/git/ref/heads/master --jq .object.sha)
+          if [ "$head" = "$VERIFIED_SHA" ]; then
+            docker tag "ghcr.io/ansidian/setpoint:$VERIFIED_SHA" ghcr.io/ansidian/setpoint:production
+            docker push ghcr.io/ansidian/setpoint:production
+          fi
+
+  demo-build:
+    name: Build fictional demo
+    needs: eligible
+    if: needs.eligible.outputs.current == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Build demo only
+        run: npm run build:demo
+        env:
+          VITE_EA_DEMO_BASE: /Setpoint/
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist-demo
+
+  demo-deploy:
+    name: Publish fictional demo
+    needs: demo-build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

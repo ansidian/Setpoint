@@ -1,0 +1,14 @@
+[Unit]
+Description=Deploy a CI-verified Setpoint image
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /srv/setpoint/source/deploy/auto-deploy.py
+UMask=0077
+Nice=10
+TimeoutStartSec=30min
+StandardOutput=journal
+StandardError=journal

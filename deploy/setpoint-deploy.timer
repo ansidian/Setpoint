@@ -1,0 +1,11 @@
+[Unit]
+Description=Check for a CI-verified Setpoint release every minute
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=60s
+AccuracySec=5s
+Unit=setpoint-deploy.service
+
+[Install]
+WantedBy=timers.target

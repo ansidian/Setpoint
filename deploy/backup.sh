@@ -2,8 +2,14 @@
 set -euo pipefail
 umask 077
 root=/srv/setpoint
+# Deployment holds this lock across backup, rehearsal and activation. Daily
+# backups must not race an app replacement. The deployer passes the held lock.
+if [[ ${SETPOINT_DEPLOY_LOCK_HELD:-0} != 1 ]]; then
+  exec 8>"$root/deploy.lock"
+  flock -w 300 8 || { echo 'Backup: deployment lock timed out'; exit 1; }
+fi
 exec 9>"$root/backups/backup.lock"
-flock -n 9 || exit 0
+flock -w 300 9 || { echo 'Backup: backup lock timed out'; exit 1; }
 [[ $(df --output=avail -B1 "$root" | tail -1) -gt 10000000000 ]] || { echo 'Backup: free disk below10GB'; exit 1; }
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
 stage="$root/data/.backup-$stamp"

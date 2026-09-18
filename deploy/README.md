@@ -1,5 +1,9 @@
 # Debian deployment bundle
 
+For the live instance's CI-gated image releases and separate fictional Pages
+demo, read [automatic releases](AUTOMATIC-DEPLOYMENT.md). The initialization
+instructions below remain relevant when preparing a new host.
+
 These files do not activate the deployment. Production services require the
 `production` profile; Certbot requires `certificate`. Do not enable workers or
 start the production profile until migration gates in the operations runbook pass.

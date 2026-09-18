@@ -15,9 +15,16 @@ Development uses `server/db/ea.db`; Turso credentials are unnecessary unless exp
 
 For the fictional frontend alone, run `npm run demo`. It needs no backend or credentials and resets mutations on refresh. To inspect the static artifact, run `npm run build:demo` then `npm run preview:demo`.
 
-The demo build adds public social metadata through `vite.config.ts`; normal private builds retain the plain Setpoint title. Build with `VITE_EA_DEMO_BASE=/Setpoint/ npm run build:demo` for the original GitHub Pages site. The original repository retains its **Deploy Demo to GitHub Pages** workflow; publishing workflows were deliberately removed from this private self-hosted copy. Local builds do not publish. Another static host can serve `dist-demo`; use its correct base path and update the canonical/image URL in the Vite metadata hook when changing the public demo URL.
+The demo build adds public social metadata through `vite.config.ts`; normal private builds retain the plain Setpoint title. The **Release production and demo** workflow publishes `dist-demo` to `https://ansidian.github.io/Setpoint/` after successful `master` push CI, using `VITE_EA_DEMO_BASE=/Setpoint/`. Local builds do not publish. See [automatic releases](deploy/AUTOMATIC-DEPLOYMENT.md) for the separate production and demo paths. Another static host can serve `dist-demo`; use its correct base path and update the canonical/image URL in the Vite metadata hook when changing the public demo URL.
 
 ## Production
+
+The owner's live instance runs on Debian; see [Debian operations](deploy/OPERATIONS-LIVE.md)
+and [automatic releases](deploy/AUTOMATIC-DEPLOYMENT.md). Successful `master` push
+CI publishes the production image; the installed Debian deployment timer pulls
+and activates verified releases. The retained Render instance is suspended and
+must not resume against stale Turso data. The Render instructions below describe
+an alternative fresh installation.
 
 The [Render Blueprint](render.yaml) provisions an always-on Starter Node service and a persistent asset disk. Supply `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`; Render generates `EA_ENCRYPTION_KEY` and `EA_SETUP_TOKEN`. The service builds with `npm ci && npm run build`, starts with `npm start`, and checks readiness at `/healthz`.
 

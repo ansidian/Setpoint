@@ -34,3 +34,8 @@ jobs:
 
       - name: Verify
         run: npm run verify
+
+      - name: Verify deployment safeguards
+        run: |
+          python3 deploy/test-auto-deploy.py
+          bash -n deploy/backup.sh deploy/install-auto-deploy.sh

@@ -43,34 +43,26 @@ Tailscale retains netfilter-off/no accepted DNS/routes/no Tailscale SSH settings
 
 ## Development and releases
 
-Use `/Users/andys/Documents/Projects/setpoint-selfhosted` and Node24. The fresh
+Use `/Users/andys/Documents/Projects/setpoint` and Node24. The fresh
 checkout needs an independent `.env`, development encryption key and setup token
 as described in OPERATIONS.md. `npm run dev` uses its local `server/db/ea.db`;
 do not point it at Debian's live database. `npm run demo` needs no credentials.
-`npm run build:demo` emits a fictional static site in `dist-demo`. It does not
-update either Debian or the original repository's GitHub Pages deployment.
+`npm run build:demo` emits a fictional static site in `dist-demo`; local builds
+do not publish. The public canonical repository is `ansidian/Setpoint`; the
+retained private original is `ansidian/Setpoint-legacy`.
 
-CI verifies pushes; production deployment is deliberate. From a clean, verified
-source commit on the Mac, build and transfer Linux dependencies inside the image:
+Successful `master` push CI triggers **Release production and demo**: GitHub
+publishes the Linux app image to GHCR and separately deploys `dist-demo` to Pages.
+Once the one-time host installation is complete, Debian checks every minute,
+verifies the exact CI commit, rehearses startup on an isolated snapshot, makes a
+fresh backup and replaces only the app. See [automatic releases](AUTOMATIC-DEPLOYMENT.md)
+for installation, status, pause and recovery. The generated `compose.override.yaml`
+pins the running image by digest. `production-release.txt` records the release.
 
-```sh
-docker build --platform linux/amd64 -t setpoint-selfhosted:local .
-docker save setpoint-selfhosted:local | ssh admin@192.0.2.10 docker load
-```
-
-Before activation, make a fresh backup and retain the previous image by its ID.
-Review any database migrations: a code rollback may not undo a schema change.
-Sync changed deployment scripts/configuration separately, never secrets/data:
-
-```sh
-rsync -a deploy/ admin@192.0.2.10:/srv/setpoint/source/deploy/
-ssh admin@192.0.2.10 'cd /srv/setpoint/source/deploy && docker compose --profile production config --quiet && docker compose --profile production up -d --no-deps --force-recreate app'
-curl --fail https://setpoint.example.com/healthz
-```
-
-Update `production-release.txt` on Debian with the verified source commit/image
-ID so the next backup records the release. If Nginx changed, validate with
-`docker compose --profile production exec -T nginx nginx -t` before reloading.
+Host scripts, Compose and Nginx configuration still require deliberate updates;
+do not blindly sync the deployment folder over installed files or the image
+override. If Nginx changes, validate with `docker compose --profile production
+exec -T nginx nginx -t` before reloading. Code rollback does not undo migrations.
 
 ## Backups and isolated restore
 
