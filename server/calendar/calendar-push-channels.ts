@@ -284,14 +284,13 @@ async function reconcile(userId: string, { dbClient = db, callbackUrl, nowMs = D
     result.stopped++;
   }
   try {
-    const origin = callbackUrl ? null : await createCanonicalUrlService(dbClient).resolveCanonicalOrigin();
-    callbackUrl ||= origin ? new URL("/api/calendar/push", origin).toString() : undefined;
+    callbackUrl ||= await createCanonicalUrlService(dbClient).resolveProviderCallbackUrl("calendarPush");
     const callback = new URL(callbackUrl || "");
     if (callback.protocol !== "https:" || callback.username || callback.password || callback.search || callback.hash
       || callback.pathname !== "/api/calendar/push") throw new Error("Invalid callback URL");
   } catch {
     for (const account of enabledAccounts) {
-      await recordAttempt(dbClient, userId, account.id, nowMs, "Calendar push needs the public HTTPS application URL.");
+      await recordAttempt(dbClient, userId, account.id, nowMs, "Calendar push needs a public HTTPS webhook URL.");
     }
     return { ...result, failed: enabledAccounts.length, skipped: true };
   }

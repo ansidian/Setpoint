@@ -27,6 +27,7 @@ Composition root and cross-cutting server concerns that don't belong to a single
 - `hash-password.ts` — one-shot CLI to bcrypt-hash a password for `EA_PASSWORD_HASH`
 
 ### `db/` — connection and migrations
+- `db/local-maintenance.ts` — consistent local snapshots, integrity/count checks, and native vector capability validation
 - `db/config.ts` — resolves the libsql client config (local file vs. remote URL/token) from env
 - `db/connection.ts` — the shared libsql client instance (default export)
 - `db/migrate.ts` — discovers and runs the SQL files under `db/migrations/` in order at startup
@@ -34,6 +35,8 @@ Composition root and cross-cutting server concerns that don't belong to a single
 - `db/migrate-encryption.ts` — one-shot rewrite of legacy CBC-encrypted columns to GCM
 
 ### `scripts/` — one-off/ad-hoc CLI maintenance scripts (not imported by the server)
+
+- `scripts/local-db.ts` — offline local snapshot and migration audit (integrity, credentials, Notes media); never starts provider workers
 - `scripts/backfill-email-date-utc.ts` — normalizes historical email dates to UTC
 - `scripts/email-search-embedding-backfill.ts`, `scripts/email-search-embedding-status.ts` — batch (re)compute and report embedding coverage for email search
 - `scripts/email-search-retrieval-eval.ts`, `scripts/seed-email-search-retrieval-eval.ts` — email search retrieval quality eval and its fixture seeding

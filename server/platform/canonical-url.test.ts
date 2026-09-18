@@ -30,7 +30,7 @@ describe("canonical URL model", () => {
   });
 
   it("deterministically derives WebAuthn and provider callback values", () => {
-    expect(deriveCanonicalUrls("https://setpoint.example.com")).toEqual({
+    expect(deriveCanonicalUrls("https://setpoint.example.com", {})).toEqual({
       canonicalOrigin: "https://setpoint.example.com",
       webAuthn: {
         rpName: "Setpoint",
@@ -41,9 +41,36 @@ describe("canonical URL model", () => {
         googleOAuth: "https://setpoint.example.com/api/ea/accounts/gmail/callback",
         todoistOAuth: "https://setpoint.example.com/api/ea/accounts/todoist/callback",
         gmailPubSub: "https://setpoint.example.com/api/gmail/push",
+        calendarPush: "https://setpoint.example.com/api/calendar/push",
         todoistWebhook: "https://setpoint.example.com/api/todoist/webhook",
       },
     });
+  });
+
+  it("keeps sign-in on the canonical domain while projecting all webhooks on the public origin", () => {
+    const env = { NODE_ENV: "production", EA_WEBHOOK_ORIGIN: "https://Public.example:8443/" };
+    const urls = deriveCanonicalUrls("https://dashboard.example.com", env);
+    expect(urls.webAuthn).toEqual({ rpName: "Setpoint", rpId: "dashboard.example.com", origin: "https://dashboard.example.com" });
+    expect(urls.callbacks).toEqual({
+      googleOAuth: "https://dashboard.example.com/api/ea/accounts/gmail/callback",
+      todoistOAuth: "https://dashboard.example.com/api/ea/accounts/todoist/callback",
+      gmailPubSub: "https://public.example:8443/api/gmail/push",
+      calendarPush: "https://public.example:8443/api/calendar/push",
+      todoistWebhook: "https://public.example:8443/api/todoist/webhook",
+    });
+    const impact = buildCanonicalOriginImpact("https://dashboard.example.com", "https://new.example.com", 2, env);
+    expect(impact.affectedPasskeys).toBe(2);
+    expect(impact.callbacks.filter((callback) => callback.previousUrl === callback.nextUrl).map((callback) => callback.provider))
+      .toEqual(["Gmail Pub/Sub", "Google Calendar push", "Todoist webhook"]);
+  });
+
+  it.each([
+    "", "http://public.example", "https://user:secret@public.example", "https://public.example/push",
+    "https://public.example/path/..", "https://public.example?", "https://public.example#",
+    "https://public.example?token=secret", "https://public.example#fragment", "https://public.example,https://other.example",
+  ])("rejects invalid production webhook origin %s without echoing its value", (value) => {
+    expect(() => deriveCanonicalUrls("https://dashboard.example.com", { NODE_ENV: "production", EA_WEBHOOK_ORIGIN: value }))
+      .toThrow("EA_WEBHOOK_ORIGIN must be a valid origin using HTTPS in production, without credentials, path, query, or fragment");
   });
 
   it("reports no passkey or callback changes for the current normalized origin", () => {
@@ -51,6 +78,7 @@ describe("canonical URL model", () => {
       "https://dashboard.example.com",
       "https://dashboard.example.com/",
       2,
+      {},
     );
 
     expect(impact.affectedPasskeys).toBe(0);
@@ -103,6 +131,22 @@ describe("canonical URL persistence", () => {
       HOST: "attacker.example.com",
       HTTP_X_FORWARDED_HOST: "proxy.example.com",
     })).resolves.toBe("https://setpoint.example.com");
+  });
+
+  it("resolves provider URLs from the separate webhook origin without changing persisted identity", async () => {
+    const service = createCanonicalUrlService(db);
+    await service.setConfirmedOrigin("https://dashboard.example.com");
+    const env = { NODE_ENV: "production", EA_WEBHOOK_ORIGIN: "https://public.example:8443" };
+    await expect(service.resolveProviderCallbackUrl("gmailPubSub", env)).resolves.toBe("https://public.example:8443/api/gmail/push");
+    await expect(service.resolveProviderCallbackUrl("calendarPush", env)).resolves.toBe("https://public.example:8443/api/calendar/push");
+    await expect(service.resolveProviderCallbackUrl("todoistWebhook", env)).resolves.toBe("https://public.example:8443/api/todoist/webhook");
+    await expect(service.resolveProviderCallbackUrl("googleOAuth", env)).resolves.toBe("https://dashboard.example.com/api/ea/accounts/gmail/callback");
+    await expect(service.resolveProviderCallbackUrl("todoistOAuth", env)).resolves.toBe("https://dashboard.example.com/api/ea/accounts/todoist/callback");
+    await expect(service.getCanonicalOrigin()).resolves.toBe("https://dashboard.example.com");
+    await expect(service.resolveProviderCallbackUrl("gmailPubSub", { NODE_ENV: "production" }))
+      .resolves.toBe("https://dashboard.example.com/api/gmail/push");
+    await expect(service.resolveProviderCallbackUrl("googleOAuth", { ...env, NODE_ENV: "development" }))
+      .resolves.toBe("http://localhost:3001/api/ea/accounts/gmail/callback");
   });
 
   it("imports one unambiguous legacy origin without replacing stored state", async () => {

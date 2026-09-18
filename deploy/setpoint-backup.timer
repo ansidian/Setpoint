@@ -1,0 +1,8 @@
+[Unit]
+Description=Daily encrypted Setpoint backup
+[Timer]
+OnCalendar=*-*-* 04:30:00 America/Los_Angeles
+Persistent=true
+RandomizedDelaySec=300
+[Install]
+WantedBy=timers.target

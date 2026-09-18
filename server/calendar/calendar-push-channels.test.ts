@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { createClient, type Client } from "@libsql/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { encrypt } from "../platform/encryption.ts";
+import { createCanonicalUrlService } from "../platform/canonical-url.ts";
 import { accountCredentialContext } from "../platform/credential-encryption-context.ts";
 import { createTestTempDir, removeTempDirSync } from "../test-utils/temp-dir.ts";
 import {
@@ -191,6 +192,23 @@ describe("Calendar push lifecycle and durable notification admission", () => {
     expect(await getCalendarPushHealth("owner", { dbClient: db, nowMs })).toEqual({
       state: "current", activeChannels: 3, lastNotificationAt: null,
     });
+  });
+
+  it("replaces canonical-origin watches with the configured public webhook origin in production", async () => {
+    await db.executeMultiple(`CREATE TABLE ea_instance_metadata (
+      singleton_id INTEGER PRIMARY KEY, canonical_origin TEXT NOT NULL, source TEXT NOT NULL,
+      confirmed_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+    )`);
+    await createCanonicalUrlService(db).setConfirmedOrigin("https://setpoint.example");
+    vi.stubEnv("NODE_ENV", "production");
+    expect(await reconcileCalendarPushWatches("owner", { dbClient: db, nowMs })).toMatchObject({ registered: 2, failed: 0 });
+    expect((await channels()).every((row) => row.callback_url === callbackUrl)).toBe(true);
+    vi.stubEnv("EA_WEBHOOK_ORIGIN", "https://public.example:8443/");
+    expect(await reconcileCalendarPushWatches("owner", { dbClient: db, nowMs: nowMs + 1000 }))
+      .toMatchObject({ registered: 2, stopped: 2, failed: 0 });
+    expect((await channels()).filter((row) => row.status === "active").map((row) => row.callback_url))
+      .toEqual(Array(2).fill("https://public.example:8443/api/calendar/push"));
+    expect(await createCanonicalUrlService(db).getCanonicalOrigin()).toBe("https://setpoint.example");
   });
 
   it("does not register automatically outside production or request an additional CalendarList scope", async () => {

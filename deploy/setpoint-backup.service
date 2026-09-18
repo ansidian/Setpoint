@@ -1,0 +1,9 @@
+[Unit]
+Description=Consistent encrypted Setpoint backup
+After=docker.service
+Requires=docker.service
+[Service]
+Type=oneshot
+ExecStart=/srv/setpoint/source/deploy/backup.sh
+UMask=0077
+Nice=10

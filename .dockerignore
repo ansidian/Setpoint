@@ -1,0 +1,26 @@
+# Allow only application build/runtime inputs; never send databases or secrets.
+**
+!Dockerfile
+!package.json
+!package-lock.json
+!index.html
+!vite.config.ts
+!tsconfig*.json
+!vendor/
+!vendor/**
+!src/
+!src/**
+!shared/
+!shared/**
+!public/
+!public/**
+!server/
+!server/**
+**/.env*
+**/*.db
+**/*.db-*
+**/*.sqlite*
+**/node_modules
+server/db/tldraw-assets
+**/*.pem
+**/*.key

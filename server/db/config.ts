@@ -1,4 +1,6 @@
 import type { Config } from "@libsql/client";
+import { isAbsolute } from "node:path";
+import { pathToFileURL } from "node:url";
 
 const LOCAL_DB_URL = "file:server/db/ea.db";
 
@@ -18,15 +20,26 @@ export function resolveDatabaseClientConfig(
   env: DatabaseEnvironment = process.env,
 ): DatabaseClientConfig {
   const nodeEnv = env.NODE_ENV || "development";
+  const adapter = clean(env.EA_DB_ADAPTER).toLowerCase();
+  if (adapter && adapter !== "sqlite" && adapter !== "turso") {
+    throw new Error("[EA] EA_DB_ADAPTER must be sqlite or turso");
+  }
   const explicitDevTurso = clean(env.EA_DEV_DB_ADAPTER).toLowerCase() === "turso"
     || clean(env.AI_SEARCH_VECTOR_ADAPTER).toLowerCase() === "turso";
-  const useTurso = nodeEnv === "production" || explicitDevTurso;
+  const useTurso = adapter ? adapter === "turso" : nodeEnv === "production" || explicitDevTurso;
 
   if (!useTurso) {
+    const localPath = clean(env.EA_SQLITE_PATH);
+    if (nodeEnv === "production" && (!isAbsolute(localPath) || localPath.includes(":memory:"))) {
+      throw new Error("[EA] Local production requires EA_SQLITE_PATH to be an absolute persistent file path");
+    }
+    if (localPath && (!isAbsolute(localPath) || localPath.includes(":memory:"))) {
+      throw new Error("[EA] EA_SQLITE_PATH must be an absolute persistent file path");
+    }
     return {
-      mode: "local",
+      mode: nodeEnv === "production" ? "production" : "local",
       adapter: "sqlite",
-      client: { url: LOCAL_DB_URL },
+      client: { url: localPath ? pathToFileURL(localPath).href : LOCAL_DB_URL },
     };
   }
 

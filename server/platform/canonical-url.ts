@@ -17,6 +17,7 @@ export type CanonicalUrlProjection = {
     googleOAuth: string;
     todoistOAuth: string;
     gmailPubSub: string;
+    calendarPush: string;
     todoistWebhook: string;
   };
 };
@@ -67,8 +68,24 @@ export function normalizeCanonicalOrigin(
   return parsed.origin;
 }
 
-export function deriveCanonicalUrls(canonicalOrigin: string): CanonicalUrlProjection {
+export function resolveConfiguredWebhookOrigin(
+  env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
+): string | undefined {
+  if (env.EA_WEBHOOK_ORIGIN === undefined) return undefined;
+  try {
+    if (!/^https?:\/\/[^\s/?#\\]+\/?$/i.test(env.EA_WEBHOOK_ORIGIN.trim())) throw new Error("Invalid origin");
+    return normalizeCanonicalOrigin(env.EA_WEBHOOK_ORIGIN, { production: env.NODE_ENV === "production" });
+  } catch {
+    throw new Error("EA_WEBHOOK_ORIGIN must be a valid origin using HTTPS in production, without credentials, path, query, or fragment");
+  }
+}
+
+export function deriveCanonicalUrls(
+  canonicalOrigin: string,
+  env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
+): CanonicalUrlProjection {
   const origin = new URL(canonicalOrigin).origin;
+  const webhookOrigin = resolveConfiguredWebhookOrigin(env) ?? origin;
   const hostname = new URL(origin).hostname.toLowerCase();
   return {
     canonicalOrigin: origin,
@@ -76,8 +93,9 @@ export function deriveCanonicalUrls(canonicalOrigin: string): CanonicalUrlProjec
     callbacks: {
       googleOAuth: `${origin}${GOOGLE_CALLBACK_PATH}`,
       todoistOAuth: `${origin}/api/ea/accounts/todoist/callback`,
-      gmailPubSub: `${origin}/api/gmail/push`,
-      todoistWebhook: `${origin}/api/todoist/webhook`,
+      gmailPubSub: `${webhookOrigin}/api/gmail/push`,
+      calendarPush: `${webhookOrigin}/api/calendar/push`,
+      todoistWebhook: `${webhookOrigin}/api/todoist/webhook`,
     },
   };
 }
@@ -86,14 +104,16 @@ export function buildCanonicalOriginImpact(
   currentOrigin: string | null,
   proposedOrigin: string,
   affectedPasskeys: number,
+  env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
 ): CanonicalOriginImpact {
-  const next = deriveCanonicalUrls(proposedOrigin);
-  const previous = currentOrigin ? deriveCanonicalUrls(currentOrigin) : null;
+  const next = deriveCanonicalUrls(proposedOrigin, env);
+  const previous = currentOrigin ? deriveCanonicalUrls(currentOrigin, env) : null;
   const originChanged = previous?.canonicalOrigin !== next.canonicalOrigin;
   const callbackLabels: Array<[keyof CanonicalUrlProjection["callbacks"], string]> = [
     ["googleOAuth", "Google OAuth"],
     ["todoistOAuth", "Todoist OAuth"],
     ["gmailPubSub", "Gmail Pub/Sub"],
+    ["calendarPush", "Google Calendar push"],
     ["todoistWebhook", "Todoist webhook"],
   ];
   return {
@@ -202,16 +222,16 @@ export function createCanonicalUrlService(dbClient: CanonicalUrlDb = db) {
   ): Promise<string> {
     if (env.NODE_ENV !== "production" && (callback === "googleOAuth" || callback === "todoistOAuth")) {
       const localOrigin = `http://localhost:${env.EA_SERVER_PORT || 3001}`;
-      return deriveCanonicalUrls(localOrigin).callbacks[callback];
+      return deriveCanonicalUrls(localOrigin, env).callbacks[callback];
     }
     const canonicalOrigin = await resolveCanonicalOrigin(env);
-    if (canonicalOrigin) return deriveCanonicalUrls(canonicalOrigin).callbacks[callback];
+    if (canonicalOrigin) return deriveCanonicalUrls(canonicalOrigin, env).callbacks[callback];
     if (callback === "googleOAuth" && env.NODE_ENV === "production" && env.GOOGLE_REDIRECT_URI) {
       return env.GOOGLE_REDIRECT_URI;
     }
     if (env.NODE_ENV !== "production") {
       const localOrigin = `http://localhost:${env.EA_SERVER_PORT || 3001}`;
-      return deriveCanonicalUrls(localOrigin).callbacks[callback];
+      return deriveCanonicalUrls(localOrigin, env).callbacks[callback];
     }
     throw new Error("Canonical URL is not configured");
   }

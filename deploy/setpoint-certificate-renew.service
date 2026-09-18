@@ -1,0 +1,12 @@
+[Unit]
+Description=Renew Setpoint HTTPS certificate and reload validated Nginx
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/setpoint/source/deploy
+ExecStart=/srv/setpoint/source/deploy/renew-certificate.sh
+UMask=0077
+TimeoutStartSec=15min

@@ -19,7 +19,7 @@ Cross-domain infrastructure: config, account canonicalization, settings validati
 - `ai-usage-tokens.ts` — OpenAI/Anthropic cache-token normalization and shared, source-checked standard-text pricing and net cache-savings estimates
 - `ai-usage-stats.ts` — owner/window/context/provider-isolated triage and financial-email ledger rollups
 - `provider-reauth.ts` — OAuth reconnect signaling: check for `invalid_grant` errors, flag/clear needs-reauth on accounts and Todoist
-- `canonical-url.ts` — canonical-origin normalization, legacy import, persistence, WebAuthn derivation, and provider callback URL projection
+- `canonical-url.ts` — canonical-origin normalization, legacy import, persistence, WebAuthn derivation, and provider callback URL projection with optional separate public webhook origin
 - `instance-credential-registry.ts` — code allowlist and provider-neutral metadata for deployment-wide credentials
 - `instance-credential-store.ts` — encrypted active/pending persistence, disable tombstones, and atomic candidate promotion
 - `instance-credential-service.ts` — server-only source resolution, env import, metadata projection, and change subscriptions

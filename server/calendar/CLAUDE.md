@@ -25,7 +25,7 @@ Tests are not listed here; follow the behavior-ownership policy in `AGENTS.md`.
 
 - Pacific time (`America/Los_Angeles`) is the canonical display timezone.
 - Calendar reuses the Gmail OAuth tokens; auth refresh lives in `calendar-google-client.ts`.
-- Production registers HTTPS watches against the saved canonical origin; normal development never registers a production callback. Notifications are sync hints, and accepted work is durable before acknowledgement. Channel credentials are random tokens whose stored hashes do not require encryption-key inventory entries.
+- Production registers HTTPS watches against `EA_WEBHOOK_ORIGIN` when configured, otherwise the saved canonical origin; normal development never registers a production callback. Notifications are sync hints, and accepted work is durable before acknowledgement. Channel credentials are random tokens whose stored hashes do not require encryption-key inventory entries.
 - Frontend calendar hooks/models live in `src/hooks/calendar/`, UI in `src/components/calendar/` — see those maps.
 
 ## Related

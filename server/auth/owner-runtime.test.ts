@@ -8,6 +8,13 @@ const owner = {
 };
 
 describe("owner runtime gate", () => {
+  it("rejects background admission before and after owner activation when disabled", () => {
+    const gate = createOwnerRuntimeGate(() => { throw new Error("Disabled worker ran"); }, { enabled: false });
+    expect(gate.startForOwner(null)).toBe(false);
+    expect(gate.startForOwner(owner)).toBe(false);
+    expect(gate.startForOwner(owner)).toBe(false);
+  });
+
   it("does not start background work for an unclaimed instance", () => {
     const startedOwners: typeof owner[] = [];
     const start = (startedOwner: typeof owner) => { startedOwners.push(startedOwner); };

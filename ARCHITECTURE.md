@@ -74,7 +74,6 @@ src/
 ├── components/
 │   ├── alfred/
 │   ├── bills/
-│   │   └── bill-badge/
 │   ├── briefing/
 │   ├── calendar/
 │   │   ├── events/
@@ -111,7 +110,6 @@ src/
 │   └── ui/
 ├── context/
 ├── demo/
-├── dev/
 ├── hooks/
 │   ├── calendar/
 │   ├── email/
@@ -129,8 +127,7 @@ server/
 ├── dashboard/
 │   └── current-providers/
 ├── db/
-│   ├── migrations/
-│   └── tldraw-assets/
+│   └── migrations/
 ├── email/
 │   ├── search/
 │   │   └── evals/

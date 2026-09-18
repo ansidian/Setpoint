@@ -1,0 +1,10 @@
+[Unit]
+Description=Check Setpoint certificate renewal twice daily
+
+[Timer]
+OnCalendar=*-*-* 03,15:00:00
+RandomizedDelaySec=30min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

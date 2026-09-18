@@ -77,7 +77,7 @@ export default function CanonicalDomainCard() {
     <SettingsCard
       title="Canonical domain"
       icon={<Globe2 size={14} />}
-      description="One confirmed origin controls passkeys and every Setpoint-owned provider callback."
+      description="The address used for sign-in and browser callbacks. Webhooks may use a separate public address."
       headerAction={<StatusPill tone={error ? "danger" : "success"}>{error ? "Needs attention" : "Configured"}</StatusPill>}
     >
       <div className="flex flex-col gap-3">

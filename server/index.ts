@@ -34,9 +34,12 @@ import { startNewsPollWorker, stopNewsPollWorker } from "./news/news-poller.ts";
 import { startTransactionImportWorker, stopTransactionImportWorker } from "./transaction-imports/transaction-import-runtime.ts";
 import { createGracefulShutdown } from "./shutdown.ts";
 import { migrate } from "./db/migrate.ts";
+import db from "./db/connection.ts";
+import { resolveDatabaseClientConfig } from "./db/config.ts";
+import { assertNativeVectorSupport } from "./db/local-maintenance.ts";
 import { migrateCbcEncryption } from "./db/migrate-encryption.ts";
 import { applySecurityMiddleware, getTrustProxySetting } from "./security.ts";
-import { getMissingRequiredEnv } from "./env.ts";
+import { backgroundWorkersEnabled, getMissingRequiredEnv } from "./env.ts";
 import { buildStartupWorkerDelays } from "./startup-delays.ts";
 import { logTiming, timeAsync } from "./timing.ts";
 import { installProductionFrontend } from "./static-assets.ts";
@@ -48,7 +51,7 @@ import { ownerStore } from "./auth/owner-store.ts";
 import { onboardingProgressStore } from "./onboarding-progress-store.ts";
 import { activateOwner, getActiveOwner, onOwnerActivated } from "./auth/owner-context.ts";
 import { createOwnerRuntimeGate } from "./auth/owner-runtime.ts";
-import { canonicalUrlService } from "./platform/canonical-url.ts";
+import { canonicalUrlService, resolveConfiguredWebhookOrigin } from "./platform/canonical-url.ts";
 import { assertValidRootEncryptionKey } from "./platform/encryption.ts";
 import { rootKeyHealthService } from "./platform/root-key-health.ts";
 
@@ -61,6 +64,7 @@ if (missing.length) {
 }
 try {
   assertValidRootEncryptionKey();
+  resolveConfiguredWebhookOrigin();
 } catch (error) {
   console.error(`[EA] ${error instanceof Error ? error.message : "EA_ENCRYPTION_KEY is invalid"}`);
   process.exit(1);
@@ -178,9 +182,16 @@ function startOwnerRuntime(): void {
   startAlfredConversationSweeper();
 }
 
-const ownerRuntimeGate = createOwnerRuntimeGate(() => startOwnerRuntime());
+const ownerRuntimeGate = createOwnerRuntimeGate(() => startOwnerRuntime(), {
+  enabled: backgroundWorkersEnabled(),
+});
 
-timeAsync("migrations", () => migrate())
+timeAsync("local-engine", async () => {
+  if (process.env.NODE_ENV === "production" && resolveDatabaseClientConfig(process.env).adapter === "sqlite") {
+    await assertNativeVectorSupport(db);
+  }
+})
+  .then(() => timeAsync("migrations", () => migrate()))
   .then(() => timeAsync("encryption-rewrite", () => migrateCbcEncryption()))
   .then(() => timeAsync("root-key-health", () => rootKeyHealthService.assertDecryptable()))
   .then(() => timeAsync("owner-bootstrap", () => resolveOwnerBootstrap({
@@ -198,7 +209,7 @@ timeAsync("migrations", () => migrate())
   })
   .then((bootstrap) => {
     if (bootstrap.claimed) activateOwner(bootstrap.owner);
-    const server = app.listen(PORT, () => {
+    const server = app.listen(Number(PORT), process.env.EA_BIND_HOST || "::", () => {
       console.log(`Setpoint running on http://localhost:${PORT}`);
       logTiming({
         event: "boot",

@@ -104,3 +104,47 @@ Migrations 080–082 prepare inert schema. Deploy the verified runtime before ac
 Fresh installations and unmigrated development databases use the same explicit preview/apply steps after connecting Actual; an empty configuration becomes canonical without enabling any providers. Runtime reads retain legacy compatibility only until migration (including older offline schema snapshots). Do not delete archived input columns or utility rows, and do not use the retired writers to initialize setup.
 
 For the disposable Actual lab, use its sanitized `lab/run.mjs` launcher. An inherited production environment takes precedence over `--env-file`; never use that flag alone to isolate an Actual write test. Verify both saved and process Actual URLs point to `127.0.0.1:5007` and that the budget ID is the clone before running acceptance.
+
+
+## Debian self-hosted deployment
+
+The private self-hosted copy supports `EA_DB_ADAPTER=sqlite` with an absolute
+`EA_SQLITE_PATH`. It uses the existing local libSQL engine without cloud sync or
+Turso credentials. Keep `NODE_ENV=production` and the exact production root key.
+Default development and hosted-production behavior are unchanged.
+
+`EA_WEBHOOK_ORIGIN` separates public Gmail/Calendar/Todoist delivery from the
+canonical browser origin. Debian uses `https://setpoint.example.com` privately and
+`https://server.example-tailnet.ts.net:8443` publicly for webhook POSTs only.
+Keep Google/Todoist OAuth redirect registrations and passkey origins unchanged.
+`EA_BIND_HOST` explicitly controls listening; the deployment binds loopback.
+
+`EA_BACKGROUND_WORKERS_ENABLED=0` blocks startup and later owner-activation
+workers. It does not disable provider-capable HTTP routes: rehearsals require
+network isolation as well. Invalid enablement values fail startup.
+
+Deployment, ingress tests and certificate renewal: see [deploy/README.md](deploy/README.md).
+Never start this deployment alongside Render's live workers.
+
+`npm run db:local -- audit` checks a local database's integrity, foreign keys,
+counts, native vectors, credential decryptability and referenced Notes media.
+`npm run db:local -- snapshot /absolute/new.db` creates and checks a standalone
+SQLite snapshot using VACUUM INTO, including committed WAL data. It refuses
+an existing destination and never imports application startup/provider workers.
+Both commands require explicit local database configuration.
+
+Daily encrypted backups use `deploy/backup.sh` and its systemd timer. They copy
+the main database consistently, then immutable Notes media, deployment config,
+root key and certificate/DNS credentials into an age-encrypted archive. Actual
+cache is reconstructed from its authoritative server. Seven server archives
+are retained; this Mac pulls and verifies archives hourly on the LAN, retaining 30.
+The age private identity stays on the Mac outside Git; preserve it separately
+in the owner's password manager for recovery if the Mac is lost. A ciphertext
+archive without that identity cannot be restored.
+
+Restore into a new private directory: decrypt with `age -d -i IDENTITY`, extract
+the archive, provide its exact root key privately and audit the restored DB with
+network disabled. Never overwrite the active data directory during a rehearsal.
+A post-cutover rollback must carry current Debian data; never reactivate the
+stale original Turso copy. The original Render service and Turso DB are retained
+for 7 days pending explicit retirement review, not deleted by deployment scripts.
