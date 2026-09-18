@@ -15,7 +15,7 @@ Development uses `server/db/ea.db`; Turso credentials are unnecessary unless exp
 
 For the fictional frontend alone, run `npm run demo`. It needs no backend or credentials and resets mutations on refresh. To inspect the static artifact, run `npm run build:demo` then `npm run preview:demo`.
 
-The demo build adds the public title, description, canonical URL, and Open Graph/Twitter preview tags through `vite.config.ts`; normal private builds retain the plain Setpoint title. The preview image is `public/setpoint-social-preview.png` (1200 × 630), composed from the fictional public demo. Build with `VITE_EA_DEMO_BASE=/Setpoint/ npm run build:demo` for GitHub Pages; use the same environment variable with `npm run preview:demo` to preview that artifact locally. If the public hosting URL changes, update the canonical and image URL in the Vite metadata hook. Publish through the **Deploy Demo to GitHub Pages** workflow; local builds do not update the live preview.
+The demo build adds public social metadata through `vite.config.ts`; normal private builds retain the plain Setpoint title. Build with `VITE_EA_DEMO_BASE=/Setpoint/ npm run build:demo` for the original GitHub Pages site. The original repository retains its **Deploy Demo to GitHub Pages** workflow; publishing workflows were deliberately removed from this private self-hosted copy. Local builds do not publish. Another static host can serve `dist-demo`; use its correct base path and update the canonical/image URL in the Vite metadata hook when changing the public demo URL.
 
 ## Production
 
@@ -23,7 +23,7 @@ The [Render Blueprint](render.yaml) provisions an always-on Starter Node service
 
 After deployment, retrieve the generated setup token from the service environment and claim the instance in the browser. The owner password must have at least 12 characters. Save the one-time recovery codes, then use Settings to connect providers. Provider credentials are not required to boot. Workers remain inactive until the owner claim succeeds.
 
-Other hosts need the same bootstrap values, an always-running Node process, and persistent storage for uploaded Notes assets. Production requires Turso. Database migrations run at server startup.
+Other hosts need the same bootstrap values, an always-running Node process, and persistent storage for uploaded Notes assets. Production defaults to Turso; the explicit SQLite adapter supports local production as described below. Database migrations run at server startup.
 
 Back up **both the database and its exact `EA_ENCRYPTION_KEY`**. The app cannot recover that key, and the database alone cannot decrypt stored credentials. Back up uploaded Notes media separately from `EA_TLDRAW_ASSET_DIR` (Render: `/var/data/tldraw-assets`). Production Notes also requires a tldraw license configured in Settings → Connections.
 
@@ -124,6 +124,8 @@ workers. It does not disable provider-capable HTTP routes: rehearsals require
 network isolation as well. Invalid enablement values fail startup.
 
 Deployment, ingress tests and certificate renewal: see [deploy/README.md](deploy/README.md).
+The current deployment, update commands, backup restoration, and rollback procedure
+are recorded in [deploy/OPERATIONS-LIVE.md](deploy/OPERATIONS-LIVE.md).
 Never start this deployment alongside Render's live workers.
 
 `npm run db:local -- audit` checks a local database's integrity, foreign keys,
