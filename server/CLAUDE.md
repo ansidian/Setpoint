@@ -36,6 +36,8 @@ Composition root and cross-cutting server concerns that don't belong to a single
 
 ### `scripts/` — one-off/ad-hoc CLI maintenance scripts (not imported by the server)
 
+- `scripts/cutover-catchup.ts` — explicit local-production post-cutover command that queues current Gmail history and Calendar recovery; never starts workers or runs synchronization itself
+
 - `scripts/local-db.ts` — offline local snapshot and migration audit (integrity, credentials, Notes media); never starts provider workers
 - `scripts/backfill-email-date-utc.ts` — normalizes historical email dates to UTC
 - `scripts/email-search-embedding-backfill.ts`, `scripts/email-search-embedding-status.ts` — batch (re)compute and report embedding coverage for email search

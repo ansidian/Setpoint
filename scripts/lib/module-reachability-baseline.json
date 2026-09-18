@@ -34,7 +34,8 @@
     "vite.config.ts",
     "vitest.config.ts",
     "server/scripts/activate-financial-provider-parsers.ts",
-    "server/scripts/local-db.ts"
+    "server/scripts/local-db.ts",
+    "server/scripts/cutover-catchup.ts"
   ],
   "exemptions": {
     "server/financial-events/financial-event-service.test-utils.ts": "Fictional receipt and sender-authentication fixtures for the real worker replay suite; keeps scenario coverage below the test size limit",
