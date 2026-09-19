@@ -44,6 +44,7 @@ dist-ssr
 .agents/
 .continue/
 skills-lock.json
+.stignore
 docs/
 server/email/search/evals/local/
 # grepai local semantic index (machine-local tooling, see AGENTS.md Search Routing)
