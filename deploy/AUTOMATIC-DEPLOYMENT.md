@@ -13,7 +13,7 @@ network, then publishes `ghcr.io/ansidian/setpoint:<commit>` and `:production`.
 The package must be public for anonymous Debian pulls; no GitHub credentials or
 SSH key are stored on Debian or in repository secrets.
 
-`setpoint-deploy.timer` checks approximately every minute after the previous
+`setpoint-deploy.timer` checks approximately every five minutes after the previous
 check completes (two minutes after boot). The host deployer:
 
 1. Pulls the candidate, resolves its immutable digest, verifies source/revision
@@ -68,7 +68,7 @@ up with the newest eligible candidate when it returns.
   running and can retry. Less than 10 GB free blocks deployment. Images are not
   automatically pruned; review/remove only obsolete Setpoint images deliberately.
 - A failed rehearsal is recorded in `deployment-rejected.json`; that digest is
-  not retried every minute and consumes no deployment backups. A newer candidate
+  not retried every five minutes and consumes no deployment backups. A newer candidate
   is eligible. After diagnosing a transient failure, remove the rejection marker
   with sudo to retry it deliberately.
 - Before live mutation, `deployment-pending.json` records the candidate, previous

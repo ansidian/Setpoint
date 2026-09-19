@@ -102,7 +102,7 @@ retained private original is `ansidian/Setpoint-legacy`.
 
 Successful `master` push CI triggers **Release production and demo**: GitHub
 publishes the Linux app image to GHCR and separately deploys `dist-demo` to Pages.
-Once the one-time host installation is complete, Debian checks every minute,
+Once the one-time host installation is complete, Debian checks every five minutes,
 verifies the exact CI commit, rehearses startup on an isolated snapshot, makes a
 fresh backup and replaces only the app. See [automatic releases](AUTOMATIC-DEPLOYMENT.md)
 for installation, status, pause and recovery. The generated `compose.override.yaml`
