@@ -1,5 +1,9 @@
 # Debian operations
 
+This public guide uses example domains and addresses. Resolve real endpoints
+from the private server runbook at `/srv/infra/README.md`; do not publish that
+inventory or copy these example values over live configuration.
+
 Production switched on2026-09-18. App source release:
 `df8c6872db5f10375d94eaf6ff6dac477429d133`; Linux image:
 `sha256:0274b97d526119f9d0d6c89326d0898e4a980fb419acb2193586c58ab77ce8df`.
@@ -41,9 +45,54 @@ Certificate renewal timer runs twice daily; backup timer runs around04:30Pacific
 The native `setpoint-funnel-poc.service` must stay disabled. Nginx replaces it.
 Tailscale retains netfilter-off/no accepted DNS/routes/no Tailscale SSH settings.
 
+## Actual Budget on the same host
+
+Actual moved from PikaPods to Debian on 2026-09-19 UTC. Its canonical URL remains
+`https://actual.example.com`, now a DigitalOcean A record pointing to
+`100.64.0.10` (TTL 120), accessible through Tailscale. The existing password and
+budget/sync IDs were retained; no Setpoint connection reset is required for this
+migration. Production data access from development machines also needs Tailscale.
+
+- `/srv/actual/compose.yaml` owns the separately version-pinned Actual app;
+  it binds only `127.0.0.1:5006`. Updating Setpoint does not update Actual.
+- `/srv/actual/data` contains Actual's authoritative `server-files` and
+  `user-files`. Preserve them together. `/srv/setpoint/data/actual` is only
+  Setpoint's reconstructable SDK cache, not an Actual server backup.
+- Setpoint's Nginx serves both private domains on `100.64.0.10:443`. The live
+  `nginx.conf` includes `/etc/letsencrypt/actual-nginx.conf` inside `http`; the
+  host file is `/srv/setpoint/letsencrypt/actual-nginx.conf`. Preserve this
+  host-specific include when updating the base proxy configuration from Git.
+  App-only automatic deployments leave it intact. Stopping Nginx affects both apps.
+- Actual's certificate and DNS-01 configuration reuse Setpoint's protected
+  certificate directory and DigitalOcean credential. Its separate
+  `actual-certificate-renew.timer` shares the renewal lock and validates/reloads
+  the same Nginx. Keep both applications' renewal timers enabled.
+- `actual-backup.timer` runs daily around 04:45 Pacific, briefly stopping only
+  Actual to produce a consistent encrypted archive. Temporary sync failures
+  during that backup should recover once Actual returns. Seven archives remain
+  in `/srv/actual/backups`; Mac LaunchAgent `tech.andysu.actual-backup-pull`
+  retrieves hourly on the LAN and retains 30 in `~/Documents/Backups/Actual`.
+  Both backup sets use the existing Mac-only age identity.
+
+Read `/srv/actual/OPERATIONS.md` for Actual recovery and the host's current
+configuration; its maintained Mac source is
+`actual-migration/OPERATIONS.md` in the private home-server workspace.
+Check health without issuing finance writes:
+
+```sh
+curl --fail https://actual.example.com/health
+docker compose -f /srv/actual/compose.yaml ps
+systemctl status actual-backup.timer actual-certificate-renew.timer
+```
+
+Actual migration verification included matching transfer hashes, SQLite integrity
+checks, successful real-client sync, certificate renewal rehearsal, and an
+off-host backup decrypted and booted in an isolated restore instance. PikaPods
+was stopped at cutover; do not rely on its continued availability for recovery.
+
 ## Development and releases
 
-Use `/Users/andys/Documents/Projects/setpoint` and Node24. The fresh
+Use the canonical Setpoint checkout and Node24. The fresh
 checkout needs an independent `.env`, development encryption key and setup token
 as described in OPERATIONS.md. `npm run dev` uses its local `server/db/ea.db`;
 do not point it at Debian's live database. `npm run demo` needs no credentials.
@@ -69,7 +118,9 @@ exec -T nginx nginx -t` before reloading. Code rollback does not undo migrations
 Each backup is a **full**, consistent SQLite snapshot plus immutable Notes media,
 runtime secrets, deployment scripts and certificate/DNS configuration, compressed
 and age-encrypted. There is no incremental chain. Actual cache is reconstructed
-from the authoritative Actual server; full source history stays in private GitHub.
+from the authoritative Actual server. This archive does not include
+`/srv/actual/data`: the separate Actual backup is required after loss of the host.
+Full source history stays in GitHub.
 Retain seven archives in `/srv/setpoint/backups`, 30 on this Mac. The first archive
 was44MiB. Storage grows with database/media size.
 
@@ -104,40 +155,25 @@ network-none environment with `-e EA_BIND_HOST=127.0.0.1 -e PORT=3001` and the
 normal image command; check health using `docker exec` within that container.
 Do not publish ports or enable provider network access in the rehearsal.
 
-Actual disaster recovery requires its existing controlled `actual:hydrate-cache`
-procedure with the restored owner ID before accepting finance operations. The
-cutover copied a consistent live cache; routine backups intentionally omit it.
+After a host loss, restore the authoritative Actual server and verify its private
+HTTPS/authentication before rebuilding Setpoint's cache. Cache reconstruction
+uses the existing controlled `actual:hydrate-cache` procedure with the restored
+owner ID before accepting finance operations. The Setpoint cutover copied a
+consistent live cache; routine Setpoint backups intentionally omit it. Keep
+Setpoint's finance workers paused until Actual and the rebuilt cache are ready.
 
-## Rollback after production writes
+## Recovery target
 
-Render `srv-d71ltea4d50c73br0ft0` is suspended, auto-deploy off. Original Turso,
-Render disk, credentials and migration exports remain for seven-day review.
-**Never resume the original app against stale Turso after Debian has accepted writes.**
+The owner intends to keep Setpoint on Debian and does not plan to restore it to
+Render. The earlier Render rollback procedure is retired. Retained Render/Turso
+resources are not required for the recovery plan; this documentation change does
+not delete them or verify their billing status.
 
-1. Stop Debian app with `docker compose --profile production stop app`. Keep
-   Nginx/HA running. Capture its latest DB using the offline local-db snapshot
-   command in a one-off container, plus Notes/runtime files. Do not copy a live
-   main DB file while omitting its WAL.
-2. Keep Render suspended while selecting this private fork and the matching
-   release. Build `npm ci && npm run build`; remove the old `db:init` build step.
-   Use production SQLite path `/var/data/actual/setpoint-recovery/db/setpoint.db`,
-   preserve the exact root key, and set workers0. Remove Turso variables.
-3. Set this maintenance-only start command before resuming/deploying Render:
-   `node -e "require('http').createServer((q,s)=>{s.statusCode=503;s.end('Maintenance')}).listen(process.env.PORT||10000)"`
-   It imports no application code or workers.
-4. Verify disk space on Render's retained1GB mount. Transfer the latest consistent
-   DB/Notes into NEW `setpoint-recovery` paths over verified SSH. Audit data/key
-   and reconstruct Actual cache if needed. Set Notes/Actual paths accordingly.
-5. Set webhook origin back to `https://setpoint.example.com`, restore `npm start` and
-   workers1, then deploy. Debian must remain stopped. Restore the original DNS
-   CNAME `ea-dashboard-hv9a.onrender.com` and original Gmail push configuration.
-   Calendar channels reconcile against the restored origin. Queue catchup and
-   repeat browser/provider checks.
-
-Private original Pub/Sub config and final exports are under this Mac's
-`~/.config/home-server/setpoint-migration`. Its endpoint can be restored with
-`python3 /Users/andys/Documents/Projects/home-server/setpoint-migration/gmail-cutover.py rollback`.
-Render SSH: `srv-d71ltea4d50c73br0ft0@ssh.oregon.render.com`; keep verified host keys.
-If latest data is unavailable, report the backup timestamp before accepting any
-data loss. Do not delete Render/Turso until seven successful days and restore
-verification; review remaining disk/service billing before claiming full savings.
+For application release failures, follow the reviewed recovery procedure in
+[automatic releases](AUTOMATIC-DEPLOYMENT.md), preserving current data and checking
+schema compatibility before any code rollback. For disk or host loss, use the
+verified encrypted Setpoint and Actual backups described above to rebuild Debian.
+Restore Actual before rehydrating Setpoint's cache and enabling finance workers.
+Preserve the shared private HTTPS configuration and exact Setpoint encryption key.
+If the latest data is unavailable, report the available backup timestamp before
+accepting data loss. Do not reactivate a stale Turso database or make Actual public.

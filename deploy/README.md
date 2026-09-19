@@ -1,5 +1,12 @@
 # Debian deployment bundle
 
+Hostnames and addresses in this public bundle are examples. Before installing
+host configuration, substitute your private Setpoint/Actual domains, Tailscale
+address, webhook origin and certificate names consistently in `compose.yaml`,
+`nginx.conf`, `renew-certificate.sh` and `runtime.env`. Keep the resulting host
+configuration and inventory outside Git. The ingress test uses only the example
+values; never copy its fixtures into production.
+
 For the live instance's CI-gated image releases and separate fictional Pages
 demo, read [automatic releases](AUTOMATIC-DEPLOYMENT.md). The initialization
 instructions below remain relevant when preparing a new host.
@@ -35,6 +42,15 @@ Tailscale IPv4 address. Nginx trusts no client-supplied forwarded address; Expre
 uses `TRUST_PROXY=loopback`. Nginx request logs omit URLs, queries and headers, and
 its free-form error log is disabled because upstream errors can include tokens.
 Startup/configuration failures remain visible through `nginx -t` and exit status.
+
+On the live host, this Nginx also serves private `https://actual.example.com`.
+The deployed `nginx.conf` has an additional include inside `http`:
+`include /etc/letsencrypt/actual-nginx.conf;`. The included file resides at
+`/srv/setpoint/letsencrypt/actual-nginx.conf` and proxies to `127.0.0.1:5006`.
+This host-specific include is absent from this repository's base `nginx.conf`;
+preserve it when installing reviewed proxy changes. Do not overwrite the live
+file with the base template. Stopping this Nginx interrupts both applications.
+See the [live Actual dependencies](OPERATIONS-LIVE.md#actual-budget-on-the-same-host).
 
 ## Validation without production activation
 
@@ -77,6 +93,12 @@ services. Successful renewal marks a pending reload; the script validates Nginx
 before reload and removes the marker only after success. A failed reload remains
 pending for the next run. The dry run does not reload Nginx or touch its marker.
 Certbot has no Docker socket access. Host `flock` serializes actual renewal runs.
+
+The shared certificate directory also contains `actual.example.com`. Its renewal
+is owned by `/srv/actual/renew-certificate.sh` and
+`actual-certificate-renew.timer`, using the same DNS credential and renewal lock.
+The Setpoint renewal script's `--cert-name setpoint.example.com` does not renew Actual's
+certificate; preserve both timers and certificates during shared maintenance.
 
 The public Funnel must be separately configured for port 8443 and pointed at
 `http://127.0.0.1:18765` only after the old PoC receiver has been stopped and the

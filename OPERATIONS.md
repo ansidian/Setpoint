@@ -23,8 +23,9 @@ The owner's live instance runs on Debian; see [Debian operations](deploy/OPERATI
 and [automatic releases](deploy/AUTOMATIC-DEPLOYMENT.md). Successful `master` push
 CI publishes the production image; the installed Debian deployment timer pulls
 and activates verified releases. The retained Render instance is suspended and
-must not resume against stale Turso data. The Render instructions below describe
-an alternative fresh installation.
+must not resume against stale Turso data. Recovery targets Debian. The Render
+instructions below describe an alternative fresh installation, not the owner's
+recovery plan.
 
 The [Render Blueprint](render.yaml) provisions an always-on Starter Node service and a persistent asset disk. Supply `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`; Render generates `EA_ENCRYPTION_KEY` and `EA_SETUP_TOKEN`. The service builds with `npm ci && npm run build`, starts with `npm start`, and checks readiness at `/healthz`.
 
@@ -115,6 +116,9 @@ For the disposable Actual lab, use its sanitized `lab/run.mjs` launcher. An inhe
 
 ## Debian self-hosted deployment
 
+Domains and addresses below are public examples; use the private server runbook
+for the owner's real endpoints. Keep deployment-specific values outside Git.
+
 The private self-hosted copy supports `EA_DB_ADAPTER=sqlite` with an absolute
 `EA_SQLITE_PATH`. It uses the existing local libSQL engine without cloud sync or
 Turso credentials. Keep `NODE_ENV=production` and the exact production root key.
@@ -131,9 +135,19 @@ workers. It does not disable provider-capable HTTP routes: rehearsals require
 network isolation as well. Invalid enablement values fail startup.
 
 Deployment, ingress tests and certificate renewal: see [deploy/README.md](deploy/README.md).
-The current deployment, update commands, backup restoration, and rollback procedure
+The current deployment, update commands, backup restoration, and recovery policy
 are recorded in [deploy/OPERATIONS-LIVE.md](deploy/OPERATIONS-LIVE.md).
-Never start this deployment alongside Render's live workers.
+Debian is the recovery target; the retired Render deployment must remain inactive.
+
+Actual Budget is also hosted on Debian, at `https://actual.example.com` over
+Tailscale. The migration preserved the domain, password and budget/sync IDs, so
+it does not require reconnecting Setpoint or resetting Actual sync. Development
+machines using this production connection need Tailscale access. Setpoint's
+`/srv/setpoint/data/actual` is a rebuildable SDK cache; the authoritative Actual
+server data is `/srv/actual/data` and has its own encrypted backup schedule.
+The apps share the private Nginx and certificate infrastructure. See
+[Actual Budget on the same host](deploy/OPERATIONS-LIVE.md#actual-budget-on-the-same-host)
+before proxy maintenance, recovery or moving Setpoint to another host.
 
 `npm run db:local -- audit` checks a local database's integrity, foreign keys,
 counts, native vectors, credential decryptability and referenced Notes media.
@@ -145,7 +159,9 @@ Both commands require explicit local database configuration.
 Daily encrypted backups use `deploy/backup.sh` and its systemd timer. They copy
 the main database consistently, then immutable Notes media, deployment config,
 root key and certificate/DNS credentials into an age-encrypted archive. Actual
-cache is reconstructed from its authoritative server. Seven server archives
+cache is reconstructed from its authoritative server. These Setpoint archives
+do not include `/srv/actual/data`; recover Actual from its separate backups before
+rehydrating Setpoint after loss of the Debian host. Seven Setpoint server archives
 are retained; this Mac pulls and verifies archives hourly on the LAN, retaining 30.
 The age private identity stays on the Mac outside Git; preserve it separately
 in the owner's password manager for recovery if the Mac is lost. A ciphertext
@@ -154,6 +170,6 @@ archive without that identity cannot be restored.
 Restore into a new private directory: decrypt with `age -d -i IDENTITY`, extract
 the archive, provide its exact root key privately and audit the restored DB with
 network disabled. Never overwrite the active data directory during a rehearsal.
-A post-cutover rollback must carry current Debian data; never reactivate the
-stale original Turso copy. The original Render service and Turso DB are retained
-for 7 days pending explicit retirement review, not deleted by deployment scripts.
+Recovery targets Debian using its current data or a verified encrypted backup,
+not the retired Render deployment or stale Turso copy. Retained cloud resources
+are not a required recovery dependency; their deletion is a separate operation.
