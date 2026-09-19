@@ -31,7 +31,7 @@ const SUCCESS_DEADLINE_MS: Record<string, number> = {
   weather: 60 * 60_000,
   calendar: 20 * 60_000,
   todoist: 20 * 60_000,
-  bills: (6 * 60 + 15) * 60_000,
+  bills: 15 * 60_000,
 };
 const STATE_PRIORITY: Record<CurrentDashboardHealthState, number> = {
   needs_reauth: 7, unavailable: 6, degraded: 5, needs_sync: 4, stale: 4,

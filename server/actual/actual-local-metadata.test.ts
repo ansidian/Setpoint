@@ -1,27 +1,13 @@
-import { mkdir, readFile, writeFile } from "fs/promises";
+import { mkdir, writeFile } from "fs/promises";
 import { createTestTempDir, removeTempDir } from "../test-utils/temp-dir.ts";
 import path from "path";
 import { createClient } from "@libsql/client";
-import {
-  MessageEnvelopeSchema,
-  MessageSchema,
-  SyncRequestSchema,
-  SyncResponseSchema,
-  Timestamp,
-  create,
-  fromBinary,
-  makeClientId,
-  makeClock,
-  serializeClock,
-  toBinary,
-} from "@actual-app/crdt";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   describeLocalActualCache,
   hydrateLocalActualCache,
   readLocalActualMetadata,
 } from "./actual-local-metadata.ts";
-import { syncDownloadedBudget } from "./actualMetadataSync.ts";
 
 let tempDir: string | null = null;
 const originalFetch = global.fetch;
@@ -100,98 +86,6 @@ async function writeBudgetFixture(budgetDir: string, {
 async function createActualBudgetFixture() {
   tempDir = await createTestTempDir("actual-local-");
   await writeBudgetFixture(path.join(tempDir!, "Budget-1"));
-}
-
-interface TestSyncMessage {
-  timestamp: Timestamp;
-  dataset: string;
-  row: string;
-  column: string;
-  value: string;
-}
-
-function syncResponseBuffer(messages: TestSyncMessage[]): Uint8Array {
-  const response = create(SyncResponseSchema, {
-    merkle: JSON.stringify({}),
-    messages: messages.map((message) => create(MessageEnvelopeSchema, {
-      timestamp: String(message.timestamp),
-      isEncrypted: false,
-      content: toBinary(MessageSchema, create(MessageSchema, {
-        dataset: message.dataset,
-        row: message.row,
-        column: message.column,
-        value: message.value,
-      })),
-    })),
-  });
-  return toBinary(SyncResponseSchema, response);
-}
-
-async function writeSyncPullFixture(budgetDir: string, { lastSyncedTimestamp }: { lastSyncedTimestamp?: string } = {}): Promise<void> {
-  await mkdir(budgetDir, { recursive: true });
-  await writeFile(path.join(budgetDir, "metadata.json"), JSON.stringify({
-    id: "Budget-Sync",
-    cloudFileId: "file-1",
-    groupId: "sync-123",
-    lastSyncedTimestamp,
-  }));
-  const client = createClient({ url: `file:${path.join(budgetDir, "db.sqlite")}` });
-  await client.executeMultiple(`
-    CREATE TABLE accounts (id TEXT, name TEXT, type TEXT, closed INTEGER, tombstone INTEGER);
-    CREATE TABLE payees (id TEXT, name TEXT, transfer_acct TEXT, tombstone INTEGER);
-    CREATE TABLE payee_mapping (id TEXT PRIMARY KEY, targetId TEXT);
-    CREATE TABLE category_groups (id TEXT, name TEXT, sort_order REAL, tombstone INTEGER);
-    CREATE TABLE categories (id TEXT, name TEXT, cat_group TEXT, sort_order REAL, tombstone INTEGER);
-    CREATE TABLE v_schedules (
-      id TEXT,
-      name TEXT,
-      rule TEXT,
-      next_date INTEGER,
-      completed INTEGER,
-      posts_transaction INTEGER DEFAULT 0,
-      tombstone INTEGER,
-      _conditions TEXT
-    );
-    CREATE TABLE transactions (
-      id TEXT PRIMARY KEY,
-      acct TEXT,
-      amount INTEGER,
-      description TEXT,
-      date INTEGER,
-      schedule TEXT,
-      tombstone INTEGER,
-      isChild INTEGER,
-      parent_id TEXT,
-      sort_order REAL
-    );
-    CREATE VIEW v_transactions AS
-      SELECT t.id, t.date, t.amount, pm.targetId AS payee, t.acct AS account, t.schedule, t.tombstone
-      FROM transactions t
-      LEFT JOIN payee_mapping pm ON pm.id = t.description
-      WHERE t.date IS NOT NULL
-        AND t.acct IS NOT NULL
-        AND (COALESCE(t.isChild, 0) = 0 OR t.parent_id IS NOT NULL);
-    CREATE TABLE messages_crdt (
-      id INTEGER PRIMARY KEY,
-      timestamp TEXT NOT NULL UNIQUE,
-      dataset TEXT NOT NULL,
-      row TEXT NOT NULL,
-      column TEXT NOT NULL,
-      value BLOB NOT NULL
-    );
-    CREATE TABLE messages_clock (id INTEGER PRIMARY KEY, clock TEXT);
-    INSERT INTO accounts VALUES ('acct-1', 'Checking', 'checking', 0, 0);
-    INSERT INTO payees VALUES ('payee-1', 'Power Co', NULL, 0);
-    INSERT INTO payee_mapping VALUES ('payee-1', 'payee-1');
-    INSERT INTO category_groups VALUES ('group-1', 'Bills', 1, 0);
-    INSERT INTO categories VALUES ('cat-1', 'Utilities', 'group-1', 1, 0);
-  `);
-  const clock = makeClock(new Timestamp(0, 0, makeClientId()));
-  await client.execute({
-    sql: "INSERT INTO messages_clock (id, clock) VALUES (1, ?)",
-    args: [serializeClock(clock)],
-  });
-  await client.close();
 }
 
 beforeEach(() => {
@@ -276,167 +170,33 @@ describe("readLocalActualMetadata", () => {
     ]);
   });
 
-  it("applies remote sync deltas to a freshly downloaded Actual snapshot before reading transactions", async () => {
+  it("fails without a network request when the local metadata is missing", async () => {
     tempDir = await createTestTempDir("actual-local-");
-    const budgetDir = path.join(tempDir!, "Budget-Sync");
-    const baseTimestamp = new Timestamp(1000, 0, makeClientId()).toString();
-    await writeSyncPullFixture(budgetDir, { lastSyncedTimestamp: baseTimestamp });
-    const remoteMessages = [
-      { timestamp: new Timestamp(2000, 0, makeClientId()), dataset: "transactions", row: "txn-remote", column: "acct", value: "S:acct-1" },
-      { timestamp: new Timestamp(2001, 0, makeClientId()), dataset: "transactions", row: "txn-remote", column: "amount", value: "N:-1888" },
-      { timestamp: new Timestamp(2002, 0, makeClientId()), dataset: "transactions", row: "txn-remote", column: "description", value: "S:payee-1" },
-      { timestamp: new Timestamp(2003, 0, makeClientId()), dataset: "transactions", row: "txn-remote", column: "date", value: "N:20260518" },
-      { timestamp: new Timestamp(2004, 0, makeClientId()), dataset: "transactions", row: "txn-remote", column: "schedule", value: "S:sched-1" },
-      { timestamp: new Timestamp(2005, 0, makeClientId()), dataset: "transactions", row: "txn-remote", column: "tombstone", value: "N:0" },
-    ];
-    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(syncResponseBuffer(remoteMessages)));
-    global.fetch = fetchMock as unknown as typeof fetch;
-
-    const syncResult = await syncDownloadedBudget({
-      serverURL: "https://actual.example.test",
-      syncId: "sync-123",
-    }, "token-1", {
-      budgetDir,
-      metadata: {
-        id: "Budget-Sync",
-        cloudFileId: "file-1",
-        groupId: "sync-123",
-        lastSyncedTimestamp: baseTimestamp,
-      },
-    });
-    const metadata = await readLocalActualMetadata("u1", {
-      dbClient: settingsDbClient(),
-      dataDir: tempDir!,
-      localOnly: true,
-    });
-    const savedMetadata = JSON.parse(await readFile(path.join(budgetDir, "metadata.json"), "utf8")) as { lastSyncedTimestamp?: string };
-
-    expect(syncResult).toMatchObject({ applied: 6, recorded: 6, since: baseTimestamp });
-    expect(metadata.recentTransactions).toEqual([
-      { id: "txn-remote", accountId: "acct-1", payee: "Power Co", payeeId: "payee-1", amount: 18.88, date: "2026-05-18", scheduleId: "sched-1" },
-    ]);
-    expect(savedMetadata.lastSyncedTimestamp).toBe(String(remoteMessages.at(-1)!.timestamp));
-    // test-architecture: allow-boundary-interaction -- This is the outbound Actual sync protocol boundary; URL, media type, and session token are not observable from the applied local rows.
-    expect(global.fetch).toHaveBeenCalledWith(
-      "https://actual.example.test/sync/sync",
-      expect.objectContaining({
-        method: "POST",
-        headers: expect.objectContaining({
-          "Content-Type": "application/actual-sync",
-          "X-ACTUAL-TOKEN": "token-1",
-        }),
-      }),
-    );
-    // test-architecture: allow-boundary-interaction -- Actual metadata fetch is an outbound provider boundary; request initialization is observable only on the SDK-compatible transport.
-    const requestInit = fetchMock.mock.calls[0]![1] as RequestInit;
-    const request = fromBinary(SyncRequestSchema, requestInit.body as Uint8Array);
-    expect(request.since).toBe(baseTimestamp);
-  });
-
-  it("syncs the existing local budget when a refresh is explicitly requested", async () => {
-    await createActualBudgetFixture();
-    const syncedBudgetDir = path.join(tempDir!, "synced-output", "Budget-Synced");
-    await writeBudgetFixture(syncedBudgetDir, {
-      id: "Budget-Synced",
-      cloudFileId: "file-synced",
-      accountName: "Fresh Checking",
-    });
-    const downloadBudget = vi.fn();
-    const syncBudget = vi.fn().mockResolvedValue({
-      budgetDir: syncedBudgetDir,
-      metadata: { id: "Budget-Synced", cloudFileId: "file-synced", groupId: "sync-123" },
-    });
-
-    const metadata = await readLocalActualMetadata("u1", {
-      dbClient: settingsDbClient(),
-      dataDir: tempDir!,
-      refresh: true,
-      downloadBudget,
-      syncBudget,
-    });
-
-    expect(metadata.accounts).toEqual([{ id: "acct-1", name: "Fresh Checking", type: "checking" }]);
-    // test-architecture: allow-boundary-interaction -- Downloading is an outbound Actual/filesystem replacement effect; an existing cache refresh must not perform that duplicate remote effect.
-    expect(downloadBudget).not.toHaveBeenCalled();
-  });
-
-  it("downloads a budget zip on refresh when no local cache exists", async () => {
-    tempDir = await createTestTempDir("actual-local-");
-    const remoteBudgetDir = path.join(tempDir!, "Budget-Remote");
-    await writeBudgetFixture(remoteBudgetDir, {
-      id: "Budget-Remote",
-      cloudFileId: "file-remote",
-      accountName: "Fresh Checking",
-    });
-    const downloadBudget = vi.fn().mockResolvedValue({
-      budgetDir: remoteBudgetDir,
-      metadata: { id: "Budget-Remote", cloudFileId: "file-remote", groupId: "sync-123" },
-    });
-    const syncBudget = vi.fn();
-
-    const metadata = await readLocalActualMetadata("u1", {
-      dbClient: settingsDbClient(),
-      dataDir: path.join(tempDir!, "empty-cache"),
-      refresh: true,
-      downloadBudget,
-      syncBudget,
-    });
-
-    expect(metadata.accounts).toEqual([{ id: "acct-1", name: "Fresh Checking", type: "checking" }]);
-  });
-
-  it("does not download from Actual when local-only metadata is requested", async () => {
-    tempDir = await createTestTempDir("actual-local-");
-    const downloadBudget = vi.fn();
+    global.fetch = vi.fn();
 
     await expect(readLocalActualMetadata("u1", {
       dbClient: settingsDbClient(),
-      dataDir: tempDir!,
-      localOnly: true,
-      downloadBudget,
-    })).rejects.toThrow("Actual Budget local metadata is unavailable");
+      dataDir: tempDir,
+    })).rejects.toMatchObject({ status: 503 });
 
-    // test-architecture: allow-boundary-interaction -- Downloading is the outbound hosted-Actual boundary; local-only mode must fail without any network-capable fallback.
-    expect(downloadBudget).not.toHaveBeenCalled();
+    // test-architecture: allow-boundary-interaction -- Disk reads must never contact the external Actual server, including on a cache miss.
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it("hydrates the local cache with an explicit hosted download and reports disk usage", async () => {
+  it("keeps the existing budget when bootstrap is requested again", async () => {
     await createActualBudgetFixture();
-    const remoteBudgetDir = path.join(tempDir!, "Budget-Remote");
-    const backupDir = path.join(remoteBudgetDir, "backups");
-    await writeBudgetFixture(remoteBudgetDir, {
-      id: "Budget-Remote",
-      cloudFileId: "file-remote",
-      accountName: "Fresh Checking",
-    });
-    await mkdir(backupDir, { recursive: true });
-    await writeFile(path.join(backupDir, "latest.zip"), "backup");
-    const downloadBudget = vi.fn().mockResolvedValue({
-      budgetDir: remoteBudgetDir,
-      metadata: { id: "Budget-Remote", cloudFileId: "file-remote", groupId: "sync-123" },
-      backupPrune: { removed: 2, kept: 1 },
-    });
+    global.fetch = vi.fn();
 
     const result = await hydrateLocalActualCache("u1", {
       dbClient: settingsDbClient(),
       dataDir: tempDir!,
-      downloadBudget,
-      forceDownload: true,
     });
 
-    expect(result).toMatchObject({
-      success: true,
-      hydrated: true,
-      budgetId: "Budget-Remote",
-      syncId: "sync-123",
-      cloudFileId: "file-remote",
-      budgetDir: remoteBudgetDir,
-      actualDataDir: tempDir,
-      backupCount: 1,
-      backupSizeBytes: 6,
-      backupPrune: { removed: 2, kept: 1 },
-    });
-    expect(result.dbSizeBytes).toBeGreaterThan(0);
+    expect(result).toMatchObject({ success: true, hydrated: true, budgetId: "Budget-1" });
+    const metadata = await readLocalActualMetadata("u1", { dbClient: settingsDbClient(), dataDir: tempDir! });
+    expect(metadata.accounts).toEqual([{ id: "acct-1", name: "Checking", type: "checking" }]);
+    // test-architecture: allow-boundary-interaction -- Bootstrap reuse must not download or synchronize over the external Actual boundary.
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
   it("openLocalBudgetClient opens the on-disk budget for direct queries", async () => {

@@ -1,6 +1,10 @@
 export type ActualWorkerOperation =
   | "testConnection"
   | "getMetadata"
+  | "clearMetadataCache"
+  | "hydrateCache"
+  | "syncMetadata"
+  | "shutdownActual"
   | "getAccounts"
   | "getRecentTransactions"
   | "getPayees"
@@ -29,6 +33,7 @@ export interface ActualWorkerErrorPayload {
   status: number | null;
   code: string | null;
   stack: string | null;
+  localWriteApplied?: boolean;
 }
 
 export type ActualWorkerResponse =
@@ -58,6 +63,10 @@ export interface ActualWorkerOptions {
 const OPERATIONS: ReadonlySet<string> = new Set<ActualWorkerOperation>([
   "testConnection",
   "getMetadata",
+  "clearMetadataCache",
+  "hydrateCache",
+  "syncMetadata",
+  "shutdownActual",
   "getAccounts",
   "getRecentTransactions",
   "getPayees",
@@ -105,6 +114,7 @@ export function parseActualWorkerResponse(value: unknown): ActualWorkerResponse 
       status: typeof payload.status === "number" ? payload.status : null,
       code: typeof payload.code === "string" ? payload.code : null,
       stack: typeof payload.stack === "string" ? payload.stack : null,
+      ...(payload.localWriteApplied === true ? { localWriteApplied: true } : {}),
     },
   };
 }

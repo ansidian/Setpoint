@@ -3,7 +3,7 @@ import db from '../db/connection.ts';
 
 let tail: Promise<unknown> = Promise.resolve();
 const scope = new AsyncLocalStorage<boolean>();
-/** Parent-process serialization also covers lightweight writes. Active journals survive restarts. */
+/** Parent-process serialization keeps write admission and correction guards together. Active journals survive restarts. */
 export function coordinateActualWrite<T>(work: () => Promise<T>): Promise<T> {
   if (scope.getStore()) return work();
   const result = tail.then(() => scope.run(true, work));

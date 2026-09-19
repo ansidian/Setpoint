@@ -11,6 +11,10 @@ import type {
 const OPERATIONS = new Set([
   "testConnection",
   "getMetadata",
+  "clearMetadataCache",
+  "hydrateCache",
+  "syncMetadata",
+  "shutdownActual",
   "getAccounts",
   "getRecentTransactions",
   "getPayees",
@@ -36,17 +40,37 @@ function serializeError(error: unknown): ActualWorkerErrorPayload {
     status: typeof candidate.status === "number" ? candidate.status : null,
     code: typeof candidate.code === "string" ? candidate.code : null,
     stack: process.env.NODE_ENV === "production" ? null : typeof candidate.stack === "string" ? candidate.stack : null,
+    ...(candidate.localWriteApplied === true ? { localWriteApplied: true } : {}),
   };
 }
 
 function sendPayload(payload: ActualWorkerResponse): void {
-  if (typeof process.send !== "function") {
+  if (typeof process.send !== "function" || !process.connected) {
     return;
   }
-  process.send(payload);
+  process.send(payload, (error) => {
+    if (error) shutdown();
+  });
 }
 
 let operationQueue: Promise<void> = Promise.resolve();
+let stopping = false;
+
+function shutdown(): void {
+  if (stopping) return;
+  stopping = true;
+  void operationQueue
+    .then(() => actualCore.shutdownActual())
+    .then(() => process.exit(0))
+    .catch((error: unknown) => {
+      console.error("[EA] Actual worker shutdown failed:", error);
+      process.exit(1);
+    });
+}
+
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);
+process.on("disconnect", shutdown);
 
 process.on("message", (message: unknown) => {
   const request = parseActualWorkerRequest(message);
@@ -63,6 +87,14 @@ process.on("message", (message: unknown) => {
   }
 
   const { id, operation, args } = request;
+  if (stopping) {
+    sendPayload({
+      id,
+      ok: false,
+      error: serializeError(Object.assign(new Error("Actual worker is shutting down"), { status: 503 })),
+    });
+    return;
+  }
   operationQueue = operationQueue
     .then(async () => {
       try {

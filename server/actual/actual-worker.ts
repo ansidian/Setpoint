@@ -11,7 +11,7 @@ import type {
   ActualWorkerOptions,
 } from "./actual-worker-protocol.ts";
 
-type WorkerError = Error & { status?: number; code?: string };
+type WorkerError = Error & { status?: number; code?: string; localWriteApplied?: boolean };
 interface PendingRequest {
   resolve: (value: unknown) => void;
   reject: (reason: unknown) => void;
@@ -22,7 +22,7 @@ interface PendingRequest {
 }
 
 const DEFAULT_TIMEOUT_MS = 120_000;
-const PRODUCTION_DEFAULT_MAX_OLD_SPACE_MB = 192;
+const PRODUCTION_DEFAULT_MAX_OLD_SPACE_MB = 1024;
 const FORCE_KILL_GRACE_MS = 2_000;
 const OUTPUT_LIMIT = 8_000;
 const WORKER_PATH = path.resolve("server/actual/actual-worker-child.ts");
@@ -40,6 +40,7 @@ let worker: ChildProcess | null = null;
 let workerStderr = "";
 let pendingRequests = new Map<string, PendingRequest>();
 let operationQueue: Promise<unknown> = Promise.resolve();
+let stopInFlight: Promise<void> | null = null;
 let health: ActualWorkerHealth = { ...INITIAL_HEALTH };
 let idleShutdownTimer: NodeJS.Timeout | null = null;
 const expectedWorkerExits = new Set<ChildProcess>();
@@ -70,7 +71,7 @@ function workerExecArgv(): string[] {
 function idleShutdownMs(): number {
   const configured = Number(process.env.EA_ACTUAL_WORKER_IDLE_SHUTDOWN_MS);
   if (Number.isFinite(configured) && configured >= 0) return configured;
-  return process.env.NODE_ENV === "production" ? 60_000 : 0;
+  return 0;
 }
 
 function clearIdleShutdownTimer(): void {
@@ -144,6 +145,7 @@ function deserializeError(errorPayload: Partial<ActualWorkerErrorPayload> = {}):
   if (errorPayload.status) error.status = errorPayload.status;
   if (errorPayload.code) error.code = errorPayload.code;
   if (errorPayload.stack) error.stack = errorPayload.stack;
+  if (errorPayload.localWriteApplied) error.localWriteApplied = true;
   return error;
 }
 
@@ -309,12 +311,25 @@ function sendOperation<T>(operation: ActualWorkerOperation, args: unknown[], opt
 }
 
 export function runActualWorkerOperation<T = unknown>(operation: ActualWorkerOperation, args: unknown[] = [], options: ActualWorkerOptions = {}): Promise<T> {
+  if (stopInFlight) return Promise.reject(Object.assign(new Error("Actual worker is shutting down"), { status: 503 }));
   const run = () => retiringWorkers.size
     ? Promise.all([...retiringWorkers.values()]).then(() => sendOperation<T>(operation, args, options))
     : sendOperation<T>(operation, args, options);
   const result = operationQueue.then(run, run) as Promise<T>;
   operationQueue = result.catch(() => {});
   return result;
+}
+
+export function stopActualWorker(): Promise<void> {
+  if (stopInFlight) return stopInFlight;
+  clearIdleShutdownTimer();
+  stopInFlight = (async () => {
+    await operationQueue;
+    clearIdleShutdownTimer();
+    if (worker) requestWorkerShutdown(worker, { expected: true, discard: true });
+    await Promise.all([...retiringWorkers.values()]);
+  })();
+  return stopInFlight;
 }
 
 // Test teardown seam: the worker runner owns process-global child and queue
@@ -332,6 +347,7 @@ export function shutdownActualWorker(): void {
   rejectPendingRequests(Object.assign(new Error("Actual worker shut down"), { status: 503 }));
   pendingRequests = new Map<string, PendingRequest>();
   operationQueue = Promise.resolve();
+  stopInFlight = null;
   workerStderr = "";
   health = { ...INITIAL_HEALTH };
 }

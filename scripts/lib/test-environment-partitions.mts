@@ -51,7 +51,6 @@ const happyDomTypescriptTests = [
 
 const slowIntegrationTests = [
   "scripts/check-typescript-migration.test.mts",
-  "server/actual/actual-lightweight-writes.test.ts",
   "server/actual/actual-local-metadata.test.ts",
   "server/actual/actual-transactions-read.test.ts",
   "server/actual/actualFinancialOperations.sdk.test.ts",

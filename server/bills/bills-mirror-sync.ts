@@ -8,6 +8,7 @@ import {
 import {
   BILLS_CURRENT_LOOKAHEAD_DAYS,
   BILLS_CURRENT_LOOKBACK_DAYS,
+  BILLS_MIRROR_FAILURE_BACKOFF_MS,
   BILLS_MIRROR_MAINTENANCE_TTL_MS,
   addDaysYmd,
   addMonthsYmd,
@@ -60,7 +61,19 @@ export { billMirrorRefreshRange, isBillsMirrorMaintenanceDue, BILLS_MIRROR_MAINT
 const BILL_MIRROR_PAID_HISTORY_MONTHS = 12;
 const BILLS_MIRROR_REFRESH_TIMERS = new Map<string, ReturnType<typeof setTimeout>>();
 const BILLS_MIRROR_REFRESH_IN_FLIGHT = new Map<string, Promise<BillsMirrorPayload>>();
+const BILLS_MIRROR_WORK_IN_FLIGHT = new Set<Promise<unknown>>();
 let billsMirrorRefreshWorkerTimer: ReturnType<typeof setInterval> | null = null;
+let billsMirrorRefreshStopped = false;
+let billsMirrorRefreshDrain: Promise<void> | null = null;
+
+function trackBillsMirrorWork<T>(work: Promise<T>): Promise<T> {
+  BILLS_MIRROR_WORK_IN_FLIGHT.add(work);
+  void work.then(
+    () => BILLS_MIRROR_WORK_IN_FLIGHT.delete(work),
+    () => BILLS_MIRROR_WORK_IN_FLIGHT.delete(work),
+  );
+  return work;
+}
 
 export async function loadActualBudgetUrl(userId: string, { dbClient = db }: { dbClient?: BillsMirrorDb } = {}): Promise<string | null> {
   const result = await dbClient.execute({
@@ -90,10 +103,11 @@ function clearBillsMirrorTimer(userId: string): void {
 
 function armBillsMirrorTimer(userId: string, dueAtIso: string): void {
   clearBillsMirrorTimer(userId);
+  if (billsMirrorRefreshStopped) return;
   const delayMs = Math.max(0, new Date(dueAtIso).getTime() - Date.now());
   const timer = setTimeout(() => {
     BILLS_MIRROR_REFRESH_TIMERS.delete(userId);
-    runDueBillsMirrorRefresh(userId).catch((err) => {
+    trackBillsMirrorWork(runDueBillsMirrorRefresh(userId)).catch((err) => {
       console.error("[EA] Bills mirror delayed refresh failed:", errorMessage(err));
     });
   }, delayMs);
@@ -263,23 +277,32 @@ export async function armPendingBillsMirrorRefreshes({
   now = new Date(),
 }: DbOptions = {}): Promise<{ dueCount: number; armedCount: number }> {
   const result = await dbClient.execute({
-    // P3-12: constrain the 5-minute scan to the configured single user
+    // Constrain maintenance and pending-work recovery to the configured owner.
     // (EA_USER_ID is load-bearing; this matches the per-user pattern every other
     // ea_bills_mirror_state query already uses) instead of scanning the table.
-    sql: `SELECT user_id, pending_refresh_at
+    sql: `SELECT user_id, pending_refresh_at, status, actual_configured,
+                 last_success_at, last_attempt_at, refresh_started_at
           FROM ea_bills_mirror_state
-          WHERE user_id = ? AND pending_refresh_at IS NOT NULL`,
+          WHERE user_id = ?`,
     args: [process.env.EA_USER_ID || ""],
   });
   const dueAt = now.toISOString();
   let dueCount = 0;
   let armedCount = 0;
   for (const row of result.rows || []) {
-    if (String(row.pending_refresh_at) <= dueAt) {
+    if (!row.pending_refresh_at) {
+      const health = mirrorStateFromRow(row);
+      const lastAttempt = new Date(health.lastAttemptAt || "").getTime();
+      const initialRetryDue = health.configured === true && health.state === "needs_sync"
+        && !health.refreshStartedAt
+        && (!Number.isFinite(lastAttempt) || now.getTime() - lastAttempt >= BILLS_MIRROR_FAILURE_BACKOFF_MS);
+      if (!initialRetryDue && !isBillsMirrorMaintenanceDue(health, { now })) continue;
+      await scheduleBillsMirrorRefresh(String(row.user_id), { dbClient, now });
       dueCount += 1;
-      runDueBillsMirrorRefresh(String(row.user_id), { dbClient, now }).catch((err) => {
-        console.error("[EA] Bills mirror due refresh failed:", errorMessage(err));
-      });
+      await runDueBillsMirrorRefresh(String(row.user_id), { dbClient, now });
+    } else if (String(row.pending_refresh_at) <= dueAt) {
+      dueCount += 1;
+      await runDueBillsMirrorRefresh(String(row.user_id), { dbClient, now });
     } else if (dbClient === db) {
       armedCount += 1;
       armBillsMirrorTimer(String(row.user_id), String(row.pending_refresh_at));
@@ -290,14 +313,15 @@ export async function armPendingBillsMirrorRefreshes({
 
 export function startBillsMirrorRefreshWorker({
   dbClient = db,
-  intervalMs = 5 * 60 * 1000,
+  intervalMs = BILLS_MIRROR_FAILURE_BACKOFF_MS,
 }: { dbClient?: BillsMirrorDb; intervalMs?: number } = {}): { started: boolean } {
-  if (billsMirrorRefreshWorkerTimer) return { started: false };
-  armPendingBillsMirrorRefreshes({ dbClient }).catch((err) => {
+  if (billsMirrorRefreshWorkerTimer || billsMirrorRefreshDrain) return { started: false };
+  billsMirrorRefreshStopped = false;
+  trackBillsMirrorWork(armPendingBillsMirrorRefreshes({ dbClient })).catch((err) => {
     console.error("[EA] Bills mirror startup refresh check failed:", errorMessage(err));
   });
   billsMirrorRefreshWorkerTimer = setInterval(() => {
-    armPendingBillsMirrorRefreshes({ dbClient }).catch((err) => {
+    trackBillsMirrorWork(armPendingBillsMirrorRefreshes({ dbClient })).catch((err) => {
       console.error("[EA] Bills mirror refresh worker failed:", errorMessage(err));
     });
   }, intervalMs);
@@ -305,16 +329,25 @@ export function startBillsMirrorRefreshWorker({
   return { started: true };
 }
 
-// REL-03: stop the refresh-worker interval and every per-user pending-refresh
-// timer in BILLS_MIRROR_REFRESH_TIMERS so no queued refresh fires after
-// shutdown. Idempotent — safe to call twice.
-export function stopBillsMirrorRefreshWorker(): void {
+// Stop future admission before awaiting scans that may still be loading their
+// DB state, then finish publication before the SDK worker is stopped. The
+// shutdown sequencer's force-exit deadline bounds a stalled provider or DB.
+export function stopBillsMirrorRefreshWorker(): Promise<void> {
+  if (billsMirrorRefreshDrain) return billsMirrorRefreshDrain;
+  billsMirrorRefreshStopped = true;
   if (billsMirrorRefreshWorkerTimer) {
     clearInterval(billsMirrorRefreshWorkerTimer);
     billsMirrorRefreshWorkerTimer = null;
   }
   for (const timer of BILLS_MIRROR_REFRESH_TIMERS.values()) clearTimeout(timer);
   BILLS_MIRROR_REFRESH_TIMERS.clear();
+  const drain = (async () => {
+    while (BILLS_MIRROR_WORK_IN_FLIGHT.size || BILLS_MIRROR_REFRESH_IN_FLIGHT.size) {
+      await Promise.allSettled([...BILLS_MIRROR_WORK_IN_FLIGHT, ...BILLS_MIRROR_REFRESH_IN_FLIGHT.values()]);
+    }
+  })().finally(() => { billsMirrorRefreshDrain = null; });
+  billsMirrorRefreshDrain = drain;
+  return drain;
 }
 
 export async function refreshBillsMirror(userId: string, {
@@ -403,7 +436,6 @@ async function refreshBillsMirrorInner(userId: string, {
   try {
     const refreshRange = billMirrorRefreshRange({ now });
     const metadata = metadataWithPayeeMap(await loadActualMetadataForProjection(userId, {
-      allowWorkerFallback: false,
       preferFreshLocal: refreshLocalActual,
       refreshLocal: !afterVerifiedWrite,
     }));

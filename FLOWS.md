@@ -10,26 +10,25 @@ When a fix touches a flow, walk every hop — partial fixes here are the known f
 
 **Retained manual endpoint:** POST `/api/briefing/actual/send` is handled in `server/routes/briefing/bills.ts` with its existing write/retry semantics. The reader drawer and its manual form are retired. Owner review and completion use the dedicated Dashboard/Finance workflow below.
 
-1. `server/bills/bills-service.ts:sendBill` — runs the write, then the invalidation fan-out and mirror refresh scheduling
-2. `server/actual/actual.ts:sendBill` — 3-way write branch: lightweight CRDT → SDK worker fallback → in-process SDK
-3. `server/actual/actual-lightweight-writes.ts:sendBillLightweight` — serializes behind the lightweight write lock; sync-push failure is tagged `ACTUAL_LIGHTWEIGHT_SYNC_FAILED` with `localWriteApplied` (never retried)
-4. `server/actual/actual-worker.ts:runActualWorkerOperation` — fallback only on `ACTUAL_LIGHTWEIGHT_UNSUPPORTED`: SDK write in a forked worker (`server/actual/actual-core.ts:sendBill`)
-5. `server/actual/actual.ts:clearMetadataCache` — clears the facade's 5-min TTL cache (level b) immediately after the write
-6. `server/bills/bills-service.ts:invalidateActualMetadata` — authoritative fan-out (run in background): clears level b, re-syncs level d, rewrites level c
-7. `server/actual/actual-local-metadata.ts:readLocalActualMetadata` — re-syncs the on-disk budget copy (level d) from the Actual server
-8. `server/actual/actual-metadata-projection.ts:refreshActualMetadataProjection` — rewrites the `ea_actual_metadata_mirror` DB projection (level c)
-9. `server/bills/bills-mirror-sync.ts:scheduleBillsMirrorRefresh` — writes `pending_refresh_at` (+60s) and arms the in-process timer; `runDueBillsMirrorRefresh` later rewrites the bill schedule/occurrence mirrors
-10. `server/dashboard/current-providers/bills-provider.ts:onRefreshed` — when the visible bills projection or successful mirror timestamp changed, publishes a `source: "bills"` dashboard event
-11. `server/dashboard/current-events.ts:publishCurrentDashboardEvent` — fans the event out to per-user SSE listeners
-12. `src/hooks/useCurrentDashboard.ts:handleChanged` — on `source === "bills"`: invalidates the frontend metadata singleton, then refetches the dashboard payload
-13. `src/lib/actualMetadata.ts:invalidateActualMetadata` — nulls the singleton cache (level a) and bumps the generation counter so stale in-flight fetches can't repopulate it
-14. `src/lib/actualMetadata.ts:ensureMetadataLoaded` — next consumer refetches GET `/api/briefing/actual/metadata`, served from level c
+1. `server/bills/bills-service.ts:sendBill` — runs the write, then publishes the synchronized local result with a durable delayed fallback.
+2. `server/actual/actual.ts:sendBill` — applies write/correction guards and dispatches to the persistent SDK worker.
+3. `server/actual/actual-worker.ts:runActualWorkerOperation` — serializes operations; healthy workers remain loaded between calls.
+4. `server/actual/actual-core.ts:sendBill` — syncs current state, writes through the SDK, and syncs the result. A completed local write with failed push returns `ACTUAL_SYNC_FAILED` with `localWriteApplied`; callers schedule reconciliation without repeating the mutation.
+5. `server/bills/bills-service.ts:invalidateActualAfterTransactionImport` — arms a durable 60-second fallback, explicitly invalidates facade/worker metadata caches, then immediately publishes from the synchronized local budget.
+6. `server/bills/bills-mirror-sync.ts:refreshBillsMirror` — serializes publication, rewrites metadata and bill occurrence mirrors, and clears the fallback after success. Failed local reads retain it.
+7. `server/bills/bills-mirror-sync.ts:runDueBillsMirrorRefresh` — the delayed fallback requests SDK synchronization. Background maintenance checks every minute and syncs configured budgets after five minutes; failures back off one minute.
+8. `server/actual/actual.ts:syncActualMetadata` — synchronizes and projects local metadata inside the worker, keeping all budget mutations under its SDK lock.
+9. `server/dashboard/current-providers/bills-provider.ts:refreshReasonOverride` — the next dashboard read adopts a newer mirror timestamp without another provider sync.
+10. `server/dashboard/current-providers/bills-provider.ts:onRefreshed` — when visible bills or the successful mirror timestamp changed, publishes a `source: "bills"` event.
+11. `server/dashboard/current-events.ts:publishCurrentDashboardEvent` — fans the event out to per-user SSE listeners.
+12. `src/hooks/useCurrentDashboard.ts:handleChanged` — invalidates the frontend metadata singleton and refetches the dashboard payload.
+13. `src/lib/actualMetadata.ts:ensureMetadataLoaded` — refetches GET `/api/briefing/actual/metadata`, served from the metadata mirror; its generation guard rejects older in-flight results.
 
 **Caches (the 4 levels, outermost first; layering diagram lives at the top of `server/bills/bills-service.ts`):**
 - (a) frontend metadata singleton — `src/lib/actualMetadata.ts` — invalidated by the bills SSE event, generation-guarded
 - (b) in-process 5-min TTL caches — `server/actual/actual.ts` facade + `server/actual/actual-core.ts` worker side — cleared on every write and by the fan-out
 - (c) `ea_actual_metadata_mirror` DB projection — `server/actual/actual-metadata-projection.ts` — rewritten during the fan-out and by bills mirror refreshes
-- (d) on-disk local budget copy — `server/actual/actual-local-metadata.ts` — re-synced from the Actual server when the fan-out runs with fresh-local preference
+- (d) on-disk local budget copy — `server/actual/actual-local-metadata.ts` reads it without network or mutations; `actual-core.ts` owns SDK synchronization
 
 **SSE:** `dashboard-current-changed` with `source: "bills"` — emitted via `server/dashboard/current-events.ts:publishCurrentDashboardEvent`, streamed by the GET `/current/events` handler in `server/routes/dashboard.ts` — consumed by `src/hooks/useCurrentDashboard.ts:handleChanged`.
 
@@ -463,7 +462,7 @@ Dashboard, Inbox, and notification references open focused financial content at 
 
 ## Financial settlement across consumers
 
-Managed settlement and legacy batch settlement publish the existing `email_triage` / `financial_event_changed` event for saved source state. Correction completion retains its independent durable publication retry. The shared verified-write invalidator first arms a durable 60-second fallback, then immediately refreshes metadata and bill occurrences from the synchronized local Actual budget. It waits for an older in-flight mirror refresh and restores the fallback before the fresh read. Successful publication clears the fallback; a local read failure retains it. Ordinary/lightweight writers retain their existing delayed refresh policy. Verified recovery of an attempted arrival import follows the same invalidation path.
+Managed settlement and legacy batch settlement publish the existing `email_triage` / `financial_event_changed` event for saved source state. Correction completion retains its independent durable publication retry. The shared verified-write invalidator first arms a durable 60-second fallback, then immediately refreshes metadata and bill occurrences from the synchronized local Actual budget. It waits for an older in-flight mirror refresh and restores the fallback before the fresh read. Successful publication clears the fallback; a local read failure retains it. Ordinary SDK writes use the same immediate publication and durable fallback. Verified recovery of an attempted arrival import follows the same invalidation path.
 
 The bills provider includes `lastSuccessAt` in its change projection. After the mirror refresh, even ledger-only changes publish the existing `source: bills` event. The retained `useCurrentDashboard` invalidates the metadata singleton, marks Calendar bill/transaction ranges stale through the existing Dashboard event plan, and reloads current data. Source settlement and mirror publication remain separate events; a verified receipt does not claim a failed projection refresh succeeded. Dashboard finance coalesces both source and metadata invalidations, retaining a queued refresh when an event arrives during a read.
 
@@ -494,7 +493,7 @@ Card statement history projects only saved original `statement_issued` transfer 
 
 ## Provider health and inbox check freshness
 
-The current-dashboard system indicator separates cache refresh eligibility from successful-provider-check deadlines: Weather 60 minutes (30-minute refresh cache), Calendar and Tasks 20 minutes, and Bills 6 hours 15 minutes (six-hour maintenance plus post-write refreshes). Failed checks, pending changes and reconnection requirements stay visible inside these age allowances. The older of the delivered cache and upstream mirror bounds freshness; local reads cannot renew the provider timestamp. Browser health expires these deadlines while a tab is open, including during a refresh.
+The current-dashboard system indicator separates cache refresh eligibility from successful-provider-check deadlines: Weather 60 minutes (30-minute refresh cache), Calendar and Tasks 20 minutes, and Bills 15 minutes (five-minute maintenance plus post-write refreshes). Failed checks, pending changes and reconnection requirements stay visible inside these age allowances. The older of the delivered cache and upstream mirror bounds freshness; local reads cannot renew the provider timestamp. Browser health expires these deadlines while a tab is open, including during a refresh.
 
 Pirate Weather returns its original provider success timestamp on cache hits and awaits an expired provider fetch; the dashboard runner already provides saved-data background refresh. Failures retain the previous persisted weather rather than recording a cached fallback as a new success.
 

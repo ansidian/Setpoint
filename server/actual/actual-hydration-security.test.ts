@@ -1,4 +1,4 @@
-import { readdir } from "fs/promises";
+import { readFile, readdir } from "fs/promises";
 import { crc32 } from "node:zlib";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { settingsCredentialContext } from "../platform/credential-encryption-context.ts";
@@ -60,7 +60,10 @@ afterEach(async () => {
 });
 
 describe("Actual hydration archive security", () => {
-  it("does not write hydration files when the downloaded archive fails validation", async () => {
+  it.each([
+    { valid: false, label: "rejects a corrupt archive before writing files" },
+    { valid: true, label: "downloads the bounded archive without a custom sync request" },
+  ])("$label", async ({ valid }) => {
     tempDir = await createTestTempDir("actual-hydration-security-");
     process.env.EA_ENCRYPTION_KEY = "11".repeat(32);
     const encryptedPassword = encrypt(
@@ -68,7 +71,7 @@ describe("Actual hydration archive security", () => {
       settingsCredentialContext("u1", "actual_budget_password_encrypted"),
     );
     const archive = storedZip([
-      { name: "db.sqlite", data: Buffer.from("corrupt"), checksum: 123 },
+      { name: "db.sqlite", data: Buffer.from("budget-data"), ...(valid ? {} : { checksum: 123 }) },
       { name: "metadata.json", data: Buffer.from('{"id":"Budget-Remote"}') },
     ]);
     global.fetch = vi.fn(async (input: string | URL | Request) => {
@@ -84,7 +87,7 @@ describe("Actual hydration archive security", () => {
       throw new Error(`Unexpected Actual request: ${url}`);
     }) as typeof fetch;
 
-    await expect(hydrateLocalActualCache("u1", {
+    const hydration = hydrateLocalActualCache("u1", {
       dbClient: {
         execute: async () => ({
           rows: [{
@@ -96,8 +99,16 @@ describe("Actual hydration archive security", () => {
       },
       dataDir: tempDir,
       forceDownload: true,
-    })).rejects.toThrow(/CRC/);
+    });
 
-    await expect(readdir(tempDir)).resolves.toEqual([]);
+    if (valid) {
+      await expect(hydration).resolves.toMatchObject({ success: true, hydrated: true, budgetId: "Budget-Remote" });
+      await expect(readFile(`${tempDir}/Budget-Remote/db.sqlite`, "utf8")).resolves.toBe("budget-data");
+      const metadata = JSON.parse(await readFile(`${tempDir}/Budget-Remote/metadata.json`, "utf8"));
+      expect(metadata).toMatchObject({ id: "Budget-Remote", groupId: "sync-123", cloudFileId: "file-1" });
+    } else {
+      await expect(hydration).rejects.toThrow(/CRC/);
+      await expect(readdir(tempDir)).resolves.toEqual([]);
+    }
   });
 });

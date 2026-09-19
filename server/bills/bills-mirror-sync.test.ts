@@ -8,6 +8,7 @@ const mockActual = {
   sendBill: vi.fn(),
   markBillPaid: vi.fn(),
   getMetadata: vi.fn(),
+  syncActualMetadata: vi.fn(),
   getCalendarBillsRange: vi.fn(),
   testConnection: vi.fn(),
   createQuickTxn: vi.fn(),
@@ -30,6 +31,7 @@ const {
   refreshBillsMirror: refreshBillsMirrorImpl,
   scheduleBillsMirrorRefresh: scheduleBillsMirrorRefreshImpl,
   consumeDueBillsMirrorRefresh: consumeDueBillsMirrorRefreshImpl,
+  armPendingBillsMirrorRefreshes,
   startBillsMirrorRefreshWorker,
   stopBillsMirrorRefreshWorker,
 } = await import("./bills-mirror-sync.ts");
@@ -156,6 +158,7 @@ beforeEach(async () => {
   Object.values(mockActualLocal).forEach((fn) => fn.mockReset());
   mockActualLocal.readLocalActualMetadata.mockRejectedValue(new Error("lightweight metadata unavailable"));
   mockActual.getMetadata.mockResolvedValue(EMPTY_METADATA);
+  mockActual.syncActualMetadata.mockRejectedValue(new Error("Actual sync unavailable"));
 
   testDb = createClient({ url: "file::memory:" });
   await testDb.executeMultiple(readFileSync(join(migrationsDir, "001_ea_tables.sql"), "utf8"));
@@ -163,8 +166,9 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  stopBillsMirrorRefreshWorker();
+  await stopBillsMirrorRefreshWorker();
   vi.useRealTimers();
+  vi.unstubAllEnvs();
   await testDb.close();
 });
 
@@ -180,7 +184,6 @@ describe("Bills mirror", () => {
     });
 
     expect(mockActualLocal.readLocalActualMetadata).toHaveBeenCalledWith("u1", { // test-architecture: allow-boundary-interaction -- Refresh must read the local Actual projection without a provider refresh before replacing mirror state.
-      refresh: false,
       localOnly: true,
     });
     expect(mockActual.getMetadata).not.toHaveBeenCalled(); // test-architecture: allow-boundary-interaction -- Mirror refresh must not spawn the provider fallback after a successful local projection read.
@@ -235,11 +238,11 @@ describe("Bills mirror", () => {
     expect((await occurrenceRows()).map((row) => row.occurrence_id)).toEqual(["paid-recent"]);
   });
 
-  it("forces a fresh local Actual projection before rebuilding the mirror", async () => {
+  it("synchronizes through the SDK before rebuilding the mirror", async () => {
     const fresh = billMetadata({
       recentTransactions: [{ id: "paid-1", scheduleId: "sched-1", payeeId: "payee-1", amount: 1500, date: "2026-05-10" }],
     });
-    mockActualLocal.readLocalActualMetadata.mockResolvedValueOnce(fresh);
+    mockActual.syncActualMetadata.mockResolvedValueOnce(fresh);
 
     const out = await refreshBillsMirror({
       actualBudgetUrl: "https://actual.example.test",
@@ -247,10 +250,6 @@ describe("Bills mirror", () => {
       now: new Date("2026-05-10T20:00:00.000Z"),
     });
 
-    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenCalledTimes(1); // test-architecture: allow-boundary-interaction -- Forced refresh performs exactly one external projection refresh to avoid duplicate Actual work.
-    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenCalledWith("u1", { // test-architecture: allow-boundary-interaction -- The forced provider boundary must receive the explicit refresh contract.
-      refresh: true,
-    });
     expect(out.allSchedules).toEqual([
       expect.objectContaining({ paid: true, openActionDisabled: true }),
     ]);
@@ -262,9 +261,8 @@ describe("Bills mirror", () => {
   it("preserves old rows and durably records degraded health when local Actual refresh fails", async () => {
     await seedState();
     await seedOccurrence({ occurrenceId: "sched-1:2026-05-10", scheduleId: "sched-1", date: "2026-05-10", name: "Mortgage" });
-    mockActualLocal.readLocalActualMetadata
-      .mockRejectedValueOnce(new Error("Actual local file unavailable"))
-      .mockRejectedValueOnce(new Error("Actual download timed out"));
+    mockActualLocal.readLocalActualMetadata.mockRejectedValueOnce(new Error("Actual local file unavailable"));
+    mockActual.syncActualMetadata.mockRejectedValueOnce(new Error("Actual sync timed out"));
     vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const out = await refreshBillsMirror({
@@ -272,15 +270,9 @@ describe("Bills mirror", () => {
       now: new Date("2026-05-06T12:00:00.000Z"),
     });
 
-    expect(mockActual.getMetadata).not.toHaveBeenCalled(); // test-architecture: allow-boundary-interaction -- Degraded recovery stays on the lightweight projection boundary rather than spawning the SDK worker.
-    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenNthCalledWith(1, "u1", { // test-architecture: allow-boundary-interaction -- Recovery first attempts a non-refreshing local read.
-      refresh: false,
-      localOnly: true,
-    });
-    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenNthCalledWith(2, "u1", { refresh: true }); // test-architecture: allow-boundary-interaction -- Recovery retries once with an explicit Actual refresh after the local cache miss.
     expect(await occurrenceRows()).toHaveLength(1);
-    expect(await stateRow()).toMatchObject({ status: "degraded", last_error: "Actual download timed out" });
-    expect(out.billsSyncHealth).toMatchObject({ state: "degraded", lastError: "Actual download timed out" });
+    expect(await stateRow()).toMatchObject({ status: "degraded", last_error: "Actual sync timed out" });
+    expect(out.billsSyncHealth).toMatchObject({ state: "degraded", lastError: "Actual sync timed out" });
   });
 
   it("coalesces concurrent refreshes for one user", async () => {
@@ -413,10 +405,10 @@ describe("Bills mirror", () => {
 
   it("stops the interval worker without consuming later durable work", async () => {
     vi.useFakeTimers();
-    process.env.EA_USER_ID = "u1";
+    vi.stubEnv("EA_USER_ID", "u1");
     startBillsMirrorRefreshWorker({ dbClient: testDb, intervalMs: 1000 });
     await vi.advanceTimersByTimeAsync(0);
-    stopBillsMirrorRefreshWorker();
+    await stopBillsMirrorRefreshWorker();
     await scheduleBillsMirrorRefresh({
       delayMs: 0,
       now: new Date("2026-05-06T12:00:00.000Z"),
@@ -427,10 +419,82 @@ describe("Bills mirror", () => {
     expect((await stateRow())?.pending_refresh_at).toBe("2026-05-06T12:00:00.000Z");
   });
 
-  it("allows a fresh worker start after stop", () => {
+  it("refreshes direct Actual changes during idle maintenance and respects the five-minute cadence", async () => {
+    vi.stubEnv("EA_USER_ID", "u1");
+    await seedState();
+    await testDb.execute("INSERT INTO ea_settings (user_id, actual_budget_url) VALUES ('u1', 'https://actual.example.test')");
+    mockActual.syncActualMetadata.mockResolvedValueOnce(billMetadata());
+    const now = new Date("2026-05-06T12:00:00.000Z");
+    await armPendingBillsMirrorRefreshes({ dbClient: testDb, now });
+    expect((await occurrenceRows()).map((row) => row.occurrence_id)).toEqual(["sched-1:2026-05-10"]);
+
+    mockActual.syncActualMetadata.mockResolvedValueOnce(billMetadata({ nextDate: "2026-06-10" }));
+    await armPendingBillsMirrorRefreshes({ dbClient: testDb, now: new Date(now.getTime() + 299_999) });
+    expect((await occurrenceRows()).map((row) => row.occurrence_id)).toEqual(["sched-1:2026-05-10"]);
+    await armPendingBillsMirrorRefreshes({ dbClient: testDb, now: new Date(now.getTime() + 300_000) });
+    expect((await occurrenceRows()).map((row) => row.occurrence_id)).toEqual(["sched-1:2026-06-10"]);
+  });
+
+  it("retries failed idle maintenance after one minute while preserving the previous mirror", async () => {
+    vi.stubEnv("EA_USER_ID", "u1");
+    await seedState();
+    await seedOccurrence({ occurrenceId: "old:2026-05-10", date: "2026-05-10" });
+    await testDb.execute("INSERT INTO ea_settings (user_id, actual_budget_url) VALUES ('u1', 'https://actual.example.test')");
+    const now = new Date("2026-05-06T12:00:00.000Z");
+    await armPendingBillsMirrorRefreshes({ dbClient: testDb, now });
+    expect(await stateRow()).toMatchObject({ status: "degraded" });
+    mockActual.syncActualMetadata.mockResolvedValueOnce(billMetadata());
+    await armPendingBillsMirrorRefreshes({ dbClient: testDb, now: new Date(now.getTime() + 59_999) });
+    expect((await occurrenceRows()).map((row) => row.occurrence_id)).toEqual(["old:2026-05-10"]);
+    await armPendingBillsMirrorRefreshes({ dbClient: testDb, now: new Date(now.getTime() + 60_000) });
+    expect((await occurrenceRows()).map((row) => row.occurrence_id)).toEqual(["sched-1:2026-05-10"]);
+    expect(await stateRow()).toMatchObject({ status: "current" });
+  });
+
+  it("allows a fresh worker start after stop", async () => {
     startBillsMirrorRefreshWorker({ dbClient: testDb, intervalMs: 1000 });
-    stopBillsMirrorRefreshWorker();
+    await stopBillsMirrorRefreshWorker();
 
     expect(startBillsMirrorRefreshWorker({ dbClient: testDb, intervalMs: 1000 })).toEqual({ started: true });
+  });
+
+  it("drains a startup scan admitted before stop through its final mirror publication", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-06T12:00:00.000Z"));
+    vi.stubEnv("EA_USER_ID", "u1");
+    await seedState();
+    await testDb.execute("INSERT INTO ea_settings (user_id, actual_budget_url) VALUES ('u1', 'https://actual.example.test')");
+    let releaseRead!: () => void;
+    const readGate = new Promise<void>((resolve) => { releaseRead = resolve; });
+    const execute = testDb.execute.bind(testDb);
+    // The database boundary stalls before the startup scan can discover work.
+    vi.spyOn(testDb, "execute").mockImplementationOnce(async (statement) => {
+      await readGate;
+      return execute(statement);
+    });
+    mockActual.syncActualMetadata.mockResolvedValueOnce(billMetadata());
+    startBillsMirrorRefreshWorker({ dbClient: testDb });
+    const stopped = stopBillsMirrorRefreshWorker();
+    expect(startBillsMirrorRefreshWorker({ dbClient: testDb })).toEqual({ started: false });
+    releaseRead();
+    await stopped;
+    expect(await stateRow()).toMatchObject({ status: "current", pending_refresh_at: null });
+    expect((await occurrenceRows()).map((row) => row.occurrence_id)).toEqual(["sched-1:2026-05-10"]);
+  });
+
+  it("finishes a refresh already awaiting Actual before stop resolves", async () => {
+    let releaseSync!: (value: ReturnType<typeof billMetadata>) => void;
+    mockActual.syncActualMetadata.mockReturnValueOnce(new Promise((resolve) => { releaseSync = resolve; }));
+    const refresh = refreshBillsMirror({
+      actualBudgetUrl: "https://actual.example.test",
+      refreshLocalActual: true,
+      now: new Date("2026-05-06T12:00:00.000Z"),
+    });
+    const stopped = stopBillsMirrorRefreshWorker();
+    releaseSync(billMetadata());
+    await stopped;
+    expect(await stateRow()).toMatchObject({ status: "current" });
+    expect((await occurrenceRows()).map((row) => row.occurrence_id)).toEqual(["sched-1:2026-05-10"]);
+    await refresh;
   });
 });

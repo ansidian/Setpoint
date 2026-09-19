@@ -1,5 +1,5 @@
 import db from "../db/connection.ts";
-import { getMetadata as actualGetMetadata } from "./actual.ts";
+import { syncActualMetadata } from "./actual.ts";
 import { readLocalActualMetadata } from "./actual-local-metadata.ts";
 import type { InStatement } from "@libsql/client";
 import type { ActualMetadata } from "../../shared/types/actual.ts";
@@ -81,36 +81,16 @@ export function hasActualMetadataRows(metadata: ActualMetadataInput = {}): boole
 
 export async function loadActualMetadataForProjection(userId: string, {
   refreshLocal = true,
-  allowWorkerFallback = true,
   preferFreshLocal = false,
-}: { refreshLocal?: boolean; allowWorkerFallback?: boolean; preferFreshLocal?: boolean } = {}): Promise<ActualMetadata> {
-  let localError: unknown = null;
-  if (!preferFreshLocal) {
+}: { refreshLocal?: boolean; preferFreshLocal?: boolean } = {}): Promise<ActualMetadata> {
+  if (!preferFreshLocal || !refreshLocal) {
     try {
-      return await readLocalActualMetadata(userId, {
-        refresh: false,
-        localOnly: true,
-      });
-    } catch (err: unknown) {
-      localError = err;
-      console.warn("[EA] Cached Actual metadata projection failed:", err instanceof Error ? err.message : err);
+      return await readLocalActualMetadata(userId, { localOnly: true });
+    } catch (error) {
+      if (!refreshLocal) throw error;
     }
   }
-
-  let projectionError: unknown = null;
-  if (refreshLocal) {
-    try {
-      return await readLocalActualMetadata(userId, {
-        refresh: true,
-      });
-    } catch (err: unknown) {
-      projectionError = err;
-      console.warn("[EA] Lightweight Actual metadata projection failed:", err instanceof Error ? err.message : err);
-    }
-  }
-  if (!allowWorkerFallback) throw projectionError || localError;
-  console.warn("[EA] Falling back to Actual worker metadata projection:", projectionError instanceof Error ? projectionError.message : localError instanceof Error ? localError.message : null);
-  return actualGetMetadata(userId, { forceWorker: true, forceRefresh: refreshLocal });
+  return syncActualMetadata(userId);
 }
 
 function metadataProjectionArgs(userId: string, metadata: ActualMetadataInput, timestamp: string): Array<string> {

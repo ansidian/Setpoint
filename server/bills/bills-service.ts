@@ -6,6 +6,7 @@ import {
   testConnection as actualTestConnection,
   createQuickTxn as actualCreateQuickTxn,
   invalidateActualMetadataCache,
+  hydrateActualCache as hydrateActualWorkerCache,
   removeActualConnection as removeStoredActualConnection,
   saveActualConnectionCandidate,
   type ActualConnectionCandidate,
@@ -16,7 +17,6 @@ import { extractBillCandidate } from "./bill-extraction-service.ts";
 import { planFinancialEmail as planFinancialEmailCore } from "./financial-email-planner.ts";
 import {
   describeLocalActualCache,
-  hydrateLocalActualCache,
 } from "../actual/actual-local-metadata.ts";
 import {
   getMetadata,
@@ -83,7 +83,7 @@ export {
 //       cleared by invalidateActualMetadataCache()
 //   (c) ea_actual_metadata_mirror — DB projection served by GET /actual/metadata;
 //       rewritten by refreshActualMetadataProjection()
-//   (d) lightweight local budget copy on disk — re-synced from the Actual
+//   (d) SDK-owned local budget copy on disk — re-synced from the Actual
 //       server when the projection loads with preferFreshLocal
 //
 //   Actual server ──sync──▶ (d) ──project──▶ (c) ──/actual/metadata──▶ (a)
@@ -128,28 +128,28 @@ async function scheduleBillsMirrorRefreshInBackground(userId: string, delayMs: n
   });
 }
 
-// A lightweight write that was applied to the local budget copy but failed
-// while pushing to the Actual server throws with err.localWriteApplied === true
-// (set in actual-lightweight-writes.ts; never retried — see actual.ts). The
-// write IS durable locally and re-syncs on the next successful push, so the
-// downstream invalidation fan-out must still run: without it the metadata
-// mirror and bills mirror keep serving pre-write data with no scheduled
-// reconciliation. We also convert the hard failure into a partial-success
-// return so the route answers 200 and the UI does not prompt a duplicate-
-// inducing retry. Any other error (no local write applied) re-throws unchanged.
+// A completed SDK write whose subsequent sync failed remains durable locally.
+// Keep its partial-success response and reconciliation so retrying the UI action
+// cannot duplicate it. A worker timeout/exit has an unknown write outcome: retain
+// the failure, but schedule reconciliation to discover any committed changes.
 async function withLocalWriteReconciliation<T>(userId: string, run: () => Promise<T>, { delayMs }: { delayMs: number }): Promise<T | { syncPending: true; localWriteApplied: true; message: string; code: string }> {
   try {
     return await run();
   } catch (error: unknown) {
     const err = error as ReconciliationError;
-    if (err.localWriteApplied !== true) throw error;
+    if (err.localWriteApplied !== true) {
+      if (err.code === "ACTUAL_WORKER_TIMEOUT" || err.code === "ACTUAL_WORKER_EXITED") {
+        await scheduleBillsMirrorRefreshInBackground(userId, delayMs);
+      }
+      throw error;
+    }
     invalidateActualMetadataInBackground(userId);
     await scheduleBillsMirrorRefreshInBackground(userId, delayMs);
     return {
       syncPending: true,
       localWriteApplied: true,
       message: err.message,
-      code: err.code || "ACTUAL_LIGHTWEIGHT_SYNC_FAILED",
+      code: err.code || "ACTUAL_SYNC_FAILED",
     };
   }
 }
@@ -157,8 +157,9 @@ async function withLocalWriteReconciliation<T>(userId: string, run: () => Promis
 export async function sendBill(userId: string, billData: BillCandidate) {
   return withLocalWriteReconciliation(userId, async () => {
     const result = await actualSendBill(billData as ActualBillWriteInput, userId);
-    invalidateActualMetadataInBackground(userId);
-    await scheduleBillsMirrorRefreshInBackground(userId, 60_000);
+    await invalidateActualAfterTransactionImport(userId).catch((err: unknown) => {
+      console.error("[EA] Actual write succeeded but projection publication failed:", errorMessage(err));
+    });
     return result;
   }, { delayMs: 60_000 });
 }
@@ -166,8 +167,9 @@ export async function sendBill(userId: string, billData: BillCandidate) {
 export async function markBillPaid(userId: string, billId: string) {
   return withLocalWriteReconciliation(userId, async () => {
     const result = await actualMarkBillPaid(billId, userId);
-    invalidateActualMetadataInBackground(userId);
-    await scheduleBillsMirrorRefreshInBackground(userId, 60_000);
+    await invalidateActualAfterTransactionImport(userId).catch((err: unknown) => {
+      console.error("[EA] Actual write succeeded but projection publication failed:", errorMessage(err));
+    });
     return result;
   }, { delayMs: 60_000 });
 }
@@ -208,8 +210,9 @@ export async function removeActualConnection(userId: string) {
 export async function createQuickTxn(userId: string, payload: ActualQuickTransactionInput) {
   return withLocalWriteReconciliation(userId, async () => {
     const result = await actualCreateQuickTxn(userId, payload);
-    invalidateActualMetadataInBackground(userId);
-    await scheduleBillsMirrorRefreshInBackground(userId, 60_000);
+    await invalidateActualAfterTransactionImport(userId).catch((err: unknown) => {
+      console.error("[EA] Actual write succeeded but projection publication failed:", errorMessage(err));
+    });
     return result;
   }, { delayMs: 60_000 });
 }
@@ -241,7 +244,7 @@ export async function hydrateActualCache(userId: string, {
   dbClient = db,
   now = new Date(),
 }: { dbClient?: BillsMirrorDb & NonNullable<LocalActualOptions["dbClient"]>; now?: Date } = {}) {
-  const hydrated = await hydrateLocalActualCache(userId, { dbClient });
+  const hydrated = await hydrateActualWorkerCache(userId);
   const actualBudgetUrl = await loadActualBudgetUrl(userId, { dbClient });
   const mirror = await refreshBillsMirror(userId, { actualBudgetUrl, dbClient, now });
   return {

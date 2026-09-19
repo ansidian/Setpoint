@@ -17,6 +17,7 @@ vi.mock("child_process", () => ({
 
 const {
   runActualWorkerOperation,
+  stopActualWorker,
   shutdownActualWorker,
 } = await import("./actual-worker.ts");
 
@@ -96,6 +97,57 @@ describe("Actual worker runner", () => {
     await expect(second).resolves.toEqual([{ id: "payee-1" }]);
   });
 
+  it("drains admitted operations and awaits worker exit when stopping", async () => {
+    const child = createChild();
+    forkMock.mockReturnValueOnce(child);
+    const first = runActualWorkerOperation("sendBill", [{ amount: 10 }, "user-1"]);
+    const second = runActualWorkerOperation("syncMetadata", ["user-1"]);
+    await Promise.resolve();
+    const stopped = stopActualWorker();
+    await expect(runActualWorkerOperation("getMetadata", ["user-1"])).rejects.toMatchObject({ status: 503 });
+
+    // test-architecture: allow-boundary-interaction -- child.kill is the process lifecycle boundary; stopping must let already-admitted writes finish before sending SIGTERM.
+    expect(child.kill).not.toHaveBeenCalled();
+    // test-architecture: allow-boundary-interaction -- child.send is the process IPC boundary; response correlation proves the admitted write and subsequent metadata sync drain in order.
+    const firstRequest = child.send.mock.calls[0]![0];
+    child.emit("message", { id: firstRequest.id, ok: true, result: { success: true } });
+    await expect(first).resolves.toEqual({ success: true });
+    // test-architecture: allow-boundary-interaction -- child.kill is the process lifecycle boundary; the queued metadata synchronization must complete before graceful process shutdown.
+    expect(child.kill).not.toHaveBeenCalled();
+    // test-architecture: allow-boundary-interaction -- child.send is the process IPC boundary; only the matching response completes the queued synchronization before shutdown.
+    const secondRequest = child.send.mock.calls[1]![0];
+    child.emit("message", { id: secondRequest.id, ok: true, result: { accounts: [] } });
+    await expect(second).resolves.toEqual({ accounts: [] });
+    // test-architecture: allow-boundary-interaction -- child.kill is the process lifecycle boundary; the drained process must receive a graceful termination request.
+    expect(child.kill).toHaveBeenCalledWith("SIGTERM");
+    let exited = false;
+    void stopped.then(() => { exited = true; });
+    await Promise.resolve();
+    expect(exited).toBe(false);
+    child.emit("exit", 0, null);
+    await stopped;
+    expect(exited).toBe(true);
+  });
+
+  it("force-kills a worker that does not exit during graceful shutdown", async () => {
+    vi.useFakeTimers();
+    const child = createChild();
+    forkMock.mockReturnValueOnce(child);
+    const operation = runActualWorkerOperation("clearMetadataCache", []);
+    await Promise.resolve();
+    // test-architecture: allow-boundary-interaction -- child.send is the process IPC boundary; the matching response leaves an idle worker eligible for shutdown.
+    const request = child.send.mock.calls[0]![0];
+    child.emit("message", { id: request.id, ok: true });
+    await operation;
+
+    const stopped = stopActualWorker();
+    await vi.advanceTimersByTimeAsync(2000);
+    // test-architecture: allow-boundary-interaction -- child.kill is the process lifecycle boundary; shutdown must escalate to SIGKILL if SDK cleanup exceeds its grace period.
+    expect(child.kill).toHaveBeenCalledWith("SIGKILL");
+    child.emit("exit", null, "SIGKILL");
+    await stopped;
+  });
+
   it("rejects with a 502 when the worker exits before responding", async () => {
     const child = createChild();
     forkMock.mockReturnValueOnce(child);
@@ -110,6 +162,21 @@ describe("Actual worker runner", () => {
       code: "ACTUAL_WORKER_EXITED",
       message: expect.stringContaining("status 134"),
     });
+  });
+
+  it("preserves a committed local write when synchronization fails", async () => {
+    const child = createChild();
+    forkMock.mockReturnValueOnce(child);
+    const result = runActualWorkerOperation("sendBill", [{ amount: 10 }, "user-1"]);
+    await Promise.resolve();
+    // test-architecture: allow-boundary-interaction -- child.send is the process IPC boundary; the worker response identifies a write that must be reconciled rather than replayed.
+    const request = child.send.mock.calls[0]![0];
+    child.emit("message", {
+      id: request.id,
+      ok: false,
+      error: { message: "Saved locally in Actual; synchronization is pending", status: 502, code: "ACTUAL_SYNC_FAILED", localWriteApplied: true },
+    });
+    await expect(result).rejects.toMatchObject({ status: 502, code: "ACTUAL_SYNC_FAILED", localWriteApplied: true });
   });
 
   it("starts a fresh worker after a crash", async () => {
@@ -221,24 +288,36 @@ describe("Actual worker runner", () => {
     await expect(second).resolves.toEqual([]);
   });
 
-  it("caps production worker heap by default", async () => {
+  it("keeps the production worker alive between writes with a bounded heap", async () => {
+    vi.useFakeTimers();
     process.env.NODE_ENV = "production";
     const child = createChild();
     forkMock.mockReturnValueOnce(child);
 
-    const resultPromise = runActualWorkerOperation("getMetadata", ["user-1"], { timeoutMs: 1000 });
+    const resultPromise = runActualWorkerOperation("sendBill", [{ amount: 10 }, "user-1"], { timeoutMs: 1000 });
     await Promise.resolve();
 
     // test-architecture: allow-boundary-interaction -- Actual worker IPC and fork configuration are process boundaries; request correlation, replacement, and memory ceilings are observable only on child messages and fork options.
-    expect(forkMock.mock.calls[0]![2]!.execArgv).toEqual(["--max-old-space-size=192"]);
+    expect(forkMock.mock.calls[0]![2]!.execArgv).toEqual(["--max-old-space-size=1024"]);
     // test-architecture: allow-boundary-interaction -- Actual worker IPC and fork configuration are process boundaries; request correlation, replacement, and memory ceilings are observable only on child messages and fork options.
     const request = child.send.mock.calls[0]![0];
     child.emit("message", {
       id: request.id,
       ok: true,
-      result: { accounts: [] },
+      result: { success: true },
     });
-    await expect(resultPromise).resolves.toEqual({ accounts: [] });
+    await expect(resultPromise).resolves.toEqual({ success: true });
+
+    await vi.advanceTimersByTimeAsync(60_001);
+    // test-architecture: allow-boundary-interaction -- child.kill is the process lifecycle boundary; production must retain the loaded SDK session after the former idle deadline.
+    expect(child.kill).not.toHaveBeenCalled();
+
+    const nextWrite = runActualWorkerOperation("createQuickTxn", ["user-1", { amount: 20 }], { timeoutMs: 1000 });
+    await Promise.resolve();
+    // test-architecture: allow-boundary-interaction -- child.send is the process IPC boundary; the retained process must accept a subsequent write after the idle interval.
+    const nextRequest = child.send.mock.calls[1]![0];
+    child.emit("message", { id: nextRequest.id, ok: true, result: { success: true } });
+    await expect(nextWrite).resolves.toEqual({ success: true });
   });
 
   it("allows an explicit worker heap cap override", async () => {

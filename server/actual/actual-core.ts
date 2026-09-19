@@ -17,6 +17,8 @@ import {
   findLocalBudgetDir,
   hydrateLocalActualCache,
   pruneActualBudgetBackups,
+  describeLocalActualCache,
+  readLocalActualMetadata,
 } from "./actual-local-metadata.ts";
 import {
   actualSessionKey,
@@ -150,10 +152,6 @@ async function maybePruneBackups(budgetDir: string): Promise<void> {
     console.warn("[EA] Actual local backup pruning failed:", err instanceof Error ? err.message : err);
   });
 }
-function allowColdActualHydration(): boolean {
-  return process.env.NODE_ENV !== "production" || process.env.EA_ACTUAL_ALLOW_COLD_SDK_DOWNLOAD === "1";
-}
-
 function withLock<T>(fn: () => T | Promise<T>): Promise<T> {
   const result = lock.then(() => fn());
   lock = result.catch(() => {});
@@ -162,6 +160,7 @@ function withLock<T>(fn: () => T | Promise<T>): Promise<T> {
 
 async function closeActualSession(): Promise<void> {
   activeBudget = null;
+  clearMetadataCache();
   await sdk.shutdown().catch(() => {});
 }
 
@@ -175,13 +174,7 @@ async function ensureActualBudget(userId: string): Promise<SdkActualConfig> {
   let localBudgetId = localBudget?.metadata?.id || null;
   let localBudgetDir = localBudget?.budgetDir || null;
   if (!localBudgetId || !localBudgetDir) {
-    if (!allowColdActualHydration()) {
-      throw Object.assign(new Error("Actual local budget cache is unavailable; refusing cold Actual download in production"), {
-        status: 503,
-        code: "ACTUAL_LOCAL_BUDGET_REQUIRED",
-      });
-    }
-    const hydrated = await hydrateLocalActualCache(userId, { dataDir, forceDownload: true });
+    const hydrated = await hydrateLocalActualCache(userId, { dataDir });
     localBudgetId = typeof hydrated.budgetId === "string" && hydrated.budgetId ? hydrated.budgetId : null;
     localBudgetDir = typeof hydrated.budgetDir === "string" && hydrated.budgetDir ? hydrated.budgetDir : null;
     if (!localBudgetId || !localBudgetDir) {
@@ -199,6 +192,7 @@ async function ensureActualBudget(userId: string): Promise<SdkActualConfig> {
   };
   const key = actualSessionKey(config);
   if (activeBudget?.key === key) return config;
+  clearMetadataCache();
   if (activeBudget) {
     await closeActualSession();
   }
@@ -241,6 +235,39 @@ export function clearMetadataCache(): void {
   metadataCache = { data: null, ts: 0 };
 }
 
+export function shutdownActual(): Promise<void> {
+  return withLock(closeActualSession);
+}
+
+export function hydrateCache(userId: string) {
+  return withLock(() => withActualBudget(userId, async () => {
+    await sdk.sync();
+    clearMetadataCache();
+    return describeLocalActualCache(userId);
+  }));
+}
+
+export function syncMetadata(userId: string): Promise<ActualMetadata> {
+  return withLock(() => withActualBudget(userId, async () => {
+    await sdk.sync();
+    clearMetadataCache();
+    return readLocalActualMetadata(userId, { localOnly: true });
+  }));
+}
+
+// The mutation has returned and is durable locally. A failed push must trigger
+// reconciliation, never a second mutation prompted by a retry response.
+async function syncAfterWrite(): Promise<void> {
+  clearMetadataCache();
+  try {
+    await sdk.sync();
+  } catch (cause) {
+    throw Object.assign(new Error("Saved locally in Actual; synchronization is pending", { cause }), {
+      status: 502, code: "ACTUAL_SYNC_FAILED", localWriteApplied: true,
+    });
+  }
+}
+
 export function testConnection(userId: string, overrides: ActualConnectionOverrides | null = null) {
   return withLock(async () => {
     let serverURL: string;
@@ -264,6 +291,7 @@ export function testConnection(userId: string, overrides: ActualConnectionOverri
     }
 
     try {
+      if (activeBudget) await closeActualSession();
       await sdk.init({ serverURL, password });
       // getBudgets validates auth + connectivity without downloading/syncing
       const budgets = await sdk.getBudgets();
@@ -298,10 +326,10 @@ async function getMetadataInner(userId: string, { forceRefresh = false }: { forc
 
     if (forceRefresh) {
       clearMetadataCache();
-      await closeActualSession();
     }
 
     return withActualBudget(userId, async () => {
+      await sdk.sync();
       const monthAgo = new Date(Date.now() - 30 * 86400000).toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
       const [rawAccounts, rawPayees, groups, schedules, recentTxns] = await Promise.all([
         sdk.getAccounts(),
@@ -390,8 +418,9 @@ export function getCalendarBillsRange(userId: string, { start, end }: { start: s
 export function markBillPaid(scheduleId: string, userId: string) {
   return withLock(async () => {
     return withActualBudget(userId, async () => {
-      await sdk.internal.send("schedule/post-transaction", { id: scheduleId });
       await sdk.sync();
+      await sdk.internal.send("schedule/post-transaction", { id: scheduleId });
+      await syncAfterWrite();
       clearMetadataCache();
       return { success: true };
     });
@@ -401,8 +430,9 @@ export function markBillPaid(scheduleId: string, userId: string) {
 export function sendBill(billData: ActualBillData, userId: string) {
   return withLock(async () => {
     return withActualBudget(userId, async () => {
-      const result = await scheduleWrites.writeBill(billData);
       await sdk.sync();
+      const result = await scheduleWrites.writeBill(billData);
+      await syncAfterWrite();
       clearMetadataCache();
       return result;
     });
@@ -419,7 +449,7 @@ export function createQuickTxn(userId: string, { accountName, amount, payee, typ
       throw e;
     }
 
-    const meta = await getMetadataInner(userId);
+    const meta = await getMetadataInner(userId, { forceRefresh: true });
     const acct = meta.accounts.find(a => a.name.toLowerCase() === String(accountName).toLowerCase());
     if (!acct) {
       const e: ActualError = new Error(`Account "${accountName}" not found in Actual Budget`);
@@ -451,7 +481,7 @@ export function createQuickTxn(userId: string, { accountName, amount, payee, typ
       if (categoryId) txn.category = categoryId;
 
       await sdk.addTransactions(acct.id, [txn]);
-      await sdk.sync();
+      await syncAfterWrite();
 
       // Invalidate cached recentTransactions so bill-paid detection sees this txn
       clearMetadataCache();
@@ -493,6 +523,7 @@ export function inspectOriginalImportBinding(userId: string, budgetId: string, a
   return withLock(() => withActualBudget(userId, async (config) => {
     if (config.syncId !== budgetId) return { status: "wrong_budget", evidence: null };
     await sdk.sync();
+    clearMetadataCache();
     const rows = targetId ? [] : (await readOriginalTransactions(sdk, accountId)).filter((row) => !row.tombstone && row.acct === accountId && row.financial_id === importedId);
     if (!targetId && rows.length !== 1) return { status: rows.length ? "ambiguous" : "missing", evidence: null };
     const evidence = await readOriginalResult(sdk, budgetId, { transactionId: targetId || String(rows[0]!.id) });
@@ -521,6 +552,7 @@ export function inspectCorrection(userId: string, budgetId: string, targets: Cor
   return withLock(() => withActualBudget(userId, async config => {
     if (config.syncId !== budgetId) throw new Error('The selected Actual budget changed.');
     await sdk.sync();
+    clearMetadataCache();
     return readCorrectionSnapshot(sdk, budgetId, targets);
   }));
 }
@@ -528,6 +560,7 @@ export function dispatchCorrection(userId: string, budgetId: string, step: Corre
   return withLock(() => withActualBudget(userId, async config => {
     if (config.syncId !== budgetId) throw new Error('The selected Actual budget changed.');
     await sdk.sync();
+    clearMetadataCache();
     const observed = await readCorrectionSnapshot(sdk, budgetId, step.targets);
     if (correctionJson(observed) !== correctionJson(expected)) return { observed, state: 'no_write' as const, error: 'Actual changed before dispatch; refresh this correction.' };
     return executeCorrectionStep(sdk, budgetId, step, expected);

@@ -168,6 +168,23 @@ describe("planCurrentDataRefresh", () => {
 });
 
 describe("provider refresh-plan modifiers", () => {
+  it("refreshes a newer bills mirror without another provider sync and stops once published", () => {
+    const rows = freshRows();
+    const lastSuccessAt = now.toISOString();
+    const context = { billsMirror: { syncHealth: { state: "current", configured: true, lastSuccessAt } } };
+    const plan = planCurrentDataRefresh(rows, { mode: "passive", now, context });
+    const forceKeys = new Set<CurrentDashboardCacheKey>();
+    applyProviderMaintenanceRefresh(plan, rows, { forceKeys, now, context });
+    expect(plan.scheduled).toContainEqual({ key: "bills_current", reason: "bills_mirror_changed" });
+    expect(forceKeys).toEqual(new Set());
+
+    rows.bills_current!.payload_json = JSON.stringify({
+      bills: [], allSchedules: [], payeeMap: {}, billsSyncHealth: context.billsMirror.syncHealth,
+    });
+    expect(planCurrentDataRefresh(rows, { mode: "passive", now, context }).scheduled)
+      .not.toContainEqual(expect.objectContaining({ key: "bills_current" }));
+  });
+
   it("suppresses a planned passive Bills refresh during provider failure backoff", () => {
     const rows = freshRows();
     rows.bills_current = cacheRow("bills_current", {
@@ -183,7 +200,7 @@ describe("provider refresh-plan modifiers", () => {
         billsMirror: {
           syncHealth: {
             state: "degraded",
-            lastAttemptAt: new Date(now.getTime() - 20 * 60_000).toISOString(),
+            lastAttemptAt: new Date(now.getTime() - 30_000).toISOString(),
           },
         },
       },
@@ -193,7 +210,7 @@ describe("provider refresh-plan modifiers", () => {
     expect(plan.skipped).toContainEqual({ key: "bills_current", reason: "provider_backoff" });
   });
 
-  it("uses the real Bills provider policy at the six-hour maintenance boundary", () => {
+  it("uses the real Bills provider policy at the five-minute maintenance boundary", () => {
     const rows = freshRows();
     const planFor = (lastSuccessAt: Date) => {
       const plan = planCurrentDataRefresh(rows, { mode: "passive", now });

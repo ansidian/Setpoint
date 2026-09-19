@@ -35,7 +35,7 @@ Bill domain logic: AI extraction from emails, profile-authorized financial-email
 - `financialEmailTargetRanker.ts` — constrained external-provider adapter that can select only supplied opaque account, payee, or history-bundle keys with high-confidence verbatim evidence
 - `billSemanticAmountPolicy.ts` — canonical semantic amount selection for the planner; card statements require the full statement balance and minimum due is never operational
 - `statementActualStatusModel.ts` — strict pure matcher for statement candidates against Actual schedules, occurrences, and exact transactions
-- `bills-mirror-sync.ts` — syncs bill occurrences into `ea_bills_mirror_*`, schedules maintenance; thin IO + scheduler + refresh-orchestration over billsMirrorModel.ts
+- `bills-mirror-sync.ts` — syncs bill occurrences into `ea_bills_mirror_*`, runs five-minute maintenance with one-minute failure retry; thin IO + scheduler + refresh-orchestration over billsMirrorModel.ts
 - `billsMirrorModel.ts` — pure derivation: date/range math, mirror row<->object projections, upsert arg builders, and the maintenance-due predicate
 - `bills-mirror-refresh-policy.ts` — pure guard: should a reader kick an immediate mirror refresh, or is a settle window already armed
 

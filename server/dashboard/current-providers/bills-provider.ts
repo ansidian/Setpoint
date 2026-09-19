@@ -12,10 +12,8 @@ import type { BillsMirrorHealth, BillsMirrorPayload } from "../../../shared/type
 import type { CurrentDashboardCacheRow } from "../../../shared/types/dashboard.ts";
 import type { CurrentDashboardProvider, CurrentProviderContext } from "../current-types.ts";
 
-// Bills refresh failures are dominated by the Actual provider being down;
-// retrying on the generic passive cadence just burns the provider, so passive
-// refreshes back off for much longer than the other sources.
-const BILLS_PASSIVE_PROVIDER_FAILURE_BACKOFF_MS = 6 * 60 * 60 * 1000;
+// Give Actual a short recovery window without delaying finance updates for hours.
+const BILLS_PASSIVE_PROVIDER_FAILURE_BACKOFF_MS = 60 * 1000;
 
 function billsHealthProjection(health: BillsMirrorHealth | null = null) {
   return {
@@ -147,6 +145,19 @@ const billsProvider: CurrentDashboardProvider = {
       state: "current",
       occurredAt: now.toISOString(),
     });
+  },
+  refreshReasonOverride({ row, context }) {
+    const lastSuccessAt = context.billsMirror?.syncHealth?.lastSuccessAt;
+    if (!lastSuccessAt || !row?.payload_json) return null;
+    try {
+      const cached = JSON.parse(row.payload_json) as Partial<BillsMirrorPayload> | null;
+      const cachedSuccessAt = (cached?.billsSyncHealth || cached?.syncHealth)?.lastSuccessAt;
+      // Worker maintenance and verified writes update the mirror independently
+      // of this dashboard cache. Publish their new snapshot on the next poll.
+      return cachedSuccessAt !== lastSuccessAt ? "bills_mirror_changed" : null;
+    } catch {
+      return null;
+    }
   },
   manualRefreshReason({ context }) {
     return context?.billsMirror?.syncHealth?.pendingRefreshAt

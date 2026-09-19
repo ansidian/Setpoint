@@ -18,7 +18,6 @@ import {
   loginActual,
   fetchActualJson,
   fetchActualBuffer,
-  syncDownloadedBudget,
 } from "./actualMetadataSync.ts";
 import { readActualBudgetArchive, validateActualBudgetId } from "./actual-budget-archive.ts";
 import { mkdir, writeFile } from "fs/promises";
@@ -32,18 +31,13 @@ interface LocalBudget {
   budgetDir: string;
   metadata: BudgetMetadata & { id?: string; groupId: string; cloudFileId: string };
   backupPrune?: { removed: number; kept: number };
-  syncDeltas?: Record<string, unknown>;
 }
 
 export interface LocalActualOptions {
   dbClient?: { execute(statement: InStatement): Promise<{ rows: Array<Record<string, unknown>> }> };
   dataDir?: string;
-  refresh?: boolean;
   forceDownload?: boolean;
   localOnly?: boolean;
-  downloadBudget?: (config: ActualConfig, options?: LocalActualOptions) => Promise<LocalBudget>;
-  syncBudget?: (config: ActualConfig, options?: LocalActualOptions & { local?: LocalBudget }) => Promise<LocalBudget>;
-  local?: LocalBudget;
 }
 
 export interface CacheDescription {
@@ -58,7 +52,7 @@ export interface CacheDescription {
 // Facade re-exports: pure date helpers (actualMetadataModel.ts) and filesystem
 // cache ops (actualMetadataCacheStore.ts) now live in their own modules but stay
 // importable from here for the existing consumers (actual-transactions-read.ts,
-// actual-core.ts, actual-lightweight-writes.ts, prune-actual-cache.js).
+// actual-core.ts, prune-actual-cache.ts).
 export { ymdFromActualDate, actualDateInt };
 export {
   actualDataDir,
@@ -150,7 +144,7 @@ async function downloadBudgetZip(config: ActualConfig, { dataDir = actualDataDir
     throw Object.assign(new Error("Actual Budget file info was unavailable"), { status: 502 });
   }
   if (info.encryptMeta) {
-    throw Object.assign(new Error("Encrypted Actual Budget files are not supported by lightweight metadata download"), { status: 400 });
+    throw Object.assign(new Error("Encrypted Actual Budget files are not supported by budget bootstrap"), { status: 400 });
   }
 
   const buffer = await fetchActualBuffer(`${config.serverURL}/sync/download-user-file`, {
@@ -172,59 +166,30 @@ async function downloadBudgetZip(config: ActualConfig, { dataDir = actualDataDir
   await mkdir(budgetDir, { recursive: true });
   await writeFile(path.join(budgetDir, "db.sqlite"), archive.database);
   await writeFile(path.join(budgetDir, "metadata.json"), JSON.stringify(metadata));
-  const syncDeltas = await syncDownloadedBudget(config, token, { budgetDir, metadata });
   let backupPrune = { removed: 0, kept: 0 };
   backupPrune = await pruneActualBudgetBackups(budgetDir).catch((err: unknown) => {
     console.warn("[EA] Actual local backup pruning failed:", err instanceof Error ? err.message : err);
     return backupPrune;
   });
-  return { budgetDir, metadata: syncDeltas.metadata, backupPrune, syncDeltas };
+  return { budgetDir, metadata, backupPrune };
 }
 
-async function syncLocalBudget(config: ActualConfig, { local }: LocalActualOptions = {}): Promise<LocalBudget> {
-  if (!local?.budgetDir || !local?.metadata) {
-    throw Object.assign(new Error("Actual Budget local metadata is unavailable"), { status: 503 });
-  }
-  const token = await loginActual(config);
-  const syncDeltas = await syncDownloadedBudget(config, token, {
-    budgetDir: local.budgetDir,
-    metadata: local.metadata,
-  });
-  let backupPrune = { removed: 0, kept: 0 };
-  backupPrune = await pruneActualBudgetBackups(local.budgetDir).catch((err: unknown) => {
-    console.warn("[EA] Actual local backup pruning failed:", err instanceof Error ? err.message : err);
-    return backupPrune;
-  });
-  return {
-    budgetDir: local.budgetDir,
-    metadata: syncDeltas.metadata,
-    backupPrune,
-    syncDeltas,
-  };
-}
-
-async function ensureLocalBudget(config: ActualConfig, options: LocalActualOptions = {}): Promise<LocalBudget> {
-  const downloadBudget = options.downloadBudget || downloadBudgetZip;
-  const syncBudget = options.syncBudget || syncLocalBudget;
+async function requireLocalBudget(config: ActualConfig, options: LocalActualOptions): Promise<LocalBudget> {
   const found = await findLocalBudgetDir(config.syncId, options);
-  const local = found ? { ...found, metadata: found.metadata as LocalBudget["metadata"] } : null;
-  if (options.refresh) {
-    if (local && !options.forceDownload) return syncBudget(config, { ...options, local });
-    return downloadBudget(config, options);
-  }
-  if (local) return local;
-  if (options.localOnly) {
+  if (!found) {
     throw Object.assign(new Error("Actual Budget local metadata is unavailable"), { status: 503 });
   }
-  return downloadBudget(config, options);
+  return { ...found, metadata: found.metadata as LocalBudget["metadata"] };
 }
 
+// Worker bootstrap only: the SDK owns synchronization after loading this archive.
+// Reuse an existing copy unless the caller explicitly requests recovery.
 export async function hydrateLocalActualCache(userId: string, options: LocalActualOptions = {}) {
   const config = await getActualConfig(userId, options);
-  const hydrated = await ensureLocalBudget(config, {
-    ...options,
-    refresh: true,
-  });
+  const local = options.forceDownload ? null : await findLocalBudgetDir(config.syncId, options);
+  const hydrated: LocalBudget = local
+    ? { ...local, metadata: local.metadata as LocalBudget["metadata"] }
+    : await downloadBudgetZip(config, options);
   const summary = await describeLocalActualBudget(hydrated.budgetDir, {
     metadata: hydrated.metadata,
   });
@@ -238,20 +203,17 @@ export async function hydrateLocalActualCache(userId: string, options: LocalActu
 
 // Direct read access to the on-disk budget copy without booting the SDK — the
 // same path readLocalActualMetadata uses, exposed so other readers (e.g.
-// transactions) can run their own queries against db.sqlite. localOnly defaults
-// to true: a missing copy throws 503 rather than triggering a download.
+// transactions) can run their own queries against db.sqlite. A missing copy
+// always throws 503; reads never download, synchronize, or replace the cache.
 export async function openLocalBudgetClient(userId: string, options: LocalActualOptions = {}): Promise<Client> {
   const config = await getActualConfig(userId, options);
-  const local = await ensureLocalBudget(config, {
-    ...options,
-    localOnly: options.localOnly !== false,
-  });
+  const local = await requireLocalBudget(config, options);
   return createClient({ url: `file:${path.join(local.budgetDir, "db.sqlite")}` });
 }
 
 export async function readLocalActualMetadata(userId: string, options: LocalActualOptions = {}): Promise<ActualMetadata> {
   const config = await getActualConfig(userId, options);
-  const local = await ensureLocalBudget(config, options);
+  const local = await requireLocalBudget(config, options);
   const budgetDb = path.join(local.budgetDir, "db.sqlite");
   const client = createClient({ url: `file:${budgetDb}` });
   try {

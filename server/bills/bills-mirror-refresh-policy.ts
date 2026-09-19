@@ -7,7 +7,7 @@
 // rescheduled with the default delayMs:0, scheduleBillsMirrorRefresh's
 // ON CONFLICT MIN(new, existing) would pull that pending time back to now and
 // fire immediately, defeating the settle and re-downloading a stale mirror (the
-// just-sent bill missing for up to the 6h maintenance TTL). So: only schedule
+// just-sent bill missing for until the next maintenance refresh). So: only schedule
 // when there is no still-future pending refresh already armed (P1-5).
 export function shouldScheduleImmediateBillsRefresh(syncHealth: BillsMirrorHealth | null | undefined, now: Date = new Date()): boolean {
   if (syncHealth?.state !== "needs_sync") return false;

@@ -94,6 +94,11 @@ describe("isBillsMirrorMaintenanceDue", () => {
       state: "degraded",
       lastAttemptAt: new Date(NOW.getTime() - 1000).toISOString(),
     }, { now: NOW })).toBe(false);
+    expect(isBillsMirrorMaintenanceDue({
+      ...base,
+      state: "degraded",
+      lastAttemptAt: new Date(NOW.getTime() - 60_000).toISOString(),
+    }, { now: NOW })).toBe(true);
   });
 });
 

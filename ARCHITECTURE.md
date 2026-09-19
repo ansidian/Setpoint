@@ -818,7 +818,7 @@ Current-data fetches degrade independently. A Gmail outage can leave the snapsho
 ### Connection Pooling
 
 - **iCloud IMAP**: Persistent connections per email address with 10-minute idle TTL. Reused across fetches, auto-reconnect on loss.
-- **Actual Budget**: Persistent provider worker owns the singleton SDK session. Calls are serialized through the worker, worker health is tracked in-process, and EA reads normally use mirrored metadata/bill rows instead of opening Actual.
+- **Actual Budget**: Persistent provider worker owns the singleton SDK session. All writes and syncs are serialized through the worker; healthy sessions remain loaded with a 1024 MiB production old-space ceiling. Cache invalidation and connection teardown are explicit. EA reads normally use local SQLite or mirrored metadata/bill rows. The bills worker synchronizes every five minutes, retries failures after one minute, and publishes verified writes immediately with a durable fallback. App shutdown drains the SDK after its producers.
 - **Gmail**: Token refresh on-demand before each API call (5-minute expiry buffer).
 
 ### Floating Panel Pattern

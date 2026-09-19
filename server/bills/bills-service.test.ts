@@ -10,14 +10,15 @@ const mockActual = {
   getCategories: vi.fn(),
   getPayees: vi.fn(),
   getMetadata: vi.fn(),
+  syncActualMetadata: vi.fn(),
   getCalendarBillsRange: vi.fn(),
   testConnection: vi.fn(),
   createQuickTxn: vi.fn(),
   invalidateActualMetadataCache: vi.fn(),
+  hydrateActualCache: vi.fn(),
 };
 const mockActualLocal = {
   describeLocalActualCache: vi.fn(),
-  hydrateLocalActualCache: vi.fn(),
   openLocalBudgetClient: vi.fn(),
   readLocalActualMetadata: vi.fn(),
 };
@@ -85,8 +86,8 @@ beforeEach(() => {
     hydrated: true,
     budgetId: "Budget-1",
   });
-  mockActualLocal.hydrateLocalActualCache.mockReset();
-  mockActualLocal.hydrateLocalActualCache.mockResolvedValue({
+  mockActual.hydrateActualCache.mockReset();
+  mockActual.hydrateActualCache.mockResolvedValue({
     success: true,
     hydrated: true,
     budgetId: "Budget-1",
@@ -101,6 +102,7 @@ beforeEach(() => {
   mockActual.invalidateActualMetadataCache.mockResolvedValue(undefined);
   mockActual.getPayees.mockResolvedValue([]);
   mockActual.getMetadata.mockResolvedValue({ accounts: [], payees: [], categories: [], schedules: [], recentTransactions: [] });
+  mockActual.syncActualMetadata.mockResolvedValue({ accounts: [], payees: [], categories: [], schedules: [], recentTransactions: [] });
   mockDb.execute.mockReset();
   mockDb.batch.mockReset();
 });
@@ -144,7 +146,7 @@ describe("settled Actual invalidation", () => {
       recentTransactions: [{ id: "paid", scheduleId: "bill", payeeId: "power", amount: 50, date }],
     };
     mockActualLocal.readLocalActualMetadata.mockImplementation(async (_userId, options) => {
-      if (options.refresh !== false) throw new Error("The verified write must not request another provider sync");
+      if (options.localOnly !== true) throw new Error("The verified write must not request another provider sync");
       return metadata;
     });
     await invalidateActualAfterTransactionImport("u1");
@@ -178,28 +180,25 @@ describe("settled Actual invalidation", () => {
 });
 
 describe("sendBill", () => {
-  it("forwards to actual.sendBill and schedules a delayed mirror refresh", async () => {
-    await useReconciliationDb();
+  it("publishes a successful bill write immediately", async () => {
+    const database = await useReconciliationDb();
+    await database.execute("INSERT INTO ea_settings (user_id, actual_budget_url) VALUES ('u1', 'https://actual.example.test')");
     mockActual.sendBill.mockResolvedValueOnce({ id: "bill-1" });
     mockActualLocal.readLocalActualMetadata.mockResolvedValueOnce({
       accounts: [], payees: [], payeeMap: {}, categories: [], schedules: [], recentTransactions: [],
     });
     const out = await sendBill("u1", { payee: "x", amount: 10, type: "bill" });
     expect(out).toEqual({ id: "bill-1" });
-    await expectReconciliationState();
+    expect((await database.execute("SELECT status, pending_refresh_at FROM ea_bills_mirror_state")).rows)
+      .toEqual([expect.objectContaining({ status: "current", pending_refresh_at: null })]);
   });
 });
 
-describe("lightweight write reconciliation on sync-push failure", () => {
-  // A lightweight write applied locally but whose Actual-server push failed
-  // throws err.localWriteApplied === true. The local write is durable and
-  // re-syncs later, so the metadata mirror + bills mirror must still be
-  // invalidated/scheduled, and the call must NOT surface as a hard failure
-  // (a 5xx would prompt a duplicate-inducing retry).
+describe("SDK write reconciliation on sync failure", () => {
   function localWriteSyncError() {
     return Object.assign(new Error("Actual sync push failed"), {
       status: 502,
-      code: "ACTUAL_LIGHTWEIGHT_SYNC_FAILED",
+      code: "ACTUAL_SYNC_FAILED",
       localWriteApplied: true,
     });
   }
@@ -220,7 +219,7 @@ describe("lightweight write reconciliation on sync-push failure", () => {
     expect(out).toMatchObject({
       syncPending: true,
       localWriteApplied: true,
-      code: "ACTUAL_LIGHTWEIGHT_SYNC_FAILED",
+      code: "ACTUAL_SYNC_FAILED",
     });
     await expectReconciliationState();
   });
@@ -265,10 +264,18 @@ describe("lightweight write reconciliation on sync-push failure", () => {
     });
     expect(mirror.rows).toEqual([]);
   });
+
+  it.each(["ACTUAL_WORKER_TIMEOUT", "ACTUAL_WORKER_EXITED"])("retains reconciliation for an uncertain %s without claiming success", async (code) => {
+    const database = await useReconciliationDb();
+    mockActual.sendBill.mockRejectedValueOnce(Object.assign(new Error("Unknown write outcome"), { code }));
+    await expect(sendBill("u1", { payee: "x", amount: 10, type: "bill" })).rejects.toMatchObject({ code });
+    expect((await database.execute("SELECT status, pending_refresh_at FROM ea_bills_mirror_state")).rows)
+      .toEqual([expect.objectContaining({ status: "needs_sync", pending_refresh_at: expect.any(String) })]);
+  });
 });
 
 describe("hydrateActualCache", () => {
-  it("hydrates the local Actual cache and refreshes the bills mirror from that cache", async () => {
+  it("hydrates the worker budget and refreshes the bills mirror from that cache", async () => {
     const actualMetadata = {
       accounts: [],
       payees: [{ id: "payee-power", name: "Power Co" }],
@@ -326,7 +333,7 @@ describe("listAccounts", () => {
     expect(out).toEqual([{ id: "a1" }]);
   });
 
-  it("does not spawn Actual for empty degraded metadata on render-facing reads", async () => {
+  it("does not spawn Actual for empty degraded metadata on dashboard reads", async () => {
     mockDb.execute
       .mockResolvedValueOnce(rowResult([
         {
@@ -348,7 +355,7 @@ describe("listAccounts", () => {
     });
   });
 
-  it("can explicitly refresh empty metadata projections through the worker after lightweight projection fails", async () => {
+  it("can explicitly refresh empty metadata projections through the worker after the local projection fails", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     mockDb.execute
       .mockResolvedValueOnce(rowResult([
@@ -365,7 +372,7 @@ describe("listAccounts", () => {
         },
       ]))
       .mockResolvedValueOnce(rowResult());
-    mockActual.getMetadata.mockResolvedValueOnce({
+    mockActual.syncActualMetadata.mockResolvedValueOnce({
       accounts: [{ id: "a1", name: "Checking" }],
       payees: [],
       categories: [],

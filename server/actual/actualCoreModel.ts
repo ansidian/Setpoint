@@ -1,4 +1,4 @@
-// Pure derivation over Actual data for SDK operations and lightweight schedule writes:
+// Pure derivation over Actual data for SDK operations and schedule writes:
 // schedule classification + matching, schedule-condition building, date helpers, and
 // the metadata/bill projections. No @actual-app/api, no DB — the residual owns the SDK
 // session lifecycle, the lock/cache singletons, and all IO.

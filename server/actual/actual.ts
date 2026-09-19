@@ -4,10 +4,10 @@ import type { CorrectionSnapshot, CorrectionStep, CorrectionTargets, CorrectionS
 import type { FinancialBindingInspection } from "../../shared/types/financial-activity.ts";
 import type { ActualTransferScheduleInput, ActualTransferScheduleMode, ActualTransferScheduleResult } from "../../shared/types/transaction-imports.ts";
 import type { ActualFinancialOperationInput, ActualFinancialOperationMode, ActualFinancialOperationResult } from "../../shared/types/financial-operations.ts";
-import { runActualWorkerOperation } from "./actual-worker.ts";
+import { runActualWorkerOperation, stopActualWorker as stopWorker } from "./actual-worker.ts";
 import { testActualConnectionHttp } from "./actual-connection-test.ts";
+import type { CacheDescription } from "./actual-local-metadata.ts";
 import { readLocalActualMetadata } from "./actual-local-metadata.ts";
-import { sendBillLightweight } from "./actual-lightweight-writes.ts";
 import type { ActualWorkerOperation, ActualWorkerOptions } from "./actual-worker-protocol.ts";
 import type {
   ActualMetadata,
@@ -22,12 +22,18 @@ import type { ActualConnectionCandidate } from "./actual-connection-settings.ts"
 
 export async function saveActualConnectionCandidate(userId: string, candidate: ActualConnectionCandidate) {
   const service = await import("./actual-connection-settings.ts");
-  return service.saveActualConnectionCandidate(userId, candidate);
+  const result = await service.saveActualConnectionCandidate(userId, candidate);
+  clearMetadataCache();
+  await callActual<void>("shutdownActual", []);
+  return result;
 }
 
 export async function removeActualConnection(userId: string) {
   const service = await import("./actual-connection-settings.ts");
-  return service.removeActualConnection(userId);
+  const result = await service.removeActualConnection(userId);
+  clearMetadataCache();
+  await callActual<void>("shutdownActual", []);
+  return result;
 }
 
 export interface ActualBillWriteInput {
@@ -67,16 +73,11 @@ const FORCE_METADATA_WORKER_TIMEOUT_MS = 30_000;
 const WRITE_OPERATION_TIMEOUT_MS = 45_000;
 const WRITE_OPERATION_WORKER_OPTIONS = {
   timeoutMs: WRITE_OPERATION_TIMEOUT_MS,
-  shutdownAfterOperation: true,
 };
 let metadataCache: { data: ActualMetadata | null; ts: number } = { data: null, ts: 0 };
 
 function shouldUseInProcessActual(): boolean {
   return process.env.NODE_ENV === "test" || process.env.EA_ACTUAL_WORKER_DISABLED === "1";
-}
-
-function allowSdkWriteFallback(): boolean {
-  return process.env.NODE_ENV !== "production" || process.env.EA_ACTUAL_SDK_WRITE_FALLBACK === "1";
 }
 
 async function callActual<T>(operation: ActualWorkerOperation, args: unknown[], options: ActualWorkerOptions = {}): Promise<T> {
@@ -93,16 +94,27 @@ function clearMetadataCache(): void {
   metadataCache = { data: null, ts: 0 };
 }
 
-// Clears every in-process Actual metadata cache: this facade's TTL cache and,
-// when Actual runs in-process (tests/dev), actual-core's worker-side cache.
-// Worker-mode write operations restart the worker (shutdownAfterOperation),
-// so the worker-side cache does not outlive mutations there.
+// The worker stays warm: invalidate both metadata caches explicitly.
 export async function invalidateActualMetadataCache(): Promise<void> {
   clearMetadataCache();
-  if (shouldUseInProcessActual()) {
-    const core = await import("./actual-core.ts");
-    core.clearMetadataCache();
-  }
+  await callActual<void>("clearMetadataCache", []);
+}
+
+export async function stopActualWorker(): Promise<void> {
+  if (shouldUseInProcessActual()) return callActual<void>("shutdownActual", []);
+  await stopWorker();
+}
+
+export async function hydrateActualCache(userId: string) {
+  clearMetadataCache();
+  return callActual<CacheDescription>("hydrateCache", [userId]);
+}
+
+// Sync and project inside the worker's serialized session. Parent readers never
+// mutate the on-disk budget behind the SDK's loaded state.
+export async function syncActualMetadata(userId: string): Promise<ActualMetadata> {
+  clearMetadataCache();
+  return callActual<ActualMetadata>("syncMetadata", [userId]);
 }
 
 export function testConnection(userId: string, overrides: Parameters<typeof testActualConnectionHttp>[1] = null) {
@@ -111,7 +123,7 @@ export function testConnection(userId: string, overrides: Parameters<typeof test
 
 export async function getMetadata(userId: string, { forceWorker = false, forceRefresh = false }: { forceWorker?: boolean; forceRefresh?: boolean } = {}): Promise<ActualMetadata> {
   if (shouldUseInProcessActual()) return callActual<ActualMetadata>("getMetadata", [userId, { forceRefresh }]);
-  if (forceWorker) {
+  if (forceWorker || forceRefresh) {
     const data = await callActual<ActualMetadata>(
       "getMetadata",
       [userId, { forceRefresh }],
@@ -125,11 +137,11 @@ export async function getMetadata(userId: string, { forceWorker = false, forceRe
     return metadataCache.data;
   }
   try {
-    const localData = await readLocalActualMetadata(userId, { refresh: forceRefresh });
+    const localData = await readLocalActualMetadata(userId, { localOnly: true });
     metadataCache = { data: localData, ts: Date.now() };
     return localData;
   } catch (err: unknown) {
-    console.warn("[EA] Lightweight Actual metadata read failed; falling back to Actual worker:", err instanceof Error ? err.message : err);
+    console.warn("[EA] Local Actual metadata read failed; falling back to Actual worker:", err instanceof Error ? err.message : err);
   }
   const data = await callActual<ActualMetadata>(
     "getMetadata",
@@ -146,35 +158,7 @@ async function markBillPaidInner(scheduleId: string, userId: string): Promise<un
   return result;
 }
 
-// Bill writes are a 3-way branch; every path logs which one ran and why so a
-// misbehaving write can be traced: (1) lightweight CRDT sync (production
-// default), (2) SDK worker fallback when the lightweight path reports
-// ACTUAL_LIGHTWEIGHT_UNSUPPORTED and the fallback is allowed, (3) in-process
-// SDK in test/dev. Errors after the lightweight local write was applied
-// (err.localWriteApplied) never fall back — retrying would duplicate the write.
 async function sendBillInner(billData: ActualBillWriteInput, userId: string): Promise<unknown> {
-  if (!shouldUseInProcessActual()) {
-    try {
-      const result = await sendBillLightweight(userId, billData);
-      console.log("[EA] Bill write path: lightweight CRDT sync");
-      clearMetadataCache();
-      return result;
-    } catch (err: unknown) {
-      const error = typeof err === "object" && err !== null ? err as Record<string, unknown> : {};
-      if (error.code !== "ACTUAL_LIGHTWEIGHT_UNSUPPORTED" || !allowSdkWriteFallback()) {
-        const reason = error.code === "ACTUAL_LIGHTWEIGHT_UNSUPPORTED"
-          ? "SDK fallback disabled"
-          : error.localWriteApplied
-            ? "local write already applied; retry would duplicate"
-            : `not an unsupported-feature error (code: ${String(error.code || "none")})`;
-        console.error(`[EA] Bill write failed on the lightweight path; no SDK fallback (${reason}):`, err instanceof Error ? err.message : err);
-        throw err;
-      }
-      console.warn("[EA] Bill write path: SDK worker fallback (lightweight unsupported):", err instanceof Error ? err.message : err);
-    }
-  } else {
-    console.log("[EA] Bill write path: SDK in-process (test/dev mode)");
-  }
   const result = await callActual<unknown>("sendBill", [billData, userId], WRITE_OPERATION_WORKER_OPTIONS);
   clearMetadataCache();
   return result;

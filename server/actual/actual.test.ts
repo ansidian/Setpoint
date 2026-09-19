@@ -290,7 +290,7 @@ describe("actual.ts metadata cache", () => {
     dateSpy.mockRestore();
   });
 
-  it("force refresh bypasses the metadata cache and reloads the budget session", async () => {
+  it("force refresh synchronizes metadata while reusing the loaded budget session", async () => {
     const { getMetadata } = await import("./actual.ts");
     const actualApi = await importActualApiMock();
 
@@ -298,10 +298,8 @@ describe("actual.ts metadata cache", () => {
     actualApi.__state.accounts = [{ id: "changed", name: "Changed", type: "checking", closed: false }];
     const refreshed = await getMetadata("user1", { forceRefresh: true });
 
-    // test-architecture: allow-boundary-interaction -- SDK shutdown is the outbound session boundary; force refresh must close the prior singleton session.
-    expect(actualApi.shutdown).toHaveBeenCalledTimes(1);
-    // test-architecture: allow-boundary-interaction -- SDK init is the outbound session boundary; force refresh must establish one replacement session.
-    expect(actualApi.init).toHaveBeenCalledTimes(2);
+    // test-architecture: allow-boundary-interaction -- SDK init is the external session boundary; explicit refresh must reuse the loaded budget.
+    expect(actualApi.init).toHaveBeenCalledTimes(1);
     expect(refreshed.accounts).toEqual([{ id: "changed", name: "Changed", type: "checking" }]);
   });
 
@@ -372,7 +370,6 @@ describe("actual.ts sendBill mutex", () => {
     // test-architecture: allow-boundary-interaction -- Bounded cache hydration is the filesystem/remote-download boundary; missing development caches must use the guarded downloader.
     expect(actualLocalMock.hydrateLocalActualCache).toHaveBeenCalledWith("user1", {
       dataDir: "/var/ea-actual",
-      forceDownload: true,
     });
     // test-architecture: allow-boundary-interaction -- SDK loadBudget is the outbound Actual boundary; the bounded downloader's hydrated budget ID must be loaded.
     expect(actualApi.loadBudget).toHaveBeenCalledWith("Budget-Hydrated");
@@ -382,30 +379,33 @@ describe("actual.ts sendBill mutex", () => {
     expect(actualLocalMock.pruneActualBudgetBackups).toHaveBeenCalledWith("/var/ea-actual/Budget-Hydrated");
   });
 
-  it("refuses a production bill pay write when the local Actual cache is missing", async () => {
+  it("safely bootstraps a missing production cache before recording a bill", async () => {
     const originalNodeEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = "production";
     try {
-      actualLocalMock.findLocalBudgetDir.mockResolvedValueOnce(null);
       const { sendBill } = await import("./actual-core.ts");
       const actualApi = await importActualApiMock();
-
-      await expect(sendBill({
-        type: "expense",
-        payee: "U.S. Bank",
-        amount: 42.25,
-        due_date: "2026-05-10",
-        account_id: "a1",
-      }, "user1")).rejects.toMatchObject({
-        status: 503,
-        code: "ACTUAL_LOCAL_BUDGET_REQUIRED",
-      });
-
-      // test-architecture: allow-boundary-interaction -- SDK download is an outbound archive effect; production must fail closed instead of cold-downloading a missing cache.
+      await sendBill({ type: "expense", payee: "U.S. Bank", amount: 42.25,
+        due_date: "2026-05-10", account_id: "a1" }, "user1");
+      expect(actualApi.__getTransactions()).toHaveLength(1);
+      // test-architecture: allow-boundary-interaction -- The SDK archive loader is an external download boundary; production bootstrap retains the bounded downloader.
       expect(actualApi.downloadBudget).not.toHaveBeenCalled();
     } finally {
       process.env.NODE_ENV = originalNodeEnv;
     }
+  });
+
+  it("preserves the local result when the post-write sync fails and allows later synchronization", async () => {
+    const { sendBill, getMetadata } = await import("./actual-core.ts");
+    const actualApi = await importActualApiMock();
+    actualApi.sync.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("server unavailable"));
+    await expect(sendBill({ type: "expense", payee: "U.S. Bank", amount: 42.25,
+      due_date: "2026-05-10", account_id: "a1" }, "user1")).rejects.toMatchObject({
+      code: "ACTUAL_SYNC_FAILED", localWriteApplied: true,
+    });
+    expect(actualApi.__getTransactions()).toHaveLength(1);
+    await getMetadata("user1", { forceRefresh: true });
+    expect(actualApi.__getTransactions()).toHaveLength(1);
   });
 
   it("sendBill reuses the loaded budget after getMetadata", async () => {

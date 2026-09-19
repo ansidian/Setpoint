@@ -207,7 +207,7 @@ describe("domain status evidence", () => {
   it.each([
     ["weather", "weather_current", 60],
     ["todoist", "deadlines_current", 20],
-    ["bills", "bills_current", 375],
+    ["bills", "bills_current", 15],
   ] as const)("gives %s an age-only deadline independent of cache expiry", (key, cacheKey, minutes) => {
     const input = baseline();
     const cache = input.currentData.sources.find((source) => source.key === cacheKey)!;
@@ -232,7 +232,7 @@ describe("domain status evidence", () => {
     input.currentData.sources = input.currentData.sources.map((source) => ({ ...source, fetchedAt: "2026-09-06T19:00:00.000Z" }));
     const result = composeSystemStatus(input, { generatedAt: "2026-09-06T19:00:00.000Z" });
     expect(result.sources.find((source) => source.key === "todoist")).toMatchObject({ state: "needs_sync", expiresAt: "2026-09-06T12:20:00.000Z" });
-    expect(result.sources.find((source) => source.key === "bills")).toMatchObject({ state: "needs_sync", expiresAt: "2026-09-06T18:15:00.000Z" });
+    expect(result.sources.find((source) => source.key === "bills")).toMatchObject({ state: "needs_sync", expiresAt: "2026-09-06T12:15:00.000Z" });
   });
 
   it("shows a known Bills change during its settle window within the age grace", () => {

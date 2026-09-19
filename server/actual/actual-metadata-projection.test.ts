@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mockActual = {
   sendBill: vi.fn(),
   markBillPaid: vi.fn(),
-  getMetadata: vi.fn(),
+  syncActualMetadata: vi.fn(),
   testConnection: vi.fn(),
   createQuickTxn: vi.fn(),
 };
@@ -119,23 +119,23 @@ describe("refreshActualMetadataProjection", () => {
     mockActualLocal.readLocalActualMetadata
       .mockRejectedValueOnce(new Error("no cache"))
       .mockRejectedValueOnce(new Error("lightweight failed"));
-    mockActual.getMetadata.mockResolvedValue({ payees: [{ id: "p9", name: "PG&E" }] });
+    mockActual.syncActualMetadata.mockResolvedValue({ payees: [{ id: "p9", name: "PG&E" }] });
     const result = await refreshActualMetadataProjection("user-1", { now: NOW, dbClient: db });
     // Worker payee surviving in the result proves the worker path won the fallback.
     expect(result.payeeMap).toEqual({ p9: "PG&E" });
   });
 
-  it("throws instead of touching the worker when allowWorkerFallback is false", async () => {
+  it("keeps verified-write publication disk-only when the cache is unavailable", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     mockActualLocal.readLocalActualMetadata.mockRejectedValue(new Error("lightweight failed"));
-    await expect(loadActualMetadataForProjection("user-1", { allowWorkerFallback: false }))
+    await expect(loadActualMetadataForProjection("user-1", { refreshLocal: false }))
       .rejects.toThrow("lightweight failed");
   });
 
   it("records a degraded marker and rethrows when metadata cannot be loaded", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     mockActualLocal.readLocalActualMetadata.mockRejectedValue(new Error("no cache"));
-    mockActual.getMetadata.mockRejectedValue(new Error("worker down"));
+    mockActual.syncActualMetadata.mockRejectedValue(new Error("worker down"));
     await expect(refreshActualMetadataProjection("user-1", { now: NOW, dbClient: db }))
       .rejects.toThrow("worker down");
 

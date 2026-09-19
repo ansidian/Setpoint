@@ -14,8 +14,8 @@ const BILL_MIRROR_LOOKAHEAD_MONTHS = 18;
 // bounds without redeclaring them (both compute the same lookback/lookahead).
 export const BILLS_CURRENT_LOOKBACK_DAYS = 30;
 export const BILLS_CURRENT_LOOKAHEAD_DAYS = 90;
-export const BILLS_MIRROR_MAINTENANCE_TTL_MS = 6 * 60 * 60 * 1000;
-const BILLS_MIRROR_FAILURE_BACKOFF_MS = 6 * 60 * 60 * 1000;
+export const BILLS_MIRROR_MAINTENANCE_TTL_MS = 5 * 60 * 1000;
+export const BILLS_MIRROR_FAILURE_BACKOFF_MS = 60 * 1000;
 
 export function isoNow(now: Date = new Date()): string {
   return now.toISOString();

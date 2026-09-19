@@ -1,3 +1,4 @@
+import { stopActualWorker } from "../actual/actual.ts";
 import { hydrateActualCache } from "../bills/bills-service.ts";
 
 const userId = process.argv[2] || process.env.EA_USER_ID;
@@ -7,5 +8,9 @@ if (!userId) {
   process.exit(1);
 }
 
-const result = await hydrateActualCache(userId);
-console.log(JSON.stringify(result, null, 2));
+try {
+  const result = await hydrateActualCache(userId);
+  console.log(JSON.stringify(result, null, 2));
+} finally {
+  await stopActualWorker();
+}

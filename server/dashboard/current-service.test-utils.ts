@@ -12,6 +12,7 @@ interface CurrentServiceTestState {
   getTodoistSyncHealth: TestMock;
   hydrateRecurringTombstones: TestMock;
   readLocalActualMetadata: TestMock;
+  syncActualMetadata: TestMock;
   getActiveSnapshotView: TestMock;
   syncActiveSnapshot: TestMock;
 }
@@ -25,6 +26,7 @@ const testState = vi.hoisted((): CurrentServiceTestState => ({
   getTodoistSyncHealth: vi.fn(),
   hydrateRecurringTombstones: vi.fn(),
   readLocalActualMetadata: vi.fn(),
+  syncActualMetadata: vi.fn(),
   getActiveSnapshotView: vi.fn(),
   syncActiveSnapshot: vi.fn(),
 }));
@@ -75,6 +77,10 @@ vi.mock("../tasks/tombstones.ts", () => ({
 // test-architecture: allow-boundary-mock -- Actual's local metadata reader is the filesystem/provider boundary; the real Bills mirror and dashboard services persist and compose its result.
 vi.mock("../actual/actual-local-metadata.ts", () => ({
   readLocalActualMetadata: (...args: unknown[]) => testState.readLocalActualMetadata(...args),
+}));
+// test-architecture: allow-boundary-mock -- Actual SDK synchronization is the provider boundary; dashboard cases publish its synchronized budget into real mirror tables.
+vi.mock("../actual/actual.ts", () => ({
+  syncActualMetadata: (...args: unknown[]) => testState.syncActualMetadata(...args),
 }));
 // test-architecture: allow-boundary-mock -- Active snapshots are a separately persisted briefing boundary; dashboard tests compose controlled snapshot views while snapshot lifecycle suites own their durable behavior.
 vi.mock("../snapshots/snapshot-service.ts", () => ({
@@ -315,6 +321,7 @@ export async function setupCurrentServiceTest() {
   });
   testState.hydrateRecurringTombstones.mockReset().mockResolvedValue([]);
   testState.readLocalActualMetadata.mockReset().mockResolvedValue(ACTUAL_METADATA_FOR_TEST);
+  testState.syncActualMetadata.mockReset().mockResolvedValue(ACTUAL_METADATA_FOR_TEST);
   testState.getActiveSnapshotView.mockReset().mockResolvedValue({
     snapshot: { id: 42 },
     lanes: { needs_attention: [], fyi: [], noise: [] },

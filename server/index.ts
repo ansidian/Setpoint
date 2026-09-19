@@ -33,6 +33,7 @@ import { startCalendarPushWorker, stopCalendarPushWorker } from "./calendar/cale
 import { startNewsPollWorker, stopNewsPollWorker } from "./news/news-poller.ts";
 import { startTransactionImportWorker, stopTransactionImportWorker } from "./transaction-imports/transaction-import-runtime.ts";
 import { createGracefulShutdown } from "./shutdown.ts";
+import { stopActualWorker } from "./actual/actual.ts";
 import { migrate } from "./db/migrate.ts";
 import db from "./db/connection.ts";
 import { resolveDatabaseClientConfig } from "./db/config.ts";
@@ -227,6 +228,7 @@ timeAsync("local-engine", async () => {
 
     const { shutdown } = createGracefulShutdown({
       server,
+      forceExitMs: 110_000,
       stopFns: [
         stopScheduler,                        // cron jobs + reminder worker (scheduler.ts)
         stopEmailBackfillWorker,              // Task 1
@@ -237,6 +239,7 @@ timeAsync("local-engine", async () => {
         stopNewsPollWorker,                   // news/news-poller.js:249
         stopTransactionImportWorker,          // durable transaction import drain
         stopAlfredConversationSweeper,        // Task 1
+        stopActualWorker,                    // drain SDK after every producer has stopped
       ],
     });
     for (const signal of ["SIGTERM", "SIGINT"]) process.on(signal, () => shutdown(signal));

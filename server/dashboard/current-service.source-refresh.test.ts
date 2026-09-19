@@ -40,7 +40,7 @@ describe("source-specific dashboard refresh", () => {
     // test-architecture: allow-boundary-interaction -- Todoist task reads can trigger provider sync; only selecting Tasks authorizes that outbound work.
     expect(testState.fetchTodoistTasks).toHaveBeenCalledTimes(source === "deadlines_current" ? 1 : 0);
     // test-architecture: allow-boundary-interaction -- Actual metadata refresh crosses the filesystem/provider boundary and must only run for the selected Bills source.
-    expect(testState.readLocalActualMetadata).toHaveBeenCalledTimes(source === "bills_current" ? 1 : 0);
+    expect(testState.syncActualMetadata).toHaveBeenCalledTimes(source === "bills_current" ? 1 : 0);
   });
 
   it("does not bootstrap missing unrelated cache sources", async () => {
