@@ -106,11 +106,11 @@ describe("email health in the dashboard envelope", () => {
       args: [now.toISOString()],
     });
     const read = (at: string) => getDashboardSystemHealth("u1", { dbClient: testState.db.current, now: new Date(at) });
-    const fresh = await read("2026-05-04T12:19:59.999Z");
+    const fresh = await read("2026-05-04T12:59:59.999Z");
     expect(fresh.systemStatus.sources.find((source) => source.key === "email:gmail-a")).toMatchObject({
-      state: "current", lastSuccessAt: now.toISOString(), expiresAt: "2026-05-04T12:20:00.000Z",
+      state: "current", lastSuccessAt: now.toISOString(), expiresAt: "2026-05-04T13:00:00.000Z",
     });
-    const overdue = await read("2026-05-04T12:20:00.000Z");
+    const overdue = await read("2026-05-04T13:00:00.000Z");
     expect(overdue.systemStatus.sources.find((source) => source.key === "email:gmail-a")?.state).toBe("needs_sync");
     await testState.db.current.execute("DROP TABLE ea_email_sync_health");
     const unknown = await read("2026-05-04T12:01:00.000Z");

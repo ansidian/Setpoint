@@ -8,7 +8,7 @@ describe("calendar client health", () => {
     generatedAt: "2026-09-06T12:06:00.000Z",
     sources: [{
       key: "calendar", label: "Calendar", state, severity: state === "current" ? "none" : "info",
-      lastSuccessAt: "2026-09-06T12:00:00.000Z", expiresAt: "2026-09-06T12:20:00.000Z",
+      lastSuccessAt: "2026-09-06T12:00:00.000Z", expiresAt: "2026-09-06T13:00:00.000Z",
       message: "Calendar is up to date.", impact: "New or changed events may be missing.",
     }],
   });
@@ -17,9 +17,9 @@ describe("calendar client health", () => {
     lastCheckedAt: "2026-09-06T12:06:00.000Z", now: Date.parse(now),
   });
 
-  it("keeps the server's successful-check grace and expires it at twenty minutes", () => {
-    expect(projectDashboardHealth(status(), observation("2026-09-06T12:19:59.999Z")).state).toBe("current");
-    const expired = projectDashboardHealth(status(), observation("2026-09-06T12:20:00.000Z"));
+  it("keeps the server's successful-check grace and expires it at one hour", () => {
+    expect(projectDashboardHealth(status(), observation("2026-09-06T12:59:59.999Z")).state).toBe("current");
+    const expired = projectDashboardHealth(status(), observation("2026-09-06T13:00:00.000Z"));
     expect(expired.state).toBe("needs_sync");
     expect(expired.sources[0]).toMatchObject({
       state: "needs_sync", lastSuccessAt: "2026-09-06T12:00:00.000Z", message: "New or changed events may be missing.",
@@ -29,7 +29,7 @@ describe("calendar client health", () => {
   it.each(["calendar", "weather", "todoist", "bills", "email:account"])("does not hide an overdue %s check behind an active refresh", (key) => {
     const input = status("refreshing");
     input.sources[0]!.key = key;
-    const expired = projectDashboardHealth(input, observation("2026-09-06T12:20:00.000Z"));
+    const expired = projectDashboardHealth(input, observation("2026-09-06T13:00:00.000Z"));
     expect(expired.state).toBe("needs_sync");
     expect(expired.sources[0]?.state).toBe("needs_sync");
   });

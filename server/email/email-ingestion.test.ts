@@ -73,6 +73,6 @@ describe("scheduled inbox ingestion health", () => {
     await boundary.database.execute(`CREATE TRIGGER reject_ingestion BEFORE INSERT ON ${table} BEGIN SELECT RAISE(ABORT, 'storage failure'); END`);
     fetchMock.mockResolvedValueOnce([email]);
     await sweep();
-    expect((await health())[0]).toMatchObject({ state: "degraded", lastSuccessAt: "2026-09-14T12:00:00.000Z", expiresAt: "2026-09-14T12:20:00.000Z" });
+    expect((await health())[0]).toMatchObject({ state: "degraded", lastSuccessAt: "2026-09-14T12:00:00.000Z", expiresAt: "2026-09-14T13:00:00.000Z" });
   });
 });

@@ -3,7 +3,9 @@ import db from "../db/connection.ts";
 import { canonicalizeConfiguredAccounts } from "../platform/account-canonical.ts";
 import type { CurrentDashboardHealthState, CurrentDashboardSeverity } from "../../shared/types/dashboard.ts";
 
-const EMAIL_STALE_MS = 20 * 60_000;
+const GMAIL_STALE_MS = 60 * 60_000;
+const ICLOUD_STALE_MS = 20 * 60_000;
+const REFRESH_ACTIVE_MS = 20 * 60_000;
 interface HealthDb {
   execute(statement: string | InStatement): Promise<{ rows: Record<string, unknown>[] }>;
 }
@@ -81,7 +83,8 @@ export async function getEmailSyncHealth(
     const terminalFailure = outstanding.some((job) => job.status === "failed");
     const failed = Boolean(check?.last_failed_at) || outstanding.some((job) => job.status === "failed" || Boolean(job.last_error));
     const lastSuccessAt = timestamp(check?.last_success_at);
-    const expiresAt = lastSuccessAt ? new Date(Date.parse(lastSuccessAt) + EMAIL_STALE_MS).toISOString() : null;
+    const staleMs = account.type === "gmail" ? GMAIL_STALE_MS : ICLOUD_STALE_MS;
+    const expiresAt = lastSuccessAt ? new Date(Date.parse(lastSuccessAt) + staleMs).toISOString() : null;
     const refreshStartedAt = timestamp(check?.refresh_started_at)
       || timestamp(outstanding.find((job) => job.status === "running")?.locked_at);
     const base = {
@@ -91,8 +94,8 @@ export async function getEmailSyncHealth(
     if (Number(account.needs_reauth) === 1) return { ...base, state: "needs_reauth", severity: "error", message: "Reconnect this email account to resume inbox checks." };
     if (failed) return { ...base, state: lastSuccessAt ? "degraded" : "unavailable", severity: lastSuccessAt ? "warning" : "error", message: terminalFailure ? "An earlier inbox sync failed and needs attention." : "The latest inbox sync failed. Setpoint will retry automatically." };
     const overdue = !expiresAt || now.getTime() >= Date.parse(expiresAt);
-    if (overdue && lastSuccessAt) return { ...base, state: "needs_sync", severity: "info", message: "No successful inbox check in the last 20 minutes." };
-    if (refreshStartedAt && now.getTime() - Date.parse(refreshStartedAt) < EMAIL_STALE_MS) return { ...base, state: "refreshing", severity: "info", message: "Checking this inbox for updates." };
+    if (overdue && lastSuccessAt) return { ...base, state: "needs_sync", severity: "info", message: `No successful inbox check in the last ${staleMs / 60_000} minutes.` };
+    if (refreshStartedAt && now.getTime() - Date.parse(refreshStartedAt) < REFRESH_ACTIVE_MS) return { ...base, state: "refreshing", severity: "info", message: "Checking this inbox for updates." };
     if (!lastSuccessAt) return { ...base, state: "unavailable", severity: "error", message: "Waiting for the first successful inbox check." };
     if (outstanding.length) return { ...base, state: "needs_sync", severity: "info", message: "An inbox change is waiting to sync." };
     return { ...base, state: "current", severity: "none", message: null };

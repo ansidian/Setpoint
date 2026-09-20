@@ -62,7 +62,7 @@ The server checks watches hourly, renews them before expiry, and retries failed 
 
 Some Google-managed calendars, including holidays, are readable but do not support push. When Google explicitly reports `pushNotSupportedForRequestedResource`, Setpoint keeps that calendar in periodic synchronization, remembers the limitation for seven days, and excludes it from required push watches. This does not create a health warning or a five-minute registration retry loop. Other authorization, request, and service errors remain visible and retry normally.
 
-Calendar cache refresh remains eligible after five minutes. The health indicator gives automatic recovery a twenty-minute window from the last successful data check; failed synchronization, expired/failed watches, reconnect requirements and browser connection failures remain visible. A working subscription by itself does not establish fresh calendar data.
+Calendar cache refresh remains eligible after five minutes. The health indicator gives automatic recovery a one-hour window from the last successful data check; failed synchronization, expired/failed watches, reconnect requirements and browser connection failures remain visible. A working subscription by itself does not establish fresh calendar data.
 
 ## Turso semantic search verification
 

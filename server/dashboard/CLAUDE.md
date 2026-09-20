@@ -9,7 +9,7 @@ Engine for the `/api/dashboard/current` envelope: cache rows, refresh planning/s
 - `current-types.ts` — server-only provider, context, dependency, and payload contracts
 - `current-sources.ts` — cache-key registry + pure row/health helpers (TTL, usable-payload, content key)
 - `current-events.ts` — SSE event fan-out for current-dashboard changes
-- `currentSystemStatusModel.ts` — per-source successful-check deadlines (Weather 60m, Calendar/Tasks 20m, Bills 6h15m), per-account email ingestion health and persisted push failures, reconnect evidence, impact text, and Connections repair actions → systemStatus
+- `currentSystemStatusModel.ts` — per-source successful-check deadlines (Weather/Calendar/Tasks 60m, Bills 15m), per-account email ingestion health and persisted push failures, reconnect evidence, impact text, and Connections repair actions → systemStatus
 - `currentRefreshPlanModel.ts` — pure refresh planning: `(rows, opts) → { scheduled, skipped }`
 - `currentCacheStore.ts` — all `ea_current_data_cache` reads/writes (load, save, mark-failed, mark-refreshing)
 - `currentRefreshRunner.ts` — async orchestration: fetch-timeout race, refreshRows, background dedup map

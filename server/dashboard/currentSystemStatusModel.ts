@@ -24,13 +24,13 @@ interface SystemStatusProviderHealthInput {
 }
 
 type HealthEvidence = Pick<CurrentDashboardSystemSource, "state" | "severity" | "lastSuccessAt">;
-// Calendar keeps its five-minute read cache. Health allows the fifteen-minute
-// recovery sweep plus five minutes to finish, measured from an actual complete
-// provider read. A working watch or quiet notification stream is not freshness.
+// Calendar keeps its five-minute read cache and fifteen-minute recovery checks.
+// Its age-only warning allows one hour from an actual complete provider read,
+// giving recovery several chances. A working watch or quiet stream is not freshness.
 const SUCCESS_DEADLINE_MS: Record<string, number> = {
   weather: 60 * 60_000,
-  calendar: 20 * 60_000,
-  todoist: 20 * 60_000,
+  calendar: 60 * 60_000,
+  todoist: 60 * 60_000,
   bills: 15 * 60_000,
 };
 const STATE_PRIORITY: Record<CurrentDashboardHealthState, number> = {

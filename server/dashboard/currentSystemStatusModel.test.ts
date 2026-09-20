@@ -165,14 +165,15 @@ describe("domain status evidence", () => {
 
   it.each([
     ["2026-09-06T12:05:00.000Z", "current"],
-    ["2026-09-06T12:19:59.999Z", "current"],
-    ["2026-09-06T12:20:00.000Z", "needs_sync"],
+    ["2026-09-06T12:20:00.000Z", "current"],
+    ["2026-09-06T12:59:59.999Z", "current"],
+    ["2026-09-06T13:00:00.000Z", "needs_sync"],
   ])("bounds calendar freshness by the last complete check at %s", (generatedAt, state) => {
     const input = baseline();
     input.currentData.sources[1] = cacheSource("calendar_current", "needs_sync");
     const result = composeSystemStatus(input, { generatedAt });
     expect(result.sources.find((source) => source.key === "calendar")).toMatchObject({
-      state, lastSuccessAt: fetchedAt, expiresAt: "2026-09-06T12:20:00.000Z",
+      state, lastSuccessAt: fetchedAt, expiresAt: "2026-09-06T13:00:00.000Z",
     });
     expect(input.currentData.sources[1]?.expiresAt).toBe(expiresAt);
   });
@@ -180,7 +181,7 @@ describe("domain status evidence", () => {
   it("shows overdue calendar checks during a refresh and preserves failed checks within the grace period", () => {
     const input = baseline();
     input.currentData.sources[1] = cacheSource("calendar_current", "refreshing");
-    const overdue = composeSystemStatus(input, { generatedAt: "2026-09-06T12:20:00.000Z" });
+    const overdue = composeSystemStatus(input, { generatedAt: "2026-09-06T13:00:00.000Z" });
     expect(overdue.sources.find((source) => source.key === "calendar")).toMatchObject({ state: "needs_sync", severity: "info" });
     input.currentData.sources[1] = cacheSource("calendar_current", "degraded");
     const failed = composeSystemStatus(input, { generatedAt: "2026-09-06T12:06:00.000Z" });
@@ -193,9 +194,9 @@ describe("domain status evidence", () => {
     expect(degraded.sources.find((source) => source.key === "calendar")).toMatchObject({
       state: "degraded", severity: "warning", message: "Calendar updates are delayed. Automatic checks continue.",
     });
-    const overdue = composeSystemStatus({ ...input, calendarPush: { state: "current" } }, { generatedAt: "2026-09-06T12:21:00.000Z" });
+    const overdue = composeSystemStatus({ ...input, calendarPush: { state: "current" } }, { generatedAt: "2026-09-06T13:01:00.000Z" });
     expect(overdue.sources.find((source) => source.key === "calendar")).toMatchObject({
-      state: "needs_sync", lastSuccessAt: fetchedAt, expiresAt: "2026-09-06T12:20:00.000Z",
+      state: "needs_sync", lastSuccessAt: fetchedAt, expiresAt: "2026-09-06T13:00:00.000Z",
     });
     const disconnected = composeSystemStatus({ ...input, configured: { calendar: false }, calendarPush: { state: "degraded" } });
     expect(disconnected.sources.find((source) => source.key === "calendar")).toMatchObject({ state: "unconfigured", severity: "none", expiresAt: null });
@@ -206,7 +207,7 @@ describe("domain status evidence", () => {
 
   it.each([
     ["weather", "weather_current", 60],
-    ["todoist", "deadlines_current", 20],
+    ["todoist", "deadlines_current", 60],
     ["bills", "bills_current", 15],
   ] as const)("gives %s an age-only deadline independent of cache expiry", (key, cacheKey, minutes) => {
     const input = baseline();
@@ -231,7 +232,7 @@ describe("domain status evidence", () => {
     const input = baseline();
     input.currentData.sources = input.currentData.sources.map((source) => ({ ...source, fetchedAt: "2026-09-06T19:00:00.000Z" }));
     const result = composeSystemStatus(input, { generatedAt: "2026-09-06T19:00:00.000Z" });
-    expect(result.sources.find((source) => source.key === "todoist")).toMatchObject({ state: "needs_sync", expiresAt: "2026-09-06T12:20:00.000Z" });
+    expect(result.sources.find((source) => source.key === "todoist")).toMatchObject({ state: "needs_sync", expiresAt: "2026-09-06T13:00:00.000Z" });
     expect(result.sources.find((source) => source.key === "bills")).toMatchObject({ state: "needs_sync", expiresAt: "2026-09-06T12:15:00.000Z" });
   });
 

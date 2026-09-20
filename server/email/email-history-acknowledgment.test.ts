@@ -63,7 +63,7 @@ describe("operator acknowledgment of historical Gmail failures", () => {
     await recordEmailInboxCheck("owner", "work", "failed", { dbClient: db, now });
     expect(await health()).toMatchObject({ state: "degraded" });
     await recordEmailInboxCheck("owner", "work", "success", { dbClient: db, now });
-    expect((await getEmailSyncHealth("owner", { dbClient: db, now: new Date(now.getTime() + 20 * 60_000) }))[0]).toMatchObject({ state: "needs_sync" });
+    expect((await getEmailSyncHealth("owner", { dbClient: db, now: new Date(now.getTime() + 60 * 60_000) }))[0]).toMatchObject({ state: "needs_sync" });
   });
 
   it("rejects stale previews before any selected job is acknowledged", async () => {

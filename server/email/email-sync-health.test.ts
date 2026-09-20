@@ -31,7 +31,7 @@ beforeEach(async () => {
 afterEach(() => database.close());
 
 describe("email inbox health", () => {
-  it("starts unknown, isolates accounts and expires an actual successful check at exactly 20 minutes", async () => {
+  it("starts unknown, isolates accounts and expires Gmail at one hour while iCloud stays at 20 minutes", async () => {
     expect(await health()).toEqual([]);
     await account("work");
     await account("personal", "owner", "icloud");
@@ -39,10 +39,17 @@ describe("email inbox health", () => {
     expect((await health()).map((row) => row.state)).toEqual(["unavailable", "unavailable"]);
     await record("work", "success");
     expect(await health(new Date(started.getTime() + 20 * 60_000 - 1))).toEqual([
-      expect.objectContaining({ accountId: "work", state: "current", expiresAt: "2026-09-14T12:20:00.000Z" }),
+      expect.objectContaining({ accountId: "work", state: "current", expiresAt: "2026-09-14T13:00:00.000Z" }),
       expect.objectContaining({ accountId: "personal", state: "unavailable", lastSuccessAt: null }),
     ]);
-    expect((await health(new Date("2026-09-14T12:20:00Z")))[0]!.state).toBe("needs_sync");
+    await record("personal", "success");
+    expect((await health(new Date("2026-09-14T12:19:59.999Z")))[1]).toMatchObject({ state: "current", expiresAt: "2026-09-14T12:20:00.000Z" });
+    expect(await health(new Date("2026-09-14T12:20:00Z"))).toEqual([
+      expect.objectContaining({ accountId: "work", state: "current" }),
+      expect.objectContaining({ accountId: "personal", state: "needs_sync", message: "No successful inbox check in the last 20 minutes." }),
+    ]);
+    expect((await health(new Date("2026-09-14T12:59:59.999Z")))[0]!.state).toBe("current");
+    expect((await health(new Date("2026-09-14T13:00:00Z")))[0]).toMatchObject({ state: "needs_sync", message: "No successful inbox check in the last 60 minutes." });
   });
 
   it("keeps failures visible during retries and recovers only on a successful check", async () => {
@@ -88,9 +95,10 @@ describe("email inbox health", () => {
     await account("work");
     await record("work", "started");
     expect((await health())[0]!.state).toBe("refreshing");
+    expect((await health(new Date("2026-09-14T12:20:00Z")))[0]!.state).toBe("unavailable");
     await record("work", "success");
-    await record("work", "started", new Date("2026-09-14T12:19:00Z"));
-    expect((await health(new Date("2026-09-14T12:20:00Z")))[0]!.state).toBe("needs_sync");
+    await record("work", "started", new Date("2026-09-14T12:59:00Z"));
+    expect((await health(new Date("2026-09-14T13:00:00Z")))[0]!.state).toBe("needs_sync");
   });
 
   it("surfaces a persistence outage instead of claiming there are no email accounts", async () => {
