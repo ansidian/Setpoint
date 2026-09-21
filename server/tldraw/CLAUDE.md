@@ -1,6 +1,6 @@
 # Tldraw Notes Map
 
-The desktop-only Notes workspace uses one owner-scoped tldraw document with native pages. The server stores a revisioned, gzip-compressed document snapshot in Turso and content-addressed native media on private filesystem storage.
+The desktop-only Notes workspace uses one owner-scoped tldraw document with native pages. The server stores a revisioned, gzip-compressed document snapshot in the application database and content-addressed native media on private filesystem storage.
 
 ## Files
 

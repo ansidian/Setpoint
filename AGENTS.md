@@ -59,7 +59,7 @@ Commands: `npm test -- <test-file> ...` for focused tests, `npx eslint <file> ..
 
 ## Provider Boundaries
 
-- Production defaults to Turso; Debian explicitly selects a persistent local file with `EA_DB_ADAPTER=sqlite` and `EA_SQLITE_PATH`. Normal development uses `server/db/ea.db`; see `OPERATIONS.md` and `deploy/README.md`.
+- The owner’s live database is the persistent SQLite file on Debian, selected with `EA_DB_ADAPTER=sqlite` and `EA_SQLITE_PATH`. Use [Debian operations](deploy/OPERATIONS-LIVE.md) to locate the live instance; the retired Turso copy is stale and must not be used for current diagnosis or repair. Normal development uses `server/db/ea.db`. Turso remains supported and is the code default when production has no explicit adapter; see `OPERATIONS.md` for alternative installations.
 - `npm run actual -- <command>` is for ad-hoc inspection only. Runtime paths use the in-process `@actual-app/api` singleton in `server/actual/actual.ts`.
 
 ## Demo Mode Contract

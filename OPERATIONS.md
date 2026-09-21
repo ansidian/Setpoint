@@ -19,23 +19,39 @@ The demo build adds public social metadata through `vite.config.ts`; normal priv
 
 ## Production
 
-The owner's live instance runs on Debian; see [Debian operations](deploy/OPERATIONS-LIVE.md)
-and [automatic releases](deploy/AUTOMATIC-DEPLOYMENT.md). Successful `master` push
-CI publishes the production image; the installed Debian deployment timer pulls
-and activates verified releases. The retained Render instance is suspended and
-must not resume against stale Turso data. Recovery targets Debian. The Render
-instructions below describe an alternative fresh installation, not the owner's
-recovery plan.
+The owner's live instance runs on Debian with a persistent SQLite application database,
+selected by `EA_DB_ADAPTER=sqlite` and an absolute `EA_SQLITE_PATH`. See
+[Debian operations](deploy/OPERATIONS-LIVE.md) for live access and recovery and
+[automatic releases](deploy/AUTOMATIC-DEPLOYMENT.md) for deployment. Successful
+`master` push CI publishes the production image; the installed Debian deployment
+timer pulls and activates verified releases. The retained Render instance is
+suspended and must not resume against stale Turso data. Use the Debian database
+for current diagnosis and repair.
 
-The [Render Blueprint](render.yaml) provisions an always-on Starter Node service and a persistent asset disk. Supply `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`; Render generates `EA_ENCRYPTION_KEY` and `EA_SETUP_TOKEN`. The service builds with `npm ci && npm run build`, starts with `npm start`, and checks readiness at `/healthz`.
-
-After deployment, retrieve the generated setup token from the service environment and claim the instance in the browser. The owner password must have at least 12 characters. Save the one-time recovery codes, then use Settings to connect providers. Provider credentials are not required to boot. Workers remain inactive until the owner claim succeeds.
-
-Other hosts need the same bootstrap values, an always-running Node process, and persistent storage for uploaded Notes assets. Production defaults to Turso; the explicit SQLite adapter supports local production as described below. Database migrations run at server startup.
-
-Back up **both the database and its exact `EA_ENCRYPTION_KEY`**. The app cannot recover that key, and the database alone cannot decrypt stored credentials. Back up uploaded Notes media separately from `EA_TLDRAW_ASSET_DIR` (Render: `/var/data/tldraw-assets`). Production Notes also requires a tldraw license configured in Settings → Connections.
+Back up **both the database and its exact `EA_ENCRYPTION_KEY`**. The app cannot recover that key, and the database alone cannot decrypt stored credentials. Back up uploaded Notes media separately from `EA_TLDRAW_ASSET_DIR`. Production Notes also requires a tldraw license configured in Settings → Connections. Database migrations run at server startup.
 
 Normal provider configuration lives in Settings. After connecting Actual, configure Financial providers in Settings → Finance: choose each utility’s existing schedule, funding/card endpoints for credit-card payments, and reusable receipt/refund destinations. Actual target names load automatically; unavailable targets show a readable status and retry instead of internal identifiers. Create profile appears for emails with a recognized financial event classification other than `other`. It seeds an unsaved, disabled provider draft with its sender and available context; select missing targets before saving. Migration 069 starts with no enabled profiles and does not adopt retired mappings or Utilities membership. Unmatched receipts/refunds wait for review; reminder and completed-payment notices are ignored. Review can also suggest an unsaved provider draft that starts disabled for explicit setup. Card profiles schedule the full statement balance on an explicitly supported due date, or the numeric payment amount/date from a scheduled-payment confirmation. Missing or conflicting statement facts stay in review. Minimum due, current balance and AutoPay enrollment alone cannot supply the scheduled amount. Optional host-managed credentials and startup/backfill timing switches remain documented in `.env.example`.
+
+### Alternative fresh installations: Turso and Render
+
+Turso remains a supported adapter. Production code selects it when `EA_DB_ADAPTER`
+is unset; that default does not describe the owner's explicitly configured Debian
+instance. Supply `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` only for a Turso
+installation. Never use the retired production copy to initialize a replacement
+for the live instance; follow the Debian recovery runbook with current data.
+
+The [Render Blueprint](render.yaml) provisions an always-on Starter Node service
+and a persistent asset disk. It requires Turso credentials and generates
+`EA_ENCRYPTION_KEY` and `EA_SETUP_TOKEN`. The service builds with
+`npm ci && npm run build`, starts with `npm start`, and checks readiness at
+`/healthz`. Notes media uses `/var/data/tldraw-assets`.
+
+After deploying a fresh instance, retrieve its setup token from the service
+environment and claim it in the browser. The owner password must have at least
+12 characters. Save the one-time recovery codes, then use Settings to connect
+providers. Provider credentials are not required to boot; workers remain inactive
+until the owner claim succeeds. Other hosts need the same bootstrap values, an
+always-running Node process and persistent storage for Notes assets.
 
 ## Sign-in and recovery
 
@@ -66,7 +82,7 @@ Calendar cache refresh remains eligible after five minutes. The health indicator
 
 ## Turso semantic search verification
 
-To exercise native vectors instead of local SQLite, configure `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`, then run:
+For an explicit remote-adapter check, use a separate Turso test database and configure `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`, then run:
 
 ```bash
 npm run ai-search:embedding-status -- --adapter=turso

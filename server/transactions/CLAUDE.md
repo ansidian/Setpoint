@@ -17,7 +17,7 @@ Actual SDK (see `docs/exec-plans/active/2026-06-14-alfred-transaction-access-des
 - direction "expense" (default) = outflows (amount < 0); direction "income" = inflows (amount > 0). Transfers are excluded in both directions.
 - Internal calendar reads may use direction "all" to return both flows in one query; rows carry explicit `direction` and positive amount magnitudes.
 - Reads go through `server/actual/actual-transactions-read.ts` → on-disk `db.sqlite`
-  via `@libsql/client`. No SDK, no budget-in-heap (Render 512MB firewall).
+  via `@libsql/client`. These reads do not load the Actual SDK or the whole budget into application memory.
 - `sync_state` freshness is best-effort, sourced from `getBillsMirrorState`.
 
 ## Related

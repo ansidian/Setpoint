@@ -17,7 +17,7 @@ The demo uses fictional data, requires no login, and resets changes on refresh. 
 
 ## Built with
 
-TypeScript, React, Vite, Tailwind CSS, shadcn/ui with Base UI, and Motion. An Express server runs on Node.js with Turso/libSQL storage. AI features use owner-supplied OpenAI or Anthropic keys; semantic email search uses OpenAI embeddings.
+TypeScript, React, Vite, Tailwind CSS, shadcn/ui with Base UI, and Motion. An Express server runs on Node.js with persistent SQLite storage through libSQL on the owner’s Debian host. Turso remains a supported alternative database adapter. AI features use owner-supplied OpenAI or Anthropic keys; semantic email search uses OpenAI embeddings.
 
 [Architecture and data flow](ARCHITECTURE.md)
 

@@ -409,7 +409,7 @@ Selection path:
 
 **Network boundary:** no polling, SSE, WebSocket, realtime presence, or per-keystroke writes. A second device sees the latest canvas after refresh. tldraw's hobby-license telemetry is governed by tldraw and is the only expected vendor traffic from the canvas itself.
 
-**Persistence:** confirmed document BLOB/revision in Turso; current unsaved recovery envelope in device-local IndexedDB; content-addressed media on the private persistent disk; session/camera in localStorage. Legacy note rows, APIs, demo data, and UI do not exist.
+**Persistence:** confirmed document BLOB/revision in the application database (persistent SQLite on the owner’s Debian host); current unsaved recovery envelope in device-local IndexedDB; content-addressed media on the private persistent disk; session/camera in localStorage. Legacy note rows, APIs, demo data, and UI do not exist.
 
 
 ## Dashboard financial context

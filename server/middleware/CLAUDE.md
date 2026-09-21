@@ -21,4 +21,4 @@ Cross-cutting Express request-pipeline middleware composed in `server/index.ts`:
 ## Related
 
 - `server/index.ts` — composition root that mounts these (compression, auth guards, terminal `errorHandler`).
-- `server/db/connection.ts` — Turso/SQLite client used by `auth.ts` for session/token validation.
+- `server/db/connection.ts` — configured libSQL client (SQLite on the live Debian instance; optional Turso adapter) used by `auth.ts` for session/token validation.

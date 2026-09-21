@@ -1,6 +1,6 @@
 # Architecture
 
-Personal executive assistant dashboard that consolidates emails, calendars, weather, Todoist-backed deadlines/tasks, and finances into a current operational workspace. Single-user app built with React 19 + Express.js, backed by Turso (LibSQL) and provider-backed email triage. Deployed on Render.
+Personal executive assistant dashboard that consolidates emails, calendars, weather, Todoist-backed deadlines/tasks, and finances into a current operational workspace. Single-user app built with React 19 + Express.js, backed by persistent SQLite through libSQL and provider-backed email triage. The owner’s live instance runs on Debian; Turso remains a supported alternative adapter.
 
 ## System Overview
 
@@ -28,7 +28,7 @@ graph TB
     end
 
     subgraph Storage
-        Turso[(Turso / LibSQL<br/>Main DB)]
+        DB[(Persistent SQLite / libSQL<br/>Debian application DB)]
     end
 
     SPA <-->|/api/*| MW
@@ -37,8 +37,8 @@ graph TB
     Scheduler -->|cron triggers| Pipeline
     Pipeline --> Gmail & iCloud & GCal & Weather & Todoist & Actual
     Pipeline --> EmailAI
-    Routes --> Turso
-    Pipeline --> Turso
+    Routes --> DB
+    Pipeline --> DB
 ```
 
 ## Tech Stack
@@ -49,7 +49,7 @@ graph TB
 | Build | Vite 8, Tailwind CSS 4 | Bundling, dev server, utility-first CSS |
 | UI | shadcn/ui, Radix, Framer Motion | Component primitives, animations |
 | Backend | Express 4 | HTTP API server |
-| Database | Turso (LibSQL) | SQLite-compatible cloud DB |
+| Database | SQLite through libSQL | Persistent application DB on Debian; optional Turso adapter |
 | AI | Anthropic Messages API, OpenAI Responses API | Email triage and bill signals |
 | Search | SQLite FTS5 | Full-text email search |
 | Email | Gmail API, ImapFlow (iCloud) | Multi-account email fetching |
@@ -345,7 +345,6 @@ GET /api/dashboard/current
 | Gesture | Action |
 |---------|--------|
 | Tap R key | Sync current dashboard data and active snapshot |
-| Hold Suspend 1.5s | Suspend Render service |
 | Click email | Expand EmailBody panel (iframe with sanitized HTML) |
 | Click task status dot | Cycle task status (incomplete → in_progress → complete) |
 | Type in Inbox search | FTS5 email keyword search across indexed INBOX mail |
@@ -392,7 +391,7 @@ graph LR
 sequenceDiagram
     participant B as Browser
     participant S as Server
-    participant DB as Turso
+    participant DB as Application database
 
     B->>S: GET /api/auth/setup/status
     alt Instance is unclaimed
@@ -1183,7 +1182,9 @@ Passkeys and API tokens are separate auth surfaces. A registered passkey can unl
 
 ## Deployment
 
-**Hosting:** Render (inferred from OAuth redirect URI and `RENDER_*` env vars)
+**Hosting:** The owner’s live instance runs in Docker on Debian with private Nginx ingress. Its application database is a persistent local SQLite file selected by `EA_DB_ADAPTER=sqlite` and an absolute `EA_SQLITE_PATH`. See [Debian operations](deploy/OPERATIONS-LIVE.md) for access and recovery, and [automatic releases](deploy/AUTOMATIC-DEPLOYMENT.md) for the verified image deployment pipeline. The retired Render instance and stale Turso copy are not live data sources.
+
+Turso remains supported for alternative installations; without an explicit adapter, production code still selects Turso. The retained `render.yaml` describes an alternative fresh installation.
 
 **Build flow:**
 1. `npm run build` → Vite produces `dist/`
@@ -1194,6 +1195,6 @@ Passkeys and API tokens are separate auth surfaces. A registered passkey can unl
 1. `npm run dev` → concurrently runs Vite (HMR) + Express (--watch)
 2. Vite proxies `/api/*` to Express on port 3001
 
-**Environment variables:** See `.env.example` for full reference. Key secrets: `EA_ENCRYPTION_KEY` (AES-256), `ANTHROPIC_API_KEY`, `GOOGLE_CLIENT_ID`/`SECRET`, and database tokens. `EA_USER_ID` plus `EA_PASSWORD_HASH` remain an optional legacy owner-import pair.
+**Environment variables:** See `.env.example` for full reference. Key secrets: `EA_ENCRYPTION_KEY` (AES-256), `ANTHROPIC_API_KEY`, `GOOGLE_CLIENT_ID`/`SECRET`, and Turso database tokens only when that adapter is selected. `EA_USER_ID` plus `EA_PASSWORD_HASH` remain an optional legacy owner-import pair.
 
 **Security defaults:** production enables HSTS + CSP + frame/referrer/permissions headers. `trust proxy` defaults to `1` only in production and can be overridden via `TRUST_PROXY`.
