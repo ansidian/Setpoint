@@ -1,4 +1,4 @@
-import { BILL_SEMANTIC_IDENTITY_PROPERTIES, BILL_SEMANTIC_IDENTITY_REQUIRED } from "../bill-semantic-prompt.ts";
+import { BILL_SEMANTIC_IDENTITY_PROPERTIES, BILL_SEMANTIC_IDENTITY_REQUIRED, FINANCIAL_EVENT_ASSESSMENT_SCHEMA } from "../bill-semantic-prompt.ts";
 import { fetchWithTimeout } from "../../platform/fetch-with-timeout.ts";
 import { resolveAiApiKey } from "../../ai-credentials.ts";
 import { trackedAiProviderCall } from "../../platform/ai-usage.ts";
@@ -68,7 +68,7 @@ export function createAnthropicProvider({
   id: "anthropic",
   envVar: "ANTHROPIC_API_KEY",
 
-  async extract({ model, systemPrompt, content, usagePurpose = "extraction" }: BillExtractionRequest) {
+  async extract({ model, systemPrompt, content, usagePurpose = "extraction", responseKind }: BillExtractionRequest) {
     const apiKey = await resolveApiKey("anthropic");
     if (!apiKey) {
       const err: HttpError = new Error("ANTHROPIC_API_KEY not set");
@@ -88,7 +88,10 @@ export function createAnthropicProvider({
           model,
           max_tokens: MAX_OUTPUT_TOKENS,
           system: systemPrompt,
-          tools: [TOOL],
+          tools: [responseKind === "event_audit" ? { ...TOOL, input_schema: { ...TOOL.input_schema,
+            properties: { ...TOOL.input_schema.properties, event_assessment: FINANCIAL_EVENT_ASSESSMENT_SCHEMA },
+            required: [...TOOL.input_schema.required, "event_assessment"],
+          } } : TOOL],
           tool_choice: { type: "tool", name: "submit_bill" },
           messages: [{ role: "user", content }],
         }),

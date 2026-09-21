@@ -89,6 +89,27 @@ describe("loadBillExtractChoice", () => {
 });
 
 describe("extractBillCandidate", () => {
+  it.each(["openai", "anthropic"])("lets the %s audit reject a false purchase through its response schema", async provider => {
+    mockSettings(provider, provider === "openai" ? "gpt-5.4-mini" : "claude-haiku-4-5");
+    global.fetch = vi.fn(async (_url, options) => {
+      const request = JSON.parse(String(options?.body));
+      const schema = provider === "openai" ? request.text.format.schema : request.tools[0].input_schema;
+      const fields = {
+        payee: "Example Shop", amount: null, due_date: null,
+        event_kind: "purchase", event_confidence: 0.99,
+        ...(schema.required.includes("event_assessment") ? {
+          event_assessment: { outcome: "nonfinancial", evidence: "The seller is packing your order." },
+        } : {}),
+      };
+      return { ok: true, json: async () => provider === "openai"
+        ? { output_text: JSON.stringify(fields), usage: {} }
+        : { content: [{ type: "tool_use", name: "submit_bill", input: fields }], usage: {} } };
+    }) as unknown as typeof fetch;
+    await expect(extractBill("u1", {
+      from: "orders@example.test", subject: "Order update", body: "The seller is packing your order.",
+    }, dependencies())).rejects.toMatchObject({ status: 422, code: "FINANCIAL_EVENT_NOT_PRESENT" });
+  });
+
   it("preserves verified initial confirmation context without inventing an operation date", async () => {
     mockSettings("openai", "gpt-5.4-mini");
     const purchaseDateContext = { kind: "initial_confirmation_without_date" as const, confidence: 0.99, evidence: "Your order was placed" };
@@ -155,8 +176,8 @@ describe("extractBillCandidate", () => {
         payees: [{ id: "payee-1", name: "Costco" }],
       },
     });
-    // test-architecture: allow-boundary-interaction -- The injected extraction provider is the outbound model boundary; exactly one first-pass request is the candidate-only API's spend contract.
-    expect(extract).toHaveBeenCalledTimes(1);
+    // test-architecture: allow-boundary-interaction -- Extraction and admission audit are the two outbound model requests for a complete candidate.
+    expect(extract).toHaveBeenCalledTimes(2);
     // test-architecture: allow-boundary-interaction -- The injected provider is the outbound model boundary; its prompt is the public extraction contract.
     expect(extract.mock.calls[0]![0].systemPrompt).toContain(BILL_SEMANTIC_EXTRACTION_INSTRUCTIONS);
   });
@@ -209,7 +230,8 @@ describe("extractBill (Anthropic)", () => {
 
     const out = await extractBill("u1", { subject: "Bill", from: "x@y", body: "body" }, dependencies());
 
-    expect(out).toEqual({
+    expect(out.event_verification?.assessment?.outcome).toBe("uncertain");
+    expect(out).toMatchObject({
       payee: "PG&E",
       currency: "USD",
       amount: 120,
@@ -273,6 +295,10 @@ describe("extractBill (OpenAI)", () => {
         amount: 40,
         amount_kind: "minimum_due",
         amount_candidates: [{ kind: "minimum_due", value: 40, evidence: "Minimum payment $40.00" }],
+      }))
+      .mockResolvedValueOnce(response({
+        event_assessment: { outcome: "financial_event", evidence: "Payment due" },
+        event_kind: "statement_issued", event_confidence: 0.99, event_evidence: "Payment due",
       }))
       .mockResolvedValueOnce(response({
         amount: 391.2,
@@ -341,7 +367,8 @@ describe("extractBill (OpenAI)", () => {
 
       const out = await extractBill("u1", { subject: "Bill", from: "x@y", body: "body" }, dependencies());
 
-      expect(out).toEqual({
+      expect(out.event_verification?.assessment?.outcome).toBe("uncertain");
+      expect(out).toMatchObject({
         payee: "Xfinity",
         amount: 95.99,
         amount_kind: "total_due",

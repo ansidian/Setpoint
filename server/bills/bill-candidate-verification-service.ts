@@ -45,12 +45,14 @@ export function createBillCandidateVerificationService({
     providerId,
     model,
     runProviderRequest,
+    requireAdmission = false,
   }: {
     email: BillEmailContext;
     candidate: BillCandidate;
     providerId: string;
     model: string;
     runProviderRequest?: BillProviderRequestRunner;
+    requireAdmission?: boolean;
   }): Promise<BillCandidate> {
     if (isIgnoredFinancialNotice(candidate)) return candidate;
     if (providerId !== "openai" && providerId !== "anthropic") return candidate;
@@ -62,16 +64,18 @@ export function createBillCandidateVerificationService({
     const configured = configuredProviders[providerId];
     const provider = runProviderRequest ? { extract: (request: BillExtractionRequest) =>
       runProviderRequest(providerId, request, () => configured.extract(request)) } : configured;
-    const amountVerified = (await verifyBillAmounts({
+    const eventVerified = (await verifyBillEvent({
       content,
       candidate,
       provider,
       providerId,
       model,
+      requireAdmission,
     })).candidate;
-    return (await verifyBillEvent({
+    if (eventVerified.event_verification?.assessment?.outcome === "nonfinancial") return eventVerified;
+    return (await verifyBillAmounts({
       content,
-      candidate: amountVerified,
+      candidate: eventVerified,
       provider,
       providerId,
       model,

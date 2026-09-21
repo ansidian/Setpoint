@@ -31,6 +31,7 @@ export function createFinancialEventAiStore(db: Pick<Client, "execute">, now = D
       const key = createHash("sha256").update(JSON.stringify([
         "financial-event-extraction-v1", provider, request.model,
         request.usagePurpose || "extraction", request.systemPrompt, request.content,
+        ...(request.responseKind ? [request.responseKind] : []),
       ])).digest("hex");
       const scope = [event.userId, event.id, key];
       async function cached(): Promise<BillCandidate | null> {

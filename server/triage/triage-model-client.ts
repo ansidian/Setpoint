@@ -325,8 +325,9 @@ async function verifyTriageBillAmounts({
     candidate: validateFinancialSemanticIdentity(decision.bill_candidate as BillCandidate, compactEmailForPrompt(email, "")),
     providerId,
     model,
+    requireAdmission: true,
   });
-  return { ...decision, bill_candidate: candidate };
+  return { ...decision, bill_candidate: candidate.event_verification?.assessment?.outcome === "nonfinancial" ? null : candidate };
 }
 
 export async function loadTriageModelConfig(userId: string, dbClient: TriageDb = db as unknown as TriageDb): Promise<TriageModelConfig> {

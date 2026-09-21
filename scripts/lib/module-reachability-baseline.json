@@ -11,6 +11,7 @@
     "server/scripts/email-search-retrieval-eval.ts",
     "server/scripts/financial-email-observe-report.ts",
     "server/scripts/financial-provider-replay.ts",
+    "server/scripts/financial-admission-eval.ts",
     "server/scripts/hydrate-actual-cache.ts",
     "server/scripts/prune-actual-cache.ts",
     "server/scripts/reindex-emails.ts",

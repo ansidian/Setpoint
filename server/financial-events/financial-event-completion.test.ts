@@ -184,11 +184,28 @@ describe("owner completion of managed financial events", () => {
     expect(ledger.size).toBe(0);
   });
 
-  it("rejects an existing reference and a changed standalone source without creating dismissal orphans", async () => {
-    const candidate = { ...partial, provider_reference: "ORDER-104", provider_reference_confidence: 0.99,
+  it("dismisses a standalone duplicate of an already-dismissed reference without changing the original event", async () => {
+    const candidate = { ...partial, amount: null, provider_reference: "ORDER-104", provider_reference_confidence: 0.99,
       provider_reference_evidence: "Order ORDER-104" };
     await arrive("receipt", candidate, { body: "Order ORDER-104", authenticated: true });
     await completion().dismiss("owner", await request());
+    const original = await store.getEventForEmail("owner", "receipt");
+    now += 86400_000;
+    await arrive("shipping-update", candidate, { body: "Order ORDER-104. The seller is packing your order!", authenticated: true, date: now });
+    const result = await completion().dismiss("owner", await request("shipping-update"));
+    expect(result.workflow).toMatchObject({ dismissed: true, completion: { canComplete: false, canDismiss: false } });
+    const related = await store.getEventForEmail("owner", "shipping-update");
+    expect(related).toMatchObject({ id: original!.id, revision: original!.revision, dismissedAt: original!.dismissedAt,
+      updatedAt: original!.updatedAt, ownerCompletion: null, operation: null });
+    expect((await db.execute("SELECT COUNT(*) AS total FROM ea_financial_events")).rows[0]?.total).toBe(1);
+    expect(await store.getNextWakeAt()).toBeNull();
+  });
+
+  it("rejects an active reference and a changed standalone source without creating dismissal orphans", async () => {
+    const candidate = { ...partial, provider_reference: "ORDER-104", provider_reference_confidence: 0.99,
+      provider_reference_evidence: "Order ORDER-104" };
+    await arrive("receipt", candidate, { body: "Order ORDER-104", authenticated: true });
+    await completion().complete("owner", await request());
     await arrive("conflicting", candidate, { body: "Order ORDER-104", authenticated: true });
     await expect(completion().dismiss("owner", await request("conflicting"))).rejects.toMatchObject({ status: 409 });
     expect(await store.getEventForEmail("owner", "conflicting")).toBeNull();

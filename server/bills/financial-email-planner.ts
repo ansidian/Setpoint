@@ -373,7 +373,7 @@ async function resolveCandidate(
         from: input.email?.from || input.email?.from_address,
         body: input.email?.body || input.email?.body_snippet || "",
       });
-      return { candidate: extracted.candidate, providerUnavailable: false };
+      return { candidate: extracted.candidate, providerUnavailable: extracted.candidate.event_verification?.status === "failed" };
     } catch {
       return { candidate: {}, providerUnavailable: true };
     }
@@ -389,7 +389,7 @@ async function resolveCandidate(
   const needsEvidenceRepair = shouldVerifyBillEvent(candidate)
     || shouldVerifyBillAmounts(content, candidate);
   if (!missingType && !needsEvidenceRepair) {
-    return { candidate, providerUnavailable: false };
+    return { candidate, providerUnavailable: candidate.event_verification?.status === "failed" };
   }
   try {
     const choice = await dependencies.modelChoiceReader(userId);

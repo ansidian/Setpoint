@@ -51,7 +51,8 @@ describe("autonomous financial event processing", () => {
       providers: { openai: { extract: async (request) => {
         providerCredits--;
         if (providerOffline || (matchingOffline && request.usagePurpose === "matching")) throw new Error("Provider unavailable");
-        return { fields: structuredClone(providerReply || {}), usage: {} };
+        return { fields: { ...structuredClone(providerReply || {}), ...(request.responseKind === "event_audit" && providerReply
+          ? { event_assessment: { outcome: "financial_event" as const, evidence: providerReply.event_evidence || null } } : {}) }, usage: {} };
       } } },
     });
     const planner = createFinancialEmailPlanner({

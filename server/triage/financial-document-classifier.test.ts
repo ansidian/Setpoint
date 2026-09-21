@@ -1,6 +1,7 @@
 import { createClient, type Client } from "@libsql/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BillCandidate } from "../../shared/types/bills.ts";
+import admissionCases from "./fixtures/financial-admission.json" with { type: "json" };
 import { EMAIL_EVIDENCE_TRUNCATED } from "../email/email-evidence.ts";
 import { createFinancialDocumentClassifier } from "./financial-document-classifier.ts";
 import type { TriageDb, TriageEmail, TriageFetch } from "./triage-types.ts";
@@ -58,6 +59,45 @@ afterEach(() => {
 });
 
 describe("independent financial document assessment", () => {
+  it.each(admissionCases)("applies the grounded admission audit without losing incomplete events: $name", async (fixture) => {
+    // Use an unknown sender to exercise AI admission even for templates which
+    // have separate deterministic coverage. The provider is the only substitute.
+    const initial: BillCandidate = { type: fixture.eventKind === "refund" ? "income" : fixture.eventKind === "bill_issued" ? "bill" : "expense",
+      event_kind: (fixture.eventKind || "purchase") as BillCandidate["event_kind"], event_confidence: 0.99,
+      event_evidence: fixture.evidence, type_confidence: 0.99, type_evidence: fixture.evidence,
+      amount: null, currency: null, due_date: null };
+    const assessor = createFinancialDocumentClassifier({dbClient:db as unknown as TriageDb,
+      fetchImpl:async()=>response({bill_candidate:initial}),credentialResolver:async()=>"test-key",
+      billExtractionProviders:{openai:{extract:async()=>({fields:{...initial,event_assessment:{
+        outcome:fixture.expected as "financial_event"|"nonfinancial",evidence:fixture.evidence}},usage:{}})}}});
+    const assessed=await assessor.assessFinancialDocument("owner",{...email,from_address:"notices@unknown.example",subject:fixture.source.subject,body_text:fixture.source.body});
+    if(fixture.expected === "nonfinancial") expect(assessed).toBeNull();
+    else expect(assessed).toMatchObject({event_kind:fixture.eventKind,amount:null,due_date:null,event_verification:{assessment:{outcome:"financial_event"}}});
+  });
+  it.each(["uncertain", "ungrounded", "missing", "failure"])("retains a candidate when the audit is %s", async (mode) => {
+    const assessor=createFinancialDocumentClassifier({dbClient:db as unknown as TriageDb,
+      fetchImpl:async()=>response({bill_candidate:candidate}),credentialResolver:async()=>"test-key",
+      billExtractionProviders:{openai:{extract:async()=>{
+        if(mode === "failure") throw new Error("Provider unavailable");
+        return {fields:{...candidate,...(mode === "missing" ? {} : {event_assessment:{
+          outcome:mode === "uncertain" ? "uncertain" as const : "nonfinancial" as const,
+          evidence:mode === "ungrounded" ? "This quote is not in the source" : null}})},usage:{}};
+      }}}});
+    const assessed=await assessor.assessFinancialDocument("owner",email);
+    expect(assessed).toMatchObject({event_kind:"purchase",event_verification:mode === "failure"
+      ? {status:"failed"} : {assessment:{outcome:"uncertain"}}});
+  });
+  it("rejects a confident purchase interpretation when the audit establishes a fulfillment-only notice", async () => {
+    const body = "Purchases. The seller is packing your order! Order number: ORDER-104. Estimated delivery: September 22.";
+    const assessor = createFinancialDocumentClassifier({
+      dbClient: db as unknown as TriageDb,
+      fetchImpl: async () => response({ bill_candidate: { ...candidate, event_evidence: "The seller is packing your order!", type_evidence: "Purchases" } }),
+      credentialResolver: async () => "test-key",
+      billExtractionProviders: { openai: { extract: async () => ({ fields: { ...candidate,
+        event_assessment: { outcome: "nonfinancial", evidence: "The seller is packing your order!" } }, usage: {} }) } },
+    });
+    expect(await assessor.assessFinancialDocument("owner", { ...email, subject: "Order update", body_text: body })).toBeNull();
+  });
   it("assesses complete source evidence with the strong model despite finished inbox handling", async () => {
     const assessor = classifier(async (_url, options) => {
       const request = JSON.parse(String(options?.body));

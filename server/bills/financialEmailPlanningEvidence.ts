@@ -38,6 +38,7 @@ export function evidenceReasons(
   policy: FinancialEmailPolicyResult,
   providerUnavailable: boolean,
 ): FinancialPlanReason[] {
+  if (candidate.event_verification?.assessment?.outcome === "nonfinancial") return [];
   const reasons: FinancialPlanReason[] = [];
   if (providerUnavailable) {
     reasons.push(reason("provider_unavailable", "Semantic verification is currently unavailable."));

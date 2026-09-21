@@ -1,5 +1,6 @@
 import { FINANCIAL_PROVIDER_CATALOG, type FinancialProviderAssessment, type FinancialProviderEmailSource, type FinancialProviderId } from "../../shared/types/financial-parsers.ts";
 import { parseAmazon, AMAZON_PARSER_VERSION } from "./amazon.ts";
+import { parseEbay, EBAY_PARSER_VERSION } from "./ebay.ts";
 import { parseChase, CHASE_PARSER_VERSION } from "./chase.ts";
 import { parseCiti, CITI_PARSER_VERSION } from "./citi.ts";
 import { parsePaypal, PAYPAL_PARSER_VERSION } from "./paypal.ts";
@@ -13,6 +14,7 @@ import { parseValleyVista, VALLEY_VISTA_PARSER_VERSION } from "./valley-vista.ts
 import { NORMALIZATION_VERSION, type ProviderParser } from "./parser-helpers.ts";
 
 const registry: Record<FinancialProviderId, { parse: ProviderParser; version: string }> = {
+  "ebay": { parse: parseEbay, version: EBAY_PARSER_VERSION },
   "sce": { parse: parseSce, version: SCE_PARSER_VERSION },
   "socalgas": { parse: parseSocalgas, version: SOCALGAS_PARSER_VERSION },
   "sgv-water": { parse: parseSgvWater, version: SGV_WATER_PARSER_VERSION },
@@ -25,12 +27,15 @@ const registry: Record<FinancialProviderId, { parse: ProviderParser; version: st
   "citi": { parse: parseCiti, version: CITI_PARSER_VERSION },
   "amazon": { parse: parseAmazon, version: AMAZON_PARSER_VERSION },
 };
-export const FINANCIAL_PROVIDER_PARSER_POLICY = `${NORMALIZATION_VERSION}:registry-v1:${Object.values(registry).map(entry => entry.version).join(",")}`;
+export const FINANCIAL_PROVIDER_PARSER_POLICY = `${NORMALIZATION_VERSION}:registry-v2:${Object.values(registry).map(entry => entry.version).join(",")}`;
 
 export function identifyFinancialProvider(fromAddress: string, source?: { subject?: string; body?: string }): FinancialProviderId | null {
   const sender = (fromAddress.match(/<([^<>]+)>/)?.[1] || fromAddress).trim().toLowerCase();
   const provider = FINANCIAL_PROVIDER_CATALOG.find(p => (p.senderAddresses as readonly string[]).includes(sender));
   if (!provider) return null;
+  // This provider has fulfillment-only coverage. Receipts, refunds and mixed or
+  // unknown templates retain the existing AI path rather than empty reviews.
+  if (provider.id === "ebay" && parseEbay({ fromAddress: sender, subject: source?.subject || "", body: source?.body || "" }).status !== "nonfinancial") return null;
   // InvoiceCloud serves unrelated billers. Its mailbox alone is not SGV identity.
   if (provider.id === "sgv-water" && !/San Gabriel Valley Water Company/i.test(`${source?.subject || ""}\n${source?.body || ""}`)) return null;
   return provider.id;

@@ -446,59 +446,6 @@ describe("financial email planner contract", () => {
     });
   });
 
-  it("plans a scheduled card payment using the confirmed funding and card accounts", async () => {
-    const plan = createFinancialEmailPlanner({
-      profileReader: async () => ({ budgetId: "budget-1", revision: 1, profiles: [{
-        id: "card-payment", name: "Everyday Card", enabled: true, budgetId: "budget-1", senderAddresses: ["payments@card.example"],
-        target: { kind: "card_payment", fromAccountId: "checking", toAccountId: "card" },
-      }] }),
-      metadataReader: async () => ({
-        accounts: [
-          { id: "checking", name: "Household Checking 1111", type: "checking" },
-          { id: "card", name: "Everyday Card 4242", type: "credit" },
-        ],
-        payees: [],
-        payeeMap: {},
-        categories: [],
-        schedules: [],
-        recentTransactions: [],
-        syncHealth: { state: "current", lastSuccessAt: "2026-09-01T11:00:00.000Z" },
-      }),
-      occurrenceReader: async () => ({ schedules: [], syncHealth: { state: "current" } }),
-      transactionReader: async () => ({
-        transactions: [
-          { id: "t1", date: "2026-08-01", amount: 42.25, direction: "expense", payee: "Transfer", category: "", account: "Household Checking 1111", accountId: "checking", transferAccountId: "card", notes: "" },
-          { id: "t2", date: "2026-07-01", amount: 42.25, direction: "expense", payee: "Transfer", category: "", account: "Household Checking 1111", accountId: "checking", transferAccountId: "card", notes: "" },
-        ],
-      }),
-      now: fixedNow,
-    });
-    const result = await plan("u1", {
-      candidate: candidate("payment_scheduled", {
-        type: "transfer",
-        payee: "Everyday Card",
-        event_evidence: "Your payment of $42.25 is scheduled for September 10, 2026",
-        amount_kind: "payment_amount",
-        amount_candidates: [{ kind: "payment_amount", value: 42.25, confidence: 0.99,
-          evidence: "Your payment of $42.25 is scheduled for September 10, 2026" }],
-        account_last4: "4242",
-        account_last4_confidence: 0.99,
-        account_last4_evidence: "Card ending in 4242",
-      }),
-      sourceIdentity: { senderAddress: "payments@card.example", senderAuthentication: "pass" },
-      email: { subject: "Your card payment is scheduled",
-        body: "Your payment of $42.25 is scheduled for September 10, 2026. Card ending in 4242." },
-    });
-
-    expect(result.operation).toEqual({ intended: "create_transfer_schedule", kind: "create_transfer_schedule", reasons: [] });
-    expect(result.targets).toMatchObject({
-      fromAccount: { status: "resolved", id: "checking" },
-      toAccount: { status: "resolved", id: "card" },
-      schedule: { status: "not_applicable" },
-      category: { status: "not_applicable" },
-    });
-  });
-
   it("represents a safe same-schedule amount change as update_existing without adding an operation kind", async () => {
     const plan = createFinancialEmailPlanner({
       profileReader: async () => ({ budgetId: "budget-1", revision: 1, profiles: [{

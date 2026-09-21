@@ -165,6 +165,12 @@ export function classifyFinancialEmail(candidate: BillCandidate): FinancialEmail
       : null,
     ...(candidate.event_evidence ? { evidence: candidate.event_evidence } : {}),
   };
+  if (candidate.event_verification?.assessment?.outcome === "nonfinancial") {
+    return { classification: { ...base, documentKind: "informational", reasons: ["informational_event"] }, intended: "no_write" };
+  }
+  if (candidate.event_verification?.assessment?.outcome === "uncertain") {
+    return { classification: { ...base, documentKind: "informational", reasons: ["semantic_event_ambiguous"] }, intended: null };
+  }
   if (isIgnoredFinancialNotice(candidate)) {
     return { classification: { ...base, documentKind: "informational", reasons: ["informational_event"] }, intended: "no_write" };
   }
