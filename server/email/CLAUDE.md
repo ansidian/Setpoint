@@ -1,6 +1,6 @@
 # Server Email Map
 
-Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and incremental sync. Entry point is `email-service.ts`; `email-backfill-worker.ts` and `gmail-sync.ts` expose the workers consumed by `server/index.ts` and `server/scheduler.ts`. The AI search pipeline lives in `search/` (see its map).
+Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and incremental sync. Entry point is `email-service.ts`; `email-backfill-worker.ts`, `gmail-pull.ts` and `gmail-sync.ts` expose the workers consumed by `server/index.ts` and `server/scheduler.ts`. The AI search pipeline lives in `search/` (see its map).
 
 ## Files
 
@@ -33,6 +33,7 @@ Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and
 - `gmail-oauth-url.ts` — combined Gmail + Calendar scope set and canonical Google authorization-URL construction
 - `gmail-sync.ts` — Gmail history/push-driven incremental sync and durable settlement; re-exports watch lifecycle entry points
 - `gmail-watch-lifecycle.ts` — Gmail watch registration/renewal lifecycle: due selection, topic resolution, persistence, and per-account failure isolation
+- `gmail-pull.ts` — outbound Pub/Sub StreamingPull admission, bounded delivery, durable queue acknowledgements, retry and shutdown
 - `gmail-pubsub.ts` — hashed push-token lifecycle, runtime topic/status projection, callback generation, and explicit watch tests
 - `email-sync-types.ts` — local history, Pub/Sub, watch, provider-state, and sync error contracts
 - `gmailPubSubNotification.ts` — pure Pub/Sub notification decode: base64url JSON → emailAddress/historyId payload

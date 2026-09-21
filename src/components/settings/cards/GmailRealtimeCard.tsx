@@ -27,6 +27,7 @@ const BUTTON_MOTION = "min-h-11 motion-reduce:transition-none motion-reduce:hove
 export default function GmailRealtimeCard({ openAdvancedSetup = false }: { openAdvancedSetup?: boolean }) {
   const demo = isDemoMode();
   const [status, setStatus] = useState<GmailPubSubStatus | null>(null);
+  const [statusUnavailable, setStatusUnavailable] = useState(false);
   const [topic, setTopic] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -41,10 +42,21 @@ export default function GmailRealtimeCard({ openAdvancedSetup = false }: { openA
     if (demo) return;
     let active = true;
     getGmailPubSubStatus()
-      .then((result) => { if (active) setStatus(result); })
+      .then((result) => { if (active) { setStatus(result); setStatusUnavailable(false); } })
       .catch(() => { if (active) setMessage("Gmail real-time status is unavailable."); });
     return () => { active = false; };
   }, [demo]);
+
+  useEffect(() => {
+    if (demo || status?.deliveryMode !== "pull_and_periodic") return;
+    let active = true;
+    const timer = window.setInterval(() => {
+      getGmailPubSubStatus()
+        .then((result) => { if (active) { setStatus(result); setStatusUnavailable(false); } })
+        .catch(() => { if (active) setStatusUnavailable(true); });
+    }, 15_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [demo, status?.deliveryMode]);
 
   useEffect(() => {
     if (revealedCallback) closeRef.current?.focus();
@@ -108,7 +120,23 @@ export default function GmailRealtimeCard({ openAdvancedSetup = false }: { openA
     }, "testing the Gmail watches");
   }
 
+  const pull = status?.deliveryMode === "pull_and_periodic";
   const periodic = !status?.configured;
+  const pullLabels = {
+    starting: "Waiting for first delivery",
+    listening: "Streaming pull active",
+    retrying: "Reconnecting · periodic fallback",
+    stopped: "Receiver stopped · periodic fallback",
+    disabled: "Receiver inactive · periodic fallback",
+    misconfigured: "Receiver configuration needs attention",
+  } as const;
+  const statusLabel = (statusUnavailable || !status) && !demo ? "Delivery status unavailable"
+    : status?.watchTest.errorCode ? "Watch registration needs attention"
+      : pull ? periodic && status?.pull?.state !== "misconfigured" ? "Topic needed · periodic fallback"
+        : pullLabels[status?.pull?.state ?? "starting"]
+        : periodic ? "Periodic updates active" : "Near real-time + periodic";
+  const statusTone = (statusUnavailable || !status) && !demo ? "neutral"
+    : status?.watchTest.errorCode || (pull && !status?.healthy) ? "warning" : "success";
   return (
     <SettingsCard
       id="gmail-realtime-delivery"
@@ -119,9 +147,15 @@ export default function GmailRealtimeCard({ openAdvancedSetup = false }: { openA
     >
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-2">
-          <StatusPill tone="success">{periodic ? "Periodic updates active" : "Near real-time + periodic"}</StatusPill>
+          <StatusPill tone={statusTone} className="max-w-full whitespace-normal">{statusLabel}</StatusPill>
           {demo ? <FieldHint>Demo preview — controls are inert.</FieldHint> : null}
         </div>
+        {pull ? (
+          <FieldHint>
+            Gmail notifications arrive over an outbound connection to Google; no public Gmail callback is needed.
+            Periodic reconciliation remains available. Calendar delivery is unchanged.
+          </FieldHint>
+        ) : null}
         {!demo ? (
           <details
             open={advancedOpen}
@@ -135,7 +169,7 @@ export default function GmailRealtimeCard({ openAdvancedSetup = false }: { openA
               <div>
                 <SectionLabel htmlFor="gmail-pubsub-topic">Google Cloud topic</SectionLabel>
                 <Input id="gmail-pubsub-topic" value={topic} disabled={credentialActionLocked} onChange={(event) => setTopic(event.target.value)} placeholder="projects/project-id/topics/gmail" />
-                <FieldHint className="mt-1">Saving a topic does not expose or replace the callback token.</FieldHint>
+                <FieldHint className="mt-1">{pull ? "The topic must match the subscription configured on the server." : "Saving a topic does not expose or replace the callback token."}</FieldHint>
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" disabled={busy || credentialActionLocked || !topic.trim()} className={`${SETTINGS_SECONDARY_BUTTON_CLASS} ${BUTTON_MOTION}`} onClick={() => run(async () => {
@@ -143,25 +177,25 @@ export default function GmailRealtimeCard({ openAdvancedSetup = false }: { openA
                   setTopic("");
                   return getGmailPubSubStatus();
                 }, "Pub/Sub topic saved.", "saving the Gmail Pub/Sub topic")}>Save topic</Button>
-                <Button size="sm" disabled={busy || credentialActionLocked} className={`${SETTINGS_PRIMARY_BUTTON_CLASS} ${BUTTON_MOTION}`} onClick={handleGenerate}>
+                {status && !pull ? <Button size="sm" disabled={busy || credentialActionLocked} className={`${SETTINGS_PRIMARY_BUTTON_CLASS} ${BUTTON_MOTION}`} onClick={handleGenerate}>
                   {status?.pushToken.configured ? "Regenerate callback" : "Generate callback"}
-                </Button>
-                <Button size="sm" disabled={busy || credentialActionLocked || !status?.configured} className={`${SETTINGS_SECONDARY_BUTTON_CLASS} ${BUTTON_MOTION}`} onClick={handleTestWatches}>Test watches</Button>
-                {status?.pushToken.source === "environment" ? (
+                </Button> : null}
+                <Button size="sm" disabled={busy || credentialActionLocked || !status?.topic.configured} className={`${SETTINGS_SECONDARY_BUTTON_CLASS} ${BUTTON_MOTION}`} onClick={handleTestWatches}>Test watches</Button>
+                {!pull && status?.pushToken.source === "environment" ? (
                   <Button size="sm" disabled={busy || credentialActionLocked} className={`${SETTINGS_SECONDARY_BUTTON_CLASS} ${BUTTON_MOTION}`} onClick={() => run(
                     importGmailPubSubEnvironmentToken,
                     "Copied into encrypted Setpoint storage. The Render variable still remains. Back up EA_ENCRYPTION_KEY, remove the Gmail push-token variable in Render, redeploy, then verify real-time delivery before considering the migration complete.",
                     "copying the Gmail push token into Setpoint",
                   )}>Copy into Setpoint</Button>
                 ) : null}
-                {status?.pushToken.configured ? (
+                {!pull && status?.pushToken.configured ? (
                   <Button variant="destructive" size="sm" disabled={busy || credentialActionLocked} className={BUTTON_MOTION} onClick={() => {
                     if (!window.confirm("Revoke this callback token? The external Pub/Sub subscription will stop delivering until it is updated.")) return;
                     void run(revokeGmailPubSubToken, "Callback revoked. Periodic updates remain active.", "revoking the Gmail callback");
                   }}>Revoke callback</Button>
                 ) : null}
               </div>
-              {status?.callbackUrl ? <FieldHint>Callback base: {status.callbackUrl}</FieldHint> : null}
+              {!pull && status?.callbackUrl ? <FieldHint>Callback base: {status.callbackUrl}</FieldHint> : null}
               {message ? <FieldHint>{message}</FieldHint> : null}
               <SensitiveActionStepUp state={stepUp} />
             </div>

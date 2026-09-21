@@ -51,6 +51,20 @@ function byId(result: ReturnType<typeof projectCapabilityStatuses>, id: string) 
 }
 
 describe("capability projection", () => {
+  it.each([
+    ["starting", "pending"], ["listening", "ready"], ["retrying", "degraded"],
+    ["stopped", "degraded"], ["disabled", "degraded"], ["misconfigured", "needs_attention"],
+  ] as const)("projects pull %s without callback-token actions", (pullState, state) => {
+    const result = byId(projectCapabilityStatuses(input({ gmailRealtime: {
+      configured: pullState !== "misconfigured", source: "environment", pullState,
+      lastTestedAt: null, lastSucceededAt: null, lastFailedAt: null, errorCode: null,
+    } })), "gmail_realtime");
+    expect(result).toMatchObject({ state, mode: "pull_and_periodic" });
+    expect(result.availableActions).not.toContain("disable");
+    expect(result.availableActions).not.toContain("migrate_environment");
+    expect(result.reasonCodes).not.toContain("GMAIL_WATCH_TEST_FAILED");
+  });
+
   it("returns every stable capability independently when nothing is configured", () => {
     const result = projectCapabilityStatuses(input());
 

@@ -87,6 +87,53 @@ Use [AGENTS.md](AGENTS.md#verification) for targeted checks and the required pre
 - The Actual SDK runs in one persistent serialized worker. Production defaults to a 1024 MiB old-space ceiling (not reserved memory); `EA_ACTUAL_WORKER_MAX_OLD_SPACE_MB` overrides it. `EA_ACTUAL_WORKER_IDLE_SHUTDOWN_MS=0` keeps the worker warm; a positive value enables idle retirement. Missing caches bootstrap through the bounded downloader before SDK synchronization. The old `EA_ACTUAL_SDK_WRITE_FALLBACK` and `EA_ACTUAL_ALLOW_COLD_SDK_DOWNLOAD` switches are retired. Ordinary reads remain local, finance maintenance runs every five minutes with one-minute failed-sync backoff, and health becomes stale after 15 minutes without a successful check. Successful writes publish immediately with a durable reconciliation fallback. Connection changes close the old SDK session; graceful app shutdown drains the worker.
 
 
+## Gmail outbound notification delivery
+
+Set `GMAIL_PUBSUB_SUBSCRIPTION=projects/example-project/subscriptions/gmail-pull`
+to enable the Google Pub/Sub StreamingPull worker. Keep `GMAIL_PUBSUB_TOPIC`
+(or its saved Settings value) set to the topic that Gmail watches publish to.
+The subscription must be a **pull** subscription on that same topic. Leaving
+this environment variable unset preserves the existing HTTPS push deployment.
+
+Authenticate with Google Application Default Credentials. For an external host,
+use a dedicated service account with `roles/pubsub.subscriber` granted on only
+that subscription. Mount its private JSON credential read-only into the app and
+set `GOOGLE_APPLICATION_CREDENTIALS` to the container path. Never bake credentials
+into the image, copy them into this repository, or reuse an administrator login.
+An example app Compose addition (adapt host paths before applying):
+
+```yaml
+services:
+  app:
+    volumes:
+      - /srv/setpoint/secrets/gmail-subscriber.json:/run/secrets/gmail-subscriber.json:ro
+```
+
+Set `GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/gmail-subscriber.json` in the
+private runtime environment. The file must be readable by the container's app
+UID, with restrictive host permissions. This is a deliberate host configuration
+change; publishing an application image does not install mounts or credentials.
+
+For an existing push subscription, save its complete private configuration and
+IAM policy first, deploy the worker, and coordinate clearing only its pushConfig
+with enabling pull mode. Reuse the subscription to retain unacknowledged messages;
+do not delete/recreate it. Preserve topic, retention and all unrelated settings.
+The subscriber cannot change Google subscription settings. Rollback disables
+pull mode and restores the saved pushConfig; retain current application data.
+
+Settings → Gmail real-time delivery reports waiting for first delivery, active,
+or retrying. Active means a notification was durably admitted in this process;
+a quiet inbox is not a failure. Registration tests alone do not establish actual
+delivery. Confirm receive/ack metrics, backlog and durable history-job completion
+after cutover. Queue admission is idempotent; failed writes are not acknowledged.
+The worker starts only with owner background workers enabled, stays off during
+migration rehearsal, and drains admission before scheduler shutdown.
+
+Calendar and Todoist use separate HTTPS callbacks and are unaffected. Calendar
+retains its existing 15-minute recovery reconciliation. Keep Funnel and its
+restricted proxy if those callbacks still use it; label their health alerts
+separately from Gmail. Gmail's ten-minute inbox fallback remains enabled.
+
 ## Acknowledge historical Gmail sync failures
 
 Use this only after reviewing exact terminal failures and accepting any remaining historical uncertainty. Acknowledgment clears those jobs from current health; it does not claim their mailbox changes were recovered. Errors, payloads, attempts and original timestamps remain saved. New failures remain visible. No provider calls or mail changes occur.

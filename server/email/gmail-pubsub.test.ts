@@ -10,7 +10,7 @@ afterEach(() => {
   for (const client of clients.splice(0)) client.close();
 });
 
-async function makeHarness(environment: Record<string, string | undefined> = {}) {
+async function makeHarness(environment: Record<string, string | undefined> = {}, options: Parameters<typeof createGmailPubSubService>[0] = {}) {
   const dbClient = createClient({ url: ":memory:" });
   clients.push(dbClient);
   await dbClient.executeMultiple(migration);
@@ -23,11 +23,35 @@ async function makeHarness(environment: Record<string, string | undefined> = {})
     canonicalUrlResolver: async () => "https://setpoint.example.com/api/gmail/push",
     environment,
     randomToken,
+    ...options,
   });
   return { service: createInstance(), createInstance, dbClient };
 }
 
 describe("Gmail Pub/Sub configuration", () => {
+  it.each([
+    ["starting", false], ["listening", true], ["retrying", false],
+    ["stopped", false], ["disabled", false], ["misconfigured", false],
+  ] as const)("reports pull %s without requiring a callback token or resolving a public URL", async (state, healthy) => {
+    const { service } = await makeHarness({ GMAIL_PUBSUB_SUBSCRIPTION: "projects/example/subscriptions/gmail" }, {
+      credentialService: { resolve: async () => ({ value: "projects/example/topics/gmail", source: "environment" }) } as never,
+      canonicalUrlResolver: async () => { throw new Error("No public Gmail endpoint"); },
+      pullStatus: () => ({ state, lastMessageAt: null, lastErrorAt: null }),
+    });
+    expect(await service.getStatus()).toMatchObject({
+      configured: state !== "misconfigured", healthy,
+      deliveryMode: "pull_and_periodic", delayedUpdates: !healthy,
+      callbackUrl: null, pushToken: { configured: false }, pull: { state },
+    });
+  });
+
+  it("does not claim pull delivery is ready when the Gmail watch topic is missing", async () => {
+    const { service } = await makeHarness({ GMAIL_PUBSUB_SUBSCRIPTION: "projects/example/subscriptions/gmail" }, {
+      pullStatus: () => ({ state: "listening", lastMessageAt: 100, lastErrorAt: null }),
+    });
+    expect(await service.getStatus()).toMatchObject({ configured: false, healthy: false, delayedUpdates: true });
+  });
+
   it("stores only a hash and reveals the generated callback once", async () => {
     const { service, dbClient } = await makeHarness();
 

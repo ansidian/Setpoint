@@ -6,6 +6,7 @@ import type {
   CapabilityStatus,
   CapabilityStatusResponse,
 } from "../../shared/types/capabilities.ts";
+import type { GmailPullStatus } from "../../shared/types/email.ts";
 import type { InstanceCredentialMetadata } from "../../shared/types/instance-credentials.ts";
 
 export interface CapabilityProjectionInput {
@@ -24,6 +25,7 @@ export interface CapabilityProjectionInput {
   todoist: { status: string; lastSucceededAt: string | null; lastFailedAt: string | null } | null;
   gmailRealtime: {
     configured: boolean;
+    pullState?: GmailPullStatus["state"];
     source: CapabilitySource;
     lastTestedAt: string | null;
     lastSucceededAt: string | null;
@@ -220,15 +222,19 @@ export function projectCapabilityStatuses(input: CapabilityProjectionInput): Cap
 
   const realtime = input.gmailRealtime;
   const gmailRealtime = status("gmail_realtime", {
-    state: !realtime?.configured
-      ? realtime?.source === "disabled" ? "disabled" : "not_configured"
-      : realtime.errorCode ? "degraded" : "ready",
+    state: realtime?.pullState === "misconfigured" ? "needs_attention"
+      : !realtime?.configured
+        ? realtime?.source === "disabled" ? "disabled" : "not_configured"
+        : realtime.errorCode ? "degraded"
+          : realtime.pullState === "starting" ? "pending"
+            : realtime.pullState && realtime.pullState !== "listening" ? "degraded" : "ready",
     source: realtime?.source ?? "absent",
-    mode: realtime?.configured ? "push_and_periodic" : "periodic",
-    reasonCodes: realtime?.errorCode ? ["GMAIL_WATCH_TEST_FAILED"] : [],
+    mode: realtime?.pullState ? "pull_and_periodic" : realtime?.configured ? "push_and_periodic" : "periodic",
+    reasonCodes: realtime?.errorCode ? ["GMAIL_WATCH_TEST_FAILED"]
+      : realtime?.pullState && ["retrying", "stopped", "disabled", "misconfigured"].includes(realtime.pullState) ? ["OPERATION_FAILED"] : [],
     availableActions: [
-      ...(realtime?.configured ? ["manage" as const, "test" as const, "disable" as const] : ["configure" as const]),
-      ...(realtime?.source === "environment" || realtime?.source === "mixed" ? ["migrate_environment" as const] : []),
+      ...(realtime?.configured ? ["manage" as const, "test" as const, ...(realtime.pullState ? [] : ["disable" as const])] : ["configure" as const]),
+      ...(!realtime?.pullState && (realtime?.source === "environment" || realtime?.source === "mixed") ? ["migrate_environment" as const] : []),
     ],
     lastTestedAt: realtime?.lastTestedAt ?? null,
     lastSucceededAt: realtime?.lastSucceededAt ?? null,

@@ -120,7 +120,7 @@ export function buildCanonicalOriginImpact(
     currentOrigin,
     proposedOrigin: next.canonicalOrigin,
     affectedPasskeys: originChanged ? affectedPasskeys : 0,
-    callbacks: callbackLabels.map(([key, provider]) => ({
+    callbacks: callbackLabels.filter(([key]) => key !== "gmailPubSub" || !env.GMAIL_PUBSUB_SUBSCRIPTION?.trim()).map(([key, provider]) => ({
       provider,
       previousUrl: previous?.callbacks[key] ?? null,
       nextUrl: next.callbacks[key],

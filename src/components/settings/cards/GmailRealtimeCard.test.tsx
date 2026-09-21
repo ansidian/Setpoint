@@ -45,6 +45,20 @@ afterEach(() => {
 });
 
 describe("GmailRealtimeCard", () => {
+  it("does not expose callback mutations for an active pull deployment", async () => {
+    api.getGmailPubSubStatus.mockResolvedValue({
+      ...periodicStatus, configured: true, healthy: true, deliveryMode: "pull_and_periodic",
+      topic: { source: "environment", configured: true },
+      pushToken: { source: "environment", configured: true }, callbackUrl: null,
+      pull: { state: "listening", lastMessageAt: 1_000, lastErrorAt: null },
+    });
+    render(<GmailRealtimeCard openAdvancedSetup />);
+    await screen.findByRole("button", { name: "Test watches" });
+    await waitFor(() => expect(screen.queryByRole("button", { name: /generate callback/i })).toBeNull());
+    expect(screen.queryByRole("button", { name: "Revoke callback" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Copy into Setpoint" })).toBeNull();
+  });
+
 
   it("reveals a generated callback once and lets the owner close it", async () => {
     api.generateGmailPubSubCallback.mockResolvedValue({

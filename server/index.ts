@@ -24,11 +24,12 @@ import instanceCredentialRoutes from "./routes/instance-credentials.ts";
 import capabilityRoutes from "./routes/capabilities.ts";
 import onboardingRoutes from "./routes/onboarding.ts";
 import todoistOAuthRoutes from "./routes/todoist-oauth.ts";
-import { initScheduler, startBackgroundIndexer, startReminderSchedulerWorker, stopScheduler } from "./scheduler.ts";
+import { initScheduler, requestGmailHistorySyncDrain, startBackgroundIndexer, startReminderSchedulerWorker, stopScheduler } from "./scheduler.ts";
 import { startSnoozeWaker, stopSnoozeWaker } from "./snapshots/snooze-waker.ts";
 import { startEmailBackfillWorker, stopEmailBackfillWorker } from "./email/email-backfill-worker.ts";
 import { startTodoistMirrorSyncWorker, stopTodoistMirrorSyncWorker } from "./tasks/todoist-webhook.ts";
 import { startBillsMirrorRefreshWorker, stopBillsMirrorRefreshWorker } from "./bills/bills-service.ts";
+import { startGmailPullWorker, stopGmailPullWorker } from "./email/gmail-pull.ts";
 import { startCalendarPushWorker, stopCalendarPushWorker } from "./calendar/calendar-push.ts";
 import { startNewsPollWorker, stopNewsPollWorker } from "./news/news-poller.ts";
 import { startTransactionImportWorker, stopTransactionImportWorker } from "./transaction-imports/transaction-import-runtime.ts";
@@ -171,6 +172,7 @@ function scheduleStartupWorker(
 function startOwnerRuntime(): void {
   const startupDelays = buildStartupWorkerDelays();
   scheduleStartupWorker("scheduler", startupDelays.scheduler, () => initScheduler());
+  scheduleStartupWorker("gmail-pull", startupDelays.scheduler, () => startGmailPullWorker(requestGmailHistorySyncDrain));
   scheduleStartupWorker("indexer", startupDelays.indexer, () => startBackgroundIndexer());
   scheduleStartupWorker("backfill", startupDelays.backfill, () => startEmailBackfillWorker());
   scheduleStartupWorker("snooze", startupDelays.snooze, () => startSnoozeWaker());
@@ -230,6 +232,7 @@ timeAsync("local-engine", async () => {
       server,
       forceExitMs: 110_000,
       stopFns: [
+        stopGmailPullWorker,                  // stop notification admission before draining sync
         stopScheduler,                        // cron jobs + reminder worker (scheduler.ts)
         stopEmailBackfillWorker,              // Task 1
         stopSnoozeWaker,                      // Task 1

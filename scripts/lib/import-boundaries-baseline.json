@@ -26,6 +26,7 @@
       "financial-email-intake.ts",
       "email-backfill-worker.ts",
       "gmail-pubsub.ts",
+      "gmail-pull.ts",
       "gmail-sync.ts",
       "search/email-search-answer.ts",
       "search/email-search-embedding-worker.ts",

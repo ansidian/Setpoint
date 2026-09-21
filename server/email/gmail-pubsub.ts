@@ -3,6 +3,8 @@ import db from "../db/connection.ts";
 import { canonicalUrlService } from "../platform/canonical-url.ts";
 import type { InstanceCredentialService } from "../platform/instance-credential-service.ts";
 import { registerGmailWatch } from "./gmail-sync.ts";
+import { getGmailPullStatus } from "./gmail-pull.ts";
+import type { GmailPullStatus } from "../../shared/types/email.ts";
 import type { GmailSyncAccount } from "./email-sync-types.ts";
 
 type PubSubDb = {
@@ -64,6 +66,7 @@ export function createGmailPubSubService({
   randomToken = () => crypto.randomBytes(32).toString("base64url"),
   registerWatch = registerGmailWatch,
   now = () => Date.now(),
+  pullStatus = getGmailPullStatus,
 }: {
   dbClient?: PubSubDb;
   credentialService?: InstanceCredentialService;
@@ -72,6 +75,7 @@ export function createGmailPubSubService({
   randomToken?: () => string;
   registerWatch?: typeof registerGmailWatch;
   now?: () => number;
+  pullStatus?: () => GmailPullStatus;
 } = {}) {
   async function readTokenRow(): Promise<TokenRow | null> {
     const result = await dbClient.execute({
@@ -124,19 +128,25 @@ export function createGmailPubSubService({
   }
 
   async function getStatus() {
+    const pullEnabled = Boolean(environment.GMAIL_PUBSUB_SUBSCRIPTION?.trim());
     const [topic, callbackUrl, tokenRow] = await Promise.all([
       credentialService.resolve("gmail.pubsub_topic"),
-      canonicalUrlResolver(),
+      pullEnabled ? Promise.resolve(null) : canonicalUrlResolver(),
       readTokenRow(),
     ]);
     const pushTokenSource = tokenSource(tokenRow);
-    const configured = Boolean(topic.value) && (pushTokenSource === "stored" || pushTokenSource === "environment");
+    const pull = pullEnabled ? pullStatus() : null;
+    const configured = Boolean(topic.value) && (pullEnabled
+      ? pull?.state !== "misconfigured"
+      : pushTokenSource === "stored" || pushTokenSource === "environment");
+    const receiving = configured && (!pull || pull.state === "listening");
     return {
       configured,
-      healthy: true,
-      deliveryMode: configured ? "push_and_periodic" as const : "periodic" as const,
-      deliveryStatus: configured ? "near_real_time" as const : "periodic_reconciliation" as const,
-      delayedUpdates: !configured,
+      healthy: pull ? receiving && !tokenRow?.errorCode : !tokenRow?.errorCode,
+      deliveryMode: pullEnabled ? "pull_and_periodic" as const : configured ? "push_and_periodic" as const : "periodic" as const,
+      deliveryStatus: receiving ? "near_real_time" as const : "periodic_reconciliation" as const,
+      delayedUpdates: !receiving,
+      pull,
       topic: { source: topic.source, configured: Boolean(topic.value) },
       pushToken: { source: pushTokenSource, configured: pushTokenSource === "stored" || pushTokenSource === "environment" },
       callbackUrl,

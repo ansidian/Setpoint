@@ -344,15 +344,22 @@ export interface EmailSearchCostStats {
   };
 }
 
+export interface GmailPullStatus {
+  state: "disabled" | "starting" | "listening" | "retrying" | "stopped" | "misconfigured";
+  lastMessageAt: number | null;
+  lastErrorAt: number | null;
+}
+
 export interface GmailPubSubStatus {
   configured: boolean;
   healthy: boolean;
-  deliveryMode: "periodic" | "push_and_periodic";
+  deliveryMode: "periodic" | "push_and_periodic" | "pull_and_periodic";
   deliveryStatus: "periodic_reconciliation" | "near_real_time";
   delayedUpdates: boolean;
   topic: { source: "stored" | "environment" | "disabled" | "absent"; configured: boolean };
   pushToken: { source: "stored" | "environment" | "disabled" | "absent"; configured: boolean };
-  callbackUrl: string;
+  callbackUrl: string | null;
+  pull: GmailPullStatus | null;
   watchTest: {
     lastTestedAt: string | null;
     lastSucceededAt: string | null;

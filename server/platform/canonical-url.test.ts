@@ -47,6 +47,16 @@ describe("canonical URL model", () => {
     });
   });
 
+  it("excludes Gmail webhook impact for pull delivery while retaining other callbacks and rollback URLs", () => {
+    const env = { GMAIL_PUBSUB_SUBSCRIPTION: "projects/example-project/subscriptions/gmail-pull" };
+    const impact = buildCanonicalOriginImpact("https://old.example.com", "https://new.example.com", 1, env);
+    expect(impact.callbacks.map(({ provider }) => provider)).toEqual([
+      "Google OAuth", "Todoist OAuth", "Google Calendar push", "Todoist webhook",
+    ]);
+    expect(deriveCanonicalUrls("https://new.example.com", env).callbacks.gmailPubSub)
+      .toBe("https://new.example.com/api/gmail/push");
+  });
+
   it("keeps sign-in on the canonical domain while projecting all webhooks on the public origin", () => {
     const env = { NODE_ENV: "production", EA_WEBHOOK_ORIGIN: "https://Public.example:8443/" };
     const urls = deriveCanonicalUrls("https://dashboard.example.com", env);

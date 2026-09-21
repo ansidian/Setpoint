@@ -2,6 +2,8 @@ import type { Client } from "@libsql/client";
 import type { CapabilitySource, CapabilityStatusResponse } from "../shared/types/capabilities.ts";
 import type { InstanceCredentialMetadata } from "../shared/types/instance-credentials.ts";
 import db from "./db/connection.ts";
+import { getGmailPullStatus } from "./email/gmail-pull.ts";
+import type { GmailPullStatus } from "../shared/types/email.ts";
 import { getActiveOwner } from "./auth/owner-context.ts";
 import {
   projectCapabilityStatuses,
@@ -16,6 +18,7 @@ type CapabilityEvidence = Omit<CapabilityProjectionInput, "generatedAt" | "crede
   gmailPubSub: {
     tokenSource: CapabilitySource;
     tokenConfigured: boolean;
+    pull?: GmailPullStatus | null;
     lastTestedAt: string | null;
     lastSucceededAt: string | null;
     lastFailedAt: string | null;
@@ -49,9 +52,11 @@ function sourceFor(sources: CapabilitySource[]): CapabilitySource {
 export async function loadCapabilityEvidence({
   dbClient = db,
   environment = process.env,
+  pullStatus = getGmailPullStatus,
 }: {
   dbClient?: Pick<Client, "execute">;
   environment?: NodeJS.ProcessEnv | Record<string, string | undefined>;
+  pullStatus?: () => GmailPullStatus;
 } = {}): Promise<CapabilityEvidence> {
   const userId = getActiveOwner()?.userId ?? environment.EA_USER_ID;
   if (!userId) throw new Error("Owner identity is unavailable");
@@ -131,6 +136,7 @@ export async function loadCapabilityEvidence({
       lastFailedAt: text(todoist.last_check_failed_at),
     } : null,
     gmailPubSub: {
+      pull: environment.GMAIL_PUBSUB_SUBSCRIPTION?.trim() ? pullStatus() : null,
       tokenSource,
       tokenConfigured: tokenSource === "stored" || tokenSource === "environment",
       lastTestedAt: pubSub?.last_tested_at == null ? null : new Date(Number(pubSub.last_tested_at)).toISOString(),
@@ -170,7 +176,8 @@ export function createCapabilityStatusService({
     const topic = byKey.get("gmail.pubsub_topic");
     const todoistClientId = byKey.get("tasks.todoist_client_id");
     const todoistClientSecret = byKey.get("tasks.todoist_client_secret");
-    const gmailSource = sourceFor([topic?.source ?? "absent", evidence.gmailPubSub.tokenSource]);
+    const pull = evidence.gmailPubSub.pull;
+    const gmailSource = sourceFor([topic?.source ?? "absent", pull ? "environment" : evidence.gmailPubSub.tokenSource]);
     const todoistSources: CapabilitySource[] = [todoistClientId?.source, todoistClientSecret?.source]
       .filter((source): source is NonNullable<typeof source> => Boolean(source));
     return projectCapabilityStatuses({
@@ -181,11 +188,12 @@ export function createCapabilityStatusService({
       actual: evidence.actual,
       todoist: evidence.todoist,
       gmailRealtime: {
-        configured: Boolean(topic?.activeConfigured) && evidence.gmailPubSub.tokenConfigured,
+        configured: Boolean(topic?.activeConfigured) && (pull ? pull.state !== "misconfigured" : evidence.gmailPubSub.tokenConfigured),
+        pullState: pull?.state,
         source: gmailSource,
         lastTestedAt: evidence.gmailPubSub.lastTestedAt,
-        lastSucceededAt: evidence.gmailPubSub.lastSucceededAt,
-        lastFailedAt: evidence.gmailPubSub.lastFailedAt,
+        lastSucceededAt: pull ? pull.lastMessageAt === null ? null : new Date(pull.lastMessageAt).toISOString() : evidence.gmailPubSub.lastSucceededAt,
+        lastFailedAt: pull ? pull.lastErrorAt === null ? null : new Date(pull.lastErrorAt).toISOString() : evidence.gmailPubSub.lastFailedAt,
         errorCode: evidence.gmailPubSub.errorCode,
       },
       todoistAdvanced: {

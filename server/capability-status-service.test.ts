@@ -56,6 +56,22 @@ function evidence() {
 }
 
 describe("capability status service", () => {
+  it("uses pull delivery evidence without a push token", async () => {
+    const response = await createCapabilityStatusService({
+      credentialService: { getCredentialMetadata: async (key) => ({
+        ...metadata[0]!, key, source: "environment", activeConfigured: key === "gmail.pubsub_topic",
+      }), subscribe: () => () => {} },
+      loadEvidence: async () => ({ ...evidence(), gmailPubSub: {
+        ...evidence().gmailPubSub,
+        pull: { state: "listening", lastMessageAt: 2_000, lastErrorAt: 1_000 },
+      } }),
+    }).getStatus();
+    expect(response.capabilities.find(({ id }) => id === "gmail_realtime")).toMatchObject({
+      state: "ready", mode: "pull_and_periodic", source: "environment",
+      lastSucceededAt: "1970-01-01T00:00:02.000Z", lastFailedAt: "1970-01-01T00:00:01.000Z",
+    });
+  });
+
   it("loads existing account, settings, and operational evidence without reading secret values", async () => {
     const execute = vi.fn(async (statement: { sql: string }) => {
       if (statement.sql.includes("FROM ea_accounts")) return { rows: [{ type: "icloud", needs_reauth: 0 }] };
