@@ -8,7 +8,6 @@ const api = vi.hoisted(() => ({
   revokeGmailPubSubToken: vi.fn(),
   setGmailPubSubTopic: vi.fn(),
   testGmailPubSubWatches: vi.fn(),
-  useHostGmailPubSubToken: vi.fn(),
 }));
 const security = vi.hoisted(() => ({
   stepUpWithPassword: vi.fn(),

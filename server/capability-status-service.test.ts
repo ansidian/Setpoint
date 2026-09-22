@@ -1,5 +1,27 @@
-import { describe, expect, it, vi } from "vitest";
+import { createClient, type Client } from "@libsql/client";
+import { readFileSync } from "node:fs";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createCapabilityStatusService, loadCapabilityEvidence } from "./capability-status-service.ts";
+import { createEncryption } from "./platform/encryption.ts";
+import { createInstanceCredentialService } from "./platform/instance-credential-service.ts";
+import { createInstanceCredentialStore } from "./platform/instance-credential-store.ts";
+
+const databases: Client[] = [];
+afterEach(() => { for (const db of databases.splice(0)) db.close(); });
+
+async function credentialService(environment: Record<string, string | undefined>) {
+  const db = createClient({ url: ":memory:" });
+  databases.push(db);
+  for (const file of ["033_instance_credentials.sql", "040_pending_credential_lifecycle.sql"]) {
+    await db.executeMultiple(readFileSync(new URL(`./db/migrations/${file}`, import.meta.url), "utf8"));
+  }
+  return createInstanceCredentialService({
+    store: createInstanceCredentialStore(db),
+    environment,
+    encryption: createEncryption(() => "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
+    now: () => 1_000,
+  });
+}
 
 const metadata = [{
     key: "ai.openai_api_key",
@@ -18,17 +40,10 @@ const metadata = [{
     version: 1,
   }];
 
-function metadataResolver() {
-  let reads = 0;
-  return {
-    resolve: async (key: string) => {
-      reads += 1;
-      return metadata.find((item) => item.key === key) ?? ({
-        ...metadata[0]!, key, source: "absent" as const, activeConfigured: false,
-      });
-    },
-    readCount: () => reads,
-  };
+async function resolveMetadata(key: string) {
+  return metadata.find((item) => item.key === key) ?? ({
+    ...metadata[0]!, key, source: "absent" as const, activeConfigured: false,
+  });
 }
 
 function evidence() {
@@ -109,43 +124,41 @@ describe("capability status service", () => {
   });
 
   it("caches metadata-only projections and supports explicit refresh", async () => {
-    const metadataReads = metadataResolver();
-    const loadEvidence = vi.fn(async () => evidence());
+    const environment: Record<string, string | undefined> = { OPENAI_API_KEY: "openai-host-key" };
     const service = createCapabilityStatusService({
-      credentialService: { getCredentialMetadata: metadataReads.resolve, subscribe: vi.fn(() => () => {}) },
-      loadEvidence,
+      credentialService: await credentialService(environment),
+      loadEvidence: async () => evidence(),
       now: () => 1_000,
       cacheTtlMs: 5_000,
     });
 
-    await service.getStatus();
-    await service.getStatus();
-    expect(metadataReads.readCount()).toBe(9);
-    await service.getStatus({ refresh: true });
-    expect(metadataReads.readCount()).toBe(18);
+    const initial = await service.getStatus();
+    expect(initial.capabilities.find(({ id }) => id === "ai")).toMatchObject({ state: "degraded", mode: "openai" });
+    environment.ANTHROPIC_API_KEY = "anthropic-host-key";
+    expect(await service.getStatus()).toEqual(initial);
+    const refreshed = await service.getStatus({ refresh: true });
+    expect(refreshed.capabilities.find(({ id }) => id === "ai")).toMatchObject({ state: "ready", mode: "anthropic+openai" });
+    expect(await service.getStatus()).toEqual(refreshed);
   });
 
   it("invalidates cached status when credential metadata changes", async () => {
-    let onChange: (() => void) | undefined;
-    const metadataReads = metadataResolver();
+    const credentials = await credentialService({ OPENAI_API_KEY: "openai-host-key", ANTHROPIC_API_KEY: "anthropic-host-key" });
     const service = createCapabilityStatusService({
-      credentialService: {
-        getCredentialMetadata: metadataReads.resolve,
-        subscribe: vi.fn((listener: (event: never) => void) => { onChange = () => listener(undefined as never); return () => {}; }),
-      },
-      loadEvidence: vi.fn(async () => evidence()),
+      credentialService: credentials,
+      loadEvidence: async () => evidence(),
       now: () => 1_000,
     });
 
-    await service.getStatus();
-    onChange?.();
-    await service.getStatus();
-    expect(metadataReads.readCount()).toBe(18);
+    const initial = await service.getStatus();
+    expect(initial.capabilities.find(({ id }) => id === "ai")).toMatchObject({ state: "ready", mode: "anthropic+openai" });
+    await credentials.disable("ai.anthropic_api_key");
+    const changed = await service.getStatus();
+    expect(changed.capabilities.find(({ id }) => id === "ai")).toMatchObject({ state: "degraded", mode: "openai" });
   });
 
   it("returns no registry keys, root-key metadata, ciphertext, or raw errors", async () => {
     const response = await createCapabilityStatusService({
-      credentialService: { getCredentialMetadata: metadataResolver().resolve, subscribe: vi.fn(() => () => {}) },
+      credentialService: { getCredentialMetadata: resolveMetadata, subscribe: vi.fn(() => () => {}) },
       loadEvidence: vi.fn(async () => ({
         ...evidence(),
         actual: { status: "failed", lastSucceededAt: null, lastFailedAt: "2026-07-18T00:00:00.000Z", rawError: "secret-bearing provider body" },

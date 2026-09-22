@@ -3,15 +3,9 @@ import { createClient, type Client } from "@libsql/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockActual = {
-  sendBill: vi.fn(),
-  markBillPaid: vi.fn(),
   syncActualMetadata: vi.fn(),
-  testConnection: vi.fn(),
-  createQuickTxn: vi.fn(),
 };
 const mockActualLocal = {
-  describeLocalActualCache: vi.fn(),
-  hydrateLocalActualCache: vi.fn(),
   readLocalActualMetadata: vi.fn(),
 };
 // Actual metadata and its local filesystem cache are genuine provider/filesystem
@@ -114,11 +108,9 @@ describe("refreshActualMetadataProjection", () => {
     expect(result.accounts).toEqual([{ id: "a1", name: "Checking" }]);
   });
 
-  it("falls back to the worker when both cached and fresh local reads fail", async () => {
+  it("falls back to the worker when the local metadata read fails", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
-    mockActualLocal.readLocalActualMetadata
-      .mockRejectedValueOnce(new Error("no cache"))
-      .mockRejectedValueOnce(new Error("lightweight failed"));
+    mockActualLocal.readLocalActualMetadata.mockRejectedValueOnce(new Error("no cache"));
     mockActual.syncActualMetadata.mockResolvedValue({ payees: [{ id: "p9", name: "PG&E" }] });
     const result = await refreshActualMetadataProjection("user-1", { now: NOW, dbClient: db });
     // Worker payee surviving in the result proves the worker path won the fallback.
@@ -127,9 +119,9 @@ describe("refreshActualMetadataProjection", () => {
 
   it("keeps verified-write publication disk-only when the cache is unavailable", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
-    mockActualLocal.readLocalActualMetadata.mockRejectedValue(new Error("lightweight failed"));
+    mockActualLocal.readLocalActualMetadata.mockRejectedValue(new Error("local metadata unavailable"));
     await expect(loadActualMetadataForProjection("user-1", { refreshLocal: false }))
-      .rejects.toThrow("lightweight failed");
+      .rejects.toThrow("local metadata unavailable");
   });
 
   it("records a degraded marker and rethrows when metadata cannot be loaded", async () => {

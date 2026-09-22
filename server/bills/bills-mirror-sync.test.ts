@@ -5,17 +5,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const mockActual = {
-  sendBill: vi.fn(),
-  markBillPaid: vi.fn(),
-  getMetadata: vi.fn(),
   syncActualMetadata: vi.fn(),
-  getCalendarBillsRange: vi.fn(),
-  testConnection: vi.fn(),
-  createQuickTxn: vi.fn(),
 };
 const mockActualLocal = {
-  describeLocalActualCache: vi.fn(),
-  hydrateLocalActualCache: vi.fn(),
   readLocalActualMetadata: vi.fn(),
 };
 
@@ -156,8 +148,7 @@ async function stateRow() {
 beforeEach(async () => {
   Object.values(mockActual).forEach((fn) => fn.mockReset());
   Object.values(mockActualLocal).forEach((fn) => fn.mockReset());
-  mockActualLocal.readLocalActualMetadata.mockRejectedValue(new Error("lightweight metadata unavailable"));
-  mockActual.getMetadata.mockResolvedValue(EMPTY_METADATA);
+  mockActualLocal.readLocalActualMetadata.mockRejectedValue(new Error("local metadata unavailable"));
   mockActual.syncActualMetadata.mockRejectedValue(new Error("Actual sync unavailable"));
 
   testDb = createClient({ url: "file::memory:" });
@@ -186,8 +177,7 @@ describe("Bills mirror", () => {
     expect(mockActualLocal.readLocalActualMetadata).toHaveBeenCalledWith("u1", { // test-architecture: allow-boundary-interaction -- Refresh must read the local Actual projection without a provider refresh before replacing mirror state.
       localOnly: true,
     });
-    expect(mockActual.getMetadata).not.toHaveBeenCalled(); // test-architecture: allow-boundary-interaction -- Mirror refresh must not spawn the provider fallback after a successful local projection read.
-    expect(mockActual.getCalendarBillsRange).not.toHaveBeenCalled(); // test-architecture: allow-boundary-interaction -- Range reads are excluded because the full local projection is the authoritative refresh boundary.
+    expect(mockActual.syncActualMetadata).not.toHaveBeenCalled(); // test-architecture: allow-boundary-interaction -- A successful local projection must not synchronize with the external Actual provider; persisted rows alone cannot prove no extra provider request occurred.
     expect(await occurrenceRows()).toEqual([
       expect.objectContaining({
         occurrence_id: "sched-1:2026-05-10",
