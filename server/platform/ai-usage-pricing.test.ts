@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { OPENAI_MODELS, ANTHROPIC_FALLBACK_MODELS } from '../ai-model-catalog.ts';
 import { estimateAiUsageCost, normalizeAiUsage } from './ai-usage-tokens.ts';
 
-// Official standard USD/1M input, cache-read, output prices checked 2026-09-10.
+// Official standard USD/1M input, cache-read, output prices checked 2026-09-22.
 const prices = [
+  ['openai', 'gpt-6-astra', 10, 1, 50],
+  ['openai', 'gpt-6-sol', 2, 0.2, 10],
+  ['openai', 'gpt-6-luna', 0.1, 0.01, 0.5],
   ['openai', 'gpt-5.6-sol', 4, 0.4, 20],
   ['openai', 'gpt-5.6-terra', 2, 0.2, 12],
   ['openai', 'gpt-5.6-luna', 0.2, 0.02, 1.2],
@@ -36,7 +39,7 @@ describe('source-checked pricing', () => {
     const estimate = estimateAiUsageCost(provider, model, tokens);
     expect(estimate.estimatedCostUsd).toBeCloseTo((input + cached + output) / 1000, 10);
     expect(estimate.estimatedSavingsUsd).toBeCloseTo((input - cached) / 1000, 10);
-    expect(estimate.pricingVersion).toBe('standard-text-2026-09-10');
+    expect(estimate.pricingVersion).toBe('standard-text-2026-09-22');
   });
 
   it('has known standard pricing for every curated and fallback model', () => {
@@ -52,6 +55,28 @@ describe('source-checked pricing', () => {
     for (const [input, expected] of [[272000, 1.108], [272001, 2.206008]] as const) {
       const tokens = normalizeAiUsage('openai', { input_tokens: input, output_tokens: 1000 });
       expect(estimateAiUsageCost('openai', 'gpt-5.6-sol', tokens).estimatedCostUsd).toBeCloseTo(expected, 10);
+    }
+  });
+
+  it.each([
+    ['gpt-6-astra', 10, 1, 50],
+    ['gpt-6-sol', 2, 0.2, 10],
+    ['gpt-6-luna', 0.1, 0.01, 0.5],
+  ] as const)('prices %s cache writes and the long-context threshold', (model, inputPrice, cachePrice, outputPrice) => {
+    for (const input of [272000, 272001, 900000]) {
+      const tokens = normalizeAiUsage('openai', {
+        input_tokens: input, output_tokens: 1000,
+        input_tokens_details: { cached_tokens: 1000, cache_write_tokens: 2000 },
+      });
+      const inputMultiplier = input > 272000 ? 2 : 1;
+      const outputMultiplier = input > 272000 ? 1.5 : 1;
+      const expected = (((input - 3000) * inputPrice + 1000 * cachePrice + 2000 * inputPrice * 1.25)
+        * inputMultiplier + 1000 * outputPrice * outputMultiplier) / 1000000;
+      const estimate = estimateAiUsageCost('openai', model, tokens);
+      expect(estimate.estimatedCostUsd).toBeCloseTo(expected, 10);
+      expect(estimate.estimatedSavingsUsd).toBeCloseTo(
+        (1000 * (inputPrice - cachePrice) - 2000 * inputPrice * 0.25) * inputMultiplier / 1000000, 10,
+      );
     }
   });
 

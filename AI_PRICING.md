@@ -1,13 +1,16 @@
 # AI usage pricing
 
-Checked 2026-09-10. Rates are USD per million tokens for standard direct API requests. `server/platform/ai-usage-tokens.ts` is the shared calculator for Alfred, triage, and financial email. This is an estimate of recorded usage, not an invoice reconciliation.
+Checked 2026-09-22. Rates are USD per million tokens for standard direct API requests. `server/platform/ai-usage-tokens.ts` is the shared calculator for Alfred, triage, and financial email. This is an estimate of recorded usage, not an invoice reconciliation.
 
 ## OpenAI
 
-All nine curated models were checked against the [official pricing page](https://developers.openai.com/api/docs/pricing) and their linked model references.
+All twelve curated models have rates from the [official pricing page](https://developers.openai.com/api/docs/pricing).
 
 | Model | Input | Cache read | Output |
 | --- | ---: | ---: | ---: |
+| [GPT-6 Astra](https://developers.openai.com/api/docs/models/gpt-6-astra) | 10 | 1 | 50 |
+| [GPT-6 Sol](https://developers.openai.com/api/docs/models/gpt-6-sol) | 2 | 0.20 | 10 |
+| [GPT-6 Luna](https://developers.openai.com/api/docs/models/gpt-6-luna) | 0.10 | 0.01 | 0.50 |
 | [GPT-5.6 Sol](https://developers.openai.com/api/docs/models/gpt-5.6-sol) | 4 | 0.40 | 20 |
 | [GPT-5.6 Terra](https://developers.openai.com/api/docs/models/gpt-5.6-terra) | 2 | 0.20 | 12 |
 | [GPT-5.6 Luna](https://developers.openai.com/api/docs/models/gpt-5.6-luna) | 0.20 | 0.02 | 1.20 |
@@ -18,13 +21,15 @@ All nine curated models were checked against the [official pricing page](https:/
 | [GPT-5.4 nano](https://developers.openai.com/api/docs/models/gpt-5.4-nano) | 0.20 | 0.02 | 1.25 |
 | [GPT-5.4 Pro](https://developers.openai.com/api/docs/models/gpt-5.4-pro) | 30 | 30* | 180 |
 
-*Pro has no cached-input discount; any reported cache reads are charged at the base input rate. GPT-5.6 cache writes cost 1.25× base input. Above 272K input tokens, GPT-5.6 charges 2× input and 1.5× output for the full request. Sol's current promotional pricing is available at least through November 21, 2026. Older OpenAI session-wide long-context premiums are not estimated here; such calls remain unpriced.
+*Pro has no cached-input discount; any reported cache reads are charged at the base input rate. GPT-5.6 and GPT-6 cache writes cost 1.25× base input. Above 272K input tokens, both generations charge 2× input and 1.5× output for the full request. GPT-5.6 Sol's current promotional pricing is available at least through November 21, 2026. Older OpenAI session-wide long-context premiums are not estimated here; such calls remain unpriced.
 
 [Email Search's text-embedding-3-small](https://developers.openai.com/api/docs/models/text-embedding-3-small) remains $0.02 per million input tokens. Its separate corpus-size projection uses a character heuristic; recorded embedding usage is reported separately.
 
 ## Anthropic
 
 The catalog discovers Claude models dynamically. The calculator includes these source-checked entries and their dated snapshots. Future or unrecognized IDs remain unpriced. Rates from [official Claude pricing](https://platform.claude.com/docs/en/about-claude/pricing):
+
+Fallback choices include Sonnet 5, Opus 5, Opus 4.8, Sonnet 4.6/4.5, and Haiku 4.5. Requests explicitly disable thinking to preserve the named-tool contract on Sonnet 5 and Opus 5. New selections exclude Opus 5.5 and Fable/Mythos 5.1 because they reject forced tool use and require adapter changes; existing saved model IDs are preserved. See [Opus 5.5 compatibility changes](https://platform.claude.com/docs/en/models/opus-5-5/overview).
 
 | Models | Input | Cache read | Output |
 | --- | ---: | ---: | ---: |

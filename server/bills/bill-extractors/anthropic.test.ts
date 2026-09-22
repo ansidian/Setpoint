@@ -35,6 +35,7 @@ describe("ANTHROPIC_PROVIDER.extract", () => {
     expect(fetchMock.mock.calls[0]![1]?.signal).toBeInstanceOf(AbortSignal);
     // test-architecture: allow-boundary-interaction -- The provider request schema is the public outbound extraction contract; no returned value can prove which schema was sent.
     const body = JSON.parse(String(fetchMock.mock.calls[0]![1]?.body));
+    expect(body.thinking).toEqual({ type: "disabled" });
     expect(body.tools[0].input_schema.properties.amount_candidates.items.properties.kind.enum)
       .toContain("statement_balance");
     expect(body.tools[0].input_schema.properties.event_kind.enum)

@@ -59,6 +59,9 @@ const PROVIDERS: Record<AiProvider, ProviderDefinition> = {
 };
 
 export const OPENAI_MODELS: readonly ProviderModelOption[] = [
+  { id: "gpt-6-astra", label: "GPT-6 Astra" },
+  { id: "gpt-6-sol", label: "GPT-6 Sol" },
+  { id: "gpt-6-luna", label: "GPT-6 Luna" },
   { id: "gpt-5.6-sol", label: "GPT-5.6 Sol" },
   { id: "gpt-5.6-terra", label: "GPT-5.6 Terra" },
   { id: "gpt-5.6-luna", label: "GPT-5.6 Luna" },
@@ -79,11 +82,24 @@ function openAiModelsForUseCase(useCase: AiModelUseCase): readonly ProviderModel
 }
 
 export const ANTHROPIC_FALLBACK_MODELS: readonly ProviderModelOption[] = [
+  { id: "claude-sonnet-5", label: "Claude Sonnet 5" },
+  { id: "claude-opus-5", label: "Claude Opus 5" },
+  { id: "claude-opus-4-8", label: "Claude Opus 4.8" },
   { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
-  { id: "claude-sonnet-4-5-20250514", label: "Claude Sonnet 4.5" },
+  { id: "claude-sonnet-4-5-20250929", label: "Claude Sonnet 4.5" },
   { id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5" },
   { id: "claude-haiku-4-5", label: "Claude Haiku 4.5" },
 ];
+
+// Every current use case can force a named tool. These models reject that
+// request, so discovery must not advertise them until the adapters support them.
+const ANTHROPIC_UNSUPPORTED_MODELS = new Set([
+  "claude-opus-5-5", "claude-fable-5-1", "claude-mythos-5-1",
+]);
+
+function supportsAnthropicToolChoice(model: string): boolean {
+  return !ANTHROPIC_UNSUPPORTED_MODELS.has(model.toLowerCase().replace(/-\d{8}$/, ""));
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -111,7 +127,8 @@ function normalizeAnthropicModels(payload: unknown): ProviderModelOption[] {
   const seen = new Set<string>();
   const models: ProviderModelOption[] = [];
   for (const item of (payload as AnthropicModelResponse).data as unknown[]) {
-    if (!isRecord(item) || !isSafeAnthropicModelId(item.id) || seen.has(item.id)) continue;
+    if (!isRecord(item) || !isSafeAnthropicModelId(item.id)
+      || !supportsAnthropicToolChoice(item.id) || seen.has(item.id)) continue;
     seen.add(item.id);
     models.push({
       id: item.id,
@@ -151,7 +168,7 @@ export function isSelectableAiModel(
   if (provider === "openai") {
     return openAiModelsForUseCase(_useCase).some((entry) => entry.id === model);
   }
-  return provider === "anthropic" && isSafeAnthropicModelId(model);
+  return provider === "anthropic" && isSafeAnthropicModelId(model) && supportsAnthropicToolChoice(model);
 }
 
 export function resolveStoredAiModelConfig({
