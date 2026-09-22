@@ -10,6 +10,7 @@ Pure, source-grounded company parsing. The public assessment facade returns pars
 - `sofi.ts`, `us-bank.ts`, `chase.ts`, `citi.ts` — issuer-owned statement, payment notice, transaction alert and reward templates
 - `paypal.ts` — Synchrony card statements/autopay/refunds, merchant receipts/refunds/authorizations, balance transfers and received-money notices; owns recognition of grounded PayPal balance movements in retained historical candidates
 - `amazon.ts` — initial order confirmation, refund and fulfillment families
+- `ebay.ts` — content-gated packing notifications only; other eBay templates retain AI assessment
 - `fixtures/historical.json` — sanitized historical text/table excerpts with fictional personal/account identities; retains label order and whitespace from real normalized sources
 
 - `replay-report.ts` — pure registry replay and redacted provider/template/version/disposition aggregation; no orchestration, credentials or writes

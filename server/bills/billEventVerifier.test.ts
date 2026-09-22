@@ -283,6 +283,7 @@ describe("bill event verifier", () => {
         type: "expense", type_confidence: 0.99, type_evidence: "You paid Example Shop $30.00",
         document_role: "processor_receipt", due_date: "2026-09-06",
         account_hint: "Example Rewards Mastercard", account_hint_confidence: 0.99,
+        event_assessment: { outcome: "financial_event", evidence: "You paid Example Shop $30.00 on September 6, 2026" },
       }, usage: {} }) },
       providerId: "openai", model: "test-model",
     });

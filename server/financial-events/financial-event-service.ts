@@ -119,7 +119,9 @@ export function createFinancialEventWorker({
       let assessment: FinancialProviderAssessment | undefined;
       if (document.processingPolicy === "provider_v1") {
         const senderAddress = document.fromAddress.trim().toLowerCase();
-        const knownSender = FINANCIAL_PROVIDER_CATALOG.some(provider => (provider.senderAddresses as readonly string[]).includes(senderAddress));
+        const indexedSource = { fromAddress: senderAddress, subject: document.subject, body: document.body };
+        const knownSender = FINANCIAL_PROVIDER_CATALOG.some(provider => (provider.senderAddresses as readonly string[]).includes(senderAddress)
+          && (provider.id !== "ebay" || assessProviderFinancialEmail(indexedSource).status !== "unrecognized"));
         if (knownSender) document = await acquireOriginal(document);
         contentHash = financialDocumentContentHash(document);
         assessment = assessProviderFinancialEmail({ fromAddress: document.fromAddress, subject: document.subject, body: document.body, emailDate: document.emailDate });
@@ -135,6 +137,12 @@ export function createFinancialEventWorker({
       }
       let assessedCandidate = assessment?.status === "parsed" ? assessment.candidate : await assessSource(document, contentHash);
       if (assessment?.status === "unrecognized") {
+        if (assessedCandidate && isIgnoredFinancialNotice(assessedCandidate)) assessedCandidate = null;
+        const source = { ...document, candidate: assessedCandidate, contentHash };
+        if (await store.inheritReferenceDismissal(source, financialDocumentReferenceKey(source), document.claimToken)) {
+          publish(document.userId);
+          return true;
+        }
         await store.settleDocument(document, { candidate: assessedCandidate, contentHash, assessment,
           status: assessedCandidate ? "retry" : "ignored", nextAttemptAt: null,
           error: assessedCandidate ? "This provider has no dedicated parser. Review the details before recording in Actual." : null });

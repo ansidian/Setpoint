@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import fixtures from "./fixtures/historical.json" with { type: "json" };
+import admissionCases from "../triage/fixtures/financial-admission.json" with { type: "json" };
 import { assessProviderFinancialEmail, identifyFinancialProvider } from "./index.ts";
 import { FINANCIAL_PROVIDER_CATALOG, type FinancialProviderEmailSource } from "../../shared/types/financial-parsers.ts";
 
@@ -34,18 +35,31 @@ const historicalFacts = [
 ] as const;
 
 describe("provider financial assessment", () => {
+  it.each(admissionCases.filter(row => row.source.fromAddress === "ebay@ebay.com"))("owns only supported eBay fulfillment: $name", ({ name, source }) => {
+    expect(assessProviderFinancialEmail(source)).toMatchObject(name === "ebay-packing" || name === "ebay-packing-original-total"
+      ? { status: "nonfinancial", providerId: "ebay", templateId: "packing-update" }
+      : { status: "unrecognized", providerId: null });
+  });
+  it("requires the exact eBay sender and complete supported template, retaining financial attachment evidence", () => {
+    const source = admissionCases[0]!.source;
+    expect(assessProviderFinancialEmail({ ...source, fromAddress: "ebay@unrelated.example" }).status).toBe("unrecognized");
+    expect(assessProviderFinancialEmail({ ...source, body: "Purchases. Check your order status." }).status).toBe("unrecognized");
+    expect(assessProviderFinancialEmail({ ...source, body: source.body.replaceAll(" ", "&nbsp;\n") }).status).toBe("nonfinancial");
+    expect(assessProviderFinancialEmail({ ...source, attachments: [{filename:"refund.txt",text:"We issued a refund of $5.00."}] }).status).toBe("review");
+  });
   it.each(historicalFacts)("extracts the labeled facts from %s", (name, providerId, amount, due_date, amount_kind, event_kind) => {
     const r = assessProviderFinancialEmail(fixture(name));
     expect(r).toMatchObject({ status: "parsed", providerId, reasons: [], candidate: { amount, due_date, amount_kind, event_kind, currency: "USD" } });
     if (r.status !== "parsed") throw new Error("Expected parsed fixture");
     expect(r.candidate.amount_candidates?.find(a => a.kind === amount_kind)?.evidence).toBeTruthy();
     expect(r.parserVersion).toBe(providerId === "sofi" ? "sofi-v2" : `${providerId}-v1`);
-    expect(r.policyVersion).toContain("provider-text-v1:registry-v1:");
+    expect(r.policyVersion).toContain("provider-text-v1:registry-v2:");
     expect(r.policyVersion).toContain(r.parserVersion);
   });
 
   it("recognizes every registered company and requires SGV identity for shared InvoiceCloud mail", () => {
     for (const provider of FINANCIAL_PROVIDER_CATALOG) {
+      if (provider.id === "ebay") continue; // Its supported content, not mailbox alone, establishes recognition.
       expect(identifyFinancialProvider(provider.senderAddresses[0], { subject: "San Gabriel Valley Water Company" })).toBe(provider.id);
     }
     expect(identifyFinancialProvider("no-reply@invoicecloud.net", { subject: "Unrelated City Water Invoice" })).toBeNull();

@@ -85,6 +85,12 @@ export interface BillEventVerification {
   status: "corrected" | "kept_initial" | "failed";
   provider?: string;
   model?: string;
+  assessment?: FinancialEventAssessment;
+}
+
+export interface FinancialEventAssessment {
+  outcome: "financial_event" | "nonfinancial" | "uncertain";
+  evidence: string | null;
 }
 
 export interface BillTargetVerification {
@@ -578,10 +584,11 @@ export interface BillExtractionRequest {
   systemPrompt: string;
   content: string;
   usagePurpose?: "extraction" | "verification" | "matching";
+  responseKind?: "event_audit";
 }
 
 export interface BillExtractionProviderResult {
-  fields: BillCandidate;
+  fields: BillCandidate & { event_assessment?: FinancialEventAssessment };
   usage: Record<string, unknown>;
 }
 

@@ -5,6 +5,7 @@ import {
   type BillCandidate,
   type BillEventVerification,
   type BillExtractionProvider,
+  type FinancialEventAssessment,
 } from "../../shared/types/bills.ts";
 
 export interface BillEventVerificationResult {
@@ -109,14 +110,16 @@ export async function verifyBillEvent({
   provider,
   providerId,
   model,
+  requireAdmission = false,
 }: {
   content: string;
   candidate: BillCandidate;
   provider: BillExtractionProvider;
   providerId: string;
   model: string;
+  requireAdmission?: boolean;
 }): Promise<BillEventVerificationResult> {
-  if (!shouldVerifyBillEvent(candidate)) return { candidate, usage: {} };
+  if (!requireAdmission && !shouldVerifyBillEvent(candidate)) return { candidate, usage: {} };
 
   const verifyType = shouldAttemptFinancialEmailTypeVerification(candidate);
   const repairDate = needsOperationDate(candidate);
@@ -127,6 +130,12 @@ export async function verifyBillEvent({
   });
 
   const prompt = `Audit the semantic event classification for this bill or financial email.
+
+First decide event_assessment independently of the proposed candidate:
+- financial_event: the email establishes a purchase/charge, issued bill or credit-card obligation, payment instruction/outcome, received income, issued/approved refund, or earned reward. Quote the sentence establishing what financially happened, even if amount, date or account are absent.
+- nonfinancial: the email clearly establishes no new financial event. Quote its actual administrative, promotional or fulfillment message. Packing/shipping/delivery updates, pending return/refund requests and tracking notices that only refer to an earlier purchase are nonfinancial, even when they repeat an order total or number. A navigation label such as Purchases, a product name, an estimated delivery date or the original purchase alone is not new-event evidence.
+- uncertain: source evidence does not settle whether a real financial event exists. Missing amount/date/account alone is not uncertainty about event existence. Use null evidence if no relevant source sentence exists. Never resolve uncertainty by inventing a financial event or discarding a possible genuine event.
+Use a verbatim source quote for evidence, not a paraphrase. If a shipping/status update also establishes a new charge, issued refund or payment problem, preserve that financial event. An order confirmation establishes a purchase; a fulfillment update about that order does not. Do not treat a refund request as an issued refund.
 
 Return a corrected extraction using the required schema. Focus on document_role, event_kind, event_confidence, event_evidence, due_date, purchase_date_context, type, type_confidence, type_evidence, account_hint, from_account_hint, to_account_hint, settlement_kind, and provider_reference with their evidence/confidences. Check event/type consistency independently of the first-pass confidence. Independently audit purchase_date_context, returning other or null when the initial confirmation interpretation is unsupported. Preserve the original monetary evidence; this audit does not select Actual IDs. Repair due_date when the email contains an explicit date for the classified event, including when correcting an event whose existing date belongs to a different event.
 Preserve a supported merchant_receipt role when the sender is the seller or merchant of record, even if it also offers checkout or payment services. Change it to processor_receipt only when the document records funding or payment to a separate seller. Repairing a date does not itself justify changing the document role.
@@ -141,8 +150,8 @@ Event definitions:
 - card_payment_completed: a payment posted or applied to a credit-card/account balance; this is a transfer
 - payment_completed: a completed utility or merchant bill payment
 - payment_cancelled: autopay or a payment was cancelled; body cancellation language overrides a stale scheduled subject
-- purchase: a charge, order, authorization, transaction, or receipt
-- refund: a refund, reversal, or account credit
+- purchase: an established new charge, purchase confirmation, authorization, transaction, or receipt; not packing/shipping/delivery of an existing order
+- refund: a refund approved for payment, issued, on its way, or credited; not a pending return/refund request
 - bill_issued: a recurring-service invoice or utility bill
 - reward: cashback or reward income
 - payment_failed: a declined, returned, or failed payment
@@ -171,7 +180,18 @@ ${JSON.stringify({
   })}`;
 
   try {
-    const verified = await provider.extract({ model, systemPrompt: prompt, content, usagePurpose: "verification" });
+    const verified = await provider.extract({ model, systemPrompt: prompt, content, usagePurpose: "verification", responseKind: "event_audit" });
+    const proposed = verified.fields.event_assessment;
+    const assessment: FinancialEventAssessment = proposed
+      && ["financial_event", "nonfinancial"].includes(proposed.outcome)
+      && typeof proposed.evidence === "string"
+      && hasVerbatimFinancialEvidence(content, proposed.evidence)
+      ? { outcome: proposed.outcome, evidence: String(proposed.evidence).trim() }
+      : { outcome: "uncertain", evidence: typeof proposed?.evidence === "string" && hasVerbatimFinancialEvidence(content, proposed.evidence) ? String(proposed?.evidence).trim() : null };
+    if (assessment.outcome === "nonfinancial") return {
+      candidate: { ...candidate, event_verification: { ...metadata("corrected", providerId, model), assessment } },
+      usage: verified.usage || {},
+    };
     let eventAccepted = usableEvent(verified.fields, content);
     let typeAccepted = hasStrongFinancialType(verified.fields)
       && hasVerbatimFinancialEvidence(content, verified.fields.type_evidence);
@@ -265,7 +285,7 @@ ${JSON.stringify({
         } : {}),
         ...(repairDate || eventChanged || clearEmailDate ? { due_date: dateAccepted ? verified.fields.due_date : null } : {}),
         ...(clearEmailDate ? { operation_date_source: undefined } : {}),
-        event_verification: metadata(eventAccepted ? "corrected" : "kept_initial", providerId, model),
+        event_verification: { ...metadata(eventAccepted ? "corrected" : "kept_initial", providerId, model), assessment },
       },
       usage: verified.usage || {},
     };
@@ -273,7 +293,11 @@ ${JSON.stringify({
     return {
       candidate: { ...candidate,
         ...(candidate.operation_date_source ? { due_date: null, operation_date_source: undefined, purchase_date_context: null } : {}),
-        event_verification: metadata("failed", providerId, model), ...(verifyType ? { type_verification: typeAttempt("failed") } : {}) },
+        event_verification: {
+          ...metadata("failed", providerId, model),
+          ...(requireAdmission || candidate.event_verification?.assessment
+            ? { assessment: { outcome: "uncertain" as const, evidence: null } } : {}),
+        }, ...(verifyType ? { type_verification: typeAttempt("failed") } : {}) },
       usage: {},
     };
   }

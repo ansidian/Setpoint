@@ -1,4 +1,4 @@
-import { BILL_SEMANTIC_IDENTITY_PROPERTIES, BILL_SEMANTIC_IDENTITY_REQUIRED } from "../bill-semantic-prompt.ts";
+import { BILL_SEMANTIC_IDENTITY_PROPERTIES, BILL_SEMANTIC_IDENTITY_REQUIRED, FINANCIAL_EVENT_ASSESSMENT_SCHEMA } from "../bill-semantic-prompt.ts";
 // OpenAI Responses API path with Structured Outputs (strict JSON schema).
 // Returns the same normalized field shape as the Anthropic extractor so the
 // caller does not branch on provider.
@@ -73,7 +73,7 @@ export function createOpenAiProvider({
   id: "openai",
   envVar: "OPENAI_API_KEY",
 
-  async extract({ model, systemPrompt, content, usagePurpose = "extraction" }: BillExtractionRequest) {
+  async extract({ model, systemPrompt, content, usagePurpose = "extraction", responseKind }: BillExtractionRequest) {
     const apiKey = await resolveApiKey("openai");
     if (!apiKey) {
       const err: HttpError = new Error("OPENAI_API_KEY not set");
@@ -98,7 +98,10 @@ export function createOpenAiProvider({
             format: {
               type: "json_schema",
               name: "submit_bill",
-              schema: SCHEMA,
+              schema: responseKind === "event_audit" ? { ...SCHEMA,
+                properties: { ...SCHEMA.properties, event_assessment: FINANCIAL_EVENT_ASSESSMENT_SCHEMA },
+                required: [...SCHEMA.required, "event_assessment"],
+              } : SCHEMA,
               strict: true,
             },
           },

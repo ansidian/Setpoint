@@ -408,9 +408,33 @@ export function createFinancialEventStore(dbClient: StoreDb = db, now = Date.now
     return results[1]!.rowsAffected === 1;
   }
 
+  async function inheritReferenceDismissal(document: FinancialDocument, referenceKey: string | null, claimToken: string | null = null): Promise<boolean> {
+    if (document.eventId || document.senderAuthentication?.status !== "pass" || !referenceKey) return false;
+    const timestamp = now();
+    // A permanent alias can outlive the correlation window. Reuse only an
+    // already-dismissed identity, preserving its original history and revision.
+    const result = await dbClient.execute({
+      sql: `WITH dismissed AS (
+              SELECT event.id FROM ea_financial_event_references reference
+              JOIN ea_financial_events event ON event.user_id = reference.user_id AND event.id = reference.event_id
+              WHERE reference.user_id = ? AND reference.reference_key = ? AND event.dismissed_at IS NOT NULL
+            ) UPDATE ea_financial_documents SET event_id = (SELECT id FROM dismissed), dismissed_at = ?,
+              revision = revision + 1, processed_revision = revision + 1, candidate_json = ?, content_hash = ?,
+              status = 'ignored', next_attempt_at = NULL, last_error = 'Candidate dismissed by owner.',
+              claim_token = NULL, claimed_at = NULL, updated_at = ?
+            WHERE user_id = ? AND id = ? AND revision = ? AND event_id IS NULL AND dismissed_at IS NULL
+              AND (? IS NULL OR (claim_token = ? AND status = 'processing'))
+              AND EXISTS (SELECT 1 FROM dismissed)`,
+      args: [document.userId, referenceKey, timestamp, writeJson(document.candidate), document.contentHash,
+        timestamp, document.userId, document.id, document.revision, claimToken, claimToken],
+    });
+    return result.rowsAffected === 1;
+  }
+
   async function dismissCandidate(document: FinancialDocument, event: FinancialEvent | null, input: {
     eventId: string; referenceKey: string | null;
   }): Promise<boolean> {
+    if (!event && await inheritReferenceDismissal(document, input.referenceKey)) return true;
     const timestamp = now();
     const revision = event?.revision ?? 1;
     const results = await dbClient.batch([
@@ -608,7 +632,7 @@ export function createFinancialEventStore(dbClient: StoreDb = db, now = Date.now
 
   return { ...createFinancialEventAiStore(dbClient, now), ...createFinancialDocumentSourceStore(dbClient, now), async isCorrected(userId: string, id: string) {
     return (await dbClient.execute({ sql: "SELECT 1 FROM ea_financial_corrected_sources WHERE user_id=? AND owner='event' AND record_id=? LIMIT 1", args: [userId, id] })).rows.length > 0;
-  }, claimDocument, settleDocument, saveProviderAssessment, associateDocument, listDocuments, findEventsByReference, completeEvent, dismissCandidate,
+  }, claimDocument, settleDocument, saveProviderAssessment, associateDocument, listDocuments, findEventsByReference, completeEvent, dismissCandidate, inheritReferenceDismissal,
     acknowledgeOwnerCompletedDocument, claimEvent, saveEvent,
     rememberCycle, admitOperation, recoverStaleClaims, getNextWakeAt, isManagedEmail, getDocumentForEmail, getEventById, getEventForEmail };
 }

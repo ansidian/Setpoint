@@ -2,6 +2,15 @@
 // remains available before Actual account resolution.
 import { FINANCIAL_SETTLEMENT_KINDS } from "../../shared/types/bills.ts";
 
+export const FINANCIAL_EVENT_ASSESSMENT_SCHEMA = {
+  type: "object", additionalProperties: false,
+  properties: {
+    outcome: { type: "string", enum: ["financial_event", "nonfinancial", "uncertain"] },
+    evidence: { type: ["string", "null"] },
+  },
+  required: ["outcome", "evidence"],
+};
+
 export const BILL_SEMANTIC_IDENTITY_PROPERTIES = {
   purchase_date_context: {
     type: ["object", "null"], additionalProperties: false,

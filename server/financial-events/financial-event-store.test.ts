@@ -89,12 +89,22 @@ describe("financial event persistence", () => {
 
   const request: BillExtractionRequest = { model: "fixture", systemPrompt: "Verify payment", content: "Receipt $12", usagePurpose: "verification" };
 
-  it("reuses paid results across store instances while separating exact inputs, stages, models, providers and events", async () => {
+  it("reuses paid results across store instances while separating exact inputs, schemas, stages, models, providers and events", async () => {
     await associate("arrival");
     const event = (await store().claimEvent("claim"))!;
     let credits = 20;
     const send = async () => { credits--; return { fields: candidate, usage: { tokens: 10 } }; };
     expect(await store().createAiRequestRunner(event)("openai", request, send)).toEqual({ fields: candidate, usage: { tokens: 10 } });
+    expect(await store().createAiRequestRunner(event)("openai", request, send)).toEqual({ fields: candidate, usage: {} });
+    const auditRequest: BillExtractionRequest = { ...request, responseKind: "event_audit" };
+    const auditFields: BillExtractionProviderResult["fields"] = {
+      ...candidate, event_assessment: { outcome: "uncertain", evidence: null },
+    };
+    expect(await store().createAiRequestRunner(event)("openai", auditRequest, async () => {
+      credits--;
+      return { fields: auditFields, usage: { tokens: 10 } };
+    })).toEqual({ fields: auditFields, usage: { tokens: 10 } });
+    expect(await store().createAiRequestRunner(event)("openai", auditRequest, send)).toEqual({ fields: auditFields, usage: {} });
     expect(await store().createAiRequestRunner(event)("openai", request, send)).toEqual({ fields: candidate, usage: {} });
     for (const changed of [{ ...request, model: "next-model" }, { ...request, content: "Receipt $15" },
       { ...request, systemPrompt: "Updated instructions" }, { ...request, usagePurpose: "matching" as const }]) {
@@ -104,7 +114,7 @@ describe("financial event persistence", () => {
     await store().saveEvent(event, { plan: null, status: "waiting", nextAttemptAt: now + 60_000 });
     await associate("another", "event-2");
     await store().createAiRequestRunner((await store().claimEvent("second"))!)("openai", request, send);
-    expect(credits).toBe(13);
+    expect(credits).toBe(12);
     expect(await store().getEventForEmail("owner", "arrival")).toMatchObject({ operation: null, attemptedAt: null });
   });
 

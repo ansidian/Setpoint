@@ -125,21 +125,23 @@ export async function extractBillCandidate(
       systemPrompt,
       content: trimmed,
     });
-    const verification = await verifyBillAmounts({
+    const eventVerification = await verifyBillEvent({
       content: trimmed,
       candidate: validateFinancialSemanticIdentity(firstPass.fields, trimmed),
       provider,
       providerId,
       model,
+      requireAdmission: true,
     });
-    const eventVerification = await verifyBillEvent({
-      content: trimmed,
-      candidate: verification.candidate,
-      provider,
-      providerId,
-      model,
-    });
-    const fields = eventVerification.candidate;
+    const fields = eventVerification.candidate.event_verification?.assessment?.outcome === "nonfinancial"
+      ? eventVerification.candidate
+      : (await verifyBillAmounts({
+        content: trimmed,
+        candidate: eventVerification.candidate,
+        provider,
+        providerId,
+        model,
+      })).candidate;
     const usage = firstPass.usage;
 
     console.log(
@@ -205,6 +207,9 @@ export async function extractBill(
   dependencies: BillExtractionDependencies = {},
 ): Promise<BillCandidate & { provider: string; model: string }> {
   const extracted = await extractBillCandidate(userId, input, dependencies);
+  if (extracted.candidate.event_verification?.assessment?.outcome === "nonfinancial") {
+    throw Object.assign(new Error("This email does not establish a financial event."), { status: 422, code: "FINANCIAL_EVENT_NOT_PRESENT" });
+  }
   return {
     ...extracted.candidate,
     provider: extracted.provider,

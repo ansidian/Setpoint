@@ -166,6 +166,10 @@ This repair does not require a restart: the existing health query excludes `ackn
 
 ## Provider parser activation
 
+`npm run financial-admission:eval` inspects the tracked 12-case fictional admission corpus and deterministic parser dispositions without calling a model. With the intended owner's `EA_USER_ID`, initialized settings and model credentials, append `-- --real-models` to evaluate financial admission through the configured strong classifier and verifier. The AI arm substitutes the explicitly reported unknown sender `admission-eval@example.test` so supported templates cannot bypass AI; deterministic dispositions use each fixture's original sender. The report separates false positives, missed financial events, uncertainty and errors; any unresolved or incorrect case fails the evaluation. Calls use the evaluation usage context and never create finance jobs, read mail or write Actual. A passing fixture-based test is not a measured model-accuracy result.
+
+New AI candidates receive an explicit financial-event admission audit. Grounded nonfinancial outcomes are discarded, uncertain outcomes stay review-only, and provider failures never establish a negative. The eBay parser owns only the supported packing-update template; other eBay mail, including purchase confirmations and refunds, retains AI assessment. Registry policy upgrades recheck eligible unsubmitted assessments through the existing bounded worker; dismissed, confirmed and attempted history remains protected.
+
 Migrations 080–082 prepare inert schema. Deploy the verified runtime before activating. Known companies have dedicated modules in `server/financial-parsers/`; add grounded, sanitized fixtures and register a module there to extend coverage. Configuration controls authority independently of recognition. Unknown or unsupported templates require review.
 
 1. Against the intended database, run `EA_USER_ID=<owner> node server/scripts/migrate-financial-connections.ts` for a read-only inventory and fingerprint. It merges existing profiles, utility identities and pay links without changing history or Actual.

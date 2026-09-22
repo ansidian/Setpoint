@@ -2,6 +2,7 @@ import type { BillCandidate } from "./bills.ts";
 
 /** Provider identity is template recognition, never authority to write to Actual. */
 export const FINANCIAL_PROVIDER_CATALOG = [
+  { id: "ebay", name: "eBay", senderAddresses: ["ebay@ebay.com"] },
   { id: "sce", name: "SCE", senderAddresses: ["sce@message.sce.com", "donotreply@email.sce.com", "sceu@paymentus.com"] },
   { id: "socalgas", name: "SoCalGas", senderAddresses: ["customerservice@socalgas.com", "notices@notification.socalgas.com", "webmaster@socalgas.messages2.com"] },
   { id: "sgv-water", name: "SGV Water", senderAddresses: ["no-reply@invoicecloud.net"] },
