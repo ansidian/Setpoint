@@ -19,11 +19,13 @@ function MobileEmailRow({ email, account, onOpen, showPreview, accent, nowTick }
   const unread = !email.read && email._lane !== "untriaged_read";
   const freshCode = isVerificationCodeFresh(email, nowTick);
   const pending = !!email._optimisticSnapshotPending;
+  const summary = showPreview ? email.summary?.trim() : null;
   const carryover = email._carryover || email._snapshotCarryover || !!email.is_carryover;
   return (
     <button
       type="button"
       className={`mobile-email-row${unread ? " mobile-email-row-unread" : ""}`}
+      data-summary={!!summary}
       aria-busy={pending || undefined}
       onClick={() => onOpen(email)}
       style={{ opacity: pending || email._providerRemoved ? 0.6 : 1 }}
@@ -35,10 +37,11 @@ function MobileEmailRow({ email, account, onOpen, showPreview, accent, nowTick }
         <time className="mobile-email-date">{timeAgo(email.date)}</time>
         {unread && <span className="sr-only">Unread</span>}
       </span>
+      {summary && <span className="mobile-email-summary"><span className="sr-only">AI summary: </span>{summary}</span>}
       <span className="mobile-email-subject">{email.subject || "(No subject)"}</span>
       <span className="mobile-email-account">{account?.name || email._account?.name}</span>
       {email._snoozedUntil && <span className="mobile-email-account" style={{ color: "#cba6f7" }}>Returns {formatSnoozeTime(email._snoozedUntil)}</span>}
-      {showPreview && email.preview && <span className="mobile-email-preview">{email.preview}</span>}
+      {!summary && showPreview && email.preview && <span className="mobile-email-preview">{email.preview}</span>}
       {(freshCode || email._resurfaced || carryover || lane) && (
         <span className="mobile-email-status">
           {freshCode ? (

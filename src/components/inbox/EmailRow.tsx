@@ -31,6 +31,7 @@ function EmailRow({ email, account = null, selected = false, batchMode = false, 
     ? `Due ${deadline.toLocaleDateString(undefined, { month: "short", day: "numeric" })}` : null;
   const carryover = email._carryover || email._snapshotCarryover || !!email.is_carryover;
   const pending = !!email._optimisticSnapshotPending;
+  const summary = showPreview ? email.summary?.trim() : null;
   const showStatus = actionHint || dueLabel || email._resurfaced || email._snoozedUntil;
   return (
     <button
@@ -38,9 +39,10 @@ function EmailRow({ email, account = null, selected = false, batchMode = false, 
       className="inbox-a-mail-row"
       data-unread={!email.read}
       data-density={density}
+      data-summary={!!summary}
       aria-current={!batchMode && selected ? "true" : undefined}
       aria-pressed={batchMode ? selected : undefined}
-      aria-label={`${email.from}, ${email.subject}, ${email.read ? "Read" : "Unread"}`}
+      aria-label={`${email.from}, ${email.subject}, ${email.read ? "Read" : "Unread"}${summary ? `. AI summary: ${summary}` : ""}`}
       aria-busy={pending || undefined}
       onClick={(event) => onOpen(email, { metaKey: event.metaKey, ctrlKey: event.ctrlKey, shiftKey: event.shiftKey })}
       onMouseDown={(event) => { if (event.shiftKey) event.preventDefault(); }}
@@ -52,12 +54,13 @@ function EmailRow({ email, account = null, selected = false, batchMode = false, 
         {email._pinned && <Pin size={11} data-testid="email-row-pin" aria-label="Pinned" />}
         <time>{timeAgo(email.date)}</time>
       </span>
+      {summary && <span className="inbox-a-row-summary">{summary}</span>}
       <span className="inbox-a-row-heading">
         <span className="inbox-a-row-subject">{email.subject || "(No subject)"}</span>
         {showLaneTag && lane && <span className="inbox-a-row-lane"><LaneIcon laneKey={String(email._lane)} />{lane.label}</span>}
         {carryover && <span className="inbox-a-row-carry">Carried over</span>}
       </span>
-      {showPreview && density !== "compact" && email.preview && <span className="inbox-a-row-preview">{email.preview}</span>}
+      {!summary && showPreview && density !== "compact" && email.preview && <span className="inbox-a-row-preview">{email.preview}</span>}
       {showStatus && <span className="inbox-a-row-bottom">
         {actionHint && <span className="inbox-a-action-hint">{freshCode ? <KeyRound size={12} /> : <ArrowRight size={12} />}{actionHint}</span>}
         {dueLabel && <span>{dueLabel}</span>}
@@ -80,7 +83,7 @@ function rowKeyFields(email: InboxEmailLike): unknown[] {
     email.read, email._lane, email._resurfaced,
     email._arrivalGraceQueued, email._untriagedRead,
     email.action, email.deadline_at, email._carryover, email._snapshotCarryover, email.is_carryover, email.from, email.fromEmail,
-    email.subject, email.preview, email.date, email._snoozedUntil, email._snoozedReturning,
+    email.subject, email.summary, email.preview, email.date, email._snoozedUntil, email._snoozedReturning,
     email.urgentFlag?.label, email.urgentFlag,
     email._pinned, email._providerRemoved,
     email._optimisticSnapshotPending,
