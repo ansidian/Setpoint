@@ -96,7 +96,7 @@ function fixture() {
       return { added: [], updated: [], errors: [], updatedPreview };
     },
     q: (dataset) => {
-      const query = { dataset, filter: () => query, select: () => query, withDead: () => query, withoutValidatedRefs: () => query };
+      const query = { dataset, options: () => query, filter: () => query, select: () => query, withDead: () => query, withoutValidatedRefs: () => query };
       return query;
     },
     runQuery: async (query) => {

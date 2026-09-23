@@ -1,3 +1,4 @@
+import { validExpenseSplits } from "../../shared/financial-splits.ts";
 import { createHash } from "node:crypto";
 import type { ActualAccount, ActualPayee, ActualScheduleCondition } from "../../shared/types/actual.ts";
 import type {
@@ -14,6 +15,7 @@ import { readOriginalResult, settleOriginalEvidence, type ActualEvidencePort } f
 import { runActualTransactionImport, type SdkImportResult, type SdkImportTransactionInput } from "./actualTransactionImportModel.ts";
 
 interface Query {
+  options(value: { splits: "all" }): Query;
   filter(value: unknown): Query;
   select(fields: string[]): Query;
   withDead(): Query;
@@ -42,6 +44,9 @@ interface TransactionRow {
   imported_id: string | null;
   transfer_id: string | null;
   tombstone?: boolean;
+  is_parent?: boolean;
+  is_child?: boolean;
+  parent_id?: string | null;
 }
 interface ScheduleRow {
   id: string;
@@ -116,11 +121,12 @@ async function transaction(
     || (input.payeeId != null && !nonempty(input.payeeId))) {
     return review("Transaction details are invalid.");
   }
+  if (input.splits && (input.categoryId || input.effectiveCategoryId || !validExpenseSplits(input.splits, input.amountCents))) return review("Expense splits must exactly total the transaction, with categories on each split.");
   const [accounts, payees, records] = await Promise.all([
     sdk.getAccounts(), sdk.getPayees(),
-    sdk.runQuery(sdk.q("transactions").withDead().withoutValidatedRefs().filter({
+    sdk.runQuery(sdk.q("transactions").options({ splits: "all" }).withDead().withoutValidatedRefs().filter({
       $or: [{ imported_id: input.identityKey }, { account: input.accountId, date: input.date }],
-    }).select(["id", "account", "payee", "category", "amount", "date", "imported_id", "transfer_id", "tombstone"])),
+    }).select(["id", "account", "payee", "category", "amount", "date", "imported_id", "transfer_id", "tombstone", "is_parent", "is_child", "parent_id"])),
   ]);
   if (!accounts.some((account) => account.id === input.accountId && !account.closed)) return review("The transaction account is closed or unavailable.");
   const matchingPayees = payees.filter((payee) => input.payeeId
@@ -131,7 +137,18 @@ async function transaction(
   const categoryId = input.effectiveCategoryId !== undefined ? input.effectiveCategoryId || undefined
     : mode === "recover" ? undefined : await availableCategoryId(sdk, input.categoryId);
   const rows = records.data as TransactionRow[];
-  const owned = rows.filter((row) => row.imported_id === input.identityKey);
+  const owned = rows.filter((row) => row.imported_id === input.identityKey && !row.is_child);
+  async function matchesSplits(parent: TransactionRow): Promise<boolean> {
+    if (!input.splits) return !parent.is_parent && !parent.is_child;
+    if (!parent.is_parent || parent.is_child) return false;
+    const children = (await sdk.runQuery(sdk.q("transactions").options({ splits: "all" }).withoutValidatedRefs()
+      .filter({ parent_id: parent.id }).select(["id", "account", "date", "amount", "is_child", "parent_id", "transfer_id"]))).data as TransactionRow[];
+    // Amounts and topology are authoritative. Actual owns later category and note edits.
+    return children.length === input.splits.length && children.every(child => child.is_child && child.parent_id === parent.id
+      && child.account === input.accountId && child.date === input.date && !child.transfer_id)
+      && JSON.stringify(children.map(child => child.amount).sort((a, b) => a - b))
+        === JSON.stringify(input.splits.map(split => split.amountCents).sort((a, b) => a - b));
+  }
   if (owned.some((row) => row.tombstone)) return review("The previously recorded transaction was deleted. It will not be recreated.");
   if (owned.length) {
     const recorded = owned[0]!;
@@ -139,6 +156,7 @@ async function transaction(
       || recorded.amount !== input.amountCents || recorded.transfer_id || !payee || recorded.payee !== payee.id) {
       return review("The recorded transaction identity conflicts with this event.");
     }
+    if (!await matchesSplits(recorded)) return review("The recorded transaction does not contain the confirmed split amounts. Review it in Actual.");
     // Actual rules or owner edits may change the category. Verified transaction
     // identity is sufficient for completion; preserve Actual's categorization.
     return result("already_present", "The transaction identity is already recorded.", { transactionId: recorded.id });
@@ -146,18 +164,22 @@ async function transaction(
   // Distinct managed event IDs prove distinct purchases even when all their
   // visible fields coincide. Only unowned/manual/provider imports can be legacy
   // duplicates; Actual's strict imported-ID reconciliation preserves this split.
-  const legacy = rows.filter((row) => !row.tombstone && !row.transfer_id
+  const legacy = rows.filter((row) => !row.tombstone && !row.transfer_id && !row.is_child
     && !row.imported_id?.startsWith("financial-event:")
     && row.account === input.accountId && row.date === input.date && row.amount === input.amountCents
     && payee && row.payee === payee.id);
   if (legacy.length === 1) {
+    if (!await matchesSplits(legacy[0]!)) return review("An existing payment matches the total but not the confirmed splits. Review it in Actual.");
     return result("already_present", "An exact existing Actual transaction matches this event.", { transactionId: legacy[0]!.id });
   }
   if (legacy.length > 1) return review("Multiple existing Actual transactions match this event.");
   if (mode === "recover") return review("A transaction write was attempted but its result cannot be verified.");
+  for (const split of input.splits || []) {
+    if (split.categoryId && !await availableCategoryId(sdk, split.categoryId)) return review("A selected split category is unavailable. Choose a current category or leave it empty.");
+  }
   const groups = [{ accountId: input.accountId, transactions: [{
     itemId: input.identityKey, importedId: input.identityKey, date: input.date,
-    amountCents: input.amountCents, payee: payee?.name || input.payee.trim(), notes: input.notes, categoryId,
+    amountCents: input.amountCents, payee: payee?.name || input.payee.trim(), notes: input.notes, categoryId, ...(input.splits ? { splits: input.splits } : {}),
   }] }];
   const importInput = {
     groups,

@@ -1,3 +1,4 @@
+import { positiveUsdCents } from "../../shared/financial-splits.ts";
 import type { FinancialEventCompletionEntry, FinancialEventCompletionRequest } from "../../shared/types/financial-operations.ts";
 import type { BillCandidate, FinancialEmailPlan, FinancialPlanTarget, FinancialTargetKind } from "../../shared/types/bills.ts";
 import type { FinancialDocument, FinancialEvent } from "./financial-event-store.ts";
@@ -37,6 +38,17 @@ export function parseFinancialEventCompletion(value: unknown): FinancialEventCom
   const date = string(source.date, "Date", 10, true)!;
   const parsedDate = new Date(`${date}T12:00:00Z`);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== date) invalid("Date must be a valid YYYY-MM-DD date");
+  let splits: FinancialEventCompletionEntry["splits"];
+  if (source.splits !== undefined) {
+    if (kind !== "expense" || !Array.isArray(source.splits) || source.splits.length < 2 || source.splits.length > 30 || source.categoryId) invalid("Use 2–30 splits on a purchase, with categories on each split");
+    splits = source.splits.map(value => {
+      const split = object(value);
+      const amountCents = positiveUsdCents(split.amount);
+      if (amountCents === null) invalid("Each split needs a positive USD amount with at most two decimal places");
+      return { amount: amountCents / 100, categoryId: string(split.categoryId, "Split category", 200) || null, notes: string(split.notes, "Split notes", 2000) || "" };
+    });
+    if (splits.reduce((sum, split) => sum + Math.round(split.amount * 100), 0) !== cents) invalid("Split amounts must equal the transaction total");
+  }
   const notes = string(source.notes, "Notes", 2000);
   const scheduleName = string(source.scheduleName, "Schedule name", 200);
   const transfer = kind === "transfer" || kind === "transfer_schedule";
@@ -52,6 +64,7 @@ export function parseFinancialEventCompletion(value: unknown): FinancialEventCom
     const categoryId = string(source.categoryId, "Category", 200) || null;
     entry = { kind, amount: cents / 100, date, accountId, payee, categoryId, ...(notes ? { notes } : {}), ...(scheduleName ? { scheduleName } : {}) };
   }
+  if (splits) entry.splits = splits;
   return { emailUid, documentRevision: Number(request.documentRevision), eventRevision: request.eventRevision as number | null, entry };
 }
 
@@ -188,5 +201,6 @@ export function ownerCompletionOperation(eventId: string, entry: FinancialEventC
   const base = { identityKey, accountId: entry.accountId!, payee: entry.payee!, categoryId: entry.categoryId || null, date };
   return entry.kind === "bill" ? { executor: "financial", input: { ...base, kind: "utility_schedule", amountCents: -amountCents,
     name: entry.scheduleName || entry.payee! } } : { executor: "financial", input: { ...base, kind: "transaction",
-    amountCents: entry.kind === "income" ? amountCents : -amountCents, notes: entry.notes || "" } };
+    amountCents: entry.kind === "income" ? amountCents : -amountCents, notes: entry.notes || "",
+    ...(entry.splits ? { splits: entry.splits.map(split => ({ amountCents: -Math.round(split.amount * 100), categoryId: split.categoryId || null, notes: split.notes || "" })) } : {}) } };
 }

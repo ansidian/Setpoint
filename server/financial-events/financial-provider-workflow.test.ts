@@ -1,3 +1,4 @@
+import { resolveManagedFinancialPlan } from './financial-event-status.ts';
 import { createClient, type Client } from '@libsql/client';
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { initializeFinancialEventTestSchema, authentication, receipt } from './financial-event-service.test-utils.ts';
@@ -91,6 +92,18 @@ it.each(['oversized','incomplete'])('parks unchanged %s evidence and resumes whe
   await db.execute("UPDATE ea_email_index SET body_text='A complete informational notice.' WHERE uid='bounded'");
   expect(await worker.processNextDocument()).toBe(true);
   expect(await store.getDocumentForEmail('owner','bounded')).toMatchObject({status:'ignored',candidate:null,eventId:null,nextAttemptAt:null,error:null});
+});
+it('preserves all Amazon orders through the stored manual review without scheduling an automatic write', async () => {
+  await email('multi-order', { from: 'auto-confirm@amazon.com', subject: 'Ordered: Three items',
+    body: 'Order # 111-1000000-1000001 Grand Total: 10.97 USD Order # 111-1000000-1000002 Grand Total: 113.61 USD Order # 111-1000000-1000003 Grand Total: 14.35 USD' });
+  const { store, worker } = setup();
+  await worker.processNextDocument();
+  const review = await resolveManagedFinancialPlan('owner', 'multi-order', { dbClient: db });
+  expect(review).toMatchObject({ candidate: { amount: null, order_items: [
+    { reference: '111-1000000-1000001', amount: 10.97 }, { reference: '111-1000000-1000002', amount: 113.61 }, { reference: '111-1000000-1000003', amount: 14.35 },
+  ] }, workflow: { completion: { canComplete: true } } });
+  expect((await store.getDocumentForEmail('owner', 'multi-order'))?.error).toContain('Review one split per order');
+  expect(await worker.processNextEvent()).toBe(false);
 });
 it('explains a SoCalGas notification that omits bill facts without inventing an amount or date',async()=>{
   await email('notification',{from:'customerservice@socalgas.com',subject:'Your bill from SoCalGas is now available',body:'Your current bill is available on My Account. Log in to view and pay your bill.'});

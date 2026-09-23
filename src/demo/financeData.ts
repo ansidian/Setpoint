@@ -43,7 +43,7 @@ export function buildDemoCalendarBillsRange(seed: DemoSeed, url: URL) {
   const end = url.searchParams.get("end") ?? "";
   return {
     schedules: demoDateRange(seed.bills, start, end, (item) => item.next_date),
-    transactions: demoDateRange(seed.transactions.filter(row => !row.transferAccountId), start, end, (item) => item.date),
+    transactions: demoDateRange(seed.transactions.filter(row => !row.transferAccountId && !row.isParent), start, end, (item) => item.date),
     transactionsTruncated: false,
     payeeMap: structuredClone(seed.currentDashboard.payeeMap),
     actualBudgetUrl: seed.currentDashboard.actualBudgetUrl,

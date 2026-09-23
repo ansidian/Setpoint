@@ -90,6 +90,7 @@ interface SdkTransactionInput {
   imported_id?: string;
 }
 interface QueryBuilder {
+  options(value: { splits: "all" }): QueryBuilder;
   filter(value: unknown): QueryBuilder;
   select(fields: string[]): QueryBuilder;
   withDead(): QueryBuilder;

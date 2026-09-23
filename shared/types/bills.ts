@@ -1,3 +1,4 @@
+import type { FinancialCompletionSplit } from "./financial-operations.ts";
 import type { FinancialProviderId } from './financial-parsers.ts';
 import type { FinancialActivity } from "./financial-activity.ts";
 import type {
@@ -131,6 +132,8 @@ export interface StatementSourceFacts {
 }
 
 export interface BillCandidate {
+  /** Deterministic order totals for owner review; never automatic write authority. */
+  order_items?: Array<{ reference: string; amount: number; currency: "USD" }>;
   purchase_date_context?: {
     kind: "initial_confirmation_without_date" | "other";
     confidence: number;
@@ -486,6 +489,8 @@ export interface FinancialEmailPlan {
     nextAttemptAt: number | null;
     dismissed?: boolean;
     completion?: {
+      /** Preserve owner allocations when a preflight returns to review. */
+      splits?: FinancialCompletionSplit[];
       emailUid: string;
       documentRevision: number;
       eventRevision: number | null;

@@ -174,3 +174,27 @@ describe("provider financial assessment", () => {
     expect(assessProviderFinancialEmail({ ...source, body: body!, attachments: [{ filename: "invoice.pdf", text: attachment! }] })).toMatchObject({ status: "parsed", candidate: { amount: 119.01, due_date: "2026-08-07" } });
   });
 });
+
+
+describe("Amazon order breakdown", () => {
+  it("keeps multi-order receipts in review and associates each total with its order", () => {
+    expect(assessProviderFinancialEmail(fixture("amazon-multiple-orders"))).toMatchObject({ status: "review", candidate: {
+      amount: null, order_items: [
+        { reference: "111-1000000-1000001", amount: 27.04, currency: "USD" },
+        { reference: "111-1000000-1000002", amount: 3.07, currency: "USD" },
+      ],
+    } });
+  });
+  it("keeps equal-price orders distinct and refuses a partial or conflicting breakdown", () => {
+    const source = fixture("amazon-multiple-orders");
+    const equal = { ...source, body: source.body.replace("3.07 USD", "27.04 USD") };
+    expect(assessProviderFinancialEmail(equal)).toMatchObject({ status: "review", candidate: { amount: null, order_items: [
+      { amount: 27.04 }, { amount: 27.04 },
+    ] } });
+    for (const body of [source.body.replace("Grand Total: 3.07 USD", ""), source.body + " Grand Total: 9.99 USD"]) {
+      const result = assessProviderFinancialEmail({ ...source, body });
+      expect(result.status).toBe("review");
+      expect("candidate" in result && result.candidate?.order_items).toBeUndefined();
+    }
+  });
+});

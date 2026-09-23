@@ -224,6 +224,10 @@
 .financial-confirmation-flow dl { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px 20px; margin-top:20px; padding-top:16px; border-top:1px solid color-mix(in srgb,var(--flow-tone) 18%,transparent); }
 .financial-confirmation-flow dt { margin-bottom:4px; color:color-mix(in srgb,var(--flow-tone) 70%,var(--foreground)); font-size:11px; }
 .financial-confirmation-flow dd { overflow-wrap:anywhere; }
+.financial-confirmation-flow .financial-confirmation-splits { grid-template-columns:minmax(0,1fr); margin-top:8px; padding-top:8px; border-top:0; }
+.financial-confirmation-splits > div { display:flex; align-items:start; justify-content:space-between; gap:16px; }
+.financial-confirmation-splits dt { min-width:0; overflow-wrap:anywhere; }
+.financial-confirmation-splits dd { flex-shrink:0; font-variant-numeric:tabular-nums; }
 .financial-payment-change { --transfer-tone:var(--flow-tone); }
 .financial-payment-change dd { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
 .financial-payment-change dd del { color:color-mix(in srgb,var(--flow-tone) 70%,var(--foreground)); }

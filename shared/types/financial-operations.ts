@@ -6,6 +6,18 @@ interface ActualFinancialOperationBase {
   preparedEvidence?: FinancialWriteEvidence;
 }
 
+export interface FinancialCompletionSplit {
+  amount: number;
+  categoryId?: string | null;
+  notes?: string;
+}
+
+export interface ActualFinancialSplit {
+  amountCents: number;
+  categoryId?: string | null;
+  notes?: string;
+}
+
 /** Owner-confirmed USD entry; amounts are positive dollars for every kind. */
 export interface FinancialEventCompletionEntry {
   kind: "expense" | "income" | "bill" | "transfer" | "transfer_schedule";
@@ -18,6 +30,7 @@ export interface FinancialEventCompletionEntry {
   categoryId?: string | null;
   notes?: string;
   scheduleName?: string;
+  splits?: FinancialCompletionSplit[];
 }
 
 export interface FinancialEventCompletionRequest {
@@ -54,6 +67,7 @@ export interface ActualUtilityScheduleInput extends ActualFinancialOperationBase
 }
 
 export interface ActualFinancialTransactionInput extends ActualFinancialOperationBase {
+  splits?: ActualFinancialSplit[];
   kind: "transaction";
   accountId: string;
   payee: string;

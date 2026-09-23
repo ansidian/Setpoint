@@ -130,7 +130,9 @@ export function createFinancialEventWorker({
         if (assessment.status === "review" || assessment.status === "nonfinancial") {
           await store.settleDocument(document, { candidate: assessment.candidate || null, contentHash, assessment,
             status: assessment.status === "nonfinancial" ? "ignored" : "retry", nextAttemptAt: null,
-            error: assessment.status === "review" ? assessment.providerId === "socalgas"
+            error: assessment.status === "review" ? assessment.reasons.includes("provider_multiple_orders")
+              ? "This email contains several orders. Review one split per order and confirm the total outflow."
+              : assessment.providerId === "socalgas"
               && assessment.reasons.includes("provider_amount_missing") && assessment.reasons.includes("provider_date_missing")
               ? "This notification does not include an amount or due date. Check the bill and enter them."
               : "Review the amount, date and account in this email before recording in Actual." : null });

@@ -1,6 +1,29 @@
 import { assessFacts, dateMatches, moneyMatches, referenceEvidence, result, text, unsupported, type ProviderParser } from "./parser-helpers.ts";
 
-export const AMAZON_PARSER_VERSION = "amazon-v2";
+export const AMAZON_PARSER_VERSION = "amazon-v3";
+
+function orderAmounts(body: string) {
+  const amounts = moneyMatches(body, "Grand Total|Order Total|Total for this order", "order_total");
+  for (const m of body.matchAll(/(?:Grand Total|Order Total|Total for this order):\s*([\d,]+\.\d{2})\s+USD\b/gi)) {
+    amounts.push({ kind: "order_total", value: Number(m[1]!.replace(/,/g, "")), confidence: 1, evidence: m[0] });
+  }
+  return amounts;
+}
+
+function orderBreakdown(body: string) {
+  const headings = [...body.matchAll(/(?:Order\s*#?|order number[:\s]*)\s*(\d{3}-\d{7}-\d{7})/gi)];
+  const multiple = new Set(headings.map(heading => heading[1])).size > 1;
+  if (!multiple) return { multiple };
+  const items = new Map<string, { reference: string; amount: number; currency: "USD" }>();
+  for (const [index, heading] of headings.entries()) {
+    const amounts = [...new Set(orderAmounts(body.slice(heading.index, headings[index + 1]?.index)).map(item => item.value))];
+    // A repeated order may be navigation text; require exactly one consistent total per distinct order.
+    if (!amounts.length) continue;
+    if (amounts.length !== 1 || amounts[0]! <= 0 || (items.has(heading[1]!) && items.get(heading[1]!)!.amount !== amounts[0])) return { multiple };
+    items.set(heading[1]!, { reference: heading[1]!, amount: amounts[0]!, currency: "USD" });
+  }
+  return { multiple, ...(items.size === new Set(headings.map(heading => heading[1])).size && items.size <= 30 ? { items: [...items.values()] } : {}) };
+}
 
 export const parseAmazon: ProviderParser = source => {
   if (/^(?:Shipped[: ]|Delivered[: ]|Out for delivery:|Delivery update:|Dropoff confirmed|Arriving|Return request confirmed)|return received|return reminder/i.test(source.subject)) return result("amazon", "fulfillment-notice", "nonfinancial", ["fulfillment_notice_no_new_transaction"]);
@@ -15,14 +38,12 @@ export const parseAmazon: ProviderParser = source => {
     reasons: /estimated|will be issued/i.test(body) ? ["provider_refund_not_issued"] : [], extra: order,
   });
   if (!/^Ordered[: ]|your amazon\.com order|your order #|order confirmation|your digital order/i.test(source.subject)) return unsupported("amazon", source);
-  const amounts = moneyMatches(body, "Grand Total|Order Total|Total for this order", "order_total");
-  for (const m of body.matchAll(/(?:Grand Total|Order Total):\s*([\d,]+\.\d{2})\s+USD\b/gi)) {
-    amounts.push({ kind: "order_total", value: Number(m[1]!.replace(/,/g, "")), confidence: 1, evidence: m[0] });
-  }
+  const amounts = orderAmounts(body);
+  const orders = orderBreakdown(body);
   const dates = dateMatches(body, "Order date|Ordered on", source.emailDate);
   const assessment = assessFacts(source, { providerId: "amazon", templateId: "order-confirmation", payee: "Amazon", event: "purchase", type: "expense", amountKind: "order_total", amounts, dates,
-    reasons: order.provider_reference ? [] : ["provider_order_reference_missing_or_ambiguous"],
-    extra: { ...order, document_role: "merchant_receipt", ...(!dates.length ? { purchase_date_context: { kind: "initial_confirmation_without_date", confidence: 1, evidence: source.subject } } : {}) },
+    reasons: [...(order.provider_reference ? [] : ["provider_order_reference_missing_or_ambiguous"]), ...(orders.multiple ? ["provider_multiple_orders"] : [])],
+    extra: { ...order, ...(orders.multiple ? { amount: null } : {}), ...(orders.multiple && orders.items ? { order_items: orders.items } : {}), document_role: "merchant_receipt", ...(!dates.length ? { purchase_date_context: { kind: "initial_confirmation_without_date", confidence: 1, evidence: source.subject } } : {}) },
   });
   // The event owner derives email-date provenance for initial confirmations, not this pure parser.
   if (assessment.status === "review" && assessment.reasons.every(r => r === "provider_date_missing") && assessment.candidate) return { ...assessment, status: "parsed", candidate: assessment.candidate, reasons: [] };

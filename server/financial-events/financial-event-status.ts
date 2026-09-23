@@ -104,6 +104,6 @@ export function projectManagedFinancialPlan(document: FinancialDocument, event: 
   return { ...plan, workflow: { ...(document.correction ? { correction:document.correction } : {}), id: event?.id || `financial-document:${document.id}`, state, ...(dismissed ? { dismissed: true } : {}),
     ...(!dismissed && !reviewingDetails && event?.progress ? { progress: event.progress } : {}),
     relatedEmails: event?.documents.length || 1, reason, nextAttemptAt: event?.nextAttemptAt || document.nextAttemptAt,
-    completion: { emailUid: document.emailUid, documentRevision: document.revision, eventRevision: event?.revision ?? null,
+    completion: { ...(event?.ownerCompletion?.entry.splits ? { splits: event.ownerCompletion.entry.splits } : {}), emailUid: document.emailUid, documentRevision: document.revision, eventRevision: event?.revision ?? null,
       canComplete: !blockedReason, canDismiss: !dismissalBlocker(document, event), ...(blockedReason ? { blockedReason } : {}) } } };
 }

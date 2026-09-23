@@ -99,6 +99,25 @@ describe('shared fictional financial settlement', () => {
     if (kind === 'bill') expect((await api.getCurrentDashboard()).bills).toEqual(expect.arrayContaining([expect.objectContaining({ scheduleId: 'demo-completed-schedule', amount: 29 })]));
   });
 
+  it('keeps split children in the journal and original receipt without double-counting spending', async () => {
+    const api = await demo();
+    const before = await api.getDashboardFinance();
+    const entry: FinancialEventCompletionEntry = { kind: 'expense', amount: 23, date, accountId: 'demo-checking', payee: 'Fictional Market',
+      splits: [{ amount: 10, notes: 'Order one', categoryId: 'demo-utilities' }, { amount: 13, notes: 'Order two' }] };
+    await api.completeFinancialEvent({ emailUid: 'demo-email-market-receipt', documentRevision: 1, eventRevision: 1, entry });
+    const original = await api.getFinancialActivity(managed);
+    expect(original.originalReceipts[0]?.evidence?.objects).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: 'primary', after: expect.objectContaining({ amount: -2300, isParent: 1 }) }),
+      expect.objectContaining({ role: 'split_child', after: expect.objectContaining({ amount: -1000, parent_id: 'demo-completed-review' }) }),
+      expect.objectContaining({ role: 'split_child', after: expect.objectContaining({ amount: -1300, parent_id: 'demo-completed-review' }) }),
+    ]));
+    const journal = (await api.getFinances()).recordedHistory!.transactions;
+    expect(journal.filter(row => row.parentId === 'demo-completed-review')).toHaveLength(2);
+    expect((await api.getDashboardFinance()).spending.current!.total).toBeCloseTo(before.spending.current!.total! + 23);
+    const calendar = await api.getCalendarBillsRange(date, date);
+    expect(calendar.transactions.filter(row => row.id.startsWith('demo-completed-')).reduce((sum, row) => sum + row.amount, 0)).toBe(23);
+  });
+
   it('creates a future transfer schedule without posting ledger activity or disguising it as a bill', async () => {
     const api = await demo();
     const before = await api.getDashboardFinance();

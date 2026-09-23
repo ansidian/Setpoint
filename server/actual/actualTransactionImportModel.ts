@@ -1,3 +1,4 @@
+import { validExpenseSplits } from "../../shared/financial-splits.ts";
 import { transactionEvidence, settleOriginalEvidence } from "./actualOriginalEvidence.ts";
 import type { FinancialWriteEvidence } from "../../shared/types/financial-activity.ts";
 import type {
@@ -8,6 +9,7 @@ import type {
 } from "../../shared/types/transaction-imports.ts";
 
 export interface SdkImportTransactionInput {
+  subtransactions?: Array<{ amount: number; category?: string; notes?: string }>;
   account: string;
   date: string;
   amount: number;
@@ -69,6 +71,7 @@ function validateActualImportGroups(groups: ActualImportAccountGroup[], dryRun: 
       if (typeof transaction.payee !== "string" || !transaction.payee.trim() || typeof transaction.notes !== "string") {
         invalid("Actual transaction import payee or notes are invalid");
       }
+      if (transaction.splits && (transaction.categoryId || !validExpenseSplits(transaction.splits, transaction.amountCents))) invalid("Actual expense splits must exactly total the parent transaction");
       if (transaction.categoryId != null && (typeof transaction.categoryId !== "string" || !transaction.categoryId.trim())) {
         invalid("Actual transaction import category is invalid");
       }
@@ -87,6 +90,7 @@ function toSdkImportTransaction(accountId: string, transaction: ActualImportTran
     imported_id: transaction.importedId,
     cleared: false,
     ...(transaction.categoryId ? { category: transaction.categoryId } : {}),
+    ...(transaction.splits ? { subtransactions: transaction.splits.map(split => ({ amount: split.amountCents, ...(split.categoryId ? { category: split.categoryId } : {}), notes: split.notes || "" })) } : {}),
   };
 }
 

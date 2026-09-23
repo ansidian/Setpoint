@@ -28,7 +28,7 @@ export function publishDemoFinanceSnapshot(before: CorrectionSnapshot, after: Co
     const amount = Number(row.amount);
     seed.transactions.push({ id: row.id, accountId:String(row.acct || ''), payeeId:String(row.description || ''),
       scheduleId:row.schedule ? String(row.schedule) : null, transferId:row.transferred_id ? String(row.transferred_id) : null,
-      parentId:row.parent_id ? String(row.parent_id) : null, isParent:!!row.is_parent, isChild:!!row.is_child, cleared:!!row.cleared, reconciled:!!row.reconciled,
+      parentId:row.parent_id ? String(row.parent_id) : null, isParent:!!(row.isParent || row.is_parent), isChild:!!(row.isChild || row.is_child), cleared:!!row.cleared, reconciled:!!row.reconciled,
       amount: Math.abs(amount) / 100, date: dateKey(row.date),
       direction: amount > 0 ? 'income' : 'expense',
       transferAccountId: row.transferred_id ? String(after.transactions.find(other => other.id === row.transferred_id)?.acct || '') : null,

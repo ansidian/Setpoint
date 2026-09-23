@@ -246,6 +246,18 @@ describe("owner completion of managed financial events", () => {
     await expect(completion().complete("owner", await request())).rejects.toMatchObject({ status: 409 });
   });
 
+  it("freezes all owner-confirmed splits in one durable operation", async () => {
+    await arrive();
+    const splits = [{ amount: 4.25, categoryId: "groceries", notes: "Order one" }, { amount: 7.75, notes: "Order two" }];
+    await completion().complete("owner", await request("receipt", { ...entry, splits }));
+    await drainEvent();
+    expect([...ledger.values()]).toEqual([expect.objectContaining({ input: expect.objectContaining({ amountCents: -1200,
+      splits: [{ amountCents: -425, categoryId: "groceries", notes: "Order one" }, { amountCents: -775, categoryId: null, notes: "Order two" }],
+    }) })]);
+    expect((await store.getEventForEmail("owner", "receipt"))?.ownerCompletion?.entry.splits).toHaveLength(2);
+    expect((await resolveManagedFinancialPlan("owner", "receipt", { dbClient: db }))?.workflow?.completion?.splits).toMatchObject(splits);
+  });
+
   it("records a confirmed entry immediately despite capture lag and unrelated pending source work", async () => {
     await arrive();
     const document = await store.claimDocument("assessment");

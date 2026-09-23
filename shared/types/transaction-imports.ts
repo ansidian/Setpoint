@@ -1,3 +1,4 @@
+import type { ActualFinancialSplit } from "./financial-operations.ts";
 import type { FinancialEmailPlan, FinancialOperationKind, FinancialPlanReasonCode } from "./bills.ts";
 import type { FinancialCorrectionDraft } from "./financial-corrections.ts";
 import type { FinancialActivity, FinancialWriteEvidence } from "./financial-activity.ts";
@@ -134,6 +135,7 @@ export interface TransactionImportConfirmation {
 }
 
 export interface ActualImportTransaction {
+  splits?: ActualFinancialSplit[];
   preparedEvidence?: FinancialWriteEvidence;
   itemId: string;
   importedId: string;

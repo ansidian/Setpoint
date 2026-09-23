@@ -1,3 +1,5 @@
+import { positiveUsdCents } from '../../../shared/financial-splits';
+import FinancialSplitFields from './FinancialSplitFields';
 import { ArrowDownLeft, ArrowLeft, ArrowUpRight, Landmark, Trash2, Wallet } from "lucide-react";
 import { Link } from "react-router";
 import PaymentConfirmation from '../financial/PaymentConfirmation';
@@ -11,7 +13,7 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import type { FinancialEmailPlan } from "../../../shared/types/bills";
 import type { FinancialEventCompletionEntry } from "../../../shared/types/financial-operations";
-import { completionValues, createCompletionDraft, editCompletionDraft, enrichCompletionDraft, type FinancialCompletionFields } from "./financialCompletionDraft";
+import { completionSplitBalance, distributeRemainingSplits, completionAmount, completionValues, createCompletionDraft, editCompletionDraft, enrichCompletionDraft, type FinancialCompletionFields } from "./financialCompletionDraft";
 
 type EntryKind = FinancialEventCompletionEntry["kind"];
 const kinds: Array<[EntryKind, string]> = [
@@ -43,7 +45,7 @@ export default function FinancialEventCompletionForm({ plan, onCancel, onQueued,
   // entry against source changes the owner has not reviewed.
   const [draft, setDraft] = useState(() => createCompletionDraft(plan));
   const { revision, fields } = draft;
-  const { kind, amount, date, payee, accountId, fromAccountId, toAccountId, categoryId, scheduleName, notes } = fields;
+  const { kind, amount, date, payee, accountId, fromAccountId, toAccountId, categoryId, scheduleName, notes, splits } = fields;
   const [profileSuggestion] = useState(plan.profileSuggestion);
   const [profileValues] = useState(() => completionValues(fields));
   function edit<K extends keyof FinancialCompletionFields>(key: K, value: FinancialCompletionFields[K]) {
@@ -84,7 +86,15 @@ export default function FinancialEventCompletionForm({ plan, onCancel, onQueued,
     : plan.targets.schedule.label || payee.trim();
   const effectiveScheduleName = scheduleName ?? (transfer && defaultScheduleName ? `${defaultScheduleName} Payment` : defaultScheduleName);
   const hasAccount = (value: string) => accounts.some((account) => account.id === value);
-  const canSend = !!kind && !sending && !stale && !dismissing && !dismissed && Number(amount) > 0 && !!date && (transfer
+  const splitPurchase = kind === "expense" && splits.length > 0;
+  const amountCents = completionAmount(fields);
+  const remainingCents = completionSplitBalance(fields);
+  const distributedSplits = distributeRemainingSplits(fields);
+  const categories = (metadata?.categories || []).map(item => ({ id: item.id, name: item.group ? `${item.group} / ${item.name}` : item.name }));
+  const validSplits = !splitPurchase || splits.length >= 2 && splits.length <= 30
+    && remainingCents === 0 && splits.every(split => positiveUsdCents(Number(split.amount)) !== null
+      && (!split.categoryId || categories.some(category => category.id === split.categoryId)));
+  const canSend = !!kind && !sending && !stale && !dismissing && !dismissed && amountCents !== null && validSplits && !!date && (transfer
     ? hasAccount(fromAccountId) && hasAccount(toAccountId) && fromAccountId !== toAccountId
     : hasAccount(accountId) && !!payee.trim() && payee.trim().length <= 200);
 
@@ -104,8 +114,9 @@ export default function FinancialEventCompletionForm({ plan, onCancel, onQueued,
     try {
       const result = await completeFinancialEvent({
         emailUid: revision.emailUid, documentRevision: revision.documentRevision, eventRevision: revision.eventRevision,
-        entry: { kind, amount: Number(amount), date, notes,
-          ...(transfer ? { fromAccountId, toAccountId } : { accountId, payee: payee.trim(), categoryId: categoryId || null }),
+        entry: { kind, amount: amountCents! / 100, date, notes,
+          ...(splitPurchase ? { splits: splits.map(split => ({ amount: Number(split.amount), categoryId: split.categoryId || null, notes: split.notes })) } : {}),
+          ...(transfer ? { fromAccountId, toAccountId } : { accountId, payee: payee.trim(), categoryId: splitPurchase ? null : categoryId || null }),
           ...(scheduled ? { scheduleName: effectiveScheduleName.trim() || (transfer
             ? `${accounts.find((account) => account.id === toAccountId)!.name} Payment` : payee.trim()) } : {}),
         },
@@ -144,13 +155,13 @@ export default function FinancialEventCompletionForm({ plan, onCancel, onQueued,
   return (
     <form onSubmit={send} className="space-y-3 text-foreground"
       aria-label="Complete financial record" onKeyDown={event => { if (event.key === "Escape" && dismissing && !sending) { event.preventDefault(); event.stopPropagation(); keepCandidate(); } }} onClick={(event) => event.stopPropagation()}>
-      {confirming ? <PaymentConfirmation amountCents={Math.round(Number(amount) * 100) * (kind === 'income' ? 1 : -1)} account={accounts.find(account => account.id === accountId)?.name || 'Account unavailable'} payee={payee.trim()} date={date} category={metadata?.categories.find(category => category.id === categoryId)?.name} notes={notes} /> : <>
+      {confirming ? <PaymentConfirmation amountCents={(amountCents || 0) * (kind === 'income' ? 1 : -1)} account={accounts.find(account => account.id === accountId)?.name || 'Account unavailable'} payee={payee.trim()} date={date} splits={splitPurchase ? splits.map(split => ({ amountCents: -Math.round(Number(split.amount) * 100), notes: split.notes, category: categories.find(category => category.id === split.categoryId)?.name })) : undefined} category={splitPurchase ? undefined : metadata?.categories.find(category => category.id === categoryId)?.name} notes={notes} /> : <>
       <p className="text-xs leading-relaxed text-foreground/85">Confirm the details you know. Category is optional; Actual can categorize the entry later.</p>
       <Field name="Record as">
         <Dropdown ariaLabel="Record as" value={kind} placeholder="Choose an entry type" onChange={value => edit("kind", value as EntryKind)} disabled={sending || dismissing} options={kinds.map(([id,name]) => ({ id,name }))} />
       </Field>
       <div className="grid min-w-0 grid-cols-2 gap-3">
-        <Field name={`${transfer ? "Transfer" : kind === "income" ? "Inflow" : "Outflow"} amount (USD)`} icon={<Wallet size={13} aria-hidden="true" className="text-muted-foreground" />}><Input className={inputClass} type="number" min="0.01" step="0.01" required value={amount} onChange={(event) => edit("amount", event.target.value)} disabled={sending || dismissing} /></Field>
+        <Field name={splitPurchase ? "Total outflow (USD)" : `${transfer ? "Transfer" : kind === "income" ? "Inflow" : "Outflow"} amount (USD)`} icon={<Wallet size={13} aria-hidden="true" className="text-muted-foreground" />}><Input className={inputClass} type="number" min="0.01" step="0.01" required value={amount} onChange={(event) => edit("amount", event.target.value)} disabled={sending || dismissing} /></Field>
         <Field name={kind === "bill" ? "Due date" : kind === "transfer_schedule" ? "Payment date" : "Transaction date"}>
           <DateField ariaLabel={kind === "bill" ? "Due date" : kind === "transfer_schedule" ? "Payment date" : "Transaction date"} value={date} onChange={value => edit("date", value)} disabled={sending || dismissing} />
         </Field>
@@ -164,7 +175,13 @@ export default function FinancialEventCompletionForm({ plan, onCancel, onQueued,
         <Field name="Payee"><SearchableDropdown ariaLabel="Payee" options={payeeOptions} value={payee} onChange={value => edit("payee", value)} allowCreate disabled={sending || dismissing} placeholder="Choose or add a payee" /></Field>
         {payee.trim().length > 200 && <p role="status" className="text-xs text-[var(--sp-rose)]">Payee must be 200 characters or fewer.</p>}
         <Field name="Account" icon={<Landmark size={13} aria-hidden="true" className="text-muted-foreground" />}><SearchableDropdown ariaLabel="Account" options={accounts} value={accountId} onChange={value => edit("accountId", value)} disabled={sending || dismissing} placeholder="Choose an account" /></Field>
-        <Field name="Category (optional)"><SearchableDropdown ariaLabel="Category (optional)" options={[{ id:"",name:"No category" },...(metadata?.categories || []).map(item => ({ id:item.id,name:item.group ? `${item.group} / ${item.name}` : item.name }))]} value={categoryId} onChange={value => edit("categoryId", value)} disabled={sending || dismissing} placeholder="No category" /></Field>
+        {!splitPurchase && <Field name="Category (optional)"><SearchableDropdown ariaLabel="Category (optional)" options={[{ id:"",name:"No category" },...(metadata?.categories || []).map(item => ({ id:item.id,name:item.group ? `${item.group} / ${item.name}` : item.name }))]} value={categoryId} onChange={value => edit("categoryId", value)} disabled={sending || dismissing} placeholder="No category" /></Field>}
+      </>}
+      {kind === 'expense' && <>
+        {splitPurchase ? <FinancialSplitFields remainingCents={remainingCents} onDistribute={distributedSplits ? () => edit("splits", distributedSplits) : undefined} splits={splits} categories={categories} disabled={sending || dismissing} onChange={value => edit('splits', value)} />
+          : <Button type="button" variant="outline" className={actionClass} disabled={sending || dismissing} onClick={() => edit('splits', [{ amount: '', categoryId, notes: '' }, { amount: '', categoryId: '', notes: '' }])}>Split this purchase</Button>}
+        {splitPurchase && <Button type="button" variant="ghost" className={actionClass} disabled={sending || dismissing} onClick={() => edit('splits', [])}>Use a single amount</Button>}
+        {splitPurchase && (!validSplits || amountCents === null) && <p role="status" className="text-xs text-foreground/85">Use positive amounts for at least two splits, check their categories, and allocate the total exactly.</p>}
       </>}
       {scheduled && <Field name="Schedule name (optional)"><Input className={inputClass} value={effectiveScheduleName} maxLength={200} onChange={(event) => edit("scheduleName", event.target.value)} disabled={sending || dismissing} placeholder={transfer ? "Account name + Payment" : payee || "Bill name"} /></Field>}
       <Field name="Notes (optional)"><Input className={inputClass} value={notes} maxLength={1000} onChange={(event) => edit("notes", event.target.value)} disabled={sending || dismissing} /></Field>

@@ -181,7 +181,7 @@ export function planFinancialCorrection(snapshot: CorrectionSnapshot, evidence: 
   const after: CorrectionRow[] = [];
   function patch(row: CorrectionRow | undefined, fields: Record<string, unknown>): CorrectionRow {
     const id = row?.id || randomUUID();
-    if (row && (row.isParent || row.isChild || snapshot.transactions.some(child => child.parent_id === id && active(child)))) correctionConstraint('This correction cannot preserve the split allocation; correct its split structure explicitly.');
+    if (row && (row.isParent || row.isChild || snapshot.transactions.some(child => child.parent_id === id && active(child)))) correctionConstraint('This correction cannot preserve the split allocation. Edit this transaction’s splits in Actual.');
     if (row?.reconciled && ['amount', 'acct', 'date'].some(key => fields[key] !== undefined && !same(fields[key], row[key]))) correctionConstraint('This change would alter a reconciled balance or date.');
     const delta = { id, ...fields };
     const result = row ? { ...row, ...delta } : { cleared: 0, reconciled: 0, tombstone: 0, ...delta };

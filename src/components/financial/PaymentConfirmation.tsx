@@ -3,7 +3,8 @@ import { ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 import { formatImportAmount } from './transactionImportReviewModel';
 
 /** Shared review presentation; the source owner retains validation and submission. */
-export default function PaymentConfirmation({ amountCents, account, payee, date, category, notes }: {
+export default function PaymentConfirmation({ amountCents, account, payee, date, category, notes, splits }: {
+  splits?: Array<{ amountCents: number; notes: string; category?: string }>;
   amountCents:number; account:string; payee:string; date:string; category?:string; notes?:string;
 }) {
   const heading = useRef<HTMLHeadingElement>(null);
@@ -22,6 +23,10 @@ export default function PaymentConfirmation({ amountCents, account, payee, date,
         {category && <div><dt>Category</dt><dd>{category}</dd></div>}
         {notes && <div><dt>Notes</dt><dd>{notes}</dd></div>}
       </dl>
+      {splits && <div className="mt-4 border-t border-white/15 pt-3">
+        <p className="text-xs font-medium">One transaction · {splits.length} splits</p>
+        <dl className="financial-confirmation-splits">{splits.map((split, index) => <div key={index}><dt className="break-words">{split.notes || `Split ${index + 1}`}<span className="block text-[11px] font-normal">{split.category || 'No category'}</span></dt><dd>{formatImportAmount(split.amountCents)}</dd></div>)}</dl>
+      </div>}
     </div>
   </section>;
 }

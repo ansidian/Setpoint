@@ -1,3 +1,4 @@
+import { positiveUsdCents, validExpenseSplits } from "../../shared/financial-splits";
 import { DEMO_RECEIPT_UID } from "./financialReceipt";
 import { getDemoCorrection } from './financialCorrections';
 import type { FinancialEmailPlan, FinancialPlanTarget } from '../../shared/types/bills';
@@ -52,6 +53,9 @@ export function completeDemoFinancialEvent(request: FinancialEventCompletionRequ
   if (completed || dismissed || request.documentRevision !== 1 || request.eventRevision !== 1) throw Object.assign(new Error('This fictional record changed. Refresh its current status.'), { status: 409 });
   if (!(request.entry.amount > 0) || !request.entry.date) throw new Error('Enter an amount and date.');
   const entry = request.entry;
+  if (entry.splits && (entry.kind !== 'expense' || entry.categoryId || !validExpenseSplits(entry.splits.map(split => ({
+    amountCents: -(positiveUsdCents(split.amount) || 0), categoryId: split.categoryId, notes: split.notes,
+  })), -(positiveUsdCents(entry.amount) || 0)))) throw new Error('Split amounts must be positive and equal the transaction total.');
   const transfer = entry.kind === 'transfer' || entry.kind === 'transfer_schedule';
   const seed = getDemoSeed();
   if (transfer ? !entry.fromAccountId || !entry.toAccountId || entry.fromAccountId === entry.toAccountId : !entry.accountId) throw new Error('Choose the accounts for this record.');
@@ -73,9 +77,16 @@ export function completeDemoFinancialEvent(request: FinancialEventCompletionRequ
     after.dates = [{ id: 'demo-completed-schedule-date', schedule_id: 'demo-completed-schedule', local_next_date: date, base_next_date: date }];
   } else {
     after.transactions = [{ id: 'demo-completed-review', acct: entry.kind === 'transfer' ? entry.fromAccountId : entry.accountId, description: payeeId, amount: entry.kind === 'income' ? amount : -amount, date, category: entry.kind === 'transfer' ? null : entry.categoryId || null, notes: entry.notes || '', transferred_id: entry.kind === 'transfer' ? 'demo-completed-counterpart' : null }];
+    if (entry.splits) {
+      const parent = after.transactions[0]!;
+      parent.isParent = 1;
+      parent.category = null;
+      after.transactions.push(...entry.splits.map((split, index) => ({ ...parent, id: `demo-completed-split-${index + 1}`, isParent: 0, isChild: 1,
+        parent_id: parent.id, amount: -Math.round(split.amount * 100), category: split.categoryId || null, notes: split.notes || '' })));
+    }
     if (entry.kind === 'transfer') after.transactions.push({ ...after.transactions[0], id: 'demo-completed-counterpart', acct: entry.toAccountId, amount, transferred_id: 'demo-completed-review' });
   }
-  completionEvidence = { budgetId: 'demo-budget', objects: [...after.transactions.map((row, index) => ({ kind: 'transaction' as const, id: row.id, role: index ? 'counterpart' as const : 'primary' as const, provenance: 'created' as const, beforeState: 'confirmed_absent' as const, before: null, after: row })), ...after.schedules.map(row => ({ kind: 'schedule' as const, id: row.id, role: 'primary' as const, provenance: 'created' as const, beforeState: 'confirmed_absent' as const, before: null, after: row }))] };
+  completionEvidence = { budgetId: 'demo-budget', objects: [...after.transactions.map((row, index) => ({ kind: 'transaction' as const, id: row.id, role: row.isChild ? 'split_child' as const : index ? 'counterpart' as const : 'primary' as const, provenance: 'created' as const, beforeState: 'confirmed_absent' as const, before: null, after: row })), ...after.schedules.map(row => ({ kind: 'schedule' as const, id: row.id, role: 'primary' as const, provenance: 'created' as const, beforeState: 'confirmed_absent' as const, before: null, after: row }))] };
   publishDemoFinanceSnapshot(before, after);
   completed = structuredClone(request);
   announceDemoFinanceChange();
