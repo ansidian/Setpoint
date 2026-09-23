@@ -494,6 +494,8 @@ export function createTriageModelClient({
             body: JSON.stringify({
               model: choice.model,
               max_tokens: ANTHROPIC_MAX_OUTPUT_TOKENS,
+              // Sonnet 5 / Opus 5 default to thinking, which conflicts with forced tools.
+              thinking: { type: "disabled" },
               // Mark the stable prefix (tools render before system) as ephemeral
               // cacheable so repeated classifications in a tick reuse it instead of
               // re-billing the prompt + schema. Prompt caching is GA — no beta

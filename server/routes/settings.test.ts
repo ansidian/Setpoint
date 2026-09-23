@@ -155,15 +155,15 @@ describe("Alfred model settings", () => {
     });
   });
 
-  it("persists a valid provider/model pair together", async () => {
+  it.each(["gpt-5.6-sol", "gpt-6-luna", "gpt-6-sol", "gpt-6-astra"])("persists the OpenAI model %s", async (model) => {
     const res = await request(makeApp())
       .put("/api/ea/settings")
-      .send({ alfred_provider: "openai", alfred_model: "gpt-5.6-sol" });
+      .send({ alfred_provider: "openai", alfred_model: model });
 
     expect(res.status).toBe(200);
     expect(await getSettingsRow()).toMatchObject({
       alfred_provider: "openai",
-      alfred_model: "gpt-5.6-sol",
+      alfred_model: model,
     });
   });
 

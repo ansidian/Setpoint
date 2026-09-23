@@ -87,6 +87,8 @@ export function createAnthropicProvider({
         body: JSON.stringify({
           model,
           max_tokens: MAX_OUTPUT_TOKENS,
+          // Sonnet 5 / Opus 5 default to thinking, which conflicts with forced tools.
+          thinking: { type: "disabled" },
           system: systemPrompt,
           tools: [responseKind === "event_audit" ? { ...TOOL, input_schema: { ...TOOL.input_schema,
             properties: { ...TOOL.input_schema.properties, event_assessment: FINANCIAL_EVENT_ASSESSMENT_SCHEMA },

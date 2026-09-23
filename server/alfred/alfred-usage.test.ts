@@ -54,7 +54,7 @@ describe("recordAlfredUsage", () => {
     expect(Number(row.cached_input_tokens)).toBe(800);
     expect(Number(row.cache_creation_input_tokens)).toBe(2048);
     expect(Number(row.output_tokens)).toBe(340);
-    expect(JSON.parse(String(row.metadata_json))).toMatchObject({ iteration: 0, accounting: { version: 1, pricingVersion: "standard-text-2026-09-10" } });
+    expect(JSON.parse(String(row.metadata_json))).toMatchObject({ iteration: 0, accounting: { version: 1, pricingVersion: "standard-text-2026-09-22" } });
   });
 
   it("includes Anthropic cache reads and writes in analytics input and cost", async () => {

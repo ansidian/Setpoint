@@ -47,6 +47,8 @@ async function runTurn({
   const body: Record<string, unknown> = {
     model: conversation.model,
     max_tokens: MAX_OUTPUT_TOKENS,
+    // Keep every turn compatible with Alfred's forced-tool recovery turn.
+    thinking: { type: "disabled" },
     stream: true,
     system,
     tools: ALFRED_TOOL_DEFINITIONS,

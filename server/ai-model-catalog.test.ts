@@ -41,7 +41,7 @@ function response(data: unknown, status = 200): Response {
 }
 
 describe("AI model catalog", () => {
-  it("returns curated OpenAI models without provider discovery", async () => {
+  it.each(["email_triage", "bill_extraction", "alfred"] as const)("offers GPT-6 for %s without provider discovery", async (useCase) => {
     let fetched = false;
     const fetchImpl = async () => {
       fetched = true;
@@ -53,10 +53,16 @@ describe("AI model catalog", () => {
       resolveApiKey: async () => null,
     });
 
-    const providers = await service.availability("email_triage");
+    const providers = await service.availability(useCase);
     const openai = providers.find((entry) => entry.provider === "openai");
 
-    expect(openai?.models).toEqual(OPENAI_MODELS);
+    expect(openai?.models).toEqual(useCase === "alfred"
+      ? OPENAI_MODELS.filter(({ id }) => id !== "gpt-5.5-pro")
+      : OPENAI_MODELS);
+    for (const model of ["gpt-6-astra", "gpt-6-sol", "gpt-6-luna"]) {
+      expect(openai?.models).toContainEqual({ id: model, label: expect.any(String) });
+      expect(isSelectableAiModel("openai", model, useCase)).toBe(true);
+    }
     expect(fetched).toBe(false);
   });
 
@@ -82,6 +88,9 @@ describe("AI model catalog", () => {
       return response({
       data: [
         { id: "claude-opus-4-6", display_name: "Claude Opus 4.6" },
+        { id: "claude-opus-5-5", display_name: "Claude Opus 5.5" },
+        { id: "claude-fable-5-1", display_name: "Claude Fable 5.1" },
+        { id: "claude-mythos-5-1", display_name: "Claude Mythos 5.1" },
         { id: "not-a-claude-model", display_name: "Ignore me" },
         { id: "claude-sonnet-4-6", display_name: "Claude Sonnet 4.6" },
       ],
@@ -192,5 +201,15 @@ describe("AI model catalog", () => {
       provider: "anthropic",
       model: "claude-future-7",
     });
+  });
+
+  it.each(["email_triage", "bill_extraction", "alfred"] as const)("excludes incompatible Claude choices for %s while preserving stored settings", (useCase) => {
+    for (const model of ["claude-opus-5-5", "claude-fable-5-1", "claude-mythos-5-1"]) {
+      expect(isSelectableAiModel("anthropic", model, useCase)).toBe(false);
+      expect(resolveStoredAiModelConfig({ provider: "anthropic", model, useCase }))
+        .toEqual({ provider: "anthropic", model });
+    }
+    expect(isSelectableAiModel("anthropic", "claude-sonnet-5", useCase)).toBe(true);
+    expect(isSelectableAiModel("anthropic", "claude-opus-5", useCase)).toBe(true);
   });
 });

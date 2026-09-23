@@ -58,14 +58,17 @@ export function normalizeAiUsage(provider: "openai" | "anthropic", raw: unknown)
   };
 }
 
-// Standard text API prices, USD / 1M tokens, checked 2026-09-10.
+// Standard text API prices, USD / 1M tokens, checked 2026-09-22.
 // https://developers.openai.com/api/docs/pricing
 // https://platform.claude.com/docs/en/about-claude/pricing
 // Deliberately do not prefix-match arbitrary variants. Unknown
 // models, nonstandard service tiers, and unsupported long contexts stay unpriced.
-const PRICING_VERSION = "standard-text-2026-09-10";
+const PRICING_VERSION = "standard-text-2026-09-22";
 type Price = { input: number; cached: number; output: number };
 const OPENAI: Record<string, Price> = {
+  "gpt-6-astra": { input: 10, cached: 1, output: 50 },
+  "gpt-6-sol": { input: 2, cached: 0.2, output: 10 },
+  "gpt-6-luna": { input: 0.1, cached: 0.01, output: 0.5 },
   "gpt-5.6-sol": { input: 4, cached: 0.4, output: 20 },
   "gpt-5.6-terra": { input: 2, cached: 0.2, output: 12 },
   "gpt-5.6-luna": { input: 0.2, cached: 0.02, output: 1.2 },
@@ -101,7 +104,8 @@ export function estimateAiUsageCost(provider: "openai" | "anthropic", model: str
   const price = (provider === "openai" ? OPENAI : ANTHROPIC)[base];
   const { inputTokens: input, outputTokens: output, cachedInputTokens: cached,
     cacheCreationInputTokens: created, cacheCreation5mTokens: fiveMin, cacheCreation1hTokens: oneHour } = tokens;
-  const openAiLongContext = provider === "openai" && base.startsWith("gpt-5.6-");
+  const openAiLongContext = provider === "openai"
+    && (base.startsWith("gpt-5.6-") || base.startsWith("gpt-6-"));
   const claudeLongContext = provider === "anthropic"
     && !["claude-haiku-4-5", "claude-sonnet-4-5", "claude-opus-4-5"].includes(base);
   const maxPricedInput = openAiLongContext || claudeLongContext ? 1_000_000
@@ -110,10 +114,10 @@ export function estimateAiUsageCost(provider: "openai" | "anthropic", model: str
     || fiveMin === null || oneHour === null || input > maxPricedInput
     || cached + created > input) return unknown;
   if (provider === "anthropic" && fiveMin + oneHour !== created) return unknown;
-  if (provider === "openai" && created > 0 && !base.startsWith("gpt-5.6-")) return unknown;
+  if (provider === "openai" && created > 0 && !openAiLongContext) return unknown;
   const writesCost = provider === "openai" ? created * price.input * 1.25
     : fiveMin * price.input * 1.25 + oneHour * price.input * 2;
-  // GPT-5.6 premiums apply to the full request above 272K. Older OpenAI
+  // GPT-5.6 and GPT-6 premiums apply to the full request above 272K. Older OpenAI
   // session-wide premiums remain unpriced because this ledger is per call.
   const inputMultiplier = openAiLongContext && input > 272_000 ? 2 : 1;
   const outputMultiplier = inputMultiplier === 2 ? 1.5 : 1;

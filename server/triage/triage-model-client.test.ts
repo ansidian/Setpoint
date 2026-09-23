@@ -103,6 +103,7 @@ describe("triage model client", () => {
     const body = JSON.parse(String(options!.body));
     expect(body.model).toBe("claude-sonnet-4-6");
     expect(body.tool_choice).toEqual({ type: "tool", name: "submit_email_triage" });
+    expect(body.thinking).toEqual({ type: "disabled" });
     // System is now an ephemeral-cacheable block array; the tool carries a
     // matching cache_control so the tools+system prefix is one cache breakpoint.
     expect(body.system[0].text).toContain(BILL_SEMANTIC_EXTRACTION_INSTRUCTIONS);
