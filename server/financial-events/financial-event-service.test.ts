@@ -249,6 +249,9 @@ describe("autonomous financial event processing", () => {
     }
     expect(assessmentCredits).toBe(7);
     expect(await store.getEventForEmail("owner", "assessment-outage")).toBeNull();
+    expect(await store.getDocumentForEmail("owner", "assessment-outage")).toMatchObject({ status: "retry", nextAttemptAt: null });
+    expect(await store.getNextWakeAt()).toBeNull();
+    expect(await newWorker().processNextDocument()).toBe(false);
     assessmentOffline = false;
     await revise(receipt("assessment-outage", { value: 40 }));
     await assessArrivals();

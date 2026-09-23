@@ -35,6 +35,15 @@ const historicalFacts = [
 ] as const;
 
 describe("provider financial assessment", () => {
+  it.each([
+    ['store-news@amazon.com','2 weeks until Prime Big Deal Days!','Prep your cart for saving! Shop early deals. Under $25.'],
+    ['MyAccount@spectrumemails.com','Service Alert','We have detected an outage affecting Spectrum service in your area.'],
+    ['MyAccount@spectrumemails.com','Your Service is Restored','We are happy to report that your Spectrum service has been restored. We will fully resolve the outage for all affected customers.'],
+    ['donotreply@email.sce.com','Did You Know You Have Rate Plan Options?','We are not changing your current rate plan and you do not have to take any action. The comparison chart below is for information only. $1,234 per year.'],
+  ])('keeps the known nonfinancial template out of review: %s / %s', (fromAddress, subject, body) => {
+    expect(assessProviderFinancialEmail({fromAddress,subject,body})).toMatchObject({status:'nonfinancial'});
+    expect(assessProviderFinancialEmail({fromAddress,subject,body:body+' Amount Due $50.00 Due Date October 15, 2026'})).toMatchObject({status:'review'});
+  });
   it.each(admissionCases.filter(row => row.source.fromAddress === "ebay@ebay.com"))("owns only supported eBay fulfillment: $name", ({ name, source }) => {
     expect(assessProviderFinancialEmail(source)).toMatchObject(name === "ebay-packing" || name === "ebay-packing-original-total"
       ? { status: "nonfinancial", providerId: "ebay", templateId: "packing-update" }
@@ -52,7 +61,7 @@ describe("provider financial assessment", () => {
     expect(r).toMatchObject({ status: "parsed", providerId, reasons: [], candidate: { amount, due_date, amount_kind, event_kind, currency: "USD" } });
     if (r.status !== "parsed") throw new Error("Expected parsed fixture");
     expect(r.candidate.amount_candidates?.find(a => a.kind === amount_kind)?.evidence).toBeTruthy();
-    expect(r.parserVersion).toBe(providerId === "sofi" ? "sofi-v2" : `${providerId}-v1`);
+    expect(r.parserVersion).toBe(`${providerId}-${["sofi", "sce", "spectrum"].includes(providerId) ? "v2" : "v1"}`);
     expect(r.policyVersion).toContain("provider-text-v1:registry-v2:");
     expect(r.policyVersion).toContain(r.parserVersion);
   });

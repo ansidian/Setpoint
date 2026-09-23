@@ -21,7 +21,18 @@ export function createFinancialEventAiStore(db: Pick<Client, "execute">, now = D
       args: [document.userId, document.id, contentHash, document.userId, document.id,
         document.revision, document.claimToken, now() - 15 * 60_000, MAX_ATTEMPTS],
     });
-    return result.rows[0] ? Number(result.rows[0].attempts) : null;
+    if (result.rows[0]) return Number(result.rows[0].attempts);
+    // An exhausted live claim is terminal for this source. A replaced/expired
+    // claim is not: it must not park work owned by another worker or revision.
+    const exhausted = await db.execute({
+      sql: `SELECT 1 FROM ea_financial_document_ai_attempts a
+        JOIN ea_financial_documents d ON d.user_id=a.user_id AND d.id=a.document_id
+        WHERE a.user_id=? AND a.document_id=? AND a.content_hash=? AND a.attempts>=?
+          AND d.revision=? AND d.claim_token=? AND d.status='processing' AND d.claimed_at>?`,
+      args: [document.userId, document.id, contentHash, MAX_ATTEMPTS, document.revision, document.claimToken, now()-15*60_000],
+    });
+    if (exhausted.rows.length) throw Object.assign(new Error("Assessment retry limit reached for this source."), { code: "financial_assessment_exhausted" });
+    return null;
   }
 
   function createAiRequestRunner(event: FinancialEvent): BillProviderRequestRunner {

@@ -130,7 +130,10 @@ export function createFinancialEventWorker({
         if (assessment.status === "review" || assessment.status === "nonfinancial") {
           await store.settleDocument(document, { candidate: assessment.candidate || null, contentHash, assessment,
             status: assessment.status === "nonfinancial" ? "ignored" : "retry", nextAttemptAt: null,
-            error: assessment.status === "review" ? "Review the amount, date and account in this email before recording in Actual." : null });
+            error: assessment.status === "review" ? assessment.providerId === "socalgas"
+              && assessment.reasons.includes("provider_amount_missing") && assessment.reasons.includes("provider_date_missing")
+              ? "This notification does not include an amount or due date. Check the bill and enter them."
+              : "Review the amount, date and account in this email before recording in Actual." : null });
           publish(document.userId);
           return true;
         }
@@ -233,12 +236,16 @@ export function createFinancialEventWorker({
         error: "Review this candidate alongside similar purchases.", nextAttemptAt: null });
       publish(document.userId);
     } catch (error) {
+      const terminalAssessment = error instanceof Error && "code" in error
+        && ["financial_assessment_exhausted", "email_evidence_incomplete", "email_evidence_oversized"].includes(String(error.code));
       const providerReview = document.processingPolicy === "provider_v1" && /Source acquisition retry limit/.test(errorText(error));
       const failedAssessment = providerReview ? assessProviderFinancialEmail({fromAddress: document.fromAddress, subject: document.subject, body: document.body, emailDate: document.emailDate}) : null;
       const reviewAssessment = failedAssessment && failedAssessment.status !== "unrecognized"
         ? { ...failedAssessment, status: "review" as const, reasons: ["original_source_unavailable"] } : undefined;
       await store.settleDocument(document, { candidate: document.candidate, contentHash: document.contentHash || "", status: "retry",
-        assessment: reviewAssessment, error: providerReview ? "The original source could not be acquired. Review this email manually." : `Financial assessment will retry: ${errorText(error)}`, nextAttemptAt: providerReview ? null : retryAt(now(), document.attempts) });
+        assessment: reviewAssessment, error: providerReview ? "The original source could not be acquired. Review this email manually."
+          : `Financial assessment ${terminalAssessment ? "stopped" : "will retry"}: ${errorText(error)}`,
+        nextAttemptAt: providerReview || terminalAssessment ? null : retryAt(now(), document.attempts) });
     }
     return true;
   }

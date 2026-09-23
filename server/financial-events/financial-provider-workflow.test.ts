@@ -8,6 +8,7 @@ import { readFinancialReviewChanges } from './financial-event-review.ts';
 import { createFinancialEventCompletion } from './financial-event-completion.ts';
 import type { BillCandidate } from '../../shared/types/bills.ts';
 import admissionCases from '../triage/fixtures/financial-admission.json' with {type:'json'};
+import { EMAIL_EVIDENCE_CHAR_LIMIT, EMAIL_EVIDENCE_TRUNCATED } from '../email/email-evidence.ts';
 
 let db: Client;
 let cutoff: string;
@@ -77,6 +78,25 @@ it('makes unsupported templates reviewable with no invented financial candidate'
   expect((await readFinancialReviewChanges('owner',{dbClient:db})).items.map(item=>item.emailUid)).toEqual(['unsupported']);
   expect(await store.getNextWakeAt()).toBeNull();
   expect(await store.dismissCandidate(document,null,{eventId:'dismissed',referenceKey:null})).toBe(true);
+});
+it.each(['oversized','incomplete'])('parks unchanged %s evidence and resumes when complete source arrives',async(kind)=>{
+  await email('bounded',{from:'billing@unknown.example',body:kind==='oversized'?'x'.repeat(EMAIL_EVIDENCE_CHAR_LIMIT+1):EMAIL_EVIDENCE_TRUNCATED});
+  const {store}=setup();
+  const worker=createFinancialEventWorker({store,now:()=>now,canRun:async()=>true,assessDocument:async()=>null});
+  expect(await worker.processNextDocument()).toBe(true);
+  expect(await store.getDocumentForEmail('owner','bounded')).toMatchObject({status:'retry',candidate:null,eventId:null,nextAttemptAt:null,error:expect.stringContaining('Financial assessment stopped:')});
+  now+=86400_000;
+  expect(await createFinancialEventStore(db,()=>now).getNextWakeAt()).toBeNull();
+  expect(await worker.processNextDocument()).toBe(false);
+  await db.execute("UPDATE ea_email_index SET body_text='A complete informational notice.' WHERE uid='bounded'");
+  expect(await worker.processNextDocument()).toBe(true);
+  expect(await store.getDocumentForEmail('owner','bounded')).toMatchObject({status:'ignored',candidate:null,eventId:null,nextAttemptAt:null,error:null});
+});
+it('explains a SoCalGas notification that omits bill facts without inventing an amount or date',async()=>{
+  await email('notification',{from:'customerservice@socalgas.com',subject:'Your bill from SoCalGas is now available',body:'Your current bill is available on My Account. Log in to view and pay your bill.'});
+  const {store,worker}=setup();await worker.processNextDocument();
+  expect(await store.getDocumentForEmail('owner','notification')).toMatchObject({status:'retry',nextAttemptAt:null,candidate:{amount:null,due_date:null},
+    error:'This notification does not include an amount or due date. Check the bill and enter them.'});
 });
 it.each([true, false])('inherits an unknown-provider reference dismissal only with authenticated evidence (authenticated=%s)',async(authenticated)=>{
   const candidate: BillCandidate = {type:'expense',event_kind:'purchase',document_role:'merchant_receipt',

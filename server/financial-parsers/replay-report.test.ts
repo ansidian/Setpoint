@@ -10,8 +10,8 @@ describe("write-disabled provider replay", () => {
     const report = replayFinancialProviderSources(sources);
     expect(report).toMatchObject({ writesEnabled: false, sampled: 3 });
     expect(report.rows).toEqual([
-      { row: 1, providerId: "sce", disposition: "review", templateId: "unsupported", parserVersion: "sce-v1", reasons: ["provider_template_unsupported"] },
-      { row: 2, providerId: "sce", disposition: "review", templateId: "unsupported", parserVersion: "sce-v1", reasons: ["provider_template_unsupported"] },
+      { row: 1, providerId: "sce", disposition: "review", templateId: "unsupported", parserVersion: "sce-v2", reasons: ["provider_template_unsupported"] },
+      { row: 2, providerId: "sce", disposition: "review", templateId: "unsupported", parserVersion: "sce-v2", reasons: ["provider_template_unsupported"] },
       { row: 3, providerId: null, disposition: "unrecognized", templateId: null, parserVersion: null, reasons: ["provider_unrecognized"] },
     ]);
     expect(report.byParser.map(group => group.count)).toEqual([2, 1]);
