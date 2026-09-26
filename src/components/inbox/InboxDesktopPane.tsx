@@ -15,6 +15,7 @@ import useInboxDiscardPrompt from "./useInboxDiscardPrompt";
 
 function InboxDesktopPane({
   batchSelection, batchOptions, batch,
+  focusUnread, setFocusUnread, disclosureScope, navigationEmails,
   accent,
   collection, setCollection, snoozedCount, snoozedLoading, snoozedError, refreshSnoozed,
   nowTick,
@@ -90,9 +91,9 @@ function InboxDesktopPane({
       guardWorkspaceExit(() => { void snapshotNavigation.onNavigate(direction); });
     },
   } : null;
-  const selectedIndex = selectedEmail ? visibleEmails.findIndex((email) => (email.id || email.uid) === (selectedEmail.id || selectedEmail.uid)) : -1;
-  const previousEmail = selectedIndex > 0 ? visibleEmails[selectedIndex - 1] : undefined;
-  const nextEmail = selectedIndex >= 0 ? visibleEmails[selectedIndex + 1] : undefined;
+  const selectedIndex = selectedEmail ? navigationEmails.findIndex((email) => (email.id || email.uid) === (selectedEmail.id || selectedEmail.uid)) : -1;
+  const previousEmail = selectedIndex > 0 ? navigationEmails[selectedIndex - 1] : undefined;
+  const nextEmail = selectedIndex >= 0 ? navigationEmails[selectedIndex + 1] : undefined;
   const selectedUid = selectedEmail?.uid || selectedEmail?.email_id || selectedEmail?.id;
   const attachSelectedEmail = !isDemoMode() && selectedEmail && selectedUid && onAttachEmailToAlfred
     ? () => onAttachEmailToAlfred({
@@ -175,6 +176,9 @@ function InboxDesktopPane({
           <div className="inbox-a-queue">
             <InboxList
               accent={accent}
+              focusUnread={focusUnread}
+              onFocusUnreadChange={setFocusUnread}
+              disclosureScope={disclosureScope}
               collection={collection} snoozedLoading={snoozedLoading} snoozedError={snoozedError}
               nowTick={nowTick}
               emails={visibleEmails}

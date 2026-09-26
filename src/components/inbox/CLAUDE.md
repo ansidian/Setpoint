@@ -40,6 +40,8 @@ The email triage and reading surface, desktop and mobile: active snapshots (tria
 - `Sidebar.tsx` — account scope, fixed desktop lane navigation, secondary views and compact shortcuts
 - `inboxRow.ts` — canonical row normalization: field fallbacks, read-override merge
 - `inboxWorkItems.ts` — work item pipelines: active-snapshot, initial-load live fallback, and resurfaced-snooze
+- `inboxDisplayModel.ts` / `useInboxDisplay.ts` — desktop Queued-first lane order, focused read disclosures, arrival reopening, and displayed-row projection shared with navigation/batch selection.
+- `useInboxFocusUnread.ts` — browser-local Focus unread preference with in-memory fallback; demo never reads or writes storage.
 - `inboxVisibleEmailsModel.ts` — `selectVisibleEmails`: the rendered-row projection (indexed-search short-circuit + snooze/account/lane filter + lane/recency sort)
 - `inboxCountsModel.ts` — scoped unread counts under account filters, plus lane/mobile-chip/unread count projections
 - `inboxNowTick.ts` — schedules the `nowTick` timeout to the soonest snooze or verification-code boundary
@@ -81,7 +83,7 @@ The email triage and reading surface, desktop and mobile: active snapshots (tria
 
 - Optimistic UI: snapshot mutations apply overlays immediately and reconcile on refresh.
 - Session state lives outside React (external store) so tab switches don't reset triage position.
-- Lane-based classification drives filtering and hotkeys; `activeSnapshotWorkflowModel.ts` owns lane rules and reading order. Carryover is provenance (`_carryover`), shown inside the assigned Needs Attention/Queued lane. Existing Untriaged Read rows remain visible regardless of the current triage-read setting.
+- Lane-based classification drives filtering and hotkeys; `activeSnapshotWorkflowModel.ts` owns lane rules, while `inboxDisplayModel.ts` owns desktop reading order and focused row eligibility. Carryover is provenance (`_carryover`), shown inside the assigned Needs Attention/Queued lane. Existing Untriaged Read rows remain accessible regardless of the current triage-read setting.
 
 ## Related
 

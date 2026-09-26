@@ -155,3 +155,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) { .inbox-a-alfred-dock { transition: none; } }
+
+.inbox-a-focus-tools { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.inbox-a-focus-tools > span { color: var(--sp-subtext0, #a6adc8); font-size: 11px; font-variant-numeric: tabular-nums; }
+.inbox-a-focus-toggle { white-space: nowrap; }
+.inbox-a-focus-toggle[aria-pressed="true"] { color: var(--ea-accent); border-color: color-mix(in srgb, var(--ea-accent) 45%, transparent); background: color-mix(in srgb, var(--ea-accent) 10%, transparent); }
+.inbox-a-read-disclosure { align-self: flex-start; margin: 4px 12px 8px; color: #a6adc8; border-color: transparent; }

@@ -34,6 +34,7 @@ import { resolveReadScope, READ_SCOPE, planMarkAllVisibleRead } from "./inboxRea
 import useIndexedSearch from "./useIndexedSearch";
 import useInboxActionDispatch from "./useInboxActionDispatch";
 import useInboxKeyboardCommands from "./useInboxKeyboardCommands";
+import useInboxFocusUnread from "./useInboxFocusUnread";
 import useInboxSessionState from "./useInboxSessionState";
 import useSnapshotOptimisticOverlay from "./useSnapshotOptimisticOverlay";
 import type { InboxSessionState } from "./useInboxSessionState";
@@ -104,6 +105,7 @@ export default function useInboxController({
     setSearch,
     setSelectedId,
   } = useInboxSessionState({ sessionState, onSessionStateChange });
+  const { focusUnread, setFocusUnread } = useInboxFocusUnread();
   const snoozed = useSnoozedEmails(collection === "snoozed");
   const searchRef = useRef<HTMLInputElement>(null);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
@@ -344,6 +346,7 @@ export default function useInboxController({
     emails: visibleEmails, pendingEmails: batch.pendingEmails,
   });
   const { active: batchActive, clear: clearBatch, select: selectBatch } = batchSelection;
+  const navigationEmails = isMobile ? visibleEmails : batchSelection.displayedEmails;
   const batchOptions = batchActionOptions(batchSelection.selectedEmails, readOnly);
   const closeSelectedEmail = useCallback(() => {
     if (batchActive) clearBatch(); else closeSingleEmail();
@@ -419,11 +422,11 @@ export default function useInboxController({
   }, [setSelectedId, isMobile, selectBatch, clearBatch, selectedEmail]);
 
   const moveBy = useCallback((direction: number) => {
-    const index = visibleEmails.findIndex((email) => email.id === selectedId || email.uid === selectedId);
-    const nextIndex = Math.max(0, Math.min(visibleEmails.length - 1, index + direction));
-    const next = visibleEmails[nextIndex];
+    const index = navigationEmails.findIndex((email) => email.id === selectedId || email.uid === selectedId);
+    const nextIndex = Math.max(0, Math.min(navigationEmails.length - 1, index + direction));
+    const next = navigationEmails[nextIndex];
     if (next) setSelectedId(next.id || next.uid || null);
-  }, [visibleEmails, selectedId, setSelectedId]);
+  }, [navigationEmails, selectedId, setSelectedId]);
 
   const { onAction: dispatchAction, announcement } = useInboxActionDispatch({
     onSnoozedChange: snoozed.refresh,
@@ -506,6 +509,8 @@ export default function useInboxController({
 
   return {
     batchSelection, batchOptions, batch,
+    focusUnread, setFocusUnread, navigationEmails,
+    disclosureScope: JSON.stringify([accountId, lane, activeSnapshot?.snapshot?.id, collection, indexedSearchActive]),
     collection, setCollection,
     snoozedCount: snoozedRows.filter((row) => accountId === "__all" || row._accountKey === accountId).length,
     snoozedLoading: snoozed.loading, snoozedError: snoozed.error, refreshSnoozed: snoozed.refresh,

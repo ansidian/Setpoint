@@ -300,6 +300,12 @@ Utilities is the default view, with Coming due and Recorded this month as primar
 
 **The Journal Companion Rule.** The activity calendar supports the recorded ledger: share its month, navigate to a day without filtering rows, preview dates from row hover or focus, and keep transfers separate from money in and out.
 
+### Inbox Focus
+
+Desktop Inbox keeps Queued first, then Pinned, Needs Attention, FYI, Noise, Handled, Catch-up, and Untriaged Read. The list toolbar pairs a scoped unread count with **Focus unread**, separate from indexed search's Unread chip. At zero, say **No unread mail in this view**; read action items may still need work.
+
+Focus unread preserves the lanes and keeps read pins and Needs Attention visible. Other read rows sit behind a compact **Show N read** disclosure within their lane. Keep the selected row visible through auto-mark-read until the reader closes or selection moves. New unread arrivals reopen their focused lane without moving reader focus or forcing scroll. Preserve ordinary lane collapse choices separately. The preference persists per browser; demo remains in memory. Search and Snoozed suspend the focused presentation, and mobile retains its chronological list.
+
 ### Reminders
 
 Event and deadline editors use **Reminders** as the section title and **Delivered via Discord** as secondary text. Deadlines also clarify that these are separate from Todoist notifications; reserve “webhook” for connection setup. Place the custom date/time trigger inline with preset chips, wrapping naturally when space is tight. Custom pickers use the shared floating-panel disclosure animation and reduced-motion behavior. Date/time pickers size to their bounded content without internal scrolling; scrollable suggestion lists remain separate.

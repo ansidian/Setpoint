@@ -1,7 +1,7 @@
 import { emailSelectionKey } from "./inboxBatchModel";
 import type { InboxRowModifiers } from "./useInboxBatchSelection";
 import Metadata from "../shared/Metadata";
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { AnimatePresence } from "motion/react";
 import type { MouseEventHandler, CSSProperties } from "react";
 import {
@@ -15,6 +15,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 import { LANE } from "../../lib/shell-helpers";
 import LaneSection from "./LaneSection";
+import useInboxDisplay from "./useInboxDisplay";
+import type { DesktopInboxLane } from "./inboxDisplayModel";
 
 import type { InboxAccount, InboxEmailLike, InboxId } from "./inboxTypes";
 
@@ -31,26 +33,6 @@ const LANE_DESCRIPTIONS: Record<string, string> = {
   handled: "Mail you marked done. Reopen it to restore its previous lane.",
   snoozed: "Mail deferred until a chosen time. It returns to the Inbox when ready.",
 };
-
-type CollapsedLanes = Record<string, boolean | undefined>;
-type GroupedEmails = Record<string, InboxEmailLike[]> & {
-  pinned: InboxEmailLike[];
-  queued: InboxEmailLike[];
-  needs_attention: InboxEmailLike[];
-  action: InboxEmailLike[];
-  catch_up: InboxEmailLike[];
-  fyi: InboxEmailLike[];
-  handled: InboxEmailLike[];
-  untriaged_read: InboxEmailLike[];
-  noise: InboxEmailLike[];
-};
-
-function createGroupedEmails(): GroupedEmails {
-  return {
-    pinned: [], queued: [], needs_attention: [],
-    action: [], catch_up: [], fyi: [], handled: [], untriaged_read: [], noise: [],
-  };
-}
 
 /* ======================================================================
  * LIST (swimlane or flat)
@@ -115,6 +97,7 @@ export default function InboxList({
   collection = "inbox", snoozedLoading = false, snoozedError = null,
   accent, nowTick, emails, accountsById,
   selectedId, onOpen, density, layout, showPreview,
+  focusUnread = false, onFocusUnreadChange, disclosureScope = "",
   batchMode = false, selectedKeys, onDisplayedChange, onCollapseRows,
   searchQuery, onClearSearch, onShowAllMail, onMarkAllRead, onRefresh,
   totalCount, unreadCount, noiseUnreadCount = 0,
@@ -139,6 +122,9 @@ export default function InboxList({
   accountsById: Record<string, InboxAccount | undefined>;
   selectedId: InboxId | null;
   onOpen: (email: InboxEmailLike, modifiers?: InboxRowModifiers) => void;
+  focusUnread?: boolean;
+  onFocusUnreadChange?: (value: boolean) => void;
+  disclosureScope?: string;
   batchMode?: boolean;
   selectedKeys?: ReadonlySet<string>;
   onDisplayedChange?: (keys: readonly string[], sourceKeys: readonly string[]) => void;
@@ -166,59 +152,31 @@ export default function InboxList({
   lane?: string;
   readOnly?: boolean;
 }) {
-  const [collapsed, setCollapsed] = useState<CollapsedLanes>(() => (activeSnapshotMode ? { handled: true, untriaged_read: true } : {}));
-  const [filterDisclosure, setFilterDisclosure] = useState({ lane, collapsed: false });
-  if (filterDisclosure.lane !== lane) setFilterDisclosure({ lane, collapsed: false });
-  const effectiveCollapsed: CollapsedLanes = {
-    ...(activeSnapshotMode ? { handled: true, untriaged_read: true } : {}),
-    ...collapsed,
-    ...(lane !== "__all" ? { [lane]: filterDisclosure.collapsed } : {}),
-  };
+  const focused = focusUnread && layout === "swimlanes" && collection === "inbox" && !indexedSearchActive;
+  const display = useInboxDisplay({ emails, selectedId, lane, activeSnapshotMode, focusUnread: focused, scope: disclosureScope });
   const showSkeletonRows = !activeSnapshotMode && liveEmailsLoading && emails.length === 0;
   const showSearchSkeletonRows = indexedSearchActive && indexedSearchLoading;
-
-  // Only the swimlane layout consumes `grouped`; flat (and mobile, which passes
-  // grouping:'flat') render `emails` directly via renderRows. Gate the O(n)
-  // bucketing + live re-sort on the layout so non-swimlane views skip it.
-  const grouped = useMemo(() => {
-    const g = createGroupedEmails();
-    if (layout !== "swimlanes") return g;
-    for (const e of emails) {
-      if (e._pinned) g.pinned.push(e);
-      else {
-        const laneKey = e._lane === "action" ? "needs_attention" : e._lane;
-        if (laneKey) g[laneKey]?.push(e);
-      }
-    }
-    return g;
-  }, [emails, layout]);
-
-  const toggleLane = (k: string) => {
-    if (!effectiveCollapsed[k]) onCollapseRows?.(grouped[k] || []);
-    if (k === lane && lane !== "__all") {
-      setFilterDisclosure(value => ({ ...value, collapsed: !value.collapsed }));
-      return;
-    }
-    setCollapsed((c) => ({ ...c, [k]: !c[k] }));
+  const toggleLane = (key: DesktopInboxLane) => {
+    const section = display.sections.find(section => section.lane === key);
+    if (section && !section.collapsed) onCollapseRows?.(section.rows);
+    display.toggleLane(key);
   };
-
-  const visibleLaneKeys = Object.keys(grouped).filter(key => grouped[key]!.length > 0);
-  const allLanesCollapsed = visibleLaneKeys.length > 0 && visibleLaneKeys.every(key => effectiveCollapsed[key]);
   const toggleAllLanes = () => {
-    const nextCollapsed = !allLanesCollapsed;
-    if (nextCollapsed) onCollapseRows?.(emails);
-    setCollapsed(current => ({ ...current, ...Object.fromEntries(visibleLaneKeys.filter(key => key !== lane).map(key => [key, nextCollapsed])) }));
-    if (lane !== "__all") setFilterDisclosure(current => ({ ...current, collapsed: nextCollapsed }));
+    if (!display.allCollapsed) onCollapseRows?.(display.displayed);
+    display.toggleAll();
   };
-  const displayedKeys = (layout === "swimlanes"
-    ? ["pinned", "needs_attention", "fyi", "noise", "handled", "queued", "catch_up", "untriaged_read"].flatMap(key => effectiveCollapsed[key] ? [] : grouped[key] || [])
-    : emails).map(emailSelectionKey);
+  const toggleRead = (key: DesktopInboxLane) => {
+    const section = display.sections.find(section => section.lane === key);
+    if (section?.readExpanded) onCollapseRows?.(section.read);
+    display.toggleRead(key);
+  };
+  const displayedKeys = (layout === "swimlanes" ? display.displayed : emails).map(emailSelectionKey);
   const displayedKeySignature = JSON.stringify(displayedKeys);
   const sourceKeySignature = JSON.stringify(emails.map(emailSelectionKey));
   useEffect(() => {
     onDisplayedChange?.(JSON.parse(displayedKeySignature) as string[], JSON.parse(sourceKeySignature) as string[]);
   }, [onDisplayedChange, displayedKeySignature, sourceKeySignature]);
-  const laneToggleLabel = allLanesCollapsed ? "Expand all lanes" : "Collapse all lanes";
+  const laneToggleLabel = display.allCollapsed ? "Expand all lanes" : "Collapse all lanes";
 
   // Stable across unrelated InboxList re-renders (filters, sheet toggles, hover
   // state, etc.) so LaneSection's memo actually engages — see LaneSection.tsx.
@@ -261,10 +219,16 @@ export default function InboxList({
           <h2>{indexedSearchActive ? "Search results" : collection === "snoozed" ? "Snoozed" : lane === "__all" ? "All mail" : LANE[lane]?.label || "Inbox"}</h2>
           <span className="inbox-a-queue-total">{totalCount}</span>
           {!readOnly && <button className="inbox-a-control inbox-a-icon-control" type="button" onClick={onMarkAllRead} aria-label="Mark all read" title="Mark all read" disabled={unreadCount === 0}><CheckCheck size={14} /></button>}
-          {layout === "swimlanes" && visibleLaneKeys.length > 0 && !showSearchSkeletonRows && <button className="inbox-a-control inbox-a-icon-control" type="button" onClick={toggleAllLanes} aria-label={laneToggleLabel} title={laneToggleLabel}>
-            {allLanesCollapsed ? <ChevronsUpDown size={14} aria-hidden="true" /> : <ChevronsDownUp size={14} aria-hidden="true" />}
+          {layout === "swimlanes" && display.sections.length > 0 && !showSearchSkeletonRows && <button className="inbox-a-control inbox-a-icon-control" type="button" onClick={toggleAllLanes} aria-label={laneToggleLabel} title={laneToggleLabel}>
+            {display.allCollapsed ? <ChevronsUpDown size={14} aria-hidden="true" /> : <ChevronsDownUp size={14} aria-hidden="true" />}
           </button>}
         </div>
+        {layout === "swimlanes" && !indexedSearchActive && collection === "inbox" && <div className="inbox-a-focus-tools">
+          <span role="status">{emails.length === 0 && activeSnapshotError ? "Mail unavailable" : emails.length === 0 && liveEmailsLoading ? "Checking mail…" : unreadCount === 0 ? "No unread mail in this view" : `${unreadCount} unread in this view`}</span>
+          {onFocusUnreadChange && <button type="button" className="inbox-a-control inbox-a-focus-toggle" aria-pressed={focused}
+            title="Collapse read mail; keep pinned and Needs Attention messages visible."
+            onClick={() => onFocusUnreadChange(!focusUnread)}>Focus unread</button>}
+        </div>}
         {readOnly && !indexedSearchActive && <Metadata items={[<strong>Historical snapshot</strong>, "Read only"]}/>}
         <p>{indexedSearchActive ? <Metadata items={["All accounts", "All indexed dates"]}/> : LANE_DESCRIPTIONS[collection === "snoozed" ? "snoozed" : lane] || LANE_DESCRIPTIONS.__all}</p>
       </header>
@@ -326,31 +290,20 @@ export default function InboxList({
           <InboxLiveLoadingBlock />
         ) : layout === "swimlanes" ? (
           <AnimatePresence initial={false}>
-            {grouped.pinned.length > 0 && (
+            {display.sections.map(section => (
               <LaneSection
-                key="pinned"
-                laneKey="pinned"
-                emails={grouped.pinned}
-                collapsed={!!effectiveCollapsed.pinned}
-                noiseUnreadCount={0}
+                key={section.lane}
+                laneKey={section.lane}
+                emails={section.source}
+                primaryEmails={section.primary}
+                readEmails={section.read}
+                readExpanded={section.readExpanded}
+                onToggleRead={toggleRead}
+                collapsed={section.collapsed}
+                noiseUnreadCount={section.lane === "noise" ? noiseUnreadCount : 0}
                 onToggle={toggleLane}
                 renderRows={renderRows}
               />
-            )}
-            {["needs_attention", "fyi", "noise", "handled", "queued", "catch_up", "untriaged_read"].map((k) => (
-              grouped[k]!.length > 0 && (
-                <LaneSection
-                  key={k}
-                  laneKey={k}
-                  emails={grouped[k]!}
-                  collapsed={!!effectiveCollapsed[k]}
-                  // Only the noise lane renders the unread pill; pass a stable 0 to the
-                  // others so a noise-count change doesn't bust every lane's memo.
-                  noiseUnreadCount={k === "noise" ? noiseUnreadCount : 0}
-                  onToggle={toggleLane}
-                  renderRows={renderRows}
-                />
-              )
             ))}
           </AnimatePresence>
         ) : (

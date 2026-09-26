@@ -65,5 +65,7 @@ export default function useInboxBatchSelection({ scope, enabled, emails, pending
   }, [displayed]);
   const byKey = new Map([...pendingEmails, ...emails].map(email => [emailSelectionKey(email), email]));
   const selectedEmails = enabled ? [...state.keys].flatMap(key => byKey.get(key) ? [byKey.get(key)!] : []) : [];
-  return { active: enabled && state.keys.size > 0, keys: state.keys, selectedEmails, clear, select, reportDisplayed, remove };
+  const displayedEmails = displayed.source === sourceSignature
+    ? displayed.keys.flatMap(key => byKey.has(key) ? [byKey.get(key)!] : []) : [];
+  return { displayedEmails, active: enabled && state.keys.size > 0, keys: state.keys, selectedEmails, clear, select, reportDisplayed, remove };
 }

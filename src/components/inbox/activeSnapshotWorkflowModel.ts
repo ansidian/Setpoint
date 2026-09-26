@@ -1,15 +1,3 @@
-export const SNAPSHOT_LANE_ORDER: Readonly<Record<string, number>> = {
-  needs_attention: 0,
-  action: 0,
-  carryover: 0,
-  fyi: 1,
-  noise: 2,
-  handled: 3,
-  queued: 4,
-  catch_up: 5,
-  untriaged_read: 6,
-};
-
 const SNAPSHOT_REOPEN_LANES = new Set<SnapshotTriageLane>(["needs_attention", "fyi", "noise"]);
 const SNAPSHOT_MUTABLE_LANES = new Set<InboxLane>(["needs_attention", "carryover", "fyi", "noise", "handled"]);
 const SNAPSHOT_DISMISSIBLE_LANES = new Set<InboxLane>(["queued", "needs_attention", "carryover", "fyi", "noise"]);

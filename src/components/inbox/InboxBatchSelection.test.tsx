@@ -81,6 +81,18 @@ describe("Inbox batch selection owner", () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
     expect(result.current.batchSelection.selectedEmails.map(emailSelectionKey)).toEqual(["b"]);
   });
+  it("navigates and selects ranges only through displayed rows", () => {
+    const { result } = renderHook(() => useHarness());
+    act(() => result.current.batchSelection.reportDisplayed(["a", "c"], ["a", "b", "c"]));
+    expect(result.current.navigationEmails.map(emailSelectionKey)).toEqual(["a", "c"]);
+    act(() => result.current.onOpen(result.current.visibleEmails[0]!));
+    act(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "j" })));
+    expect(result.current.selectedEmail?.uid).toBe("c");
+    act(() => result.current.onOpen(result.current.visibleEmails[0]!));
+    act(() => result.current.onOpen(result.current.visibleEmails[2]!, { shiftKey: true }));
+    expect(result.current.batchSelection.selectedEmails.map(emailSelectionKey)).toEqual(["a", "c"]);
+  });
+
   it("clears on mobile and snapshot changes", () => {
     const { result, rerender } = renderHook(useHarness, { initialProps: { mobile: false, snapshotKey: 0 } });
     act(() => result.current.onOpen(result.current.visibleEmails[0]!, { metaKey: true }));

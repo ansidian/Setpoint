@@ -255,6 +255,8 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useInboxBatchSelection` | `src/components/inbox/useInboxBatchSelection.ts` |
 | `useInboxController` | `src/components/inbox/useInboxController.ts` |
 | `useInboxDiscardPrompt` | `src/components/inbox/useInboxDiscardPrompt.tsx` |
+| `useInboxDisplay` | `src/components/inbox/useInboxDisplay.ts` |
+| `useInboxFocusUnread` | `src/components/inbox/useInboxFocusUnread.ts` |
 | `useInboxKeyboardCommands` | `src/components/inbox/useInboxKeyboardCommands.ts` |
 | `useInboxSessionStore` | `src/components/inbox/useInboxSessionState.ts` |
 | `useInboxUndoSlot` | `src/components/inbox/useInboxUndoSlot.ts` |

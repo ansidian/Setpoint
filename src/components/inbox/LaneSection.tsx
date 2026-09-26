@@ -1,11 +1,13 @@
 import { memo, useEffect, useRef } from "react";
-import { AnimatePresence, motion as Motion, useReducedMotion } from "motion/react";
+import { motion as Motion, useReducedMotion } from "motion/react";
 import { ChevronRight } from "lucide-react";
 import { LANE } from "../../lib/shell-helpers";
 import { LaneIcon } from "./primitives";
 import type { CSSProperties, ReactNode } from "react";
 import type { InboxEmailLike } from "./inboxTypes";
-import { heightTransition, motionDuration, motionTransition } from "../../lib/motion";
+import { motionDuration, motionTransition } from "../../lib/motion";
+import AnimatedCollapse from "../shared/AnimatedCollapse";
+import type { DesktopInboxLane } from "./inboxDisplayModel";
 import InboxRowTransition from "./InboxRowTransition";
 
 // One swimlane lane section: sticky header (icon, label, count, optional
@@ -15,15 +17,19 @@ import InboxRowTransition from "./InboxRowTransition";
 // InboxList — callers must pass a stable renderRows (see InboxList.tsx) or this
 // memo boundary is defeated.
 interface LaneSectionProps {
-  laneKey: string;
+  laneKey: DesktopInboxLane;
   emails: InboxEmailLike[];
+  primaryEmails: InboxEmailLike[];
+  readEmails: InboxEmailLike[];
+  readExpanded: boolean;
+  onToggleRead: (lane: DesktopInboxLane) => void;
   collapsed: boolean;
   noiseUnreadCount: number;
-  onToggle: (lane: string) => void;
+  onToggle: (lane: DesktopInboxLane) => void;
   renderRows: (emails: InboxEmailLike[]) => ReactNode;
 }
 
-function LaneSection({ laneKey, emails, collapsed, noiseUnreadCount, onToggle, renderRows }: LaneSectionProps) {
+function LaneSection({ laneKey, emails, primaryEmails, readEmails, readExpanded, onToggleRead, collapsed, noiseUnreadCount, onToggle, renderRows }: LaneSectionProps) {
   const reduceMotion = useReducedMotion() ?? false;
   const lane = LANE[laneKey] ?? LANE.fyi!;
   const previousEmails = useRef(emails);
@@ -104,22 +110,20 @@ function LaneSection({ laneKey, emails, collapsed, noiseUnreadCount, onToggle, r
           <ChevronRight size={12} color="rgba(205,214,244,0.4)" />
         </Motion.span>
       </button>
-      <AnimatePresence initial={false}>
-        {!collapsed && (
-          <Motion.div
-            key="lane-rows"
-            initial={reduceMotion ? false : { height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: reduceMotion ? 1 : 0 }}
-            transition={heightTransition(reduceMotion)}
-            style={{ overflow: "hidden" }}
-          >
-            <div style={{ display: "flex", flexDirection: "column" }}>
-              {renderRows(emails)}
-            </div>
-          </Motion.div>
-        )}
-      </AnimatePresence>
+      <AnimatedCollapse open={!collapsed}>
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          {renderRows(primaryEmails)}
+          {readEmails.length > 0 && <>
+            <button type="button" className="inbox-a-control inbox-a-read-disclosure" aria-expanded={readExpanded}
+              aria-label={`${readExpanded ? "Hide" : "Show"} ${readEmails.length} read in ${lane.label}`}
+              onClick={() => onToggleRead(laneKey)}>
+              <ChevronRight size={12} aria-hidden="true" style={{ transform: readExpanded ? "rotate(90deg)" : undefined }} />
+              {readExpanded ? "Hide" : "Show"} {readEmails.length} read
+            </button>
+            <AnimatedCollapse open={readExpanded}>{renderRows(readEmails)}</AnimatedCollapse>
+          </>}
+        </div>
+      </AnimatedCollapse>
     </InboxRowTransition>
   );
 }

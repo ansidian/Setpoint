@@ -89,9 +89,18 @@ describe("selectVisibleEmails", () => {
     ];
     const result = selectVisibleEmails({ flatEmails });
     expect(result.map((e) => e.uid)).toEqual([
-      "needs", "legacy-carryover", "legacy-action", "fyi-new", "fyi-old", "noise", "handled",
-      "queued", "untriaged", "catch-up", "read-before-triage",
+      "queued", "untriaged", "needs", "legacy-carryover", "legacy-action", "fyi-new", "fyi-old", "noise", "handled", "catch-up", "read-before-triage",
     ]);
+  });
+
+  it("places newest Queued before Pins without changing mobile pinned-first ordering", () => {
+    const flatEmails = [
+      email({ uid: "pin", _pinned: true, _pinnedAt: 1 }),
+      email({ uid: "queue-old", _lane: "queued", date: "2026-01-01", _resurfacedAt: Date.parse("2026-12-01") }),
+      email({ uid: "queue-new", _lane: "queued", date: "2026-06-01" }),
+    ];
+    expect(selectVisibleEmails({ flatEmails }).map(email => email.uid)).toEqual(["queue-new", "queue-old", "pin"]);
+    expect(selectVisibleEmails({ flatEmails, sortOrder: "newest" }).map(email => email.uid)).toEqual(["pin", "queue-new", "queue-old"]);
   });
 
   it("uses _resurfacedAt as the recency key, ranking a row up when it resurfaced recently", () => {
