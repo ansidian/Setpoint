@@ -33,8 +33,8 @@ export function identifyFinancialProvider(fromAddress: string, source?: { subjec
   const sender = (fromAddress.match(/<([^<>]+)>/)?.[1] || fromAddress).trim().toLowerCase();
   const provider = FINANCIAL_PROVIDER_CATALOG.find(p => (p.senderAddresses as readonly string[]).includes(sender));
   if (!provider) return null;
-  // This provider has fulfillment-only coverage. Receipts, refunds and mixed or
-  // unknown templates retain the existing AI path rather than empty reviews.
+  // This provider has fulfillment-only coverage. Other eBay mail is an unknown
+  // sender; eBay purchases arrive through the PayPal authorization template.
   if (provider.id === "ebay" && parseEbay({ fromAddress: sender, subject: source?.subject || "", body: source?.body || "" }).status !== "nonfinancial") return null;
   // InvoiceCloud serves unrelated billers. Its mailbox alone is not SGV identity.
   if (provider.id === "sgv-water" && !/San Gabriel Valley Water Company/i.test(`${source?.subject || ""}\n${source?.body || ""}`)) return null;

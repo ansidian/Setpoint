@@ -140,20 +140,14 @@ export function createFinancialEventWorker({
           return true;
         }
       }
-      let assessedCandidate = assessment?.status === "parsed" ? assessment.candidate : await assessSource(document, contentHash);
       if (assessment?.status === "unrecognized") {
-        if (assessedCandidate && isIgnoredFinancialNotice(assessedCandidate)) assessedCandidate = null;
-        const source = { ...document, candidate: assessedCandidate, contentHash };
-        if (await store.inheritReferenceDismissal(source, financialDocumentReferenceKey(source), document.claimToken)) {
-          publish(document.userId);
-          return true;
-        }
-        await store.settleDocument(document, { candidate: assessedCandidate, contentHash, assessment,
-          status: assessedCandidate ? "retry" : "ignored", nextAttemptAt: null,
-          error: assessedCandidate ? "This provider has no dedicated parser. Review the details before recording in Actual." : null });
+        // Senders without a dedicated parser get no automatic AI assessment and
+        // never enter review; the owner records them explicitly from the reader.
+        await store.settleDocument(document, { candidate: null, contentHash, assessment, status: "ignored", nextAttemptAt: null });
         publish(document.userId);
         return true;
       }
+      let assessedCandidate = assessment?.status === "parsed" ? assessment.candidate : await assessSource(document, contentHash);
       if (assessedCandidate && !isIgnoredFinancialNotice(assessedCandidate) && !document.acquiredSource
         && (assessedCandidate.type === "bill" || assessedCandidate.type === "income" || assessedCandidate.event_kind === "payment_scheduled"
           || (assessedCandidate.type === "transfer" && assessedCandidate.event_kind === "statement_issued")

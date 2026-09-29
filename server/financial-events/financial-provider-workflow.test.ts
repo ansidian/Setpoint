@@ -6,8 +6,6 @@ import { createFinancialEventStore } from './financial-event-store.ts';
 import { createFinancialEventWorker } from './financial-event-service.ts';
 import { activateFinancialProviderEpoch } from './financial-provider-policy.ts';
 import { readFinancialReviewChanges } from './financial-event-review.ts';
-import { createFinancialEventCompletion } from './financial-event-completion.ts';
-import type { BillCandidate } from '../../shared/types/bills.ts';
 import admissionCases from '../triage/fixtures/financial-admission.json' with {type:'json'};
 import { EMAIL_EVIDENCE_CHAR_LIMIT, EMAIL_EVIDENCE_TRUNCATED } from '../email/email-evidence.ts';
 
@@ -88,19 +86,6 @@ it('makes unsupported templates with labeled bill facts reviewable with no inven
   expect(await store.getNextWakeAt()).toBeNull();
   expect(await store.dismissCandidate(document,null,{eventId:'dismissed',referenceKey:null})).toBe(true);
 });
-it.each(['oversized','incomplete'])('parks unchanged %s evidence and resumes when complete source arrives',async(kind)=>{
-  await email('bounded',{from:'billing@unknown.example',body:kind==='oversized'?'x'.repeat(EMAIL_EVIDENCE_CHAR_LIMIT+1):EMAIL_EVIDENCE_TRUNCATED});
-  const {store}=setup();
-  const worker=createFinancialEventWorker({store,now:()=>now,canRun:async()=>true,assessDocument:async()=>null});
-  expect(await worker.processNextDocument()).toBe(true);
-  expect(await store.getDocumentForEmail('owner','bounded')).toMatchObject({status:'retry',candidate:null,eventId:null,nextAttemptAt:null,error:expect.stringContaining('Financial assessment stopped:')});
-  now+=86400_000;
-  expect(await createFinancialEventStore(db,()=>now).getNextWakeAt()).toBeNull();
-  expect(await worker.processNextDocument()).toBe(false);
-  await db.execute("UPDATE ea_email_index SET body_text='A complete informational notice.' WHERE uid='bounded'");
-  expect(await worker.processNextDocument()).toBe(true);
-  expect(await store.getDocumentForEmail('owner','bounded')).toMatchObject({status:'ignored',candidate:null,eventId:null,nextAttemptAt:null,error:null});
-});
 it('preserves all Amazon orders through the stored manual review without scheduling an automatic write', async () => {
   await email('multi-order', { from: 'auto-confirm@amazon.com', subject: 'Ordered: Three items',
     body: 'Order # 111-1000000-1000001 Grand Total: 10.97 USD Order # 111-1000000-1000002 Grand Total: 113.61 USD Order # 111-1000000-1000003 Grand Total: 14.35 USD' });
@@ -119,65 +104,22 @@ it('explains a SoCalGas notification that omits bill facts without inventing an 
   expect(await store.getDocumentForEmail('owner','notification')).toMatchObject({status:'retry',nextAttemptAt:null,candidate:{amount:null,due_date:null},
     error:'This notification does not include an amount or due date. Check the bill and enter them.'});
 });
-it.each([true, false])('inherits an unknown-provider reference dismissal only with authenticated evidence (authenticated=%s)',async(authenticated)=>{
-  const candidate: BillCandidate = {type:'expense',event_kind:'purchase',document_role:'merchant_receipt',
-    payee_hint:'Example Seller',amount:null,currency:null,provider_reference:'ORDER-104',
-    provider_reference_confidence:0.99,provider_reference_evidence:'Order ORDER-104'};
-  const source = {from:'orders@market.example',subject:'Order update',body:'Order ORDER-104. The seller is packing your order!'};
-  await email('original',source);
-  const {store}=setup();
-  await db.execute({sql:'UPDATE ea_financial_documents SET candidate_json=? WHERE email_uid=?',args:[JSON.stringify(candidate),'original']});
-  const original=(await store.getDocumentForEmail('owner','original'))!;
-  await createFinancialEventCompletion({store,now:()=>now}).dismiss('owner',{emailUid:'original',documentRevision:original.revision,eventRevision:null});
-  const dismissed=(await store.getEventForEmail('owner','original'))!;
-  now+=86400_000;
-  await email('update',source);
-  if(!authenticated) await db.execute("UPDATE ea_email_index SET sender_authentication_json=NULL WHERE uid='update'");
-  const worker=createFinancialEventWorker({store,now:()=>now,canRun:async()=>true,assessDocument:async()=>candidate});
-  expect(await worker.processNextDocument()).toBe(true);
-  const update=(await store.getDocumentForEmail('owner','update'))!;
-  expect(update).toMatchObject(authenticated
-    ? {status:'ignored',eventId:dismissed.id,dismissedAt:now,candidate,nextAttemptAt:null}
-    : {status:'retry',eventId:null,dismissedAt:null,candidate,nextAttemptAt:null});
-  expect((await store.getEventForEmail('owner','original'))).toMatchObject({revision:dismissed.revision,updatedAt:dismissed.updatedAt});
-  expect((await readFinancialReviewChanges('owner',{dbClient:db})).items.map(item=>item.emailUid)).toEqual(authenticated?[]:['update']);
-  expect(await worker.processNextEvent()).toBe(false);
-});
-it('keeps an unknown-provider payment reminder out of financial review',async()=>{
-  await email('reminder',{from:'billing@unknown.example',subject:'Payment reminder',body:'Your payment is due soon.'});
+it.each([
+  ['receipt',{from:'orders@market.example',subject:'Your receipt',body:'Order ORDER-104 Total $42.10'}],
+  ['reminder',{from:'billing@unknown.example',subject:'Payment reminder',body:'Your payment is due soon.'}],
+  ['oversized',{from:'billing@unknown.example',body:'x'.repeat(EMAIL_EVIDENCE_CHAR_LIMIT+1)}],
+  ['incomplete',{from:'billing@unknown.example',body:EMAIL_EVIDENCE_TRUNCATED}],
+] as const)('ignores an unknown %s sender without AI assessment or review',async(uid,source)=>{
+  await email(uid,source);
   const {store}=setup();
   const worker=createFinancialEventWorker({store,now:()=>now,canRun:async()=>true,
-    assessDocument:async()=>({type:'bill',event_kind:'payment_due'})});
+    assessDocument:async()=>{throw new Error('Unknown senders must not use financial AI');}});
   expect(await worker.processNextDocument()).toBe(true);
-  expect(await store.getDocumentForEmail('owner','reminder')).toMatchObject({status:'ignored',candidate:null,nextAttemptAt:null,eventId:null});
+  expect(await store.getDocumentForEmail('owner',uid)).toMatchObject({status:'ignored',candidate:null,eventId:null,nextAttemptAt:null,
+    error:null,providerAssessment:{status:'unrecognized'}});
   expect((await readFinancialReviewChanges('owner',{dbClient:db})).items).toEqual([]);
+  expect(await store.getNextWakeAt()).toBeNull();
   expect(await worker.processNextEvent()).toBe(false);
-});
-it('does not let an expired assessment dismiss a source after a newer nonfinancial assessment',async()=>{
-  const candidate: BillCandidate={type:'expense',event_kind:'purchase',provider_reference:'ORDER-104',
-    provider_reference_confidence:0.99,provider_reference_evidence:'Order ORDER-104'};
-  const source={from:'orders@market.example',body:'Order ORDER-104'};
-  await email('original',source);
-  const {store}=setup();
-  await db.execute({sql:'UPDATE ea_financial_documents SET candidate_json=? WHERE email_uid=?',args:[JSON.stringify(candidate),'original']});
-  const original=(await store.getDocumentForEmail('owner','original'))!;
-  await createFinancialEventCompletion({store,now:()=>now}).dismiss('owner',{emailUid:'original',documentRevision:original.revision,eventRevision:null});
-  await email('update',source);
-  const started=Promise.withResolvers<void>();
-  const delayed=Promise.withResolvers<BillCandidate|null>();
-  let first=true;
-  const worker=createFinancialEventWorker({store,now:()=>now,canRun:async()=>true,assessDocument:async()=>{
-    if(first){first=false;started.resolve();return delayed.promise;}
-    return null;
-  }});
-  const staleWork=worker.processNextDocument();
-  await started.promise;
-  now+=16*60_000;
-  await store.recoverStaleClaims();
-  expect(await worker.processNextDocument()).toBe(true);
-  delayed.resolve(candidate);
-  await staleWork;
-  expect(await store.getDocumentForEmail('owner','update')).toMatchObject({status:'ignored',candidate:null,eventId:null,dismissedAt:null});
 });
 it('does not allow historical queued work to acquire first-write authority',async()=>{
   await email('historical',{date:new Date(Date.parse(cutoff)-1000).toISOString()});
