@@ -3,6 +3,7 @@ import { financialEventStore, createFinancialEventStore, readManagedFinancialEma
 import { canReviewKnownDetails, completionBlocker, dismissalBlocker, hasPendingFinancialPlan } from "./financial-event-completion-model.ts";
 import type { FinancialEmailPlan, FinancialPlanTarget, FinancialTargetKind } from "../../shared/types/bills.ts";
 import type { Row } from "@libsql/client";
+import type { FinancialRecordRequest } from "../../shared/types/financial-operations.ts";
 import { documentFromRow, eventFromRow } from "./financial-event-store.ts";
 import { hasFinancialSemanticConflict, selectSemanticBillAmount } from "../bills/financial-email-planner.ts";
 export { FINANCIAL_EVENT_STATUS_SELECT } from "./financial-event-store.ts";
@@ -35,6 +36,17 @@ export async function resolveManagedFinancialPlan(userId: string, emailUid: stri
   if (!document) return null;
   const event = await store.getEventForEmail(userId, emailUid);
   return projectManagedFinancialPlan(document, event);
+}
+
+/** A settled source with no Actual entry that the owner may still record, including
+ * ordinary mail whose status card the reader hides. */
+export function financialRecordRequest(plan: FinancialEmailPlan | null): FinancialRecordRequest | null {
+  const workflow = plan?.workflow;
+  const completion = workflow?.completion;
+  if (!plan || !workflow || !completion || workflow.state !== "settled" || workflow.correction || workflow.dismissed
+    || !completion.canComplete || ["already_recorded", "already_scheduled"].includes(plan.reconciliation.status)) return null;
+  return { emailUid: completion.emailUid, documentRevision: completion.documentRevision, eventRevision: completion.eventRevision,
+    covered: /^Covered by Actual schedule/.test(workflow.reason || "") };
 }
 
 export function projectManagedFinancialPlan(document: FinancialDocument, event: FinancialEvent | null): FinancialEmailPlan {

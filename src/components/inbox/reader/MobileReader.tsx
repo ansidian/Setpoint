@@ -15,6 +15,8 @@ import {
   XCircle,
   Zap,
   BellPlus,
+  ScanText,
+  Wallet,
 } from "lucide-react";
 import { useRemoteContentTrust } from "../../../hooks/useRemoteContentTrust";
 import SnoozePicker from "../SnoozePicker";
@@ -30,6 +32,9 @@ import type { SnapshotTriageLane } from "../../../../shared/types/snapshots";
 import type { InboxActionKind } from "../useInboxActionDispatch";
 import type { ReaderSurfaceProps } from "./readerTypes";
 import EmailActualStatus from "./EmailActualStatus";
+import useTransactionImportStatus from "./useTransactionImportStatus";
+import RecordRequestNotice from "../../bills/RecordRequestNotice";
+import { useRecordInActual } from "../../bills/useRecordInActual";
 import VerificationCodeCallout from "./VerificationCodeCallout";
 
 export default function MobileReader({
@@ -66,6 +71,11 @@ export default function MobileReader({
     pinned,
   } = actions;
   const snapshotPending = !!email._optimisticSnapshotPending;
+  const emailUid = String(email.uid || email.email_id || "");
+  const financialStatus = useTransactionImportStatus(emailUid);
+  const { state: recordState, record } = useRecordInActual();
+  const recordRequest = readOnly ? null : financialStatus.recordRequest;
+  const recordBusy = recordState.emailUid === emailUid && !!recordState.mode;
   const triageSummary = showTriage ? email.claude?.summary || email.aiSummary || email.summary || null : null;
   const [actionsOpen, setActionsOpen] = useState(false);
   const [trustSaving, setTrustSaving] = useState(false);
@@ -86,7 +96,7 @@ export default function MobileReader({
   };
   const hasTriageActions = actions.canHandle || canReopen || canPin || showMutableActions
     || actions.canMoveToFyi || actions.canMoveToNoise || canMoveToNeeds || canDismiss;
-  const hasFollowUpActions = showDestructiveActions || !!onRemind || canCreateProfile
+  const hasFollowUpActions = showDestructiveActions || !!onRemind || canCreateProfile || !!recordRequest
     || (!catchUp && !!email.claude?.draftReply);
   const hasMessageActions = !!remoteTrust.trustSender;
 
@@ -141,8 +151,9 @@ export default function MobileReader({
           onTrash={() => onAction("trash")}
         />
 
+        <RecordRequestNotice state={recordState} emailUid={emailUid} className="mx-4 mb-2.5" />
         <EmailActualStatus
-          emailUid={String(email.uid || email.email_id || "")}
+          status={financialStatus}
           billResolution={billResolution}
           style={{ margin: "0 16px 10px" }}
         />
@@ -251,6 +262,12 @@ export default function MobileReader({
                       }}
                     />
                   )}
+                  {recordRequest && <>
+                    <MobileActionRow icon={Wallet} iconColor="var(--sp-green)" label={recordRequest.covered ? "Record anyway" : "Record in Actual"}
+                      disabled={recordBusy} onClick={() => { setActionsOpen(false); void record(recordRequest, false); }} />
+                    <MobileActionRow icon={ScanText} iconColor="var(--sp-green)" label="Extract and record"
+                      disabled={recordBusy} onClick={() => { setActionsOpen(false); void record(recordRequest, true); }} />
+                  </>}
                   {canCreateProfile && (
                     <MobileActionRow
                       icon={SlidersHorizontal}

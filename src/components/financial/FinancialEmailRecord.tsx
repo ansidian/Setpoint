@@ -23,7 +23,7 @@ export default function FinancialEmailRecord({ emailUid }: { emailUid: string })
   const plan = status.financialEvent;
   const navigate = useNavigate();
   useEffect(() => {
-    if (plan?.workflow?.id) navigate(financialHref({ source:"managed",view:plan.workflow.state === "settled" ? "completed" : "needs_attention" }, { owner:plan.workflow.completion?.eventRevision === null ? "document" : "event",id:plan.workflow.id.replace(/^(event|document):/,"") }), { replace:true });
+    if (plan?.workflow?.id) navigate(financialHref({ source:"managed",view:plan.workflow.state === "settled" ? "completed" : "needs_attention" }, { owner:plan.workflow.completion?.eventRevision === null ? "document" : "event",id:plan.workflow.id.replace(/^(?:financial-)?(?:event|document):/,"") }), { replace:true });
   },[plan,navigate]);
   return <section aria-label="Actual record" className="mb-5 min-w-0 border-y border-primary/20 py-4">
     <div className="mb-3 flex items-start justify-between gap-3">

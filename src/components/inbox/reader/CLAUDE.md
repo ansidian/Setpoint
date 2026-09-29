@@ -14,7 +14,7 @@ The desktop and mobile email detail pane: body loading/rendering, triage context
 
 ### Desktop
 - `BatchReader.tsx` / `BatchReader.css` — desktop hidden-selection summary and eligible batch action bar; no message body or auto-read.
-- `DesktopReaderActionBar.tsx` — desktop lifecycle actions, consolidated More menu, snooze, and adjacent-email navigation
+- `DesktopReaderActionBar.tsx` — desktop lifecycle actions, consolidated More menu (including the Actual record/extract section when the email has no entry), snooze, and adjacent-email navigation
 - `DesktopReaderActionBar.css` — container-responsive action-bar states, cluster separation, and reduced motion
 
 ### Mobile
@@ -44,11 +44,11 @@ The desktop and mobile email detail pane: body loading/rendering, triage context
 - `useBillPayResolver.ts` — resolves or reuses the financial plan only for an already classified financial email; profile creation never forces extraction
 - `ActualActionStatus.tsx` — shared desktop/mobile status strip for canonical Actual reconciliation results
 - `actualActionStatusModel.ts` — pure copy/tone/actioned-state projection for Actual reconciliation status
-- `EmailActualStatus.tsx` — informational desktop/mobile status; prefers the live managed financial event, otherwise displays retained import/reconciliation status
+- `EmailActualStatus.tsx` — informational desktop/mobile status rendered from the reader's single `useTransactionImportStatus` read; prefers the live managed financial event, otherwise displays retained import/reconciliation status
 - `emailActualStatusModel.ts` — pure precedence policy across transaction-import and statement reconciliation evidence
 - `TransactionImportStatus.tsx` — retained receipt history and eligible import/correction status with focused Finance routing
 - `transactionImportStatusModel.ts` — pure durable item/correction-to-reader status projection; epoch-retired originals remain saved history while admitted work and corrections retain progress
-- `useTransactionImportStatus.ts` — owner-scoped financial-event/import status with stale guards, pending polling and slower waiting-state refresh; Finance can opt into all-state polling for late evidence; accepted owner completions refresh status and restart polling
+- `useTransactionImportStatus.ts` — owner-scoped financial-event/import status plus the owner `recordRequest` for settled sources without an Actual entry, with stale guards, pending polling and slower waiting-state refresh; Finance can opt into all-state polling for late evidence; accepted owner completions refresh status and restart polling
 - `billExtractionBody.ts` — source body state for classified financial plan resolution
 - `remindMeTaskSeedModel.ts` — pure email-to-Todoist seed derivation with Pacific due-date handling and bounded provenance
 

@@ -4,21 +4,21 @@ import {
 } from "./TransactionImportStatus";
 import { resolveEmailActualStatusSource } from "./emailActualStatusModel";
 import { resolveTransactionImportStatus } from "./transactionImportStatusModel";
-import useTransactionImportStatus from "./useTransactionImportStatus";
+import type useTransactionImportStatus from "./useTransactionImportStatus";
 import type { CSSProperties } from "react";
 import type { ActualResolutionLike } from "./actualActionStatusModel";
 import FinancialEventStatus from "../../bills/FinancialEventStatus";
 
+/** Renders the reader's already-loaded financial status; the reader owns the single status read. */
 export default function EmailActualStatus({
-  emailUid,
+  status: transactionImportState,
   billResolution,
   style,
 }: {
-  emailUid: string;
+  status: ReturnType<typeof useTransactionImportStatus>;
   billResolution: ActualResolutionLike | null | undefined;
   style?: CSSProperties;
 }) {
-  const transactionImportState = useTransactionImportStatus(emailUid);
   const source = resolveEmailActualStatusSource({
     transactionImportItems: transactionImportState.items,
     billResolution,

@@ -19,6 +19,9 @@ import EmailContentSection from "./EmailContentSection";
 import DraftReply from "./DraftReply";
 import AnimatedCollapse from "../../shared/AnimatedCollapse";
 import EmailActualStatus from "./EmailActualStatus";
+import useTransactionImportStatus from "./useTransactionImportStatus";
+import RecordRequestNotice from "../../bills/RecordRequestNotice";
+import { useRecordInActual } from "../../bills/useRecordInActual";
 import VerificationCodeCallout from "./VerificationCodeCallout";
 import { resolveReaderActionGroups } from "./readerActionsModel";
 import DesktopReaderActionBar, { ToolbarButton } from "./DesktopReaderActionBar";
@@ -98,6 +101,10 @@ export default function DesktopReader({
   const resolvedSnoozeBtnRef = snoozeBtnRef || internalSnoozeBtnRef;
   const gmailUrl = getGmailUrl(email);
   const readerActionGroups = resolveReaderActionGroups(email, { readOnly });
+  const emailUid = String(email.uid || email.email_id || "");
+  const financialStatus = useTransactionImportStatus(emailUid);
+  const { state: recordState, record } = useRecordInActual();
+  const recordRequest = readOnly ? null : financialStatus.recordRequest;
   const {
     catchUp,
     showDestructiveActions,
@@ -136,6 +143,8 @@ export default function DesktopReader({
         snoozeAnchorRef={resolvedSnoozeBtnRef}
         snoozeOpen={snoozeOpen}
         setSnoozeOpen={setSnoozeOpen}
+        recordActions={recordRequest ? { covered: recordRequest.covered, busy: recordState.emailUid === emailUid && !!recordState.mode,
+          onRecord: (extract) => void record(recordRequest, extract) } : null}
       />
       <div className="inbox-a-reader-scroll">
         <div className="inbox-a-reader-inner" data-has-context={hasTriage}>
@@ -169,7 +178,8 @@ export default function DesktopReader({
             <div className="inbox-a-reader-message">
               <VerificationCodeCallout key={String(email.uid || email.id || "verification-code")} email={email} readOnly={readOnly} onTrash={() => onAction("trash")} />
               {!hasTriage && <div className="inbox-a-reader-context-actions">{contextualActions}</div>}
-              <EmailActualStatus emailUid={String(email.uid || email.email_id || "")} billResolution={billResolution} style={{ margin: "0 0 18px" }} />
+              <RecordRequestNotice state={recordState} emailUid={emailUid} className="mb-3" />
+              <EmailActualStatus status={financialStatus} billResolution={billResolution} style={{ margin: "0 0 18px" }} />
               <AnimatedCollapse open={!!((drafting || showDraft) && !catchUp && email.claude?.draftReply)}>
                 <DraftReply key={email.id} email={email} accent={accent} onDiscard={() => setDrafting(false)} onDirtyChange={setDraftDirty} />
               </AnimatedCollapse>

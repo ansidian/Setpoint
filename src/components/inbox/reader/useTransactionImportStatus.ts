@@ -3,12 +3,15 @@ import { getTransactionImportEmailStatus } from "@/api";
 import { hasActiveTransactionImport } from "./transactionImportStatusModel";
 import type { TransactionImportItem } from "../../../../shared/types/transaction-imports";
 import type { FinancialEmailPlan } from "../../../../shared/types/bills";
+import type { FinancialRecordRequest } from "../../../../shared/types/financial-operations";
 
 export default function useTransactionImportStatus(emailUid: string, { pollAllStates = false }: { pollAllStates?: boolean } = {}) {
-  const [result, setResult] = useState<{ emailUid: string; items: TransactionImportItem[]; financialEvent: FinancialEmailPlan | null; error: boolean }>({
+  const [result, setResult] = useState<{ emailUid: string; items: TransactionImportItem[]; financialEvent: FinancialEmailPlan | null;
+    recordRequest: FinancialRecordRequest | null; error: boolean }>({
     emailUid: "",
     items: [],
     financialEvent: null,
+    recordRequest: null,
     error: false,
   });
   const requestRef = useRef(0);
@@ -16,6 +19,7 @@ export default function useTransactionImportStatus(emailUid: string, { pollAllSt
   const items = result.emailUid === emailUid ? result.items : [];
   const error = result.emailUid === emailUid && result.error;
   const financialEvent = result.emailUid === emailUid ? result.financialEvent : null;
+  const recordRequest = result.emailUid === emailUid ? result.recordRequest : null;
   const active = hasActiveTransactionImport(items);
   const correctionState = financialEvent?.workflow?.correction?.state;
   const financialState = correctionState && !['completed','superseded','attention'].includes(correctionState) ? 'pending' : financialEvent?.workflow?.state;
@@ -28,12 +32,12 @@ export default function useTransactionImportStatus(emailUid: string, { pollAllSt
     try {
       const response = await getTransactionImportEmailStatus(emailUid);
       if (mountedRef.current && requestId === requestRef.current) {
-        setResult({ emailUid, items: response.items, financialEvent: response.financialEvent || null, error: false });
+        setResult({ emailUid, items: response.items, financialEvent: response.financialEvent || null, recordRequest: response.recordRequest || null, error: false });
       }
     } catch {
       if (mountedRef.current && requestId === requestRef.current) {
         setResult((current) => current.emailUid === emailUid ? { ...current, error: true }
-          : { emailUid, items: [], financialEvent: null, error: true });
+          : { emailUid, items: [], financialEvent: null, recordRequest: null, error: true });
       }
     }
   }, [emailUid]);
@@ -45,13 +49,13 @@ export default function useTransactionImportStatus(emailUid: string, { pollAllSt
       void getTransactionImportEmailStatus(emailUid)
         .then((response) => {
           if (mountedRef.current && requestId === requestRef.current) {
-            setResult({ emailUid, items: response.items, financialEvent: response.financialEvent || null, error: false });
+            setResult({ emailUid, items: response.items, financialEvent: response.financialEvent || null, recordRequest: response.recordRequest || null, error: false });
           }
         })
         .catch(() => {
           if (mountedRef.current && requestId === requestRef.current) {
             setResult((current) => current.emailUid === emailUid ? { ...current, error: true }
-              : { emailUid, items: [], financialEvent: null, error: true });
+              : { emailUid, items: [], financialEvent: null, recordRequest: null, error: true });
           }
         });
     }
@@ -66,7 +70,8 @@ export default function useTransactionImportStatus(emailUid: string, { pollAllSt
       if (detail?.emailUid && detail.emailUid !== emailUid) return;
       if (detail?.plan) {
         ++requestRef.current;
-        setResult((current) => ({ emailUid, items: current.emailUid === emailUid ? current.items : [], financialEvent: detail.plan!, error: false }));
+        // A confirmed entry is no longer an ignored source the owner could request.
+        setResult((current) => ({ emailUid, items: current.emailUid === emailUid ? current.items : [], financialEvent: detail.plan!, recordRequest: null, error: false }));
       } else void refresh();
     };
     window.addEventListener("ea-financial-event-changed", onFinancialChange);
@@ -88,5 +93,5 @@ export default function useTransactionImportStatus(emailUid: string, { pollAllSt
     };
   }, [active, financialState, pollAllStates, refresh]);
 
-  return { items, financialEvent, error, loading: !emailUid || result.emailUid !== emailUid, refresh };
+  return { items, financialEvent, recordRequest, error, loading: !emailUid || result.emailUid !== emailUid, refresh };
 }

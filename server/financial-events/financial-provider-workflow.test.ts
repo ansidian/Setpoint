@@ -1,4 +1,4 @@
-import { resolveManagedFinancialPlan } from './financial-event-status.ts';
+import { financialRecordRequest, resolveManagedFinancialPlan } from './financial-event-status.ts';
 import { createClient, type Client } from '@libsql/client';
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { initializeFinancialEventTestSchema, authentication, receipt } from './financial-event-service.test-utils.ts';
@@ -185,7 +185,11 @@ it('lets the owner record an ignored unknown sender, optionally prefilled by one
   await worker.processNextDocument();
   const extracted={type:'expense',event_kind:'purchase',payee:'Example Shop',amount:18.4,amount_kind:'transaction_amount',currency:'USD'} as const;
   const completion=createFinancialEventCompletion({store,now:()=>now,extract:async()=>({candidate:{...extracted},provider:'fixture',model:'fixture',metadata:{accounts:[],categories:[],payees:[]} as never})});
+  // Ordinary ignored mail hides its status card but stays recordable on request.
+  expect(financialRecordRequest(await resolveManagedFinancialPlan('owner','manual',{dbClient:db})))
+    .toEqual({...await revisions('manual',store),covered:false});
   const plan=await completion.request('owner',{...await revisions('manual',store),extract:true});
+  expect(financialRecordRequest(plan)).toBeNull();
   expect(plan).toMatchObject({candidate:{payee:'Example Shop',amount:18.4},workflow:{state:'needs_review',completion:{canComplete:true,canDismiss:true}}});
   expect((await readFinancialReviewChanges('owner',{dbClient:db})).items.map(item=>item.emailUid)).toEqual(['manual']);
   await db.execute(`UPDATE ea_financial_documents SET provider_assessment_json=json_set(provider_assessment_json,'$.policyVersion','obsolete')`);
@@ -204,8 +208,10 @@ it('reopens a schedule-covered event for owner review without re-covering it',as
   await worker.processNextDocument();
   await worker.processNextEvent();
   expect(await store.getEventForEmail('owner','covered')).toMatchObject({status:'settled'});
+  expect(financialRecordRequest(await resolveManagedFinancialPlan('owner','covered',{dbClient:db}))).toMatchObject({covered:true});
   const plan=await createFinancialEventCompletion({store,now:()=>now}).request('owner',await revisions('covered',store));
   expect(plan).toMatchObject({workflow:{state:'needs_review',completion:{canComplete:true}}});
+  expect(financialRecordRequest(plan)).toBeNull();
   now+=60_000;
   await db.execute("UPDATE ea_financial_events SET status='waiting', next_attempt_at=? WHERE status='needs_review'",[now]);
   await worker.processNextEvent();
@@ -220,6 +226,7 @@ it('refuses to reopen dismissed candidates',async()=>{
   const completion=createFinancialEventCompletion({store,now:()=>now});
   await completion.request('owner',await revisions('dismissed',store));
   await completion.dismiss('owner',await revisions('dismissed',store));
+  expect(financialRecordRequest(await resolveManagedFinancialPlan('owner','dismissed',{dbClient:db}))).toBeNull();
   await expect(completion.request('owner',await revisions('dismissed',store))).rejects.toMatchObject({status:409,message:'This candidate was dismissed.'});
 });
 it('reassesses only unsubmitted post-epoch reviews on a parser upgrade',async()=>{

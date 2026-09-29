@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useState, type ComponentProps, type SetStateAction } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { MemoryRouter } from "react-router";
 import DesktopReader from "./DesktopReader";
 import type { InboxEmailLike } from "../inboxTypes";
 
@@ -48,7 +49,8 @@ function renderReader(overrides: ReaderOverrides = {}) {
     />;
   }
 
-  render(<Harness />);
+  // The reader always renders inside the app router (financial record actions navigate).
+  render(<MemoryRouter><Harness /></MemoryRouter>);
 }
 
 function openMoreMenu() {

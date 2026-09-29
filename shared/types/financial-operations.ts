@@ -43,6 +43,8 @@ export interface FinancialEventCompletionRequest {
 export type FinancialEventDismissalRequest = Pick<FinancialEventCompletionRequest, "emailUid" | "documentRevision" | "eventRevision">;
 /** Owner request to record an ignored or settled source; `extract` prefills the review form only. */
 export type FinancialEventReviewRequest = FinancialEventDismissalRequest & { extract?: boolean };
+/** An email the workflow settled without an entry that the owner can still record. */
+export type FinancialRecordRequest = FinancialEventDismissalRequest & { covered: boolean };
 
 export interface ActualCompletedTransferInput extends ActualFinancialOperationBase {
   kind: "completed_transfer";

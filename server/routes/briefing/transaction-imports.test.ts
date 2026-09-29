@@ -199,6 +199,7 @@ describe("transaction import routes", () => {
     expect(status.body).toEqual({
       emailUid: "gmail-demo-message",
       financialEvent: null,
+      recordRequest: null,
       items: [{ id: "owner-1:gmail-demo-message" }],
     });
   });

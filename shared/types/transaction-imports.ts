@@ -1,4 +1,4 @@
-import type { ActualFinancialSplit } from "./financial-operations.ts";
+import type { ActualFinancialSplit, FinancialRecordRequest } from "./financial-operations.ts";
 import type { FinancialEmailPlan, FinancialOperationKind, FinancialPlanReasonCode } from "./bills.ts";
 import type { FinancialCorrectionDraft } from "./financial-corrections.ts";
 import type { FinancialActivity, FinancialWriteEvidence } from "./financial-activity.ts";
@@ -122,6 +122,7 @@ export interface TransactionImportEmailStatusResponse {
   emailUid: string;
   items: TransactionImportItem[];
   financialEvent?: FinancialEmailPlan | null;
+  recordRequest?: FinancialRecordRequest | null;
 }
 
 export interface TransactionImportConfirmation {

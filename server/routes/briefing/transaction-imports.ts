@@ -2,7 +2,7 @@ import { Router, type RequestHandler } from "express";
 import { billExtractLimiter } from "../../middleware/rate-limits.ts";
 import { transactionImportService } from "../../transaction-imports/transaction-import-service.ts";
 import { requestTransactionImportDrain } from "../../transaction-imports/transaction-import-runtime.ts";
-import { resolveManagedFinancialPlan } from "../../financial-events/financial-event-status.ts";
+import { financialRecordRequest, resolveManagedFinancialPlan } from "../../financial-events/financial-event-status.ts";
 import { financialEventCompletion } from "../../financial-events/financial-event-completion.ts";
 import { readFinancialReviewChanges } from "../../financial-events/financial-event-review.ts";
 
@@ -91,7 +91,7 @@ export function createTransactionImportRouter({
         service.listItemsForEmail(ownerUserId(), emailUid), financialStatus(ownerUserId(), emailUid),
       ]);
       const financialEvent = plan?.workflow?.state === "settled" && !plan.workflow.correction && !plan.candidate.event_kind ? null : plan;
-      res.json({ emailUid, items, financialEvent });
+      res.json({ emailUid, items, financialEvent, recordRequest: financialRecordRequest(plan) });
     } catch (error) {
       errorResponse(res, error);
     }
