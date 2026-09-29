@@ -1,66 +1,77 @@
 import type { Client } from '@libsql/client';
 import type { FinancialEmailPlan } from '../../shared/types/bills.ts';
-import { readFinancialProfiles } from '../bills/financial-profiles.ts';
-import { projectTransactionImportItem } from './transaction-import-store-projections.ts';
-import type { InsertItemInput, TransactionImportStore } from './transaction-import-store.ts';
+import type { TransactionImportItemStatus, TransactionImportPlanShadow, TransactionImportSource } from '../../shared/types/transaction-imports.ts';
 
-export async function readImportRun(db: Client, store: TransactionImportStore, userId: string, runId: string) {
-  const run = await store.getRun(userId, runId);
-  if (!run) return null;
-  const rows = await db.execute({ sql: 'SELECT * FROM ea_transaction_import_items WHERE user_id = ? AND run_id = ? ORDER BY created_at, id', args: [userId, runId] });
-  return { ...run, items: rows.rows.map(projectTransactionImportItem) };
-}
-
-export async function seedProfileAuthorizedImportItems({ db, store, userId, createId, items, automationMode, accounts, plan }: {
-  db: Client;
-  store: TransactionImportStore;
+export interface SavedImportItemInput {
+  id: string;
+  runId: string;
   userId: string;
-  createId: () => string;
-  items: Partial<InsertItemInput>[];
+  gmailAccountId: string;
+  gmailMessageId: string;
+  emailUid: string;
+  emailSubject?: string;
+  internetMessageId?: string | null;
+  candidateKey: string;
+  source: TransactionImportSource;
+  parserVersion: string;
+  externalId?: string | null;
+  importedId?: string | null;
+  date: string | null;
+  amountCents: number | null;
+  currency: string | null;
+  payee: string | null;
+  notes?: string;
+  actualAccountId?: string | null;
+  actualCategoryId?: string | null;
   automationMode: 'observe' | 'automatic';
-  accounts: Record<'amazon' | 'paypal', string>;
-  plan: FinancialEmailPlan;
-}) {
-  const authorization = plan.profile;
-  if (authorization?.status !== 'matched' || !authorization.budgetId) throw new Error('The fixture needs a profile-authorized plan.');
-  const runId = createId();
-  const savedItems = items.map(item => ({ ...savedImportFixture(), ...item, userId, runId, id: createId() }));
-  const configuration = await readFinancialProfiles(userId, { dbClient: db });
-  await store.createRun({
-    id: runId, userId, trigger: 'arrival', optionsKey: `legacy:${runId}`,
-    gmailAccountIds: ['gmail-1'], sources: [...new Set(savedItems.map(item => item.source))],
-  });
-  for (const item of savedItems) {
-    const accountId = accounts[item.source as 'amazon' | 'paypal'];
-    const profileId = `${item.source}-profile`;
-    configuration.profiles = configuration.profiles.filter(profile => profile.id !== profileId);
-    configuration.profiles.push({
-      id: profileId, name: `${item.source} receipts`, enabled: true, budgetId: authorization.budgetId,
-      senderAddresses: [item.source === 'amazon' ? 'auto-confirm@amazon.com' : 'service@paypal.com'],
-      target: { kind: 'expense', accountId, payeeId: `${item.source}-payee` },
-    });
-    const financialPlan = structuredClone(plan);
-    financialPlan.profile = { ...authorization, profileId };
-    financialPlan.candidate = { ...financialPlan.candidate, payee: item.payee || undefined, amount: Math.abs(item.amountCents || 0) / 100, due_date: item.date };
-    financialPlan.targets.account = { kind: 'account', status: 'resolved', id: accountId, provenance: [] };
-    financialPlan.targets.payee = { kind: 'payee', status: 'resolved', id: `${item.source}-payee`, label: item.payee || undefined, provenance: [] };
-    financialPlan.targets.category = { kind: 'category', status: 'not_applicable', provenance: [] };
-    await store.insertItem({
-      ...item, actualAccountId: accountId, financialPlan, actualCategoryId: null, automationMode,
-      automaticSafe: Boolean(item.importedId && item.externalId && item.date && item.amountCents
-        && item.currency === 'USD' && !item.blockingWarnings.some(warning => (
-          typeof warning === 'object' && warning !== null && (warning as { blocking?: boolean }).blocking
-        ))),
-      status: item.date && item.amountCents && item.payee ? 'queued' : 'needs_review',
-    });
-  }
-  await db.execute({ sql: 'UPDATE ea_settings SET financial_profiles_json = ? WHERE user_id = ?', args: [JSON.stringify(configuration.profiles), userId] });
-  await store.updateRunProgress(userId, runId, { status: 'completed', cursor: { complete: true } });
-  return { runId };
+  automaticSafe: boolean;
+  blockingWarnings: unknown[];
+  evidence: unknown[];
+  financialPlan?: FinancialEmailPlan | null;
+  planShadow?: TransactionImportPlanShadow | null;
+  status: TransactionImportItemStatus;
 }
 
-/** Captured legacy rows for recovery tests: parser behavior belongs to the provider registry. */
-export function savedImportFixture(overrides: Partial<InsertItemInput> = {}): InsertItemInput {
+/** Seeds a retired import run as saved history; the product no longer creates runs. */
+export async function seedSavedImportRun(db: Pick<Client, 'execute'>, { id, userId, trigger = 'arrival', createdAt = 1_000 }: {
+  id: string; userId: string; trigger?: 'arrival' | 'historical_scan'; createdAt?: number;
+}): Promise<void> {
+  await db.execute({
+    sql: `INSERT INTO ea_transaction_import_runs (id, user_id, trigger, options_key, gmail_account_ids_json, sources_json,
+            start_date, end_date, status, cursor_json, created_at, updated_at)
+          VALUES (?, ?, ?, ?, '["gmail-1"]', '["amazon"]', ?, ?, 'completed', '{}', ?, ?)`,
+    args: [id, userId, trigger, `saved:${id}`, trigger === 'historical_scan' ? '2026-01-01' : null,
+      trigger === 'historical_scan' ? '2026-02-01' : null, createdAt, createdAt],
+  });
+}
+
+/** Seeds one saved import item; database triggers still derive its activity occurrence. */
+export async function seedSavedImportItem(db: Pick<Client, 'execute'>, input: SavedImportItemInput, timestamp = 1_000): Promise<void> {
+  await db.execute({
+    sql: `INSERT INTO ea_transaction_import_items
+            (id, run_id, user_id, gmail_account_id, gmail_message_id, email_uid, email_subject,
+             internet_message_id, candidate_key, source, parser_version, external_id,
+             imported_id, transaction_date, amount_cents, currency, payee, notes,
+             actual_account_id, actual_category_id, automation_mode, automatic_safe,
+             blocking_warnings_json, evidence_json, financial_email_plan_json,
+             financial_plan_shadow_json, status, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [
+      input.id, input.runId, input.userId, input.gmailAccountId, input.gmailMessageId,
+      input.emailUid, input.emailSubject ?? '', input.internetMessageId ?? null, input.candidateKey, input.source,
+      input.parserVersion, input.externalId ?? null, input.importedId ?? null, input.date,
+      input.amountCents, input.currency, input.payee, input.notes ?? '', input.actualAccountId ?? null,
+      input.actualCategoryId ?? null, input.automationMode, input.automaticSafe ? 1 : 0,
+      JSON.stringify(input.blockingWarnings), JSON.stringify(input.evidence),
+      input.financialPlan ? JSON.stringify(input.financialPlan) : null,
+      input.planShadow ? JSON.stringify(input.planShadow) : null, input.status,
+      timestamp, timestamp,
+    ],
+  });
+}
+
+/** Captured legacy rows for history tests: parser behavior belongs to the provider registry. */
+export function savedImportFixture(overrides: Partial<SavedImportItemInput> = {}): SavedImportItemInput {
   return {
     id: "fixture-item", runId: "fixture-run", userId: "owner-1",
     gmailAccountId: "gmail-personal", gmailMessageId: "msg-1", emailUid: "gmail-personal-msg-1",

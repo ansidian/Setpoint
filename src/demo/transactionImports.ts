@@ -1,14 +1,11 @@
 import { DEMO_RECEIPT_UID } from "./financialReceipt";
 import { demoCompletionPlan } from './financialCompletion';
 import { getDemoCorrection } from './financialCorrections';
-import { announceDemoFinanceChange } from './financeProjection';
 import type {
   TransactionImportItem,
   TransactionImportRunDetail,
 } from "../../shared/types/transaction-imports";
 import type { DashboardFinanceActivity, DashboardFinanceActivityItem } from "../../shared/types/dashboard-finance";
-import type { DemoSeed } from "./store.ts";
-import { recordDemoImportedTransaction } from "./financeData.ts";
 
 export const NO_DEMO_TRANSACTION_IMPORT_RESPONSE = Symbol("NO_DEMO_TRANSACTION_IMPORT_RESPONSE");
 
@@ -50,7 +47,7 @@ const item: TransactionImportItem = {
   updatedAt: now,
 };
 
-let runs: TransactionImportRunDetail[] = [{
+const runs: TransactionImportRunDetail[] = [{
   id: "demo-transaction-run-1",
   trigger: "arrival",
   status: "completed",
@@ -74,16 +71,10 @@ function projectCorrection(item: TransactionImportItem): TransactionImportItem {
     ...(correction.state === 'completed' ? { effectiveResult: correction.effectiveResult as NonNullable<TransactionImportItem['effectiveResult']> } : {}) };
 }
 
-function needsReview(entry: TransactionImportItem) {
-  return ["needs_review", "failed", "paused"].includes(entry.status)
-    || (entry.status === "ready" && !entry.confirmedAt && (entry.automationMode === "observe" || !entry.automaticSafe));
-}
-
 export function getDemoImportRuns(): TransactionImportRunDetail[] { return clone(runs); }
 
 export function getDemoFinanceActivity(): DashboardFinanceActivity {
   const items = runs.flatMap((run) => run.items);
-  const review = items.filter(needsReview);
   const recent = items.filter((entry) => entry.automationMode === "automatic" && !entry.confirmedAt && ["added", "updated", "already_present"].includes(entry.status));
   const project = (original: TransactionImportItem): DashboardFinanceActivityItem => {
     const projected = projectCorrection(original);
@@ -92,23 +83,20 @@ export function getDemoFinanceActivity(): DashboardFinanceActivity {
     return ({
     id: entry.id, runId: entry.runId, emailUid: entry.emailUid, payee: entry.payee, amountCents: entry.amountCents, currency: entry.currency,
     status: entry.status as DashboardFinanceActivityItem["status"], updatedAt: entry.updatedAt,
-    description: entry.status === "added" ? "Imported into Actual" : entry.status === "already_present" ? "Already recorded in Actual" : entry.status === "updated" ? "Updated in Actual" : entry.status === "ready" ? "Ready for your confirmation" : entry.status === "failed" ? "Import needs a retry" : "Review the source evidence",
+    description: entry.status === "added" ? "Imported into Actual" : entry.status === "already_present" ? "Already recorded in Actual" : "Updated in Actual",
   }); };
-  return { status: "ready", reviewCount: review.length, review: review.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 3).map(project), recent: recent.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 3).map(project), error: null };
+  // Retired import history never needs review.
+  return { status: "ready", reviewCount: 0, review: [], recent: recent.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 3).map(project), error: null };
 }
 
 export function handleDemoTransactionImportRequest({
   pathname,
   method,
   url,
-  body,
-  seed,
 }: {
   pathname: string;
   method: string;
   url: URL;
-  body: Record<string, unknown>;
-  seed: DemoSeed;
 }): unknown {
   if (method === "GET" && (pathname === "/api/briefing/email/demo-email-paypal-receipt" || pathname === "/api/briefing/email/demo-email-cloud-receipt")) {
     const automatic = pathname.endsWith("demo-email-cloud-receipt");
@@ -120,55 +108,6 @@ export function handleDemoTransactionImportRequest({
   }
   if (!pathname.startsWith("/api/briefing/transaction-imports/")) {
     return NO_DEMO_TRANSACTION_IMPORT_RESPONSE;
-  }
-  const commitMatch = pathname.match(/\/runs\/([^/]+)\/commit$/);
-  if (commitMatch && method === "POST") {
-    const runId = decodeURIComponent(commitMatch[1]!);
-    const confirmations = Array.isArray(body.items) ? body.items : [];
-    let accepted = 0;
-    runs = runs.map((run) => {
-      if (run.id !== runId) return run;
-      const choices = new Map(confirmations.flatMap((entry) => entry && typeof entry === "object" && "itemId" in entry
-        ? [[String(entry.itemId || ""), entry as Record<string, unknown>] as const] : []));
-      const items = run.items.map((candidate) => {
-        const choice = choices.get(candidate.id);
-        if (!choice || !needsReview(candidate) || candidate.confirmedAt != null) return candidate;
-        accepted++;
-        const confirmed = { ...candidate,
-          date: typeof choice.date === "string" ? choice.date : candidate.date,
-          amountCents: typeof choice.amountCents === "number" && Number.isFinite(choice.amountCents) ? choice.amountCents : candidate.amountCents,
-          payee: typeof choice.payee === "string" ? choice.payee : candidate.payee,
-          notes: typeof choice.notes === "string" ? choice.notes : candidate.notes,
-          actualAccountId: typeof choice.actualAccountId === "string" ? choice.actualAccountId : candidate.actualAccountId,
-          actualCategoryId: typeof choice.actualCategoryId === "string" || choice.actualCategoryId === null ? choice.actualCategoryId : candidate.actualCategoryId,
-          status: "added" as const, reconciliationStatus: "added" as const, confirmedAt: Date.now(), updatedAt: Date.now() };
-        recordDemoImportedTransaction(seed, confirmed);
-        return confirmed;
-      });
-      return { ...run, items, counts: { ...run.counts, added: run.counts.added + accepted, review: Math.max(0, run.counts.review - accepted) }, updatedAt: Date.now() };
-    });
-    if (accepted) announceDemoFinanceChange();
-    return { accepted };
-  }
-  const itemActionMatch = pathname.match(/\/items\/([^/]+)\/(retry|dismiss)$/);
-  if (itemActionMatch && method === "POST") {
-    const itemId = decodeURIComponent(itemActionMatch[1]!);
-    const action = itemActionMatch[2]!;
-    let changed = false;
-    runs = runs.map((run) => ({
-      ...run,
-      items: run.items.map((candidate) => {
-        if (candidate.id !== itemId) return candidate;
-        changed = true;
-        return {
-          ...candidate,
-          status: action === "dismiss" ? "dismissed" as const : "ready" as const,
-          reconciliationStatus: action === "dismiss" ? candidate.reconciliationStatus : "would_add" as const,
-          updatedAt: Date.now(),
-        };
-      }),
-    }));
-    return action === "dismiss" ? { dismissed: changed } : { accepted: changed };
   }
   if (pathname.endsWith("/email-status") && method === "GET") {
     const emailUid = url.searchParams.get("emailUid") || "";

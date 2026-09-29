@@ -13,8 +13,6 @@ export const PROVIDER_ADMISSION_ELIGIBLE = `(${PROVIDER_EPOCH_INACTIVE} OR owner
   EXISTS (SELECT 1 FROM ea_financial_documents d WHERE d.user_id=ea_financial_events.user_id AND d.event_id=ea_financial_events.id)
   AND NOT EXISTS (SELECT 1 FROM ea_financial_documents d WHERE d.user_id=ea_financial_events.user_id AND d.event_id=ea_financial_events.id
     AND (d.processing_policy<>'provider_v1' OR COALESCE(json_extract(d.provider_assessment_json,'$.status'),'')<>'parsed'))))`;
-export const LEGACY_IMPORT_ELIGIBLE = `(${PROVIDER_EPOCH_INACTIVE} OR original_attempted_at IS NOT NULL
-  OR json_extract(financial_email_plan_json,'$.transferExecution.attemptedAt') IS NOT NULL OR confirmed_at IS NOT NULL)`;
 export const FINANCIAL_PROFILE_REVISION = `COALESCE((SELECT revision FROM ea_financial_connection_state WHERE user_id=settings.user_id), settings.financial_profiles_revision)`;
 
 /** Explicit post-verification switch. No source is enrolled or financial fact rewritten. */

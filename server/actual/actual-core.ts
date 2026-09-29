@@ -1,9 +1,6 @@
 import type { CorrectionSnapshot, CorrectionStep, CorrectionTargets } from '../../shared/types/financial-corrections.ts';
 import { readCorrectionSnapshot, correctionJson } from './actualCorrectionEvidence.ts';
 import { executeCorrectionStep } from './actualCorrectionExecutor.ts';
-import { readOriginalTransactions } from "./actualOriginalEvidence.ts";
-import { readOriginalResult } from "./actualOriginalEvidence.ts";
-import type { FinancialBindingInspection } from "../../shared/types/financial-activity.ts";
 import { reconcileActualTransferSchedule } from "./actualTransferSchedules.ts";
 import { reconcileActualFinancialOperation } from "./actualFinancialOperations.ts";
 import type { ActualFinancialOperationInput, ActualFinancialOperationMode } from "../../shared/types/financial-operations.ts";
@@ -40,15 +37,7 @@ import type {
   ActualRecentTransaction,
   ActualSchedule,
 } from "../../shared/types/actual.ts";
-import type {
-  ActualImportAccountGroup,
-  ActualImportBatchResult,
-} from "../../shared/types/transaction-imports.ts";
-import {
-  runActualTransactionImport,
-  type SdkImportTransactionInput,
-  type SdkImportResult,
-} from "./actualTransactionImportModel.ts";
+import type { SdkImportTransactionInput, SdkImportResult } from "./actualTransactionImportModel.ts";
 import {
   createActualSdkScheduleWrites,
   type ActualSdkSchedulePort,
@@ -486,39 +475,6 @@ export function createQuickTxn(userId: string, { accountName, amount, payee, typ
       };
     });
   });
-}
-
-export function importTransactionGroups(
-  userId: string,
-  groups: ActualImportAccountGroup[],
-  dryRun: boolean,
-): Promise<ActualImportBatchResult> {
-  return withLock(async () => {
-    return withActualBudget(userId, async (config) => {
-      const result = await runActualTransactionImport({
-        groups,
-        dryRun,
-        evidenceAccess: { budgetId: config.syncId, readTransactions: (accountId) => readOriginalTransactions(sdk, accountId) },
-        importTransactions: (accountId, transactions, options) => sdk.importTransactions(accountId, transactions, options),
-        sync: () => sdk.sync(),
-      });
-      if (!dryRun) clearMetadataCache();
-      return result;
-    });
-  });
-}
-
-export function inspectOriginalImportBinding(userId: string, budgetId: string, accountId: string, importedId: string, targetId?: string): Promise<FinancialBindingInspection> {
-  return withLock(() => withActualBudget(userId, async (config) => {
-    if (config.syncId !== budgetId) return { status: "wrong_budget", evidence: null };
-    await sdk.sync();
-    clearMetadataCache();
-    const rows = targetId ? [] : (await readOriginalTransactions(sdk, accountId)).filter((row) => !row.tombstone && row.acct === accountId && row.financial_id === importedId);
-    if (!targetId && rows.length !== 1) return { status: rows.length ? "ambiguous" : "missing", evidence: null };
-    const evidence = await readOriginalResult(sdk, budgetId, { transactionId: targetId || String(rows[0]!.id) });
-    if (!evidence || !evidence.objects.length || evidence.objects.some((object) => object.after?.tombstone)) return { status: "missing", evidence: null };
-    return { status: "resolved", evidence: { budgetId, objects: evidence.objects.map((object) => ({ ...object, provenance: "unknown", before: null, beforeState: "unknown" })) } };
-  }));
 }
 
 export function reconcileTransferSchedule(userId: string, input: ActualTransferScheduleInput, mode: ActualTransferScheduleMode) {

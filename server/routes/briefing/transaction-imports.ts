@@ -1,13 +1,13 @@
 import { Router, type RequestHandler } from "express";
 import { billExtractLimiter } from "../../middleware/rate-limits.ts";
-import { transactionImportService } from "../../transaction-imports/transaction-import-service.ts";
+import { transactionImportStore } from "../../transaction-imports/transaction-import-store.ts";
 import { requestTransactionImportDrain } from "../../transaction-imports/transaction-import-runtime.ts";
 import { financialRecordRequest, resolveManagedFinancialPlan } from "../../financial-events/financial-event-status.ts";
 import { financialEventCompletion } from "../../financial-events/financial-event-completion.ts";
 import { readFinancialReviewChanges } from "../../financial-events/financial-event-review.ts";
 
 type HttpError = Error & { status?: number };
-type Service = typeof transactionImportService;
+type ImportHistory = Pick<typeof transactionImportStore, "listItemsForEmail">;
 
 const ownerUserId = (): string => process.env.EA_USER_ID!;
 function nonnegativeInteger(value: unknown): number | null {
@@ -22,7 +22,7 @@ function errorResponse(res: Parameters<Parameters<Router["get"]>[1]>[1], error: 
 }
 
 export function createTransactionImportRouter({
-  service = transactionImportService,
+  history = transactionImportStore,
   wake = requestTransactionImportDrain,
   financialStatus = resolveManagedFinancialPlan,
   financialCompletion = financialEventCompletion,
@@ -31,7 +31,7 @@ export function createTransactionImportRouter({
   financialRequest = financialEventCompletion.request,
   extractLimiter = billExtractLimiter,
 }: {
-  service?: Service;
+  history?: ImportHistory;
   wake?: () => void;
   financialStatus?: typeof resolveManagedFinancialPlan;
   financialCompletion?: Pick<typeof financialEventCompletion, "complete">;
@@ -88,42 +88,10 @@ export function createTransactionImportRouter({
     }
     try {
       const [items, plan] = await Promise.all([
-        service.listItemsForEmail(ownerUserId(), emailUid), financialStatus(ownerUserId(), emailUid),
+        history.listItemsForEmail(ownerUserId(), emailUid), financialStatus(ownerUserId(), emailUid),
       ]);
       const financialEvent = plan?.workflow?.state === "settled" && !plan.workflow.correction && !plan.candidate.event_kind ? null : plan;
       res.json({ emailUid, items, financialEvent, recordRequest: financialRecordRequest(plan) });
-    } catch (error) {
-      errorResponse(res, error);
-    }
-  });
-
-  router.post("/transaction-imports/runs/:runId/commit", async (req, res) => {
-    if (!Array.isArray(req.body?.items)) return res.status(400).json({ message: "items are required" });
-    try {
-      const result = await service.commitItems(ownerUserId(), req.params.runId, req.body.items);
-      wake();
-      res.status(202).json(result);
-    } catch (error) {
-      errorResponse(res, error);
-    }
-  });
-
-  router.post("/transaction-imports/items/:itemId/retry", async (req, res) => {
-    try {
-      const result = await service.retryItem(ownerUserId(), req.params.itemId);
-      if (!result.accepted) return res.status(409).json({ message: "Transaction import item is not retryable" });
-      wake();
-      res.status(202).json(result);
-    } catch (error) {
-      errorResponse(res, error);
-    }
-  });
-
-  router.post("/transaction-imports/items/:itemId/dismiss", async (req, res) => {
-    try {
-      const result = await service.dismissItem(ownerUserId(), req.params.itemId);
-      if (!result.dismissed) return res.status(409).json({ message: "Transaction import item cannot be dismissed" });
-      res.json(result);
     } catch (error) {
       errorResponse(res, error);
     }

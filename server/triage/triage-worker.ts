@@ -48,7 +48,6 @@ import type {
   TriageRule,
 } from "./triage-types.ts";
 import { triageError } from "./triage-types.ts";
-import { stageFinancialEmailPreflight } from "../transaction-imports/financial-email-preflight.ts";
 import { isManagedEmail } from "../financial-events/financial-event-status.ts";
 export {
   getNextEmailTriageWakeAt,
@@ -228,14 +227,12 @@ export async function processNextEmailTriageJob({
   now = new Date(),
   batch = null,
   financialEmailPlanner = planFinancialEmail,
-  financialEmailPreflight = stageFinancialEmailPreflight,
 }: {
   dbClient?: TriageDb;
   modelClient?: TriageModelClient;
   now?: Date;
   batch?: TriageBatchContext | null;
   financialEmailPlanner?: typeof planFinancialEmail;
-  financialEmailPreflight?: typeof stageFinancialEmailPreflight;
 } = {}): Promise<Record<string, unknown>> {
   // P2-18: claim the next job first (one ordered scan + UPDATE), then check
   // paused mode using the claimed row's user_id. This eliminates the separate
@@ -412,15 +409,6 @@ export async function processNextEmailTriageJob({
         inferBillCandidate: mode.effective_email_triage_mode !== "no_model",
         financialEmailPlan,
       });
-      if (financialEmailPlan) {
-        await financialEmailPreflight(email.user_id, {
-          accountId: email.account_id,
-          emailId: email.email_id,
-          emailSubject: String(email.subject || ""),
-          emailFrom: String(email.from_address || email.from_name || ""),
-          emailBody: String(email.body_text || email.body_snippet || ""),
-        }, financialEmailPlan).catch(() => undefined);
-      }
       await completeJob(job, dbClient, now, status === "failed" ? decision.error || "" : "");
     } catch (caught) {
       const finalizeErr = triageError(caught);

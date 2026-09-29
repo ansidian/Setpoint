@@ -10,7 +10,8 @@ import { createEmailIndexTestDb, seedEmailAccount, seedIndexedEmail } from "../e
 
 const workerMock = vi.hoisted(() => ({
   recoverStaleClaims: vi.fn().mockResolvedValue({}),
-  processNextItemBatch: vi.fn().mockResolvedValue(false),
+  processNextDocument: vi.fn().mockResolvedValue(false),
+  processNextEvent: vi.fn().mockResolvedValue(false),
   getNextWakeAt: vi.fn().mockResolvedValue(null),
 }));
 
@@ -21,7 +22,8 @@ async function flushDrain(): Promise<void> {
 describe("transaction import runtime", () => {
   beforeEach(() => {
     workerMock.recoverStaleClaims.mockReset().mockResolvedValue({});
-    workerMock.processNextItemBatch.mockReset().mockResolvedValue(false);
+    workerMock.processNextDocument.mockReset().mockResolvedValue(false);
+    workerMock.processNextEvent.mockReset().mockResolvedValue(false);
     workerMock.getNextWakeAt.mockReset().mockResolvedValue(null);
   });
 
@@ -34,7 +36,7 @@ describe("transaction import runtime", () => {
     vi.useFakeTimers();
     let release!: () => void;
     const pageStarted = new Promise<void>((resolve) => {
-      workerMock.processNextItemBatch.mockImplementationOnce(() => new Promise<boolean>((done) => {
+      workerMock.processNextDocument.mockImplementationOnce(() => new Promise<boolean>((done) => {
         release = () => done(false);
         resolve();
       }));
@@ -55,7 +57,7 @@ describe("transaction import runtime", () => {
     runtime.requestDrain();
     await vi.advanceTimersByTimeAsync(0);
     // test-architecture: allow-boundary-interaction -- Worker admission is a background-process boundary; after stop, a new drain request must not admit a second durable worker pass.
-    expect(workerMock.processNextItemBatch).toHaveBeenCalledTimes(1);
+    expect(workerMock.processNextDocument).toHaveBeenCalledTimes(1);
   });
 
   it("recovers interrupted items at startup without polling an idle queue every 30 seconds", async () => {
@@ -70,7 +72,7 @@ describe("transaction import runtime", () => {
 
     await vi.advanceTimersByTimeAsync(299_999);
     // test-architecture: allow-boundary-interaction -- Idle runtime admission is the behavior under test; no legacy 30-second process wake may reach the durable worker boundary.
-    expect(workerMock.processNextItemBatch).toHaveBeenCalledTimes(1);
+    expect(workerMock.processNextDocument).toHaveBeenCalledTimes(1);
     // test-architecture: allow-boundary-interaction -- Stale recovery is now a sparse safety boundary, so an idle runtime must not re-run it before five minutes.
     expect(workerMock.recoverStaleClaims).toHaveBeenCalledTimes(1);
 
@@ -80,7 +82,7 @@ describe("transaction import runtime", () => {
     // test-architecture: allow-boundary-interaction -- The five-minute safety boundary must still recover stale claims and admit one durable queue check.
     expect(workerMock.recoverStaleClaims).toHaveBeenCalledTimes(2);
     // test-architecture: allow-boundary-interaction -- The safety pass remains a real queue backstop even when no in-process admission signal arrives.
-    expect(workerMock.processNextItemBatch).toHaveBeenCalledTimes(2);
+    expect(workerMock.processNextDocument).toHaveBeenCalledTimes(2);
 
     await runtime.stop();
   });
@@ -98,20 +100,20 @@ describe("transaction import runtime", () => {
     await flushDrain();
     await vi.advanceTimersByTimeAsync(59_999);
     // test-architecture: allow-boundary-interaction -- A future durable retry is a timer/process boundary; it must not be claimed before its stored timestamp.
-    expect(workerMock.processNextItemBatch).toHaveBeenCalledTimes(1);
+    expect(workerMock.processNextDocument).toHaveBeenCalledTimes(1);
 
     await vi.advanceTimersByTimeAsync(1);
     await vi.advanceTimersToNextTimerAsync();
     await flushDrain();
     // test-architecture: allow-boundary-interaction -- Reaching the stored retry timestamp must admit exactly one follow-up drain without waiting for the safety backstop.
-    expect(workerMock.processNextItemBatch).toHaveBeenCalledTimes(2);
+    expect(workerMock.processNextDocument).toHaveBeenCalledTimes(2);
 
     await runtime.stop();
   });
 
   it("keeps bounded 30-second pacing only after a drain exhausts its work cap", async () => {
     vi.useFakeTimers();
-    workerMock.processNextItemBatch
+    workerMock.processNextDocument
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(true)
@@ -128,17 +130,17 @@ describe("transaction import runtime", () => {
     await runtime.start();
     await vi.advanceTimersByTimeAsync(0);
     await flushDrain();
-    // test-architecture: allow-boundary-interaction -- The bounded worker contract permits ten item batches in one drain and must stop at that cap.
-    expect(workerMock.processNextItemBatch).toHaveBeenCalledTimes(10);
+    // test-architecture: allow-boundary-interaction -- The bounded worker contract permits ten document batches in one drain and must stop at that cap.
+    expect(workerMock.processNextDocument).toHaveBeenCalledTimes(10);
     await vi.advanceTimersByTimeAsync(29_999);
     // test-architecture: allow-boundary-interaction -- The saturated-drain boundary must remain quiet until its full pacing delay has elapsed.
-    expect(workerMock.processNextItemBatch).toHaveBeenCalledTimes(10);
+    expect(workerMock.processNextDocument).toHaveBeenCalledTimes(10);
 
     await vi.advanceTimersByTimeAsync(1);
     await vi.advanceTimersToNextTimerAsync();
     await flushDrain();
     // test-architecture: allow-boundary-interaction -- Saturated work, unlike idle state, must retain the existing 30-second follow-up pacing.
-    expect(workerMock.processNextItemBatch).toHaveBeenCalledTimes(11);
+    expect(workerMock.processNextDocument).toHaveBeenCalledTimes(11);
 
     await runtime.stop();
   });
@@ -147,7 +149,7 @@ describe("transaction import runtime", () => {
     vi.useFakeTimers();
     let release!: () => void;
     const pageStarted = new Promise<void>((resolve) => {
-      workerMock.processNextItemBatch.mockImplementationOnce(() => new Promise<boolean>((done) => {
+      workerMock.processNextDocument.mockImplementationOnce(() => new Promise<boolean>((done) => {
         release = () => done(false);
         resolve();
       }));
@@ -162,11 +164,11 @@ describe("transaction import runtime", () => {
     await vi.advanceTimersByTimeAsync(0);
 
     // test-architecture: allow-boundary-interaction -- A queue-admission signal racing an active background drain must produce a second durable pass instead of being dropped.
-    expect(workerMock.processNextItemBatch).toHaveBeenCalledTimes(2);
+    expect(workerMock.processNextDocument).toHaveBeenCalledTimes(2);
     await runtime.stop();
   });
 
-  it("drains durable financial documents and wakes their events before a later import retry", async () => {
+  it("drains durable financial documents and wakes their events at their retry time", async () => {
     vi.useFakeTimers();
     const startedAt = Date.parse("2026-09-07T00:00:00Z");
     vi.setSystemTime(startedAt);
@@ -174,8 +176,7 @@ describe("transaction import runtime", () => {
     await database.execute("UPDATE ea_financial_workflow_state SET cutover_at = '2000-01-01T00:00:00Z'");
     const store = createFinancialEventStore(database);
     await seedIndexedEmail(database, { uid: "arrival", email_date: "2026-09-06T12:01:00Z" });
-    workerMock.getNextWakeAt.mockResolvedValue(startedAt + 120_000);
-    const runtime = createTransactionImportRuntime(workerMock, {
+    const runtime = createTransactionImportRuntime({
       recoverStaleClaims: store.recoverStaleClaims,
       getNextWakeAt: store.getNextWakeAt,
       async processNextDocument() {
@@ -221,7 +222,7 @@ describe("transaction import runtime", () => {
     const gate = new Promise<void>((resolve) => { release = resolve; });
     let admitted!: () => void;
     const admission = new Promise<void>((resolve) => { admitted = resolve; });
-    const runtime = createTransactionImportRuntime(workerMock, {
+    const runtime = createTransactionImportRuntime({
       recoverStaleClaims: store.recoverStaleClaims,
       getNextWakeAt: store.getNextWakeAt,
       async processNextDocument() {
@@ -272,7 +273,7 @@ describe("transaction import runtime", () => {
         date: "2026-09-01T12:00:00Z", read: true, body_text: "Purchase total $12.00", body_preview: "Purchase total $12.00" }],
       nextPageToken: page < 6 ? String(page) : null, unavailableMessageCount: 0 };
     } });
-    const runtime = createTransactionImportRuntime(workerMock, undefined, intake);
+    const runtime = createTransactionImportRuntime(undefined, intake);
     try {
       await runtime.start();
       await vi.advanceTimersByTimeAsync(0);
@@ -313,7 +314,7 @@ describe("transaction import runtime", () => {
     const blocked = new Promise<void>(resolve => { release = resolve; });
     let started!: () => void;
     const captureStarted = new Promise<void>(resolve => { started = resolve; });
-    const runtime = createTransactionImportRuntime(workerMock, finance, {
+    const runtime = createTransactionImportRuntime(finance, {
       recoverStaleClaims:async () => 0, getNextWakeAt:async () => null,
       processNextPage:async () => { started(); await blocked; return false; },
     });
@@ -328,7 +329,7 @@ describe("transaction import runtime", () => {
     }
   });
 
-  it.each(['saturated capture', 'a slow import batch'])("honors a two-second verification deadline around %s", async (background) => {
+  it("honors a two-second verification deadline around saturated capture", async () => {
     vi.useFakeTimers();
     const database = await createMigratedDb();
     await database.execute("UPDATE ea_financial_workflow_state SET cutover_at = '2000-01-01T00:00:00Z'");
@@ -345,10 +346,7 @@ describe("transaction import runtime", () => {
         return { outcome:mode === 'preview' ? 'would_add' : 'already_present', budgetId:'budget', transactionId:entries ? 'entry' : undefined, reason:'Checked' };
       },
     }) });
-    let release!: () => void;
-    const blocked = new Promise<boolean>(resolve => { release = () => resolve(false); });
-    if (background === 'a slow import batch') workerMock.processNextItemBatch.mockImplementationOnce(() => blocked);
-    const runtime = createTransactionImportRuntime(workerMock, finance, {
+    const runtime = createTransactionImportRuntime(finance, {
       recoverStaleClaims:async () => 0, getNextWakeAt:async () => Date.now(), processNextPage:async () => true,
     });
     try {
@@ -358,11 +356,10 @@ describe("transaction import runtime", () => {
       await vi.advanceTimersByTimeAsync(1999);
       expect((await store.getEventForEmail('user-1', 'uncertain'))?.status).toBe('waiting');
       await vi.advanceTimersByTimeAsync(1);
-      if (background === 'a slow import batch') release();
-      else await vi.advanceTimersToNextTimerAsync();
+      await vi.advanceTimersToNextTimerAsync();
       await flushDrain();
       expect(await store.getEventForEmail('user-1', 'uncertain')).toMatchObject({ status:'settled' });
       expect(entries).toBe(1);
-    } finally { release(); await runtime.stop(); database.close(); }
+    } finally { await runtime.stop(); database.close(); }
   });
 });

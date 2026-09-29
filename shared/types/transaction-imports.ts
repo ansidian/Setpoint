@@ -74,8 +74,6 @@ export interface TransactionImportRunSummary {
 
 export interface TransactionImportItem {
   runTrigger?: TransactionImportRunTrigger;
-  /** Original execution eligibility; saved history and corrections remain available. */
-  executionEligible?: boolean;
   correction?: FinancialActivity["correction"];
   /** Latest verified correction for read-only consumers; original import fields remain immutable history. */
   effectiveResult?: { correctionId: string; resolution?: 'kept_actual'; entry?: FinancialCorrectionDraft & { payee?: string }; scheduleId?: string; transactionId?: string };
@@ -123,16 +121,6 @@ export interface TransactionImportEmailStatusResponse {
   items: TransactionImportItem[];
   financialEvent?: FinancialEmailPlan | null;
   recordRequest?: FinancialRecordRequest | null;
-}
-
-export interface TransactionImportConfirmation {
-  itemId: string;
-  date?: string;
-  amountCents?: number;
-  payee?: string;
-  notes?: string;
-  actualAccountId?: string;
-  actualCategoryId?: string | null;
 }
 
 export interface ActualImportTransaction {

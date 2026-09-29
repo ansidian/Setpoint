@@ -8,4 +8,4 @@ Explicit corrections retain immutable original source receipts. Provider work be
 - `financial-correction-store.ts` — preview admission, immutable step journal, frozen keep-result reviews, atomic acceptance and source revisions
 - `financial-corrections.ts` — authenticated synchronized editor inspection, preview, confirmation, status, explicit stopped-effect recheck, reviewed-result acceptance and bounded recovery facade
 
-Attempted steps are observed, never blindly dispatched again. Temporary coordination does not establish permanent ownership of shared schedules or distributed isolation from Actual CRDT clients.
+Retired transaction-import history cannot start a new correction; an unfinished one recorded before retirement can still be rechecked, kept or recovered. Attempted steps are observed, never blindly dispatched again. Temporary coordination does not establish permanent ownership of shared schedules or distributed isolation from Actual CRDT clients.

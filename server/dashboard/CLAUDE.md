@@ -13,7 +13,7 @@ Engine for the `/api/dashboard/current` envelope: cache rows, refresh planning/s
 - `currentRefreshPlanModel.ts` — pure refresh planning: `(rows, opts) → { scheduled, skipped }`
 - `currentCacheStore.ts` — all `ea_current_data_cache` reads/writes (load, save, mark-failed, mark-refreshing)
 - `currentRefreshRunner.ts` — async orchestration: fetch-timeout race, refreshRows, background dedup map
-- `dashboard-finance.ts` — read-only finance card facade: bounded local Actual spending, freshness, and independently degraded import activity
+- `dashboard-finance.ts` — read-only finance card facade: bounded local Actual spending, freshness, and independently degraded saved import history
 - `dashboard-finance-model.ts` — Pacific month-to-date comparison ranges and expense/category aggregation
 
 (Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)

@@ -1,7 +1,6 @@
 import type { TransactionRecord } from '../../shared/types/transactions';
 import { demoDateRange } from "./dateRange.ts";
 import type { DemoSeed } from "./store.ts";
-import type { TransactionImportItem } from "../../shared/types/transaction-imports.ts";
 
 export function buildDemoTransactions(todayKey: string, yesterdayKey: string): TransactionRecord[] {
   const priorMonth = new Date(`${todayKey.slice(0, 7)}-01T12:00:00Z`);
@@ -19,23 +18,6 @@ export function buildDemoTransactions(todayKey: string, yesterdayKey: string): T
     { id: "demo-txn-prior-market", date: priorDate, amount: 88, direction: "expense", payee: "Corner Market", category: "Groceries", account: "Demo Checking", notes: "Fictional prior-month groceries" },
     { id: "demo-txn-prior-dining", date: priorDate, amount: 22.25, direction: "expense", payee: "Signal Coffee", category: "Dining", account: "Demo Card", notes: "Fictional prior-month dining" },
   ];
-}
-
-export function recordDemoImportedTransaction(seed: DemoSeed, item: TransactionImportItem) {
-  const transaction: TransactionRecord = {
-    id: item.id,
-    date: item.date || seed.dateKey,
-    amount: Math.abs(item.amountCents || 0) / 100,
-    direction: (item.amountCents || 0) > 0 ? "income" : "expense",
-    payee: item.payee || "Demo payee",
-    category: seed.actualMetadata.categories.flatMap((group) => group.categories)
-      .find((category) => category.id === item.actualCategoryId)?.name || "Uncategorized",
-    account: seed.actualMetadata.accounts.find((account) => account.id === item.actualAccountId)?.name || "Demo Checking",
-    notes: item.notes,
-  };
-  const existing = seed.transactions.findIndex((entry) => entry.id === transaction.id);
-  if (existing < 0) seed.transactions.push(transaction);
-  else seed.transactions[existing] = transaction;
 }
 
 export function buildDemoCalendarBillsRange(seed: DemoSeed, url: URL) {

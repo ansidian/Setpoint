@@ -1,7 +1,6 @@
 export { readActualMetadataProjection } from './actual-metadata-projection.ts';
 import { coordinateActualWrite, guardOrdinaryActualWrite, guardCorrectedOriginalIdentity } from './actual-write-coordination.ts';
 import type { CorrectionSnapshot, CorrectionStep, CorrectionTargets, CorrectionStepStatus } from '../../shared/types/financial-corrections.ts';
-import type { FinancialBindingInspection } from "../../shared/types/financial-activity.ts";
 import type { ActualTransferScheduleInput, ActualTransferScheduleMode, ActualTransferScheduleResult } from "../../shared/types/transaction-imports.ts";
 import type { ActualFinancialOperationInput, ActualFinancialOperationMode, ActualFinancialOperationResult } from "../../shared/types/financial-operations.ts";
 import { runActualWorkerOperation, stopActualWorker as stopWorker } from "./actual-worker.ts";
@@ -12,10 +11,6 @@ import type { ActualWorkerOperation, ActualWorkerOptions } from "./actual-worker
 import type {
   ActualMetadata,
 } from "../../shared/types/actual.ts";
-import type {
-  ActualImportAccountGroup,
-  ActualImportBatchResult,
-} from "../../shared/types/transaction-imports.ts";
 
 export type { ActualConnectionCandidate } from "./actual-connection-settings.ts";
 import type { ActualConnectionCandidate } from "./actual-connection-settings.ts";
@@ -158,29 +153,10 @@ async function createQuickTxnInner(userId: string, payload: ActualQuickTransacti
   return result;
 }
 
-async function importTransactionGroupsInner(
-  userId: string,
-  groups: ActualImportAccountGroup[],
-  dryRun: boolean,
-): Promise<ActualImportBatchResult> {
-  const result = await callActual<ActualImportBatchResult>(
-    "importTransactionGroups",
-    [userId, groups, dryRun],
-    WRITE_OPERATION_WORKER_OPTIONS,
-  );
-  if (!dryRun) clearMetadataCache();
-  return result;
-}
-
 async function reconcileTransferScheduleInner(userId: string, input: ActualTransferScheduleInput, mode: ActualTransferScheduleMode): Promise<ActualTransferScheduleResult> {
   const result = await callActual<ActualTransferScheduleResult>("reconcileTransferSchedule", [userId, input, mode], WRITE_OPERATION_WORKER_OPTIONS);
   clearMetadataCache();
   return result;
-}
-
-export async function inspectOriginalImportBinding(userId: string, budgetId: string, accountId: string, importedId: string, targetId?: string) {
-  return callActual<FinancialBindingInspection>(
-    "inspectOriginalImportBinding", [userId, budgetId, accountId, importedId, targetId], WRITE_OPERATION_WORKER_OPTIONS);
 }
 
 async function reconcileFinancialOperationInner(userId: string, input: ActualFinancialOperationInput, mode: ActualFinancialOperationMode): Promise<ActualFinancialOperationResult> {
@@ -200,18 +176,6 @@ export async function createQuickTxn(userId: string, payload: ActualQuickTransac
   return coordinateActualWrite(async () => {
     await guardOrdinaryActualWrite(userId);
     return createQuickTxnInner(userId, payload);
-  });
-}
-
-export async function importTransactionGroups(
-  userId: string,
-  groups: ActualImportAccountGroup[],
-  dryRun: boolean,
-): Promise<ActualImportBatchResult> {
-  return coordinateActualWrite(async () => {
-    await guardOrdinaryActualWrite(userId);
-    await guardCorrectedOriginalIdentity(userId, groups.flatMap(group => group.transactions.map(transaction => transaction.importedId)));
-    return importTransactionGroupsInner(userId, groups, dryRun);
   });
 }
 

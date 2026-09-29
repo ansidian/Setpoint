@@ -5,8 +5,6 @@ import type { BillCandidate, FinancialEmailPlan } from "../../shared/types/bills
 import { FINANCIAL_CANDIDATE_SEMANTICS_VERSION } from "./bill-semantic-prompt.ts";
 import { FINANCIAL_TARGET_INFERENCE_VERSION } from "./financialEmailTargetInference.ts";
 import { createFinancialEmailPlanner } from "./financial-email-planner.ts";
-import { createTransactionImportStore } from "../transaction-imports/transaction-import-store.ts";
-import { stageFinancialEmailPreflight } from "../transaction-imports/financial-email-preflight.ts";
 import { readFinancialProfiles } from "./financial-profiles.ts";
 
 function reviewPlan(candidate: BillCandidate): FinancialEmailPlan {
@@ -188,12 +186,7 @@ describe("resolveFinancialEmailSeed", () => {
       occurrenceReader: async () => ({ schedules: [], syncHealth: { state: "current" } }),
       now: () => new Date("2026-09-01T12:00:00.000Z"),
     });
-    const store = createTransactionImportStore(dbClient);
-    const dependencies = {
-      planner,
-      stagePreflight: (userId: string, context: Parameters<typeof stageFinancialEmailPreflight>[1], plan: FinancialEmailPlan) =>
-        stageFinancialEmailPreflight(userId, context, plan, store),
-    };
+    const dependencies = { planner };
     const payload = { emailId: "msg-1", accountId: "gmail-work", dbClient };
     const first = await resolveFinancialEmailSeed("user-1", payload, dependencies);
     expect(first.targetInferenceVersion).toBe(FINANCIAL_TARGET_INFERENCE_VERSION);
@@ -211,7 +204,7 @@ describe("resolveFinancialEmailSeed", () => {
     await dbClient.close();
   });
 
-  it("preserves historical registered-provider decisions without reassessing or staging them", async () => {
+  it("preserves historical registered-provider decisions without reassessing them", async () => {
     const dbClient = await createMigratedDb();
     await queueEmail(dbClient, {
       subject: "Your transfer request is processing",

@@ -7,7 +7,6 @@ import { financialEmailSourceIdentity } from "./financialEmailSourceIdentity.ts"
 import { shouldAttemptFinancialEmailTypeVerification } from "./financialEmailClassificationPolicy.ts";
 import { FINANCIAL_TARGET_INFERENCE_VERSION } from "./financialEmailTargetInference.ts";
 import { FINANCIAL_CANDIDATE_SEMANTICS_VERSION } from "./bill-semantic-prompt.ts";
-import { stageFinancialEmailPreflight } from "../transaction-imports/financial-email-preflight.ts";
 import { resolveManagedFinancialPlan } from "../financial-events/financial-event-status.ts";
 import type { InStatement } from "@libsql/client";
 import type {
@@ -198,10 +197,8 @@ export async function resolveFinancialEmailSeed(
   payload: FinancialEmailSeedOptions = {},
   {
     planner = planFinancialEmail,
-    stagePreflight = stageFinancialEmailPreflight,
   }: {
     planner?: typeof planFinancialEmail;
-    stagePreflight?: typeof stageFinancialEmailPreflight;
   } = {},
 ): Promise<FinancialEmailPlan> {
   return withAiUsageContext({
@@ -234,16 +231,6 @@ export async function resolveFinancialEmailSeed(
         source:payload.source || "triage",providerMessageId:payload.providerMessageId || stored?.emailId || payload.emailId || null,
         sourceIdentity:{...(stored?.sourceIdentity || {}),senderAuthentication:"unavailable"}});
     }
-    const stage = async (plan: FinancialEmailPlan): Promise<void> => {
-      if (!stored) return;
-      await stagePreflight(userId, {
-        accountId: stored.accountId,
-        emailId: stored.emailId,
-        emailSubject: String(stored.email.subject || ""),
-        emailFrom: String(stored.email.from_address || stored.email.from || ""),
-        emailBody: String(stored.email.body || ""),
-      }, plan).catch(() => undefined);
-    };
     const missingType = stored?.plan && shouldAttemptFinancialEmailTypeVerification(stored.plan.candidate);
     const refreshCandidateSemantics = Boolean(stored?.plan && shouldRefreshCandidateSemantics(stored.plan));
     if (
@@ -254,7 +241,6 @@ export async function resolveFinancialEmailSeed(
       && !shouldRefreshAuthentication(stored.plan, stored.sourceIdentity)
       && !shouldRefreshTargetInference(stored.plan)
     ) {
-      await stage(stored.plan);
       return stored.plan;
     }
 
@@ -273,21 +259,15 @@ export async function resolveFinancialEmailSeed(
     if (!stored) return plan;
     if (refreshCandidateSemantics
       && plan.reviewReasons.some((reason) => reason.code === "provider_unavailable")) {
-      await stage(stored.plan || plan);
       return stored.plan || plan;
     }
 
     const persisted = await persistPlanCompareAndSwap(userId, stored, plan, dbClient);
-    if (persisted) {
-      await stage(plan);
-      return plan;
-    }
+    if (persisted) return plan;
     const winner = await loadStoredFinancialContext(userId, {
       emailId: stored.emailId,
       accountId: stored.accountId,
     }, dbClient);
-    const result = winner?.plan || plan;
-    await stage(result);
-    return result;
+    return winner?.plan || plan;
   });
 }

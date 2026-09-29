@@ -1,21 +1,13 @@
 import { financialCorrections } from '../financial-corrections/financial-corrections.ts';
-import { transactionImportWorker } from "./transaction-import-worker.ts";
 import { financialEventWorker } from "../financial-events/financial-event-service.ts";
 import { financialEventIntake } from "../financial-events/financial-event-intake.ts";
 
 const SATURATED_DRAIN_RECHECK_MS = 30_000;
 const SAFETY_BACKSTOP_MS = 5 * 60_000;
 const MAX_TIMER_MS = 2_147_483_647;
-const MAX_ITEM_BATCHES_PER_DRAIN = 10;
 const MAX_FINANCIAL_DOCUMENTS_PER_DRAIN = 10;
 const MAX_FINANCIAL_EVENTS_PER_DRAIN = 10;
 const MAX_FINANCIAL_INTAKE_PAGES_PER_DRAIN = 5;
-
-type TransactionImportWorker = Pick<typeof transactionImportWorker,
-  | "recoverStaleClaims"
-  | "processNextItemBatch"
-  | "getNextWakeAt"
->;
 
 interface FinancialEventWorker {
   processNextDocument(): Promise<boolean>;
@@ -24,7 +16,7 @@ interface FinancialEventWorker {
   recoverStaleClaims(): Promise<unknown>;
 }
 
-export function createTransactionImportRuntime(worker: TransactionImportWorker, financeWorker?: FinancialEventWorker,
+export function createTransactionImportRuntime(financeWorker?: FinancialEventWorker,
   financeIntake?: Pick<typeof financialEventIntake, "processNextPage" | "getNextWakeAt" | "recoverStaleClaims">, corrections?: Pick<typeof financialCorrections, "recoverPending">) {
   let safetyInterval: ReturnType<typeof setInterval> | null = null;
   let wakeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -70,7 +62,6 @@ export function createTransactionImportRuntime(worker: TransactionImportWorker, 
     inFlight = (async () => {
       if (recoveryRequested) {
         recoveryRequested = false;
-        await worker.recoverStaleClaims();
         await financeWorker?.recoverStaleClaims();
         await financeIntake?.recoverStaleClaims();
       }
@@ -97,20 +88,16 @@ export function createTransactionImportRuntime(worker: TransactionImportWorker, 
         MAX_FINANCIAL_DOCUMENTS_PER_DRAIN,
         () => backgroundStep(financeWorker.processNextDocument),
       ) : false;
-      const itemsSaturated = await drainBounded(
-        MAX_ITEM_BATCHES_PER_DRAIN,
-        () => backgroundStep(worker.processNextItemBatch),
-      );
       const eventsSaturated = eventCount >= MAX_FINANCIAL_EVENTS_PER_DRAIN;
       if (stopping) return;
-      if (intakeSaturated || documentsSaturated || eventsSaturated || itemsSaturated) {
+      if (intakeSaturated || documentsSaturated || eventsSaturated) {
         const now = Date.now();
         const eventWakeAt = await financeWorker?.getNextWakeAt({ eventsOnly: true });
         scheduleDrainAt(eventWakeAt != null && eventWakeAt > now
           ? Math.min(eventWakeAt, now + SATURATED_DRAIN_RECHECK_MS) : now + SATURATED_DRAIN_RECHECK_MS);
         return;
       }
-      const wakeTimes = [await worker.getNextWakeAt(), await financeWorker?.getNextWakeAt(), await financeIntake?.getNextWakeAt()]
+      const wakeTimes = [await financeWorker?.getNextWakeAt(), await financeIntake?.getNextWakeAt()]
         .filter((value): value is number => value != null && Number.isFinite(value));
       const nextWakeAt = wakeTimes.length ? Math.min(...wakeTimes) : null;
       if (nextWakeAt != null) {
@@ -147,7 +134,6 @@ export function createTransactionImportRuntime(worker: TransactionImportWorker, 
 
   async function start(): Promise<void> {
     stopping = false;
-    await worker.recoverStaleClaims();
     await financeWorker?.recoverStaleClaims();
     await financeIntake?.recoverStaleClaims();
     if (safetyInterval) clearInterval(safetyInterval);
@@ -174,7 +160,7 @@ export function createTransactionImportRuntime(worker: TransactionImportWorker, 
   return { requestDrain, start, stop };
 }
 
-const runtime = createTransactionImportRuntime(transactionImportWorker, financialEventWorker, financialEventIntake, financialCorrections);
+const runtime = createTransactionImportRuntime(financialEventWorker, financialEventIntake, financialCorrections);
 
 export const requestTransactionImportDrain = runtime.requestDrain;
 export const startTransactionImportWorker = runtime.start;

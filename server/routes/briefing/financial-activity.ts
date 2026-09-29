@@ -1,6 +1,5 @@
 import { Router } from "express";
 import { financialActivityReader } from "../../financial-activity/financial-activity.ts";
-import { resolveFinancialActivityBinding } from "../../financial-activity/financial-activity-binding.ts";
 import type { FinancialActivityQuery, FinancialActivityReference } from "../../../shared/types/financial-activity.ts";
 
 const router = Router();
@@ -29,9 +28,5 @@ router.get("/financial-activity/:owner/:id", async (req, res, next) => {
     if (!detail) return res.status(404).json({ message: "Financial activity not found" });
     res.json(detail);
   } catch (error) { next(error); }
-});
-router.post("/financial-activity/binding", async (req, res, next) => {
-  try { res.json(await resolveFinancialActivityBinding(owner(), req.body?.reference, req.body?.budgetId)); }
-  catch (error) { next(error); }
 });
 export default router;

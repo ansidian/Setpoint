@@ -11,13 +11,13 @@ export function getDemoFinancialActivities(): FinancialActivity[] {
   const imported = getDemoImportRuns().flatMap((run) => run.items.map((item): FinancialActivity => {
     const reference: FinancialActivityReference = { owner: "import", id: item.id, runId: run.id };
     const completed = ["added", "updated", "already_present"].includes(item.status);
-    const attention = ["ready", "needs_review", "failed", "paused"].includes(item.status) && !completed;
     return { id: JSON.stringify(["import", item.source, item.importedId]), reference, occurrences: [reference], source: item.source,
       contexts: [run.trigger], emailUids: [item.emailUid], subject: item.emailSubject, payee: item.payee,
       amountCents: item.amountCents, currency: item.currency, createdAt: item.createdAt, updatedAt: item.updatedAt,
-      status: completed ? "completed" : attention ? "needs_attention" : item.status === "dismissed" ? "dismissed" : "processing",
-      reason: item.lastError || item.status.replace(/_/g, " "),
-      actions: { complete: attention, retry: ["failed", "paused"].includes(item.status), inspect: true, correct: completed },
+      // Retired import history is inspection-only, matching production.
+      status: completed ? "completed" : "dismissed",
+      reason: completed ? item.lastError || item.status.replace(/_/g, " ") : "History import was retired. This saved record remains available for inspection.",
+      actions: { complete: false, retry: false, inspect: true, correct: false },
       originalReceipts: completed ? [{ reference, revision: null, capturedAt: item.updatedAt, captureKind: "historical",
         outcome: item.status, input: { type: "payment", amountCents: Math.abs(item.amountCents || 0), date: item.date, accountId: item.actualAccountId }, result: { transactionId: item.id }, evidence: { budgetId: "demo-budget", objects: [{ kind: "transaction", id: item.id, role: "primary", provenance: "created", beforeState: "confirmed_absent", before: null, after: { id: item.id, amount: item.amountCents, date: Number((item.date || getDemoSeed().dateKey).replace(/-/g, "")), acct: item.actualAccountId, description: `demo-payee-${item.id}`, category: item.actualCategoryId, notes: item.notes } }] } }] : [],
       sourceEvidence: item.evidence, targetBindings: [], liveState: "not_checked", effectiveResult: null,
@@ -53,7 +53,6 @@ export function getDemoFinancialActivities(): FinancialActivity[] {
 
 export function handleDemoFinancialActivity(url: URL, method: string, body: DemoRequestBody = {}): unknown {
   if (url.pathname.startsWith("/api/briefing/financial-corrections/")) return handleDemoCorrection(url, method, body, getDemoFinancialActivities());
-  if (method === "POST" && url.pathname === "/api/briefing/financial-activity/binding") return { status: "unavailable", evidence: null };
   if (method !== "GET") return demoNotFound(url.pathname);
   const all = getDemoFinancialActivities();
   if (url.pathname === "/api/briefing/financial-activity") {

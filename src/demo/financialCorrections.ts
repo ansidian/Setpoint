@@ -158,6 +158,7 @@ export function handleDemoCorrection(url: URL, method: string, body: DemoRequest
   const reference = body.reference as FinancialActivityReference;
   const activity = all.find(item => key(item.reference) === key(reference));
   if (!activity) return demoNotFound(url.pathname);
+  if (reference.owner === 'import') constraint('Retired import history is read-only.');
   if (reference.id === 'demo-event-disconnected') throw Object.assign(new Error('Actual is disconnected for this saved record. Reconnect its original budget in Connections; the saved receipt remains available.'), { status: 503, code: 'ACTUAL_UNAVAILABLE' });
   const current = snapshot(activity);
   const predecessorId = latest.get(key(reference)) || null;

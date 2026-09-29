@@ -1,9 +1,8 @@
 # Financial Activity Map
 
-Shared history over the existing managed-event and transaction-import owners. Reads never admit work or query Actual. Authentication supplies the owner.
+Shared history over managed events and read-only saved transaction imports. Reads never admit work or query Actual. Authentication supplies the owner.
 
 - `financial-activity-display.ts` — captured monetary labels and source snapshots; completed history never uses later source reassessment
-- `financial-activity-binding.ts` — explicit exact imported-ID binding with original source/account and budget isolation; never fuzzy matches or creates replacements
 - `financial-activity.ts` — one consistent owner snapshot, semantic filtering and pagination, exact occurrence lookup, and immutable receipt and latest correction projection; detail adds source dates and every correction’s saved state/attempt times in the same read snapshot
 
 Migration 063 owns permanent source occurrence aliases and append-only original receipts. An Actual target is evidence for one activity, never ownership of every later activity using the same schedule. The existing source owners retain completion and execution policy.
@@ -12,4 +11,4 @@ Needs attention includes processing rows for the Pending section until verified 
 
 Assessed, unsubmitted managed review candidates are actionable immediately, including during background planning. Shared managed-review eligibility drives their completion action and attention count; known facts populate the existing form without a collection wait. Independent automatic events and submitted/attempted entries remain in Pending.
 
-Legacy arrival rows that have no confirmation or admitted attempt become inspection-only history after the provider epoch. Their actions and attention counts use the same eligibility predicate as durable queue claims; completed history and exact corrections remain available.
+Saved transaction-import rows are read-only history: completed rows keep their original receipts and bindings, every other row is retired, and none offers completion, retry, new corrections or attention counts.

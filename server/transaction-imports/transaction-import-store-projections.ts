@@ -12,16 +12,6 @@ import type {
   TransactionImportSource,
 } from "../../shared/types/transaction-imports.ts";
 
-/** Shared semantic policy for historical and automatic activity inspection. */
-export function transactionImportActivityActions(item: TransactionImportItem) {
-  const eligible = item.executionEligible !== false;
-  const attention = eligible && (["needs_review", "failed", "paused"].includes(item.status)
-    || (item.status === "ready" && item.confirmedAt == null && (item.automationMode === "observe" || !item.automaticSafe)));
-  const attempted = item.originalAttemptedAt != null || !!item.financialPlan?.transferExecution?.attemptedAt;
-  return { attention, complete: attention && !attempted,
-    retry: eligible && ["failed", "paused"].includes(item.status) };
-}
-
 function numberValue(value: unknown): number {
   return Number(value || 0);
 }
@@ -70,7 +60,6 @@ export function projectTransactionImportItem(row: Row): TransactionImportItem {
   return {
     ...(row.prepared_actual_json ? { preparedEvidence: parseJson(row.prepared_actual_json, undefined) } : {}),
     ...(row.original_attempted_at != null ? { originalAttemptedAt: Number(row.original_attempted_at) } : {}),
-    ...(row.execution_eligible == null ? {} : { executionEligible: Number(row.execution_eligible) === 1 }),
     id: String(row.id),
     runId: String(row.run_id),
     ...(row.run_trigger ? { runTrigger: String(row.run_trigger) as TransactionImportRunTrigger } : {}),

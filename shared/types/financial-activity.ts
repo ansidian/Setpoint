@@ -97,7 +97,3 @@ export interface FinancialActivityPage {
   limit: 20;
 }
 
-export interface FinancialBindingInspection {
-  status: "resolved" | "missing" | "ambiguous" | "wrong_budget" | "unavailable";
-  evidence: FinancialWriteEvidence | null;
-}

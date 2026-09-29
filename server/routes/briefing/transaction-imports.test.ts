@@ -19,33 +19,26 @@ const { createFinancialEventCompletion } = await import("../../financial-events/
 const { readFinancialReviewChanges } = await import("../../financial-events/financial-event-review.ts");
 const sessionHash = `sha256:${crypto.createHash("sha256").update("session-token").digest("hex")}`;
 
-function serviceMock() {
+function historyMock() {
   return {
     listItemsForEmail: async (userId: string, emailUid: string) => [{ id: `${userId}:${emailUid}` }],
-    commitItems: async (userId: string, runId: string, items: unknown[]) => ({
-      accepted: items.length,
-      owner: userId,
-      runId,
-    }),
-    retryItem: async (userId: string, itemId: string) => ({ accepted: true, owner: userId, itemId }),
-    dismissItem: async (userId: string, itemId: string) => ({ dismissed: true, owner: userId, itemId }),
   };
 }
 
-function makeApp(service = serviceMock(), financialCompletion?: ReturnType<typeof createFinancialEventCompletion>, financialDb?: Client) {
+function makeApp(history = historyMock(), financialCompletion?: ReturnType<typeof createFinancialEventCompletion>, financialDb?: Client) {
   let wakeCount = 0;
   const app = express();
   app.use(express.json());
   app.use(cookieParser());
   app.use("/api/briefing", requireCookieSession, createTransactionImportRouter({
-    service: service as never,
+    history: history as never,
     financialStatus: async () => null,
     financialCompletion,
     financialDismissal: financialCompletion?.dismiss,
     financialReviewChanges: financialDb ? (userId, options) => readFinancialReviewChanges(userId, { ...options, dbClient: financialDb }) : undefined,
     wake: () => { wakeCount += 1; },
   }));
-  return { app, service, wakeCount: () => wakeCount };
+  return { app, wakeCount: () => wakeCount };
 }
 
 function authenticated(requestBuilder: Test): Test {
@@ -83,7 +76,7 @@ describe("transaction import routes", () => {
     try {
       await db.execute(`UPDATE ea_financial_documents SET candidate_json = '{"type":"expense","amount":12}'`);
       const store = createFinancialEventStore(db);
-      const { app } = makeApp(serviceMock(), createFinancialEventCompletion({ store }));
+      const { app } = makeApp(historyMock(), createFinancialEventCompletion({ store }));
       const path = "/api/briefing/financial-events/dismiss";
       const input = { emailUid: "managed", documentRevision: 1, eventRevision: null, userId: "other" };
       expect((await request(app).post(path).send(input)).status).toBe(401);
@@ -100,7 +93,7 @@ describe("transaction import routes", () => {
     const db = await managedDb();
     try {
       const store = createFinancialEventStore(db);
-      const { app } = makeApp(serviceMock(), createFinancialEventCompletion({ store }));
+      const { app } = makeApp(historyMock(), createFinancialEventCompletion({ store }));
       const path = "/api/briefing/financial-events/complete";
       const input = { emailUid: "managed", userId: "other", documentRevision: 1, eventRevision: null,
         entry: { kind: "expense", amount: 12, date: "2026-09-06", payee: "Example Market", accountId: "card" } };
@@ -124,7 +117,7 @@ describe("transaction import routes", () => {
       await db.execute({ sql: `UPDATE ea_financial_documents SET status = 'retry', candidate_json = ?,
         last_error = 'Waiting for evidence that distinguishes similar purchases.', updated_at = 1000`,
       args: [JSON.stringify({ type: "expense", event_kind: "purchase", amount: 12, amount_kind: "transaction_amount", currency: "USD" })] });
-      const { app } = makeApp(serviceMock(), undefined, db);
+      const { app } = makeApp(historyMock(), undefined, db);
       const changesPath = "/api/briefing/financial-events/review-changes";
       expect((await request(app).get(changesPath)).status).toBe(401);
       const changes = await authenticated(request(app).get(`${changesPath}?afterAt=0&afterId=&userId=other`));
@@ -153,41 +146,20 @@ describe("transaction import routes", () => {
     expect(response.body).toMatchObject({ items: [{ id: "owner-1:message" }] });
   });
 
-  it("does not expose retired mapping and history endpoints", async () => {
+  it("does not expose retired mapping, history and import mutation endpoints", async () => {
     const { app } = makeApp();
     for (const path of ['/transaction-imports/runs', '/transaction-imports/runs/saved', '/financial-events/review']) {
       expect((await authenticated(request(app).get(`/api/briefing${path}`))).status).toBe(404);
     }
     expect((await authenticated(request(app).post('/api/briefing/transaction-imports/runs')).send({})).status).toBe(404);
+    for (const path of ['/transaction-imports/runs/run-1/commit', '/transaction-imports/items/item-1/retry', '/transaction-imports/items/item-1/dismiss']) {
+      expect((await authenticated(request(app).post(`/api/briefing${path}`)).send({ items: [] })).status).toBe(404);
+    }
     expect((await authenticated(request(app)
       .get("/api/briefing/transaction-imports/mappings"))).status).toBe(404);
     expect((await authenticated(request(app)
       .put("/api/briefing/transaction-imports/mappings/amazon")
       .send({ mode: "automatic", actualAccountId: "actual-1", actualCategoryId: "category-1" }))).status).toBe(404);
-  });
-
-  it("returns 202 for commit and retry admission and wakes the worker", async () => {
-    const { app, wakeCount } = makeApp();
-    const commit = await authenticated(request(app)
-      .post("/api/briefing/transaction-imports/runs/run-1/commit")
-      .send({ items: [{ itemId: "item-1" }] }));
-    const retry = await authenticated(request(app)
-      .post("/api/briefing/transaction-imports/items/item-1/retry"));
-
-    expect([commit.status, retry.status]).toEqual([202, 202]);
-    expect(commit.body).toMatchObject({ accepted: 1, owner: "owner-1", runId: "run-1" });
-    expect(retry.body).toMatchObject({ accepted: true, owner: "owner-1", itemId: "item-1" });
-    expect(wakeCount()).toBe(2);
-  });
-
-  it("shapes owner-scoped status and dismiss responses", async () => {
-    const service = serviceMock();
-    const { app } = makeApp(service);
-    expect((await authenticated(request(app).get("/api/briefing/transaction-imports/runs/not-owned"))).status).toBe(404);
-
-    const dismissed = await authenticated(request(app).post("/api/briefing/transaction-imports/items/item-1/dismiss"));
-    expect(dismissed.status).toBe(200);
-    expect(dismissed.body).toEqual({ dismissed: true, owner: "owner-1", itemId: "item-1" });
   });
 
   it("lists email status through owner-scoped read paths", async () => {

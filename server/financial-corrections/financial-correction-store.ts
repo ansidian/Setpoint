@@ -95,8 +95,6 @@ export function createFinancialCorrectionStore(client: Client = db) {
         await tx.execute({ sql: 'INSERT OR IGNORE INTO ea_financial_correction_guards VALUES(?,?)', args: [userId, preview.activityId] });
         await tx.execute({ sql: `UPDATE ea_financial_events SET status='settled', claim_token=NULL, claimed_at=NULL
           WHERE user_id=? AND id IN(SELECT record_id FROM ea_financial_corrected_sources WHERE user_id=? AND activity_id=? AND owner='event')`, args: [userId, userId, preview.activityId] });
-        await tx.execute({ sql: `UPDATE ea_transaction_import_items SET status='needs_review', claim_token=NULL, claimed_at=NULL, automatic_safe=0
-          WHERE user_id=? AND id IN(SELECT record_id FROM ea_financial_corrected_sources WHERE user_id=? AND activity_id=? AND owner='import') AND status NOT IN('added','updated','already_present')`, args: [userId, userId, preview.activityId] });
         await tx.commit();
       } finally { tx.close(); }
       return (await read(userId, preview.id))!;

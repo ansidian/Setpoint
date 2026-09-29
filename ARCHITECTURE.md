@@ -919,7 +919,6 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | PUT | `/api/briefing/finances/payment-groups` | `server/routes/briefing/finances.ts` |
 | GET | `/api/briefing/financial-activity` | `server/routes/briefing/financial-activity.ts` |
 | GET | `/api/briefing/financial-activity/:owner/:id` | `server/routes/briefing/financial-activity.ts` |
-| POST | `/api/briefing/financial-activity/binding` | `server/routes/briefing/financial-activity.ts` |
 | GET | `/api/briefing/financial-connections` | `server/routes/briefing/financial-connections.ts` |
 | PUT | `/api/briefing/financial-connections` | `server/routes/briefing/financial-connections.ts` |
 | GET | `/api/briefing/financial-corrections/:id` | `server/routes/briefing/financial-corrections.ts` |
@@ -945,9 +944,6 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | GET | `/api/briefing/todoist/labels` | `server/routes/briefing/tasks.ts` |
 | GET | `/api/briefing/todoist/projects` | `server/routes/briefing/tasks.ts` |
 | GET | `/api/briefing/transaction-imports/email-status` | `server/routes/briefing/transaction-imports.ts` |
-| POST | `/api/briefing/transaction-imports/items/:itemId/dismiss` | `server/routes/briefing/transaction-imports.ts` |
-| POST | `/api/briefing/transaction-imports/items/:itemId/retry` | `server/routes/briefing/transaction-imports.ts` |
-| POST | `/api/briefing/transaction-imports/runs/:runId/commit` | `server/routes/briefing/transaction-imports.ts` |
 | GET | `/api/calendar/bills/range` | `server/routes/calendar.ts` |
 | GET | `/api/calendar/calendars` | `server/routes/calendar.ts` |
 | GET | `/api/calendar/deadlines` | `server/routes/calendar.ts` |

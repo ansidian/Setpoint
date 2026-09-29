@@ -2,9 +2,8 @@ import { createClient, type Client } from "@libsql/client";
 import { createTestTempDir, removeTempDir } from "../test-utils/temp-dir.ts";
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createFinancialActivityBinding } from "./financial-activity-binding.ts";
 import { createFinancialActivityReader } from "./financial-activity.ts";
-import { createTransactionImportStore } from "../transaction-imports/transaction-import-store.ts";
+import { seedSavedImportItem, seedSavedImportRun } from "../transaction-imports/transaction-import.test-utils.ts";
 import { createFinancialEventStore } from "../financial-events/financial-event-store.ts";
 import { createFinancialEventCompletion } from "../financial-events/financial-event-completion.ts";
 import { ownerCompletionPlan } from "../financial-events/financial-event-completion-model.ts";
@@ -31,14 +30,11 @@ describe("shared financial activity history", () => {
   const reader = () => createFinancialActivityReader(db);
   async function item(id: string, { runId = `run-${id}`, importedId = id, candidateKey = id, messageId = id,
     createdAt = 1000, trigger = "arrival" as "historical_scan" | "arrival" } = {}) {
-    const store = createTransactionImportStore(db, () => createdAt);
-    await store.createRun({ id: runId, userId: "owner", trigger: "arrival", optionsKey: runId,
-      gmailAccountIds: ["gmail"], sources: ["amazon"],  });
-    await db.execute({ sql: 'UPDATE ea_transaction_import_runs SET trigger = ?, start_date = ?, end_date = ? WHERE id = ?', args: [trigger, trigger === 'historical_scan' ? '2026-01-01' : null, trigger === 'historical_scan' ? '2026-09-01' : null, runId] });
-    await store.insertItem({ id, runId, userId: "owner", gmailAccountId: "gmail", gmailMessageId: messageId,
+    await seedSavedImportRun(db, { id: runId, userId: "owner", trigger, createdAt });
+    await seedSavedImportItem(db, { id, runId, userId: "owner", gmailAccountId: "gmail", gmailMessageId: messageId,
       emailUid: `gmail-${messageId}`, candidateKey, source: "amazon", parserVersion: "v1", importedId,
       date: "2026-09-01", amountCents: -1000, currency: "USD", payee: "Market", actualAccountId: "card",
-      automationMode: "observe", automaticSafe: false, blockingWarnings: [], evidence: [], status: "needs_review" });
+      automationMode: "observe", automaticSafe: false, blockingWarnings: [], evidence: [], status: "needs_review" }, createdAt);
   }
   async function event(id: string, createdAt = 1000, owner = "owner", status = "waiting") {
     await db.execute({ sql: `INSERT INTO ea_financial_events (id, user_id, status, reason, created_at, updated_at)
@@ -137,12 +133,13 @@ describe("shared financial activity history", () => {
     }
     await event("private", 1000, "other");
     await event("negative", 1000, "owner", "settled");
-    const first = await reader().list("owner", { view: "needs_attention" });
-    const second = await reader().list("owner", { view: "needs_attention", offset: 20 });
-    const last = await reader().list("owner", { view: "needs_attention", offset: 40 });
+    const first = await reader().list("owner", { view: "all" });
+    const second = await reader().list("owner", { view: "all", offset: 20 });
+    const last = await reader().list("owner", { view: "all", offset: 40 });
     expect([first.total, second.total, last.total]).toEqual([50, 50, 50]);
-    expect([first.attentionTotal, second.attentionTotal, last.attentionTotal]).toEqual([50, 50, 50]);
-    expect((await reader().list("owner", { source: "amazon" })).attentionTotal).toBe(25);
+    // Retired import history never counts as actionable.
+    expect([first.attentionTotal, second.attentionTotal, last.attentionTotal]).toEqual([25, 25, 25]);
+    expect((await reader().list("owner", { source: "amazon" })).attentionTotal).toBe(0);
     expect(first.items.slice(0, 2).map((entry) => entry.reference.id)).toEqual(["e24", "i24"]);
     expect(new Set([...first.items, ...second.items, ...last.items].map((entry) => entry.id)).size).toBe(50);
     expect((await reader().list("owner", { source: "amazon" })).total).toBe(25);
@@ -348,29 +345,6 @@ describe("shared financial activity history", () => {
       expect((await readFinancialReviewChanges("owner", { dbClient: db })).items).toEqual([]);
     }
   });
-  it("binds only the original owner-scoped identity and preserves unknown old provenance", async () => {
-    await item("old", { importedId: "original-imported-id" });
-    const reference = { owner: "import" as const, id: "old", runId: "run-old" };
-    const resolve = createFinancialActivityBinding({ dbClient: db, inspect: async (owner, budget, account, importedId) => {
-      if (owner !== "owner" || account !== "card" || importedId !== "original-imported-id") return { status: "missing", evidence: null };
-      return { status: "resolved", evidence: { budgetId: budget, objects: [{ kind: "transaction", id: "exact-target", role: "primary",
-        provenance: "unknown", beforeState: "unknown", before: null, after: { id: "exact-target", amount: -1000 } }] } };
-    } });
-    await db.execute("UPDATE ea_transaction_import_items SET imported_id = 'edited-imported-id', actual_account_id = 'edited-account' WHERE id = 'old'");
-    expect((await resolve("owner", reference, "budget")).status).toBe("resolved");
-    const detail = await reader().detail("owner", reference);
-    expect(detail?.targetBindings).toMatchObject([{ budgetId: "budget", objects: [{ id: "exact-target", provenance: "unknown", before: null }] }]);
-    expect((await resolve("owner", reference, "different-budget")).status).toBe("wrong_budget");
-    await expect(resolve("other", reference, "budget")).rejects.toMatchObject({ status: 404 });
-    const replaced = createFinancialActivityBinding({ dbClient: db, inspect: async (_owner, budget, _account, _imported, targetId) => targetId === "exact-target"
-      ? { status: "missing", evidence: null }
-      : { status: "resolved", evidence: { budgetId: budget, objects: [{ kind: "transaction", id: "replacement", role: "primary", provenance: "unknown", beforeState: "unknown", before: null, after: null }] } } });
-    expect(await replaced("owner", reference, "budget")).toEqual({ status: "missing", evidence: null });
-    expect((await reader().detail("owner", reference))?.targetBindings[0]?.objects).toHaveLength(1);
-    const unavailable = createFinancialActivityBinding({ dbClient: db, inspect: async () => { throw new Error("offline"); } });
-    expect(await unavailable("owner", reference, "budget")).toEqual({ status: "unavailable", evidence: null });
-  });
-
   it("captures a verified write even when changed source evidence requires attention", async () => {
     await event("conflicted");
     const operation = { executor: "financial", input: { kind: "transaction", payee: "Original", amountCents: -2500, budgetId: "budget" },
@@ -389,18 +363,7 @@ describe("shared financial activity history", () => {
     await item("conflict", { importedId: "import-b", messageId: "message-a", candidateKey: "candidate-a" });
     expect((await reader().list("owner")).total).toBe(3);
     const detail = await reader().detail("owner", { owner: "import", id: "conflict", runId: "run-conflict" });
-    expect(detail).toMatchObject({ status: "needs_attention", actions: { complete: false, retry: false } });
-    expect(detail?.reason).toMatch(/aliases conflict/);
-  });
-
-  it("admits only one selected budget when old binding inspections race", async () => {
-    await item("racing");
-    const resolve = createFinancialActivityBinding({ dbClient: db, inspect: async (_owner, budget) => ({ status: "resolved",
-      evidence: { budgetId: budget, objects: [{ kind: "transaction", id: `target-${budget}`, role: "primary", provenance: "unknown", beforeState: "unknown", before: null, after: null }] } }) });
-    const reference = { owner: "import" as const, id: "racing", runId: "run-racing" };
-    const results = await Promise.all([resolve("owner", reference, "budget-a"), resolve("owner", reference, "budget-b")]);
-    expect(results.map((result) => result.status).sort()).toEqual(["resolved", "wrong_budget"]);
-    expect((await reader().detail("owner", reference))?.targetBindings).toHaveLength(1);
+    expect(detail).toMatchObject({ identityConflict: true, status: "dismissed", actions: { complete: false, retry: false, correct: false } });
   });
 
   it("retains historical source inspection without original execution actions", async () => {
@@ -410,37 +373,24 @@ describe("shared financial activity history", () => {
     expect(detail?.sourceEvidence).toHaveLength(1);
   });
 
-  it("retains an attempted import preparation and refuses to rewrite its source fields", async () => {
-    await item("attempt");
-    const store = createTransactionImportStore(db, () => 2000);
-    const fields = { date: "2026-09-01", amountCents: -1000, payee: "Original", notes: "", actualAccountId: "card", actualCategoryId: null };
-    expect(await store.confirmItem("owner", "run-attempt", "attempt", fields)).toBe(true);
-    const preview = (await store.claimNextItem("preview"))!;
-    await store.settleItem("owner", "attempt", preview.claimToken, { status: "ready" });
-    const claim = (await store.claimNextItem("write"))!;
-    expect(await store.admitOriginalImport(claim, { budgetId: "original-budget", objects: [] })).toBe(true);
-    await store.settleItem("owner", "attempt", claim.claimToken, { status: "failed", lastError: "Response lost" });
-    expect(await store.confirmItem("owner", "run-attempt", "attempt", { ...fields, amountCents: -9999 })).toBe(false);
-    expect(await store.getItem("owner", "attempt")).toMatchObject({ amountCents: -1000, originalAttemptedAt: 2000,
-      preparedEvidence: { budgetId: "original-budget", objects: [] } });
-    expect(await store.retryItem("owner", "attempt")).toBe(true);
-    const recovery = (await store.claimNextItem("recovery"))!;
-    expect(await store.admitOriginalImport(recovery, { budgetId: "different-budget", objects: [] })).toBe(false);
-  });
-
-  it("keeps retired arrival history inspectable without unavailable actions or attention", async () => {
+  it("keeps retired arrival history inspectable without actions, attention or corrections", async () => {
     await item("retired-arrival");
-    await item("recovery");
+    await item("attempted");
+    await item("recorded");
     await db.execute("UPDATE ea_transaction_import_items SET status='failed'");
-    await db.execute("UPDATE ea_transaction_import_items SET original_attempted_at=123 WHERE id='recovery'");
-    await db.execute("UPDATE ea_financial_workflow_state SET provider_parser_cutover_at='2026-09-16T03:02:18.469Z'");
-    const retired = await reader().detail("owner", { owner: "import", id: "retired-arrival", runId: "run-retired-arrival" });
-    expect(retired).toMatchObject({ status: "dismissed", actions: { complete: false, retry: false, inspect: true }, importItem: { executionEligible: false } });
-    expect(retired?.sourceEvidence).toHaveLength(1);
-    const recovery = await reader().detail("owner", { owner: "import", id: "recovery", runId: "run-recovery" });
-    expect(recovery).toMatchObject({ status: "needs_attention", actions: { complete: false, retry: true } });
-    expect((await reader().list("owner", { view: "needs_attention" })).items.map(value => value.reference.id)).toEqual(["recovery"]);
-    expect(await createTransactionImportStore(db).retryItem("owner", "retired-arrival")).toBe(false);
+    await db.execute("UPDATE ea_transaction_import_items SET original_attempted_at=123 WHERE id='attempted'");
+    await db.execute({ sql: "UPDATE ea_transaction_import_items SET status='added', actual_result_json=? WHERE id='recorded'",
+      args: [JSON.stringify({ evidence: { budgetId: "budget", objects: [{ kind: "transaction", id: "entry", role: "primary" }] } })] });
+    for (const id of ["retired-arrival", "attempted"]) {
+      const retired = await reader().detail("owner", { owner: "import", id, runId: `run-${id}` });
+      expect(retired).toMatchObject({ status: "dismissed", actions: { complete: false, retry: false, inspect: true, correct: false } });
+      expect(retired?.sourceEvidence).toHaveLength(1);
+    }
+    const recorded = await reader().detail("owner", { owner: "import", id: "recorded", runId: "run-recorded" });
+    expect(recorded).toMatchObject({ status: "completed", actions: { correct: false } });
+    expect(recorded?.originalReceipts).toHaveLength(1);
+    expect(recorded?.targetBindings).toHaveLength(1);
+    expect((await reader().list("owner", { view: "needs_attention" })).total).toBe(0);
   });
 
 });

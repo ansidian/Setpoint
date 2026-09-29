@@ -41,30 +41,23 @@ function item(status: TransactionImportItem["status"], overrides: Partial<Transa
 }
 
 describe("transaction import inbox status model", () => {
-  it("keeps retired historical work inspectable without polling or offering retry", () => {
-    for (const status of ["queued", "failed", "ready"] as const) {
-      const saved = item(status, { runTrigger: "historical_scan" });
-      expect(hasActiveTransactionImport([saved])).toBe(false);
-      expect(resolveTransactionImportStatus([saved])).toMatchObject({ title: "Saved receipt", active: false, review: false, recordHref: expect.any(String) });
+  it("keeps unsettled originals inspectable as saved history without polling or offering retry", () => {
+    for (const trigger of ["historical_scan", "arrival"] as const) {
+      for (const status of ['queued', 'reconciling', 'importing', 'failed', 'paused', 'needs_review', 'ready'] as const) {
+        const saved = item(status, { runTrigger: trigger });
+        expect(hasActiveTransactionImport([saved])).toBe(false);
+        expect(resolveTransactionImportStatus([saved])).toMatchObject({ title: "Saved receipt", active: false, review: false, recordHref: expect.any(String) });
+        saved.correction = { id: 'correction', state: 'recovering', revision: 1 };
+        expect(hasActiveTransactionImport([saved])).toBe(true);
+        expect(resolveTransactionImportStatus([saved])).toMatchObject({ title: 'Checking correction progress', active: true });
+      }
     }
   });
 
-  it('keeps epoch-retired arrivals as history while corrections retain their own recovery', () => {
-    for (const status of ['queued', 'reconciling', 'importing', 'failed', 'paused', 'needs_review', 'ready'] as const) {
-      const retired = item(status, { executionEligible: false });
-      expect(hasActiveTransactionImport([retired])).toBe(false);
-      expect(resolveTransactionImportStatus([retired])).toMatchObject({ title: 'Saved receipt', active: false, review: false, recordHref: expect.any(String) });
-      retired.correction = { id: 'correction', state: 'recovering', revision: 1 };
-      expect(hasActiveTransactionImport([retired])).toBe(true);
-      expect(resolveTransactionImportStatus([retired])).toMatchObject({ title: 'Checking correction progress', active: true });
-    }
-    expect(resolveTransactionImportStatus([item('added', { executionEligible: false })])).toMatchObject({ title: 'Added to Actual' });
-  });
-
-  it('uses the completed correction type without hiding another pending receipt', () => {
+  it('uses the completed correction type ahead of other saved receipts', () => {
     const corrected = item('added', { effectiveResult: { correctionId:'correction-1', entry: { type:'payment', amountCents:1200, date:'2026-09-07', accountId:'account-1' } } });
     expect(resolveTransactionImportStatus([corrected])).toMatchObject({ title:'Corrected in Actual', detail:'The corrected entry is recorded in Actual.', review:false });
-    expect(resolveTransactionImportStatus([corrected, item('needs_review')])).toMatchObject({ title:'Needs review', review:true });
+    expect(resolveTransactionImportStatus([corrected, item('needs_review')])).toMatchObject({ title:'Corrected in Actual', review:false });
     corrected.correction = { id:'next', state:'recovering', revision:1 };
     expect(resolveTransactionImportStatus([corrected])).toMatchObject({ title:'Checking correction progress', active:true });
     corrected.correction.state = 'attention';
@@ -78,27 +71,14 @@ describe("transaction import inbox status model", () => {
     const kept = item('added', { id: 'kept', runId: 'run', correction: { id: 'kept-correction', state: 'completed', revision: 2, resolution: 'kept_actual' },
       effectiveResult: { correctionId: 'kept-correction', resolution: 'kept_actual' } });
     expect(resolveTransactionImportStatus([kept])).toMatchObject({ title: 'Current Actual result kept', review: false, active: false, recordHref: expect.stringContaining('view=completed') });
-    expect(resolveTransactionImportStatus([kept, item('needs_review')])).toMatchObject({ title: 'Needs review', review: true });
   });
 
   it.each([
     ["added", "Added to Actual"],
     ["updated", "Updated in Actual"],
     ["already_present", "Already in Actual"],
-    ["failed", "Couldn’t sync"],
-    ["needs_review", "Needs review"],
-    ["importing", "Syncing transaction"],
+    ["failed", "Saved receipt"],
   ] as const)("projects %s consistently", (status, title) => {
     expect(resolveTransactionImportStatus([item(status)])?.title).toBe(title);
-  });
-
-  it("describes observe-mode results as no-write review", () => {
-    expect(resolveTransactionImportStatus([
-      item("ready", { automationMode: "observe", reconciliationStatus: "would_add" }),
-    ])).toMatchObject({
-      title: "Needs review",
-      detail: "Observed safely; no Actual write was made.",
-      review: true,
-    });
   });
 });

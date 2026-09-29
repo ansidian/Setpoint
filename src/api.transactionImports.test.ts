@@ -17,23 +17,14 @@ describe("transaction import API helpers", () => {
     vi.resetModules();
   });
 
-  it("sends typed correction, and email-status requests", async () => {
-    const fetch = vi.fn()
-      .mockResolvedValueOnce(okJson({ accepted: 1 }, 202))
-      .mockResolvedValueOnce(okJson({ emailUid: "gmail-1", items: [] }));
+  it("sends encoded email-status requests", async () => {
+    const fetch = vi.fn().mockResolvedValueOnce(okJson({ emailUid: "gmail-1", items: [] }));
     vi.stubGlobal("fetch", fetch);
     const api = await importApi();
 
-    await api.commitTransactionImportItems("run-1", [{
-      itemId: "item-1",
-      payee: "Corrected merchant",
-      amountCents: -1299,
-    }]);
     await api.getTransactionImportEmailStatus("gmail-1/message 1");
 
-    // test-architecture: allow-boundary-interaction -- Transaction-import fetch is an irreversible HTTP boundary; the encoded route and write payload are the stable wire contract.
-    expect(fetch.mock.calls[0]?.[0]).toBe("/api/briefing/transaction-imports/runs/run-1/commit");
-    // test-architecture: allow-boundary-interaction -- Transaction-import fetch is an irreversible HTTP boundary; the encoded route and write payload are the stable wire contract.
-    expect(fetch.mock.calls[1]?.[0]).toBe("/api/briefing/transaction-imports/email-status?emailUid=gmail-1%2Fmessage%201");
+    // test-architecture: allow-boundary-interaction -- Transaction-import fetch is an HTTP boundary; the encoded route is the stable wire contract.
+    expect(fetch.mock.calls[0]?.[0]).toBe("/api/briefing/transaction-imports/email-status?emailUid=gmail-1%2Fmessage%201");
   });
 });

@@ -25,16 +25,16 @@ Build-time fictional walkthrough (`VITE_EA_DEMO=1`). `src/api.ts` routes demo re
 - `alfredUsageData.ts` — fictional Alfred usage with provider-specific summaries; no assistant calls
 - `emailAiUsageData.ts` — fictional email-AI usage and legacy triage statistics.
 - `financialHistory.ts` — a two-email fictional bill journey and saved history metadata; related source bodies use the protected demo reader.
-- `financialActivity.ts` — shared fictional imported history plus managed completed, processing and uncertain examples; old-target binding stays inert.
+- `financialActivity.ts` — shared fictional read-only imported history plus managed completed, processing and uncertain examples.
 - `financeProjection.ts` — exact-ID fictional Actual objects and settled in-memory ledger/bill projections shared by correction, Calendar and spending consumers; emits the demo-only financial-change event after owner settlement.
 - `financialCorrections.ts` — in-memory fictional inspection, exact previews, confirmation and effective result projection; no SDK or network.
 - `financialCompletion.ts` — fictional managed review plan with an unsaved mapping suggestion, owner-completion and candidate-dismissal mutations.
 - `financialConnections.ts` — fictional canonical provider setup and revision-bound saves; initial and saved settings/pay-link projections share production’s pure helpers
 - `financialProfiles.ts` — fictional unsaved review suggestions and ordinary in-memory Settings updates; retired profile/pay-link writes are rejected
 - `financialReceipt.ts` — one fictional Market receipt UID, sender, source row and body shared by Inbox, managed review and profile suggestion fixtures
-- `financeData.ts` — shared fictional transactions, confirmed-import mutation, and calendar Bills range projection.
+- `financeData.ts` — shared fictional transactions and calendar Bills range projection.
 - `dashboardFinance.ts` — spending comparisons and category totals derived from the shared seed plus import activity.
-- `transactionImports.ts` — fictional import runs/items, shared pending-review predicate, paginated pending runs, safe receipt bodies, and in-memory confirmation/retry/dismiss actions.
+- `transactionImports.ts` — fictional read-only import runs/items, dashboard import history, safe receipt bodies and per-email status.
 
 ### Other feeds
 - `weatherData.ts` — fictional current conditions and forecast.
@@ -46,7 +46,7 @@ Tests are not listed here; follow `AGENTS.md` behavior-ownership guidance.
 ## Boundaries
 
 - Unsupported API exports must fail explicitly rather than fall through to `/api/*`, authentication, providers, SSE, AI, or external-service navigation.
-- Finance spending and Journal transactions share `seed.transactions`; managed completion, import confirmation and correction settlement update that same in-memory ledger. Transfers remain paired in raw correction inspection, with signed income/expense directions and transfer-account identity in the ledger; spending excludes them like production while Journal retains their exact reciprocal topology. Bill changes update the shared Dashboard/Finances schedule projection. Unconfirmed review candidates must not already count as recorded spending.
+- Finance spending and Journal transactions share `seed.transactions`; managed completion and correction settlement update that same in-memory ledger. Transfers remain paired in raw correction inspection, with signed income/expense directions and transfer-account identity in the ledger; spending excludes them like production while Journal retains their exact reciprocal topology. Bill changes update the shared Dashboard/Finances schedule projection. Unconfirmed review candidates must not already count as recorded spending.
 - Demo connection flags describe simulated state only. Keep real passwords, tokens, provider operations, and persistent settings out of this directory.
 - Canonical product behavior and provider writes remain in their production domains; this directory supplies only the walkthrough contract.
 

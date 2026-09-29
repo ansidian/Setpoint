@@ -14,6 +14,7 @@ async function demo() {
 const date = '2026-09-07';
 const managed = { owner: 'event' as const, id: 'demo-event-review' };
 const imported = { owner: 'import' as const, id: 'demo-transaction-item-automatic', runId: 'demo-transaction-run-1' };
+const recordedExpense: FinancialEventCompletionEntry = { kind: 'expense', amount: 23, date, accountId: 'demo-checking', payee: 'Fictional Market', categoryId: 'demo-utilities' };
 
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.useRealTimers(); vi.resetModules(); });
 
@@ -199,11 +200,13 @@ describe('shared fictional financial settlement', () => {
   it('rejects scheduled-transfer corrections without an existing exact transfer schedule or future date', async () => {
     const api = await demo();
     const draft = { type: 'transfer_schedule' as const, amountCents: 25000, date: '2026-09-14', fromAccountId: 'demo-checking', toAccountId: 'demo-savings' };
-    await expect(api.previewFinancialCorrection(imported, draft)).rejects.toThrow('exact existing transfer schedule');
     await api.completeFinancialEvent({ emailUid: 'demo-email-market-receipt', documentRevision: 1, eventRevision: 1, entry: { ...draft, kind: 'transfer_schedule', amount: 250 } });
     await expect(api.previewFinancialCorrection(managed, { ...draft, date })).rejects.toThrow('future date');
     await expect(api.previewFinancialCorrection(managed, { ...draft, categoryId: 'demo-utilities' })).rejects.toThrow('transfer accounts');
     await expect(api.previewFinancialCorrection(managed, { ...draft, targetScheduleId: 'some-other-schedule' })).rejects.toThrow('exact bound schedule');
+    const recorded = await demo();
+    await recorded.completeFinancialEvent({ emailUid: 'demo-email-market-receipt', documentRevision: 1, eventRevision: 1, entry: recordedExpense });
+    await expect(recorded.previewFinancialCorrection(managed, draft)).rejects.toThrow('exact existing transfer schedule');
   });
 
   it('does not turn an arrived transfer notice into a recorded payment', async () => {
@@ -213,47 +216,36 @@ describe('shared fictional financial settlement', () => {
     expect((await api.getCalendarBillsRange(date, date)).schedules.some(row => row.scheduleId === 'demo-completed-schedule')).toBe(false);
   });
 
-  it('replaces the exact imported ledger row through payment, income, transfer, bill and retained-schedule conversions', async () => {
+  it('keeps retired import history read-only', async () => {
     const api = await demo();
-    const original = await api.getFinancialActivity(imported);
+    expect((await api.getFinancialActivity(imported)).actions).toMatchObject({ complete: false, retry: false, correct: false });
+    await expect(api.previewFinancialCorrection(imported, { type: 'payment', amountCents: 5000, date, accountId: 'demo-checking' })).rejects.toThrow('read-only');
+  });
+
+  it('replaces the exact recorded ledger row through payment, income, transfer, bill and retained-schedule conversions', async () => {
+    const api = await demo();
     const before = await api.getDashboardFinance();
+    await api.completeFinancialEvent({ emailUid: 'demo-email-market-receipt', documentRevision: 1, eventRevision: 1, entry: recordedExpense });
+    const original = await api.getFinancialActivity(managed);
     for (const type of ['payment', 'income', 'transfer', 'bill', 'payment'] as const) {
-      const preview = await api.previewFinancialCorrection(imported, { type, amountCents: 5000, date, accountId: 'demo-checking', fromAccountId: 'demo-savings', toAccountId: 'demo-checking', categoryId: 'demo-utilities', scheduleTreatment: 'keep' });
+      const preview = await api.previewFinancialCorrection(managed, { type, amountCents: 5000, date, accountId: 'demo-checking', fromAccountId: 'demo-savings', toAccountId: 'demo-checking', categoryId: 'demo-utilities', scheduleTreatment: 'keep' });
       await api.confirmFinancialCorrection(preview.id, preview.id);
-      const status = await api.getTransactionImportEmailStatus('demo-email-cloud-receipt');
-      expect(status.items[0]).toMatchObject({ correction: { state: 'completed' }, effectiveResult: { entry: { type, amountCents: 5000 } } });
-      expect((await api.getDashboardFinance()).activity.recent[0]).toMatchObject({ amountCents: type === 'income' ? 5000 : -5000, status: 'updated' });
+      expect((await api.getTransactionImportEmailStatus('demo-email-market-receipt')).financialEvent?.workflow?.correction?.state).toBe('completed');
       const range = await api.getCalendarBillsRange(date, date);
-      const current = await api.inspectFinancialCorrection(imported);
+      const current = await api.inspectFinancialCorrection(managed);
       expect(current.snapshot.transactions).toHaveLength(type === 'bill' ? 0 : type === 'transfer' ? 2 : 1);
       expect(range.transactions.filter(row => current.snapshot.transactions.some(raw => raw.id === row.id))).toHaveLength(type === 'transfer' ? 0 : current.snapshot.transactions.length);
-      expect((await api.getDashboardFinance()).spending.current?.total).toBeCloseTo(before.spending.current!.total! - 38.47 + (type === 'payment' ? 50 : 0));
+      expect((await api.getDashboardFinance()).spending.current?.total).toBeCloseTo(before.spending.current!.total! + (type === 'payment' ? 50 : 0));
       if (type === 'bill') expect(range.schedules).toEqual(expect.arrayContaining([expect.objectContaining({ scheduleId: current.snapshot.schedules[0]?.id, amount: 50 })]));
-      expect((await api.getFinancialActivity(imported)).originalReceipts).toEqual(original.originalReceipts);
+      expect((await api.getFinancialActivity(managed)).originalReceipts).toEqual(original.originalReceipts);
     }
-    const retire = await api.previewFinancialCorrection(imported, { type: 'payment', amountCents: 5000, date, accountId: 'demo-checking', scheduleTreatment: 'retire' });
+    const retire = await api.previewFinancialCorrection(managed, { type: 'payment', amountCents: 5000, date, accountId: 'demo-checking', scheduleTreatment: 'retire' });
     const scheduleId = retire.snapshot.schedules[0]!.id;
     await api.confirmFinancialCorrection(retire.id, 'retire');
     expect((await api.getCalendarBillsRange(date, date)).schedules.some(row => row.scheduleId === scheduleId)).toBe(false);
     const refreshed = await demo();
-    expect((await refreshed.getFinancialActivity(imported)).effectiveResult).toBeNull();
+    expect((await refreshed.getFinancialActivity(managed)).effectiveResult).toBeNull();
     expect((await refreshed.getDashboardFinance()).spending.current?.total).toBe(before.spending.current?.total);
-  });
-
-  it('settles historical confirmation once and corrects its exact ledger identity', async () => {
-    const api = await demo();
-    const before = await api.getDashboardFinance();
-    const reference = { owner: 'import' as const, id: 'demo-transaction-item-1', runId: imported.runId };
-    const confirmation = { itemId: reference.id, date, amountCents: -1800, actualAccountId: 'demo-checking', actualCategoryId: 'demo-utilities' };
-    expect(await api.commitTransactionImportItems(reference.runId, [confirmation])).toEqual({ accepted: 1 });
-    expect(await api.commitTransactionImportItems(reference.runId, [confirmation])).toEqual({ accepted: 0 });
-    expect((await api.getDashboardFinance()).spending.current?.total).toBeCloseTo(before.spending.current!.total! + 18);
-    expect((await api.getCalendarBillsRange(date, date)).transactions.filter(row => row.id === reference.id)).toHaveLength(1);
-    const original = await api.getFinancialActivity(reference);
-    const preview = await api.previewFinancialCorrection(reference, { type: 'income', amountCents: 1800, date, accountId: 'demo-checking' });
-    await api.confirmFinancialCorrection(preview.id, 'refund');
-    expect((await api.getDashboardFinance()).spending.current?.total).toBeCloseTo(before.spending.current!.total!);
-    expect((await api.getFinancialActivity(reference)).originalReceipts).toEqual(original.originalReceipts);
   });
 
   it('keeps two related bill emails and the full correction chain on one demo record', async () => {

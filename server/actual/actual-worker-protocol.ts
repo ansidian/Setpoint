@@ -13,9 +13,7 @@ export type ActualWorkerOperation =
   | "getCalendarBillsRange"
   | "markBillPaid"
   | "createQuickTxn"
-  | "importTransactionGroups"
   | "reconcileTransferSchedule"
-  | "inspectOriginalImportBinding"
   | "inspectCorrection"
   | "dispatchCorrection"
   | "reconcileFinancialOperation";
@@ -74,9 +72,7 @@ const OPERATIONS: ReadonlySet<string> = new Set<ActualWorkerOperation>([
   "getCalendarBillsRange",
   "markBillPaid",
   "createQuickTxn",
-  "importTransactionGroups",
   "reconcileTransferSchedule",
-  "inspectOriginalImportBinding",
   "inspectCorrection",
   "dispatchCorrection",
   "reconcileFinancialOperation",

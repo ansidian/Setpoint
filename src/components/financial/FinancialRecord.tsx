@@ -6,7 +6,6 @@ import AnimatedHeight from '../shared/AnimatedHeight';
 import type { FinancialActivity, FinancialCorrectionHistory } from '../../../shared/types/financial-activity';
 import type { FinancialEmailPlan } from '../../../shared/types/bills';
 import { ensureMetadataLoaded, type ActualMetadata } from '../../lib/actualMetadata';
-import FinancialBindingRepair from './FinancialBindingRepair';
 import FinancialCorrectionEditor from './FinancialCorrectionEditor';
 import useActualRecordingSound from "./useActualRecordingSound";
 import PendingFinancialRecord from './PendingFinancialRecord';
@@ -72,10 +71,9 @@ export default function FinancialRecord({ activity,onDirty,onChanged,onRepair,re
     </dl>}
     {!activity.correction && !processing && activity.status !== 'completed' && <p className="financial-note">{activity.status === 'dismissed' ? 'Removed from review.' : activity.reason === 'ready' ? 'Review the details before recording in Actual.' : activity.reason}</p>}
     </div></AnimatedCollapse>
-    {activity.status === "completed" && !activity.actions.correct && !activity.correction && activity.reference.owner === "import" && !activity.identityConflict && <FinancialBindingRepair activity={activity} onChanged={onChanged} onRepair={onRepair} />}
     {(activity.actions.correct || activity.correction) && <FinancialCorrectionEditor onHistoryChange={setCurrentCorrection} onEditing={setEditing} activity={activity} onDirty={onDirty} onChanged={onChanged} onRepair={onRepair} registerBack={registerBack} requestDiscard={requestDiscard} />}
     {!processing && (activity.actions.complete || activity.actions.retry) && <AnimatedHeight><div className="mt-5 p-1"><PendingFinancialRecord onRecordingSubmitted={beginRecordingSound} onAccepted={accepted} onConfirming={setConfirmingImport} activity={activity} onDirty={onDirty} onChanged={onChanged} onRepair={onRepair} requestDiscard={requestDiscard} /></div></AnimatedHeight>}
-    {activity.status === 'completed' && !activity.actions.correct && !activity.actions.complete && !activity.actions.retry && !activity.correction && <p className="financial-note mt-4">This saved result is available for inspection. An exact supported Actual target is required before correction.</p>}
+    {activity.status === 'completed' && !activity.actions.correct && !activity.actions.complete && !activity.actions.retry && !activity.correction && <p className="financial-note mt-4">{activity.reference.owner === 'import' ? 'This saved import result is read-only history. Make any changes directly in Actual.' : 'This saved result is available for inspection. An exact supported Actual target is required before correction.'}</p>}
     <FinancialRecordHistory activity={activity} metadata={metadata} currentCorrection={currentCorrection} />
   </article>;
 }

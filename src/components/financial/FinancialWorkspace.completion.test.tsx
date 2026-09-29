@@ -18,11 +18,10 @@ const plan:FinancialEmailPlan = {
 };
 let current:FinancialActivity;
 let failDetail = 0;
-let rejectImport = false;
 let played = 0;
 beforeEach(() => {
   invalidateActualMetadata();
-  failDetail = 0; rejectImport = false; played = 0;
+  failDetail = 0; played = 0;
   vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
   vi.stubGlobal('AudioContext', undefined);
   vi.stubGlobal('Audio', class {
@@ -36,33 +35,24 @@ beforeEach(() => {
     if (path === '/api/briefing/actual/metadata') return Response.json({ accounts:[{ id:'checking',name:'Checking' }],payees:[],categories:[] });
     if (/\/financial-activity\/(event|document|import)\//.test(path)) { if (failDetail-- > 0) return Response.json({ message:'Temporary status failure' },{status:503}); return Response.json(current); }
     if (path.startsWith('/api/briefing/financial-activity?')) return Response.json({ items:current.status !== 'completed' ? [current] : [],total:current.status !== 'completed' ? 1 : 0,attentionTotal:current.status === 'needs_attention' ? 1 : 0,offset:0,limit:20 });
-    if (path === '/api/briefing/financial-events/complete' || path.endsWith('/commit')) {
-      if (path.endsWith('/commit') && rejectImport) return Response.json({accepted:0},{status:202});
+    if (path === '/api/briefing/financial-events/complete') {
       current = { ...current,status:'processing',updatedAt:2,reason:'Owner-confirmed entry queued for Actual.',actions:{ ...current.actions,complete:false } };
       if (current.reference.owner === 'document') current = { ...current,id:'event',reference:{ owner:'event',id:'event' } };
-      return Response.json(path.endsWith('/commit') ? { accepted:1 } : { ...plan,workflow:{ ...plan.workflow,state:'pending' } },{ status:202 });
+      return Response.json({ ...plan,workflow:{ ...plan.workflow,state:'pending' } },{ status:202 });
     }
     throw Error('Unexpected request: '+path);
   });
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
-function useImportFixture() {
-  current = { ...current,source:'paypal',reference:{ owner:'import',id:'event',runId:'run' },completionPlan:null,importItem:{ id:'event',runId:'run',gmailAccountId:'gmail',gmailMessageId:'message',emailUid:'receipt',emailSubject:'Receipt',internetMessageId:null,source:'paypal',parserVersion:'1',externalId:null,importedId:null,date:'2026-09-08',amountCents:-3000,currency:'USD',payee:'Example Merchant',notes:'',actualAccountId:'checking',actualCategoryId:null,automationMode:'observe',automaticSafe:false,blockingWarnings:[],evidence:[],financialPlan:null,planShadow:null,status:'needs_review',reconciliationStatus:null,attempts:0,lastError:null,confirmedAt:null,createdAt:1,updatedAt:1 } };
-}
-
-it.each(['managed','import','document'] as const)('keeps %s submissions selected and silent until a fresh verified receipt arrives',async owner => {
-  if (owner === 'import') useImportFixture();
+it.each(['managed','document'] as const)('keeps %s submissions selected and silent until a fresh verified receipt arrives',async owner => {
   if (owner === 'document') current = { ...current,id:'document:1',reference:{ owner:'document',id:'1' },completionPlan:{ ...plan,workflow:{ ...plan.workflow!,id:'document:1',completion:{ ...plan.workflow!.completion!,eventRevision:null } } } };
-  render(<FinancialWorkspace search={`?financial=list&view=needs_attention&owner=${owner === 'import' ? 'import' : owner === 'document' ? 'document' : 'event'}&record=${owner === 'document' ? '1' : 'event'}&recordRun=run`} onNavigate={()=>{}} onClose={()=>{}} onRepair={()=>{}} onDirty={()=>{}} registerBack={()=>{}} requestDiscard={action=>action()} />);
+  render(<FinancialWorkspace search={`?financial=list&view=needs_attention&owner=${owner === 'document' ? 'document' : 'event'}&record=${owner === 'document' ? '1' : 'event'}&recordRun=run`} onNavigate={()=>{}} onClose={()=>{}} onRepair={()=>{}} onDirty={()=>{}} registerBack={()=>{}} requestDiscard={action=>action()} />);
   const review = await screen.findByRole('button',{ name:'Review before sending' });
   await waitFor(()=>expect((review as HTMLButtonElement).disabled).toBe(false));
   fireEvent.submit(screen.getByRole('form',{ name:'Complete financial record' }));
   vi.useFakeTimers({ toFake:['setTimeout','clearTimeout'] });
-  await act(async()=>{
-    if (owner === 'import') fireEvent.click(screen.getByRole('button',{ name:'Record in Actual' }));
-    else fireEvent.submit(screen.getByRole('form',{ name:'Complete financial record' }));
-  });
+  await act(async()=>{ fireEvent.submit(screen.getByRole('form',{ name:'Complete financial record' })); });
   expect(screen.getByRole('region',{ name:'Pending' })).toBeTruthy();
   expect(screen.getByRole('status').textContent).toContain('processing will continue');
   expect(screen.queryByRole('button',{ name:'Record in Actual' })).toBeNull();
@@ -95,18 +85,4 @@ it('restores review after accepted work returns to attention instead of retainin
   expect(await screen.findByRole('button',{ name:'Review before sending' })).toBeTruthy();
   expect(screen.queryByText('Confirmation received')).toBeNull();
   expect(screen.queryByText('Recorded in Actual')).toBeNull();
-});
-
-
-it('does not claim confirmation when an import admission returns accepted zero',async () => {
-  useImportFixture(); rejectImport = true;
-  render(<FinancialWorkspace search="?financial=list&view=needs_attention&owner=import&record=event&recordRun=run" onNavigate={()=>{}} onClose={()=>{}} onRepair={()=>{}} onDirty={()=>{}} registerBack={()=>{}} requestDiscard={action=>action()} />);
-  const review = await screen.findByRole('button',{ name:'Review before sending' });
-  await waitFor(()=>expect((review as HTMLButtonElement).disabled).toBe(false));
-  fireEvent.submit(screen.getByRole('form',{ name:'Complete financial record' }));
-  fireEvent.click(screen.getByRole('button',{ name:'Record in Actual' }));
-  expect((await screen.findByRole('alert')).textContent).toContain('This confirmation was not accepted');
-  expect(screen.queryByText('Confirmation received')).toBeNull();
-  expect(screen.queryByText('Recorded in Actual')).toBeNull();
-  expect(screen.getByRole('button',{ name:'Record in Actual' })).toBeTruthy();
 });

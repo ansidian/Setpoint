@@ -1,13 +1,13 @@
 # Shared financial foreground
 
-Financial activity and records live at `/finance` inside WorkspaceRoute's retained foreground. Dashboard, Inbox, and notifications link here directly; legacy Settings workflow URLs redirect here. Settings retains connection repair and finance preferences. Saved history never implies a live Actual read. Pending completion stays with its existing managed/import owner; corrections use only the correction facade.
+Financial activity and records live at `/finance` inside WorkspaceRoute's retained foreground. Dashboard, Inbox, and notifications link here directly; legacy Settings workflow URLs redirect here. Settings retains connection repair and finance preferences. Saved history never implies a live Actual read. Pending completion stays with the managed financial-event owner; saved imports are read-only; corrections use only the correction facade.
 
 - `financialNavigation.ts` — exact URL-compatible list/source/run/record targets.
 - `financial.css` — adaptive list/detail and record surface; centered viewport-responsive dialogs with bounded content measures; Settings up to 1920px, activity up to 1680px, records up to 1000px, and a 960px split-list threshold.
 
 - `src/components/bills/FinancialSplitFields.tsx` — owner-editable expense allocation amounts, order notes and optional categories; the completion owner validates an independent parent total, tracks the unallocated balance and can distribute the remainder in exact cents.
 - `src/components/bills/financialCompletionDraft.ts` — known-fact prefills and same-revision enrichment for managed completion; untouched fields and clean baselines update together, while owner edits, explicit clears and confirmation drafts remain fixed.
-- `PendingFinancialRecord.tsx` — shared managed and arrival-import pending completion through their existing owner facades; drafts and inline confirmation.
+- `PendingFinancialRecord.tsx` — managed pending completion through the financial-event owner facade; saved import items show their read-only reason.
 - Short option lists use `src/components/shared/Dropdown.tsx`; long/creatable lists use `src/components/shared/SearchableDropdown.tsx`. Date fields use `src/components/shared/pickers/DateField.tsx`.
 
 - `CorrectionFields.tsx` — type-aware controlled correction fields, explicit schedule treatment and transfer survivor choice.
@@ -23,9 +23,7 @@ Financial activity and records live at `/finance` inside WorkspaceRoute's retain
 - `PaymentConfirmation.tsx` — shared ordinary-payment money-flow review; source owners retain submission and validation.
 - `useFinancialNavigationGuard.ts` — inline draft discard guard for foreground and browser navigation.
 
-- `FinancialBindingRepair.tsx` — explicit older import binding inspection in the selected budget; no replacement/fuzzy target.
-
-- `transactionImportReviewModel.ts` — saved-item eligibility, signed confirmation projection, and source labels.
+- `transactionImportReviewModel.ts` — saved import amount formatting and source labels.
 
 - `FinancialEmailRecord.tsx` — compatible email-UID resolution through managed status, with protected source fallback.
 
