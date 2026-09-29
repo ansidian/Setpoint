@@ -344,7 +344,7 @@ Selection path:
 1. `server/transaction-imports/transaction-import-runtime.ts` drains modern capture, documents, events and corrections. Immediate drains, the safety backstop and shutdown coordination remain active.
 2. `server/transaction-imports/transaction-import-store.ts` is read-only history: per-email items for the reader and bounded dashboard activity. Run/item tables, imported identities, captured targets and immutable receipts stay untouched.
 3. `server/routes/briefing/transaction-imports.ts` serves `GET /transaction-imports/email-status` (saved items plus managed status and record request) alongside the managed financial-event routes. Import commit/retry/dismiss and source configuration routes are removed.
-4. `server/financial-activity/financial-activity.ts` lists saved imports as inspection-only: completed rows keep their receipts, every other row is retired history, and none offers completion, retry or a new correction. An unfinished correction recorded before retirement can still recover.
+4. `server/financial-activity/financial-activity.ts` lists saved imports as inspection-only: completed rows keep their receipts, every other row is retired history, and none offers completion, retry or correction.
 
 **Caches/state:** durable run/item tables originating in migration 041. Legacy mapping rows remain audit data only. Raw email HTML is never stored.
 

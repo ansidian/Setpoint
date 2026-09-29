@@ -10,17 +10,11 @@ export function createFinancialCorrectionStore(client: Client = db) {
   async function sourceRevision(userId: string, activityId: string, reader: Reader = client): Promise<string> {
     const occurrences = (await reader.execute({ sql: 'SELECT * FROM ea_financial_activity_occurrences WHERE user_id=? AND activity_id=? ORDER BY owner, record_id', args: [userId, activityId] })).rows;
     const sources: unknown[] = [(await reader.execute({ sql: 'SELECT actual_budget_sync_id FROM ea_settings WHERE user_id=?', args: [userId] })).rows];
-    const conflicts = (await reader.execute({ sql: `SELECT 1 FROM ea_financial_identity_conflicts c JOIN ea_financial_activity_occurrences o ON o.user_id=c.user_id AND o.record_id=c.record_id AND o.owner='import' WHERE o.user_id=? AND o.activity_id=?`, args: [userId, activityId] })).rows;
-    if (conflicts.length) correctionConstraint('The original source aliases are quarantined and require exact identity resolution.');
-    for (const occurrence of occurrences) {
-      if (occurrence.owner === 'event') {
-        const event = (await reader.execute({ sql: 'SELECT revision, owner_completion_json, operation_json, outcome_json FROM ea_financial_events WHERE user_id=? AND id=?', args: [userId, String(occurrence.record_id)] })).rows;
-        const documents = (await reader.execute({ sql: 'SELECT d.id, d.revision, d.content_hash, d.candidate_json, e.sender_authentication_json FROM ea_financial_documents d LEFT JOIN ea_email_index e ON e.user_id=d.user_id AND e.uid=d.email_uid WHERE d.user_id=? AND d.event_id=? ORDER BY d.id', args: [userId, String(occurrence.record_id)] })).rows;
-        sources.push({ occurrence, event, documents });
-      } else {
-        const item = (await reader.execute({ sql: 'SELECT transaction_date, amount_cents, payee, actual_account_id, actual_category_id, imported_id, evidence_json, financial_email_plan_json FROM ea_transaction_import_items WHERE user_id=? AND id=?', args: [userId, String(occurrence.record_id)] })).rows;
-        sources.push({ occurrence, item });
-      }
+    // Only managed events are correctable; retired import history is read-only.
+    for (const occurrence of occurrences.filter(row => row.owner === 'event')) {
+      const event = (await reader.execute({ sql: 'SELECT revision, owner_completion_json, operation_json, outcome_json FROM ea_financial_events WHERE user_id=? AND id=?', args: [userId, String(occurrence.record_id)] })).rows;
+      const documents = (await reader.execute({ sql: 'SELECT d.id, d.revision, d.content_hash, d.candidate_json, e.sender_authentication_json FROM ea_financial_documents d LEFT JOIN ea_email_index e ON e.user_id=d.user_id AND e.uid=d.email_uid WHERE d.user_id=? AND d.event_id=? ORDER BY d.id', args: [userId, String(occurrence.record_id)] })).rows;
+      sources.push({ occurrence, event, documents });
     }
     return createHash('sha256').update(correctionJson(sources)).digest('hex');
   }

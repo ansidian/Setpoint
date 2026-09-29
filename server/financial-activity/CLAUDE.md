@@ -11,4 +11,4 @@ Needs attention includes processing rows for the Pending section until verified 
 
 Assessed, unsubmitted managed review candidates are actionable immediately, including during background planning. Shared managed-review eligibility drives their completion action and attention count; known facts populate the existing form without a collection wait. Independent automatic events and submitted/attempted entries remain in Pending.
 
-Saved transaction-import rows are read-only history: completed rows keep their original receipts and bindings, every other row is retired, and none offers completion, retry, new corrections or attention counts.
+Saved transaction-import rows are read-only history: completed rows keep their original receipts and bindings, every other row is retired, and none offers completion, retry, corrections or attention counts.

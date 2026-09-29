@@ -24,9 +24,8 @@ export function createFinancialCorrections({ store = createFinancialCorrectionSt
   async function resolve(userId: string, reference: FinancialActivityReference, targetScheduleId?: string) {
     const activity = await reader.detail(userId, reference);
     if (!activity?.originalReceipts.length) correctionConstraint('This activity has no completed original result.');
+    if (activity.reference.owner === 'import') correctionConstraint('Retired import history is read-only.');
     const previous = await store.latest(userId, activity.id);
-    // Retired import history is read-only; only an unfinished correction may still be recovered.
-    if (activity.reference.owner === 'import' && (!previous || previous.state === 'completed')) correctionConstraint('Retired import history is read-only.');
     const effective = previous?.effectiveResult as { evidence?: FinancialWriteEvidence } | null;
     const evidence = effective?.evidence || previous?.preview.evidence || activity.targetBindings[0] || activity.originalReceipts[0]?.evidence;
     if (!evidence?.objects.length || activity.targetBindings.length > 1) correctionConstraint('Resolve exact targets in one Actual budget before correcting.');

@@ -14,7 +14,7 @@ Read-only saved transaction-import history and the shared financial worker runti
 ## Local patterns
 
 - Amounts are signed integer cents and dates are `YYYY-MM-DD`.
-- Saved items are inspection-only history: no completion, retry, dismissal or new correction. An unfinished correction recorded before retirement still reports its own progress.
+- Saved items are inspection-only history: no completion, retry, dismissal or correction.
 - Durable plan JSON omits model/body evidence excerpts while retaining target provenance, reconciliation, and eligibility reasons.
 - Raw Gmail message IDs remain distinct from RFC Message-ID headers.
 - Legacy `ea_transaction_import_mappings` rows and import tables remain untouched for audit only; retirement deletes no configuration or history.
