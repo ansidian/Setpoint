@@ -4,7 +4,6 @@ import type { BillCandidate, FinancialEmailPlan } from "../../shared/types/bills
 import type { EmailAuthenticationProjection } from "../../shared/types/email.ts";
 import type { FinancialOwnerCompletion } from "./financial-event-completion-model.ts";
 import type { FinancialEventCompletionEntry } from "../../shared/types/financial-operations.ts";
-import { createFinancialEventAiStore } from "./financial-event-ai.ts";
 import { createFinancialDocumentSourceStore, projectFinancialDocumentSource, type FinancialEmailSource } from "./financial-event-source.ts";
 
 import type { FinancialProviderAssessment } from "../../shared/types/financial-parsers.ts";
@@ -663,7 +662,7 @@ export function createFinancialEventStore(dbClient: StoreDb = db, now = Date.now
     return result.rows[0] ? projectEvent(result.rows[0]) : null;
   }
 
-  return { ...createFinancialEventAiStore(dbClient, now), ...createFinancialDocumentSourceStore(dbClient, now), async isCorrected(userId: string, id: string) {
+  return { ...createFinancialDocumentSourceStore(dbClient, now), async isCorrected(userId: string, id: string) {
     return (await dbClient.execute({ sql: "SELECT 1 FROM ea_financial_corrected_sources WHERE user_id=? AND owner='event' AND record_id=? LIMIT 1", args: [userId, id] })).rows.length > 0;
   }, claimDocument, settleDocument, saveProviderAssessment, associateDocument, listDocuments, findEventsByReference, completeEvent, dismissCandidate, requestOwnerReview, inheritReferenceDismissal,
     acknowledgeOwnerCompletedDocument, claimEvent, saveEvent,

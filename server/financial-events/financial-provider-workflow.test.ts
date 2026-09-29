@@ -29,8 +29,7 @@ async function email(uid: string, {from='sce@message.sce.com',subject='Bill is r
 }
 function setup(overrides: Partial<Parameters<typeof createFinancialEventWorker>[0]> = {}) {
   const store = createFinancialEventStore(db,()=>now);
-  const worker = createFinancialEventWorker({store,now:()=>now,canRun:async()=>false,
-    assessDocument:async()=>{throw new Error('Financial AI must not be used');},
+  const worker = createFinancialEventWorker({store,now:()=>now,
     profileReader:async()=>({budgetId:'budget',revision:1,profiles:[]}),
     sourceAcquirer:async(_user,uid)=>{
       const document = (await store.getDocumentForEmail('owner',uid))!;
@@ -50,7 +49,7 @@ it('enrolls only mail both received and first indexed after the new epoch; refet
   expect((await store.getDocumentForEmail('owner','old-arrival'))?.processingPolicy).toBe('legacy');
   await expect(activateFinancialProviderEpoch('owner',1,db)).rejects.toThrow('cannot be reset');
 });
-it('parses a supported provider while email AI is disabled and records parser provenance',async()=>{
+it('parses a supported provider and records parser provenance',async()=>{
   await email('supported');
   const {store,worker}=setup();
   await worker.processNextDocument();
@@ -59,7 +58,7 @@ it('parses a supported provider while email AI is disabled and records parser pr
   expect(document?.candidate).toMatchObject({amount:125.35,due_date:'2026-10-15'});
   expect(document?.eventId).toBeTruthy();
 });
-it('ignores supported eBay packing notices while AI is paused',async()=>{
+it('ignores supported eBay packing notices',async()=>{
   const source=admissionCases[0]!.source;
   await email('packing',{from:source.fromAddress,subject:source.subject,body:source.body});
   const {store,worker}=setup();
@@ -139,8 +138,7 @@ it.each([
 ] as const)('ignores an unknown %s sender without AI assessment or review',async(uid,source)=>{
   await email(uid,source);
   const {store}=setup();
-  const worker=createFinancialEventWorker({store,now:()=>now,canRun:async()=>true,
-    assessDocument:async()=>{throw new Error('Unknown senders must not use financial AI');}});
+  const worker=createFinancialEventWorker({store,now:()=>now});
   expect(await worker.processNextDocument()).toBe(true);
   expect(await store.getDocumentForEmail('owner',uid)).toMatchObject({status:'ignored',candidate:null,eventId:null,nextAttemptAt:null,
     error:null,providerAssessment:{status:'unrecognized'}});
@@ -162,8 +160,7 @@ it('keeps attempted historical recovery available without re-extraction or anoth
   await db.execute("UPDATE ea_financial_documents SET event_id='attempted' WHERE email_uid='admitted'");
   const {store}=setup();
   let recovered=0;
-  const worker=createFinancialEventWorker({store,now:()=>now,canRun:async()=>false,
-    assessDocument:async()=>{throw new Error('Must not re-extract immutable history');},
+  const worker=createFinancialEventWorker({store,now:()=>now,
     execute:async(_owner,saved,mode)=>{
       expect(mode).toBe('recover');expect(saved).toEqual(operation);recovered++;
       return {outcome:'already_present',reason:'Verified immutable entry',budgetId:'clone'};

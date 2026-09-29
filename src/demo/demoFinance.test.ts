@@ -85,7 +85,7 @@ describe('shared fictional financial settlement', () => {
     expect((await api.getDashboardFinance()).spending.current?.total).toBeCloseTo(before.spending.current!.total! + (kind === 'expense' ? 23 : 0));
     const preview = await api.previewFinancialCorrection(managed, { type: kind === 'expense' ? 'payment' : kind, amountCents: 2900, date, accountId: 'demo-checking', fromAccountId: 'demo-checking', toAccountId: 'demo-savings', categoryId: 'demo-utilities' });
     await api.confirmFinancialCorrection(preview.id, 'same-key');
-    expect((await api.resolveFinancialEmailPlan({ emailId: 'demo-email-market-receipt' })).candidate).toMatchObject({ amount: 29, type: kind });
+    expect((await api.resolveFinancialEmailPlan({ emailId: 'demo-email-market-receipt' }))?.candidate).toMatchObject({ amount: 29, type: kind });
     expect((await api.getFinancialActivity(managed)).amountCents).toBe(kind === 'income' ? 2900 : -2900);
     if (kind === 'expense') {
       const recorded = (await api.getFinances()).recordedHistory?.transactions.filter(row => row.id.startsWith('demo-completed-'));
@@ -166,7 +166,7 @@ describe('shared fictional financial settlement', () => {
     const transferPayee = after.snapshot.payees.find(payee => payee.id === nextConditions.find(condition => condition.field === 'payee')!.value);
     expect(transferPayee).toMatchObject({ transfer_acct: sign > 0 ? 'demo-savings' : 'demo-credit' });
     expect((await api.getCalendarBillsRange(date, '2026-09-30')).schedules).toEqual(expect.arrayContaining([expect.objectContaining({ scheduleId: 'demo-completed-schedule', amount: 310, type: 'transfer', next_date: '2026-09-21' })]));
-    expect((await api.resolveFinancialEmailPlan({ emailId: 'demo-email-market-receipt' })).candidate).toMatchObject({ type: 'transfer', event_kind: 'payment_scheduled', amount: 310 });
+    expect((await api.resolveFinancialEmailPlan({ emailId: 'demo-email-market-receipt' }))?.candidate).toMatchObject({ type: 'transfer', event_kind: 'payment_scheduled', amount: 310 });
     expect((await api.getFinancialActivity(managed)).originalReceipts).toEqual(original.originalReceipts);
   });
 

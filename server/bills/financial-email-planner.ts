@@ -1,29 +1,18 @@
 import { getMetadata as actualGetMetadata } from "../actual/actual.ts";
-import { withAiUsageContext } from "../platform/ai-usage.ts";
 import { queryTransactions } from "../transactions/transactions-service.ts";
 import { readBillsMirrorRange } from "./bills-mirror-sync.ts";
-import { createBillCandidateVerificationService, type BillProviderRequestRunner } from "./bill-candidate-verification-service.ts";
-import {
-  extractBillCandidate,
-  loadBillExtractChoice,
-} from "./bill-extraction-service.ts";
 import { evidenceReasons } from "./financialEmailPlanningEvidence.ts";
-import { shouldVerifyBillEvent } from "./billEventVerifier.ts";
-import { shouldVerifyBillAmounts } from "./billAmountVerifier.ts";
-import { trimBillBody } from "./bill-extract.ts";
 import { FINANCIAL_CANDIDATE_SEMANTICS_VERSION } from "./bill-semantic-prompt.ts";
 import { financialEmailAutomationEligibility } from "./financialEmailAutomationPolicy.ts";
 import { financialEmailIdentity, withFinancialEmailProviderTransactionIdentity } from "./financialEmailIdentity.ts";
 import { applyOwnerFinancialEmailPolicy } from "./financialEmailRewardEvidence.ts";
 import {
   classifyFinancialEmail,
-  shouldAttemptFinancialEmailTypeVerification,
   type FinancialEmailPolicyResult,
 } from "./financialEmailClassificationPolicy.ts";
 import {
   FINANCIAL_TARGET_INFERENCE_VERSION,
   inferFinancialEmailTargets,
-  type FinancialTargetBundleRanker,
 } from "./financialEmailTargetInference.ts";
 import { resolveStatementActualStatus } from "./statementActualStatusModel.ts";
 import { readFinancialProfiles } from "./financial-profiles.ts";
@@ -71,20 +60,8 @@ interface PlannerOccurrenceData {
   syncHealth?: BillsMirrorHealth;
 }
 
-interface CandidateResolution {
-  candidate: BillCandidate;
-  providerUnavailable: boolean;
-}
-
 export interface FinancialEmailPlannerDependencies {
   profileReader?: typeof readFinancialProfiles;
-  candidateExtractor?: typeof extractBillCandidate;
-  candidateVerification?: Pick<
-    ReturnType<typeof createBillCandidateVerificationService>,
-    "verifyEmailCandidate"
-  > & Partial<Pick<ReturnType<typeof createBillCandidateVerificationService>, "rankEmailTargetBundles">>;
-  targetRanker?: FinancialTargetBundleRanker;
-  modelChoiceReader?: typeof loadBillExtractChoice;
   metadataReader?: (userId: string) => Promise<ProjectedActualMetadata>;
   occurrenceReader?: (userId: string, range: { start: string; end: string }) => Promise<PlannerOccurrenceData>;
   transactionReader?: (userId: string, filters: Parameters<typeof queryTransactions>[1]) => Promise<TransactionQueryResult>;
@@ -351,76 +328,12 @@ function validateInput(userId: string, input: FinancialEmailInput): void {
   if (input.candidate != null && (typeof input.candidate !== "object" || Array.isArray(input.candidate))) {
     throw new TypeError("candidate must be an object");
   }
-  if (!input.candidate && !String(input.email?.body || input.email?.body_snippet || "").trim()) {
-    throw new TypeError("email body or persisted candidate is required");
-  }
-}
-
-async function resolveCandidate(
-  userId: string,
-  input: FinancialEmailInput,
-  dependencies: Required<Pick<FinancialEmailPlannerDependencies, "candidateExtractor" | "candidateVerification" | "modelChoiceReader">>,
-  runProviderRequest?: BillProviderRequestRunner,
-): Promise<CandidateResolution> {
-  if (input.assessmentMode === "deterministic") {
-    if (!input.candidate) throw new TypeError("A deterministic assessment requires a parsed candidate");
-    return {candidate:{...input.candidate},providerUnavailable:false};
-  }
-  if (!input.candidate) {
-    try {
-      const extracted = await dependencies.candidateExtractor(userId, {
-        subject: input.email?.subject,
-        from: input.email?.from || input.email?.from_address,
-        body: input.email?.body || input.email?.body_snippet || "",
-      });
-      return { candidate: extracted.candidate, providerUnavailable: extracted.candidate.event_verification?.status === "failed" };
-    } catch {
-      return { candidate: {}, providerUnavailable: true };
-    }
-  }
-  const candidate = { ...input.candidate };
-  if (isIgnoredFinancialNotice(candidate)) return { candidate, providerUnavailable: false };
-  const missingType = shouldAttemptFinancialEmailTypeVerification(candidate);
-  const content = trimBillBody({
-    subject: String(input.email?.subject || ""),
-    from: String(input.email?.from || input.email?.from_address || ""),
-    body: String(input.email?.body || input.email?.body_snippet || ""),
-  });
-  const needsEvidenceRepair = shouldVerifyBillEvent(candidate)
-    || shouldVerifyBillAmounts(content, candidate);
-  if (!missingType && !needsEvidenceRepair) {
-    return { candidate, providerUnavailable: candidate.event_verification?.status === "failed" };
-  }
-  try {
-    const choice = await dependencies.modelChoiceReader(userId);
-    const verified = await dependencies.candidateVerification.verifyEmailCandidate({
-      email: input.email || {},
-      candidate,
-      providerId: choice.provider,
-      model: choice.model,
-      runProviderRequest,
-    });
-    return {
-      candidate: verified,
-      providerUnavailable: verified.event_verification?.status === "failed",
-    };
-  } catch {
-    return {
-      candidate: missingType ? { ...candidate, type_verification: {
-        status: "failed", attempted_at: new Date().toISOString(),
-        attempts: (candidate.type_verification?.attempts ?? (candidate.type_verification ? 1 : 0)) + 1,
-      } } : candidate,
-      providerUnavailable: true,
-    };
-  }
+  // Planning is deterministic: callers supply an already parsed or owner-provided candidate.
+  if (!input.candidate) throw new TypeError("A parsed financial candidate is required");
 }
 
 export function createFinancialEmailPlanner({
   profileReader = readFinancialProfiles,
-  candidateExtractor = extractBillCandidate,
-  candidateVerification: suppliedCandidateVerification,
-  targetRanker,
-  modelChoiceReader = loadBillExtractChoice,
   metadataReader = async (userId) => ({
     ...await actualGetMetadata(userId),
     syncHealth: { state: "current", lastSuccessAt: null },
@@ -429,145 +342,108 @@ export function createFinancialEmailPlanner({
   transactionReader = queryTransactions,
   now = () => new Date(),
 }: FinancialEmailPlannerDependencies = {}) {
-  const candidateVerification = suppliedCandidateVerification || createBillCandidateVerificationService();
   return async function planFinancialEmailForUser(
     userId: string,
     input: FinancialEmailInput,
-    runProviderRequest?: BillProviderRequestRunner,
   ): Promise<FinancialEmailPlan> {
-    return withAiUsageContext({
-      userId,
-      origin: input.source === "transaction_import" || input.source === "financial_event" ? "transaction_import"
-        : input.source === "extract" ? "manual_extraction" : "reader_adoption",
-      accountId: input.sourceIdentity?.accountId,
-      emailId: input.providerMessageId,
-    }, async () => {
-      validateInput(userId, input);
-      const configuration = input.candidate && isIgnoredFinancialNotice(input.candidate)
-        ? { budgetId: null, revision: 0, profiles: [] } : await profileReader(userId);
-      const resolved = await resolveCandidate(userId, input, {
-        candidateExtractor,
-        candidateVerification,
-        modelChoiceReader,
-      }, runProviderRequest);
-      const policyCandidate = applyOwnerFinancialEmailPolicy(resolved.candidate);
-      const candidate = withFinancialEmailProviderTransactionIdentity(userId, input, policyCandidate);
-      const policy = classifyFinancialEmail(candidate);
-      const needsActualEvidence = policy.classification.documentKind === "credit_card_statement"
-        || Boolean(policy.intended && policy.intended !== "no_write");
-      const metadata = needsActualEvidence
-        ? await metadataReader(userId).catch(() => unavailableMetadata())
-        : { ...unavailableMetadata(), syncHealth: { state: "current", lastSuccessAt: null } };
-      const metadataAvailable = metadata.syncHealth.state === "current";
-      const match = matchFinancialProfile(configuration, input, candidate);
-      const mapped = match.profile && metadataAvailable
-        ? resolveFinancialProfileTargets(match.profile, match.resolution, candidate, metadata,
-          `${input.email?.subject || ""}\n${input.email?.body || input.email?.body_snippet || ""}`)
-        : { resolution: match.resolution, inference: null };
-      const today = todayYmd(now());
-      // Managed mapped entries reconcile against live SDK records at admission;
-      // their configured targets do not need a year of discovery history.
-      const historyResult: TransactionQueryResult = needsActualEvidence && metadataAvailable
-        && !(input.source === "financial_event" && mapped.inference)
-        ? await transactionReader(userId, {
-            start: addDaysYmd(today, -365),
-            end: today,
-            direction: "all",
-            include_transfers: true,
-            limit: 1000,
-          }).catch(() => ({ error: "transaction_history_unavailable" }))
-        : { transactions: [] };
-      const historyAvailable = !historyResult.error && !historyResult.sync_state;
-      const history = historyAvailable ? historyResult.transactions || [] : [];
-      const defaultRanker: FinancialTargetBundleRanker | undefined = input.assessmentMode !== "deterministic" && candidateVerification.rankEmailTargetBundles
-        ? async ({ candidate, options }) => {
-            try {
-              const choice = await modelChoiceReader(userId);
-              return await candidateVerification.rankEmailTargetBundles!({
-                email: input.email || {},
-                candidate,
-                options,
-                providerId: choice.provider,
-                model: choice.model,
-                runProviderRequest,
-              });
-            } catch {
-              return { status: "failed", key: null, confidence: null, evidence: null };
-            }
-          }
-        : undefined;
-      const inference = mapped.inference || await inferFinancialEmailTargets({
-        candidate,
-        classification: policy.classification,
-        intended: policy.intended,
-        metadata: metadataAvailable ? metadata : unavailableMetadata(),
-        history,
-        rankBundles: input.assessmentMode === "deterministic" ? undefined : targetRanker || defaultRanker,
-        evidenceText: String(input.email?.body || input.email?.body_snippet || ""),
-        allowNewPayee: input.source === "financial_event",
-      });
-      const targets = inference.targets;
-      const evidence = evidenceReasons(inference.candidate, policy, resolved.providerUnavailable);
-      const unresolved = targetReasons(targets, inference.reasons, metadataAvailable);
-      const profileReason = policy.intended !== "no_write" ? financialProfileReason(mapped.resolution) : null;
-      if (profileReason) unresolved.unshift(profileReason);
-      const reconciled = await reconcileCandidate(userId, inference.candidate, metadata, history, historyAvailable, {
-        occurrenceReader,
-        now,
-      }, input.source === "financial_event" && Boolean(policy.intended && policy.intended !== "no_write"));
-      const reconciliation = reconcileUpdateDisposition(reconciled, targets);
-      const reconciliationReview = reconciliationReasons(reconciliation)
-        .filter((item) => item.code === "reconciliation_conflict" || item.code === "reconciliation_unavailable");
-      const operation = finalOperation(policy, evidence, unresolved, reconciliation);
-      const completedPaymentReview = policy.intended === "no_write"
-        && policy.classification.documentKind !== "informational"
-        && reconciliation.status !== "already_recorded"
-        && reconciliation.status !== "already_scheduled"
-        ? [reconciliation.status === "needs_review"
-            ? reason("reconciliation_conflict", "Existing Actual activity conflicts with this payment confirmation.")
-            : reason("reconciliation_unavailable", "The completed payment could not be reconciled to Actual.")]
-        : [];
-      const reviewReasons = operation.kind === "no_write"
-        ? []
-        : policy.intended === "no_write"
-          ? [...evidence, ...completedPaymentReview]
-          : [...evidence, ...unresolved, ...reconciliationReview];
-      return {
-        profile: mapped.resolution,
-        profileSuggestion: suggestFinancialProfile({
-          input, candidate, intended: policy.intended, targets, resolution: mapped.resolution,
-          metadata: metadataAvailable ? metadata : null, reasons: inference.reasons,
-        }),
-        version: 1,
-        candidateSemanticsVersion: FINANCIAL_CANDIDATE_SEMANTICS_VERSION,
-        targetInferenceVersion: FINANCIAL_TARGET_INFERENCE_VERSION,
-        identity: financialEmailIdentity(userId, input),
-        candidate: inference.candidate,
-        classification: policy.classification,
-        operation,
-        targets,
-        reconciliation,
-        reviewReasons,
-        automation: financialEmailAutomationEligibility({
-          profile: mapped.resolution,
-          input,
-          candidate: inference.candidate,
-          evidence,
-          targets: unresolved,
-          reconciliation,
-          intended: policy.intended,
-        }),
-      };
+    validateInput(userId, input);
+    const configuration = isIgnoredFinancialNotice(input.candidate!)
+      ? { budgetId: null, revision: 0, profiles: [] } : await profileReader(userId);
+    const policyCandidate = applyOwnerFinancialEmailPolicy({ ...input.candidate! });
+    const candidate = withFinancialEmailProviderTransactionIdentity(userId, input, policyCandidate);
+    const policy = classifyFinancialEmail(candidate);
+    const needsActualEvidence = policy.classification.documentKind === "credit_card_statement"
+      || Boolean(policy.intended && policy.intended !== "no_write");
+    const metadata = needsActualEvidence
+      ? await metadataReader(userId).catch(() => unavailableMetadata())
+      : { ...unavailableMetadata(), syncHealth: { state: "current", lastSuccessAt: null } };
+    const metadataAvailable = metadata.syncHealth.state === "current";
+    const match = matchFinancialProfile(configuration, input, candidate);
+    const mapped = match.profile && metadataAvailable
+      ? resolveFinancialProfileTargets(match.profile, match.resolution, candidate, metadata,
+        `${input.email?.subject || ""}\n${input.email?.body || input.email?.body_snippet || ""}`)
+      : { resolution: match.resolution, inference: null };
+    const today = todayYmd(now());
+    // Managed mapped entries reconcile against live SDK records at admission;
+    // their configured targets do not need a year of discovery history.
+    const historyResult: TransactionQueryResult = needsActualEvidence && metadataAvailable
+      && !(input.source === "financial_event" && mapped.inference)
+      ? await transactionReader(userId, {
+          start: addDaysYmd(today, -365),
+          end: today,
+          direction: "all",
+          include_transfers: true,
+          limit: 1000,
+        }).catch(() => ({ error: "transaction_history_unavailable" }))
+      : { transactions: [] };
+    const historyAvailable = !historyResult.error && !historyResult.sync_state;
+    const history = historyAvailable ? historyResult.transactions || [] : [];
+    const inference = mapped.inference || await inferFinancialEmailTargets({
+      candidate,
+      classification: policy.classification,
+      intended: policy.intended,
+      metadata: metadataAvailable ? metadata : unavailableMetadata(),
+      history,
+      evidenceText: String(input.email?.body || input.email?.body_snippet || ""),
+      allowNewPayee: input.source === "financial_event",
     });
+    const targets = inference.targets;
+    const evidence = evidenceReasons(inference.candidate, policy);
+    const unresolved = targetReasons(targets, inference.reasons, metadataAvailable);
+    const profileReason = policy.intended !== "no_write" ? financialProfileReason(mapped.resolution) : null;
+    if (profileReason) unresolved.unshift(profileReason);
+    const reconciled = await reconcileCandidate(userId, inference.candidate, metadata, history, historyAvailable, {
+      occurrenceReader,
+      now,
+    }, input.source === "financial_event" && Boolean(policy.intended && policy.intended !== "no_write"));
+    const reconciliation = reconcileUpdateDisposition(reconciled, targets);
+    const reconciliationReview = reconciliationReasons(reconciliation)
+      .filter((item) => item.code === "reconciliation_conflict" || item.code === "reconciliation_unavailable");
+    const operation = finalOperation(policy, evidence, unresolved, reconciliation);
+    const completedPaymentReview = policy.intended === "no_write"
+      && policy.classification.documentKind !== "informational"
+      && reconciliation.status !== "already_recorded"
+      && reconciliation.status !== "already_scheduled"
+      ? [reconciliation.status === "needs_review"
+          ? reason("reconciliation_conflict", "Existing Actual activity conflicts with this payment confirmation.")
+          : reason("reconciliation_unavailable", "The completed payment could not be reconciled to Actual.")]
+      : [];
+    const reviewReasons = operation.kind === "no_write"
+      ? []
+      : policy.intended === "no_write"
+        ? [...evidence, ...completedPaymentReview]
+        : [...evidence, ...unresolved, ...reconciliationReview];
+    return {
+      profile: mapped.resolution,
+      profileSuggestion: suggestFinancialProfile({
+        input, candidate, intended: policy.intended, targets, resolution: mapped.resolution,
+        metadata: metadataAvailable ? metadata : null, reasons: inference.reasons,
+      }),
+      version: 1,
+      candidateSemanticsVersion: FINANCIAL_CANDIDATE_SEMANTICS_VERSION,
+      targetInferenceVersion: FINANCIAL_TARGET_INFERENCE_VERSION,
+      identity: financialEmailIdentity(userId, input),
+      candidate: inference.candidate,
+      classification: policy.classification,
+      operation,
+      targets,
+      reconciliation,
+      reviewReasons,
+      automation: financialEmailAutomationEligibility({
+        profile: mapped.resolution,
+        input,
+        candidate: inference.candidate,
+        evidence,
+        targets: unresolved,
+        reconciliation,
+        intended: policy.intended,
+      }),
+    };
   };
 }
 
 const defaultPlanner = createFinancialEmailPlanner();
 
-export function planFinancialEmail(
-  userId: string,
-  input: FinancialEmailInput,
-  runProviderRequest?: BillProviderRequestRunner,
-): Promise<FinancialEmailPlan> {
-  return defaultPlanner(userId, input, runProviderRequest);
+export function planFinancialEmail(userId: string, input: FinancialEmailInput): Promise<FinancialEmailPlan> {
+  return defaultPlanner(userId, input);
 }

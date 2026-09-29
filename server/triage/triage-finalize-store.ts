@@ -9,7 +9,6 @@ import type {
   TriageLane,
   TriageUrgency,
 } from "./triage-types.ts";
-import type { FinancialEmailPlan } from "../../shared/types/bills.ts";
 
 interface SnapshotTriageProjection {
   lane: TriageLane;
@@ -90,13 +89,11 @@ export async function updateTriageRow(email: TriageEmail, decision: TriageDecisi
   now,
   status = "complete",
   inferBillCandidate = true,
-  financialEmailPlan = null,
 }: {
   dbClient: TriageDb;
   now: Date;
   status?: string;
   inferBillCandidate?: boolean;
-  financialEmailPlan?: FinancialEmailPlan | null;
 }): Promise<void> {
   // Only semantic classification can admit a financial candidate. Money-related
   // wording in a rule or failure fallback is not evidence of a recordable event.
@@ -120,7 +117,6 @@ export async function updateTriageRow(email: TriageEmail, decision: TriageDecisi
               estimated_cost_usd = ?,
               latency_ms = ?,
               bill_candidate_json = ?,
-              financial_email_plan_json = ?,
               decision_metadata_json = ?,
               last_decision_reason = ?,
               last_triaged_at = ?,
@@ -144,7 +140,6 @@ export async function updateTriageRow(email: TriageEmail, decision: TriageDecisi
       decision.estimated_cost_usd,
       decision.latency_ms,
       billCandidate ? JSON.stringify(billCandidate) : null,
-      financialEmailPlan ? JSON.stringify(financialEmailPlan) : null,
       decision.decision_metadata ? JSON.stringify(decision.decision_metadata) : null,
       decision.last_decision_reason || null,
       nowIso(now),

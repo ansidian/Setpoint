@@ -1,8 +1,7 @@
 import type { BillCandidate, FinancialTargetConfidence, FinancialTargetKind, FinancialTargetProvenance } from "../../shared/types/bills.ts";
 import type { TransactionRecord } from "../../shared/types/transactions.ts";
 import type { TargetEvidence, TargetValue } from "./financialEmailImportedHistory.ts";
-import type { FinancialTargetBundleRanker } from "./financialEmailTargetInference.ts";
-import type { FinancialTargetRankingResult } from "./financialEmailTargetRanker.ts";
+import type { FinancialTargetBundleRanker, FinancialTargetRankingResult } from "./financialEmailTargetInference.ts";
 
 interface HistoryBundle {
   key: string;

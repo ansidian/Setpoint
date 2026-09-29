@@ -1,4 +1,4 @@
-import { financialEventStore, createFinancialEventStore, readManagedFinancialEmailUids,
+import { financialEventStore, createFinancialEventStore,
   type FinancialStatusDb, type FinancialDocument, type FinancialEvent } from "./financial-event-store.ts";
 import { canReviewKnownDetails, completionBlocker, dismissalBlocker, hasPendingFinancialPlan } from "./financial-event-completion-model.ts";
 import type { FinancialEmailPlan, FinancialPlanTarget, FinancialTargetKind } from "../../shared/types/bills.ts";
@@ -12,15 +12,6 @@ export { FINANCIAL_EVENT_STATUS_SELECT } from "./financial-event-store.ts";
 export function hydrateManagedFinancialActivity(row: Row | null, sources: Row[]) {
   const documents = sources.map(documentFromRow);
   return { documents, event: row ? eventFromRow(row, documents) : null };
-}
-
-/** Read-only ownership boundary shared by legacy ingestion and Inbox status. */
-export function listManagedEmailUids(userId: string, uids: string[], { dbClient }: { dbClient?: FinancialStatusDb } = {}): Promise<string[]> {
-  return readManagedFinancialEmailUids(userId, uids, dbClient);
-}
-
-export async function isManagedEmail(userId: string, uid: string, options?: { dbClient?: FinancialStatusDb }): Promise<boolean> {
-  return (await listManagedEmailUids(userId, [uid], options)).length > 0;
 }
 
 function emptyTarget(kind: FinancialTargetKind): FinancialPlanTarget {

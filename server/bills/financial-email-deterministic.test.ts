@@ -11,7 +11,7 @@ const planner=createFinancialEmailPlanner({
 });
 describe('deterministic financial planning',()=>{
   it('leaves incomplete parser evidence in review without manufacturing model audit outcomes',async()=>{
-    const result=await planner('owner',{assessmentMode:'deterministic',providerId:'citi',source:'financial_event',
+    const result=await planner('owner',{providerId:'citi',source:'financial_event',
       email:{from_address:'citicards@info6.citi.com',subject:'Your statement',body:'Your Costco Anywhere Visa statement is now available.'},
       candidate:{type:'transfer',event_kind:'statement_issued',event_evidence:'Your Costco Anywhere Visa statement is now available.'},
     });
@@ -23,7 +23,7 @@ describe('deterministic financial planning',()=>{
     expect(result.candidate.amount).toBeFalsy();
   });
   it('requires a parsed candidate instead of falling through to extraction',async()=>{
-    await expect(planner('owner',{assessmentMode:'deterministic',providerId:'citi',email:{body:'A statement'}})).rejects.toThrow('requires a parsed candidate');
+    await expect(planner('owner',{providerId:'citi',email:{body:'A statement'}})).rejects.toThrow('parsed financial candidate is required');
   });
   it('does not grant authority from a shared sender without the matching provider identity',()=>{
     const configuration={budgetId:'budget',revision:2,profiles:[{id:'water',providerId:'sgv-water' as const,name:'SGV Water',enabled:true,budgetId:'budget',senderAddresses:['no-reply@invoicecloud.net'],target:{kind:'utility' as const,scheduleId:'water-schedule'}}]};

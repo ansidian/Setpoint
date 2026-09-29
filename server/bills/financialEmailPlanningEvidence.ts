@@ -36,13 +36,9 @@ function validYmd(value: unknown): boolean {
 export function evidenceReasons(
   candidate: BillCandidate,
   policy: FinancialEmailPolicyResult,
-  providerUnavailable: boolean,
 ): FinancialPlanReason[] {
   if (candidate.event_verification?.assessment?.outcome === "nonfinancial") return [];
   const reasons: FinancialPlanReason[] = [];
-  if (providerUnavailable) {
-    reasons.push(reason("provider_unavailable", "Semantic verification is currently unavailable."));
-  }
   if (policy.classification.reasons.includes("credit_account_evidence_missing")) {
     reasons.push(reason("semantic_event_ambiguous", "The email does not establish whether this is a card payment or a bill.", "type"));
   }

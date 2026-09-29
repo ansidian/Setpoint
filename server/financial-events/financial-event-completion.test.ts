@@ -12,6 +12,7 @@ import { projectManagedFinancialPlan } from "./financial-event-status.ts";
 import { readFinancialProfiles } from "../bills/financial-profiles.ts";
 import type { FinancialEmailSource } from "../email/financial-email-source.ts";
 import type { EmailAuthenticationProjection } from "../../shared/types/email.ts";
+import { parsedAssessment, startProviderEpoch } from "./financial-event-service.test-utils.ts";
 
 const DATE = "2026-09-06";
 const ARRIVAL = Date.parse(`${DATE}T12:00:00Z`);
@@ -26,20 +27,20 @@ describe("owner completion of managed financial events", () => {
   let ledger: Map<string, FinancialEventOperation>;
   let loseResponse: boolean;
   let blockPreview: boolean;
-  let assessmentPaused: boolean;
   let metadataUnavailable: boolean;
   let providerSources: Map<string, FinancialEmailSource>;
 
   beforeEach(async () => {
     db = createClient({ url: "file::memory:" });
     await db.execute("PRAGMA foreign_keys = ON");
-    for (const file of ["001_ea_tables.sql", "013_email_index_normalized_date.sql", "025_email_thread_identity.sql", "054_email_sender_authentication.sql", "062_financial_events.sql", "071_financial_event_readiness.sql", "068_financial_candidate_dismissal.sql", "067_financial_event_ai_requests.sql", "069_financial_profiles.sql", "080_financial_connections.sql", "081_provider_financial_assessments.sql", "083_financial_owner_requests.sql", "070_financial_document_sources.sql"]) {
+    for (const file of ["001_ea_tables.sql", "013_email_index_normalized_date.sql", "025_email_thread_identity.sql", "054_email_sender_authentication.sql", "062_financial_events.sql", "071_financial_event_readiness.sql", "068_financial_candidate_dismissal.sql", "067_financial_event_ai_requests.sql", "069_financial_profiles.sql", "080_financial_connections.sql", "081_provider_financial_assessments.sql", "083_financial_owner_requests.sql", "070_financial_document_sources.sql", "084_retire_legacy_financial_documents.sql"]) {
       await db.executeMultiple(readFileSync(new URL(`../db/migrations/${file}`, import.meta.url), "utf8"));
     }
     await addFinancialCorrectionSchema(db);
     await db.execute({ sql: "UPDATE ea_financial_workflow_state SET cutover_at = ?", args: [new Date(ARRIVAL - 60_000).toISOString()] });
+    await startProviderEpoch(db, ARRIVAL - 60_000);
     now = ARRIVAL; candidates = new Map(); providerSources = new Map(); ledger = new Map(); loseResponse = false; blockPreview = false;
-    assessmentPaused = false; metadataUnavailable = false;
+    metadataUnavailable = false;
     store = createFinancialEventStore(db, () => now);
   });
   afterEach(() => db.close());
@@ -90,13 +91,12 @@ describe("owner completion of managed financial events", () => {
     };
   }
   function worker() {
-    return createFinancialEventWorker({ store, now: () => now, canRun: async () => !assessmentPaused,
+    return createFinancialEventWorker({ store, now: () => now,
       profileReader: (userId) => readFinancialProfiles(userId, { dbClient: db }),
       sourceAcquirer: async (_userId, uid) => structuredClone(providerSources.get(uid)!),
-      assessDocument: async (_owner, email) => {
-        if (assessmentPaused) throw new Error("Financial document assessment is unavailable while email AI is paused or disabled.");
-        return candidates.get(email.email_id) || null;
-      },
+      // Stands in for the deterministic company registry so owner-confirmed correlation can be exercised with fictional candidates.
+      assessProvider: email => parsedAssessment(candidates.get([...providerSources.keys()].reverse()
+        .find(uid => providerSources.get(uid)!.body === email.body) || "")),
       metadataReader: async () => {
         if (metadataUnavailable) throw new Error("Actual metadata is unavailable");
         return { accounts: [{ id: "card", name: "Visa 1111" }, { id: "checking", name: "Checking 2222" }],
@@ -148,6 +148,7 @@ describe("owner completion of managed financial events", () => {
     await arrive(); await arrive("related");
     for (const token of ["one", "two"]) {
       const document = await store.claimDocument(token);
+      await store.saveProviderAssessment(document!, parsedAssessment(partial));
       await store.associateDocument(document!, { candidate: partial, contentHash: "source", eventId: "existing", nextAttemptAt: now });
     }
     const claim = await store.claimEvent("automatic");
@@ -228,8 +229,7 @@ describe("owner completion of managed financial events", () => {
     expect(ledger.size).toBe(1);
   });
 
-  it("records owner-supplied date and account without category, sender authentication, candidate, or enabled AI", async () => {
-    assessmentPaused = true;
+  it("records owner-supplied date and account without category, sender authentication or candidate", async () => {
     await arrive("receipt", null);
     const input = await request();
     const queued = await completion().complete("owner", input);
@@ -292,11 +292,10 @@ describe("owner completion of managed financial events", () => {
     await expect(completion().complete("owner", await request())).rejects.toMatchObject({ status: 409 });
   });
 
-  it("executes owner confirmation while an unrelated new document is waiting for paused AI", async () => {
+  it("executes owner confirmation while an unrelated new document is waiting for assessment", async () => {
     await arrive("receipt", null);
     await completion().complete("owner", await request());
     await arrive("newsletter", null, { body: "This week's neighborhood news.", sender: "news@example.test" });
-    assessmentPaused = true;
     await worker().processNextEvent();
     expect(await store.getDocumentForEmail("owner", "newsletter")).toMatchObject({ status: "pending", processedRevision: 0 });
     expect((await store.getEventForEmail("owner", "receipt"))?.status).toBe("settled");
@@ -307,6 +306,7 @@ describe("owner completion of managed financial events", () => {
     const plan = await authorizeAutomaticEntry();
     await arrive();
     const document = await store.claimDocument("assessment");
+    await store.saveProviderAssessment(document!, parsedAssessment(partial));
     await store.associateDocument(document!, { candidate: partial, contentHash: "source", eventId: "existing" });
     const automatic = await store.claimEvent("automatic-preview");
     const queued = await completion().complete("owner", await request());
@@ -317,6 +317,7 @@ describe("owner completion of managed financial events", () => {
 
     await arrive("second");
     const second = await store.claimDocument("second");
+    await store.saveProviderAssessment(second!, parsedAssessment(partial));
     await store.associateDocument(second!, { candidate: partial, contentHash: "second", eventId: "automatic-won" });
     const winner = await store.claimEvent("automatic-won");
     expect(await store.admitOperation(winner!, { automatic: true }, plan)).toBe(true);

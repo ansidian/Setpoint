@@ -4,14 +4,13 @@ AI email classification: the batch worker, model client, preflight rules, escala
 
 ## Files
 
-- `triage-worker.ts` — batch triage of snapshot items, applies escalation policy, plans financial candidates before finalization, and stages exact USD expenses for preview and policy-gated automatic execution
+- `triage-worker.ts` — batch triage of snapshot items and escalation policy; persists the triage financial candidate without planning or staging it
 - `triage-types.ts` — shared triage rows, decisions, rules, model, queue, and dependency contracts
 - `triage-projections-model.ts` — pure DB-free triage projections: email interests, event details, and sound trigger
 - `triage-job-store.ts` — `ea_triage_jobs` queue SQL: claim/requeue/complete/defer/recover-stale/prune
-- `triage-finalize-store.ts` — `ea_email_triage` + snapshot persistence: load email, persist decisions/candidates/financial plans, attach to snapshot
+- `triage-finalize-store.ts` — `ea_email_triage` + snapshot persistence: load email, persist decisions/candidates (historical financial plans are left untouched), attach to snapshot
 - `triage-model-client.ts` — LLM triage call and decision parsing; records each provider attempt before semantic parsing, owns financial candidate admission, and embeds the bills domain's shared first-pass semantic instructions
-- `financial-document-classifier.ts` — public independent financial assessment seam; uses the configured strong model and verification tier, bypasses Inbox admission rules, and distinguishes explicit negative assessments from provider failure
-- `fixtures/financial-admission.json` — paired fictional fulfillment, purchase, return, refund and incomplete-bill sources with financial-admission labels; model accuracy is measured only by explicit live evaluation
+- `fixtures/financial-admission.json` — paired fictional fulfillment, purchase, return, refund and incomplete-bill sources with financial-admission labels for deterministic provider-parser tests
 - `triage-decision-normalize.ts` — normalizes decisions: action, rationale, confidence
 - `triage-heuristic-scorer.ts` — dev-only no-LLM classifier: sender/subject/body bands → lane (the `no_model` path)
 - `triage-escalation-policy.ts` — routes actions to destinations (snooze/archive/bill/…)

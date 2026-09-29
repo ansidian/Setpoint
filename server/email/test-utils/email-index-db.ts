@@ -23,6 +23,7 @@ const CORE_MIGRATION_FILES = [
   "054_email_sender_authentication.sql",
   "062_financial_events.sql", "080_financial_connections.sql", "081_provider_financial_assessments.sql", "083_financial_owner_requests.sql", "071_financial_event_readiness.sql",
   "068_financial_candidate_dismissal.sql",
+  "084_retire_legacy_financial_documents.sql",
 ];
 
 const DEFAULT_EXTRA_MIGRATION_FILES = [

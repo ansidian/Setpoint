@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { createFinancialEmailPlanner } from "./financial-email-planner.ts";
-import { createBillCandidateVerificationService } from "./bill-candidate-verification-service.ts";
 import type { ActualMetadata } from "../../shared/types/actual.ts";
 import type { BillCandidate, FinancialEmailInput } from "../../shared/types/bills.ts";
 import type { FinancialProfile, FinancialProfileConfiguration } from "../../shared/types/financial-profiles.ts";
@@ -35,9 +34,6 @@ function planner(profiles: FinancialProfile[] = [], overrides: Partial<ActualMet
     profileReader: async () => config,
     metadataReader: async () => ({ ...metadata, ...overrides, syncHealth: { state: "current", lastSuccessAt: "2026-09-09T12:00:00Z" } }),
     occurrenceReader: async () => ({ schedules: [] }), transactionReader: async () => ({ transactions: [] }),
-    candidateVerification: createBillCandidateVerificationService({ credentialResolver: async () => null,
-      providers: { openai: { extract: async () => { throw new Error("No additional provider facts in this fixture"); } } } }),
-    modelChoiceReader: async () => ({ provider: "openai", model: "fixture" }),
     now: () => new Date("2026-09-09T12:00:00Z"),
   });
 }

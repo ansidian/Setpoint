@@ -7,7 +7,7 @@ import type { Client, InStatement } from "@libsql/client";
 
 const testDb = vi.hoisted(() => ({ client: null as Client | null }));
 
-// test-architecture: allow-boundary-mock -- Default planner database reads use the same migrated ephemeral SQLite as the worker, keeping real profile/settings queries isolated from the development database.
+// test-architecture: allow-boundary-mock -- Default-connection reads by triage collaborators use the same migrated ephemeral SQLite as the worker, keeping real settings queries isolated from the development database.
 vi.mock("../db/connection.ts", () => ({
   default: {
     execute: (statement: InStatement) => testDb.client!.execute(statement),
@@ -42,27 +42,22 @@ describe("email triage worker model routing", () => {
 
   it("routes a receipt rule through semantic triage and persists its incomplete financial candidate", async () => {
     const dbClient = testDb.client!;
-    const queued = await queueEmail(dbClient, {
+    await queueEmail(dbClient, {
       subject: "Your Apple receipt",
       body_snippet: "Order total $84.12",
       body_text: "Your Apple order total is $84.12.",
       from_name: "Apple",
       from_address: "orders@apple.com",
     });
-    await dbClient.execute({
-      sql: "UPDATE ea_email_index SET sender_authentication_json = ? WHERE uid = ?",
-      args: [JSON.stringify({
-        version: 1,
-        status: "pass",
-        provider: "gmail",
-        source: "gmail_authentication_results",
-        headerFromDomain: "apple.com",
-        dkim: [{ result: "pass", domain: "apple.com", aligned: true }],
-        spf: null,
-        dmarc: { result: "pass", domain: "apple.com", aligned: true },
-        evaluatedAt: "2026-05-03T12:00:00.000Z",
-      }), queued.uid],
-    });
+    const billCandidate = {
+      payee_hint: "Apple",
+      amount: 84.12,
+      amount_kind: "order_total",
+      amount_candidates: [{ kind: "order_total", value: 84.12 }],
+      event_kind: "purchase",
+      event_confidence: 0.99,
+      event_evidence: "order total",
+    };
     const modelClient = {
       classify: vi.fn(async ({ tier }) => ({
         decision: {
@@ -74,57 +69,17 @@ describe("email triage worker model routing", () => {
           action: "Review order",
           deadline_at: null,
           confidence: 0.98,
-          bill_candidate: {
-            payee_hint: "Apple",
-            amount: 84.12,
-            amount_kind: "order_total",
-            amount_candidates: [{ kind: "order_total", value: 84.12 }],
-            event_kind: "purchase",
-            event_confidence: 0.99,
-            event_evidence: "order total",
-          },
+          bill_candidate: billCandidate,
         },
         usage: { input_tokens: 80, output_tokens: 30 },
         latency_ms: 300,
         tier,
       })),
     };
-    let plannerInput: Record<string, unknown> | null = null;
-    const financialEmailPlanner = async (_userId: string, input: { candidate?: Record<string, unknown> | null; sourceIdentity?: Record<string, unknown> }) => {
-      plannerInput = input as Record<string, unknown>;
-      const candidate = {
-        ...input.candidate,
-        target_policy_key: "policy_software",
-        target_confidence: 0.99,
-        target_evidence: "Apple order",
-        target_verification: { status: "selected" as const, option_count: 2, provider: "openai", model: "gpt-5.4-mini" },
-        category_id: "category-software",
-        category_label: "Software",
-        semantic_enrichment: { status: "complete" as const, provider: "openai", model: "gpt-5.4-mini" },
-      };
-      return {
-        version: 1 as const,
-        candidate,
-        classification: { documentKind: "one_time_transaction" as const, eventKind: "purchase" as const, confidence: 0.99, reasons: [] },
-        operation: { intended: "create_transaction" as const, kind: "review" as const, reasons: ["due_date_missing" as const] },
-        targets: {
-          account: { kind: "account" as const, status: "unresolved" as const, provenance: [] },
-          payee: { kind: "payee" as const, status: "resolved" as const, id: "payee-apple", label: "Apple", provenance: [] },
-          category: { kind: "category" as const, status: "resolved" as const, id: "category-software", label: "Software", provenance: [] },
-          fromAccount: { kind: "from_account" as const, status: "not_applicable" as const, provenance: [] },
-          toAccount: { kind: "to_account" as const, status: "not_applicable" as const, provenance: [] },
-          schedule: { kind: "schedule" as const, status: "not_applicable" as const, provenance: [] },
-        },
-        reconciliation: { status: "not_checked" as const, disposition: "review" as const },
-        reviewReasons: [{ code: "due_date_missing" as const, message: "A date is required.", field: "due_date", blocking: true }],
-        automation: { eligible: false, gates: [], reasons: ["due_date_missing" as const] },
-      };
-    };
 
     await processNextEmailTriageJob({
       dbClient,
       modelClient,
-      financialEmailPlanner: financialEmailPlanner as never,
       now: new Date("2026-05-03T12:20:00.000Z"),
     });
 
@@ -139,32 +94,10 @@ describe("email triage worker model routing", () => {
       args: ["msg-1"],
     });
     const triageCandidate = JSON.parse(String(rows.rows[0]!.triage_candidate));
-    const financialPlan = JSON.parse(String(rows.rows[0]!.financial_plan));
     const snapshotCandidate = JSON.parse(String(rows.rows[0]!.snapshot_candidate));
     expect(triageCandidate).toEqual(snapshotCandidate);
-    expect(triageCandidate).toMatchObject({
-      target_policy_key: "policy_software",
-      category_id: "category-software",
-      semantic_enrichment: { status: "complete" },
-    });
-    expect(financialPlan).toMatchObject({
-      version: 1,
-      candidate: triageCandidate,
-      operation: { kind: "review" },
-    });
-    expect(plannerInput).toMatchObject({
-      sourceIdentity: {
-        provider: "gmail",
-        accountId: "gmail-work",
-        senderAddress: "orders@apple.com",
-        senderAuthentication: "pass",
-        authenticationEvidence: expect.arrayContaining([
-          "sender-auth:v1",
-          "dmarc:pass",
-          "dkim:pass:aligned",
-        ]),
-      },
-    });
+    expect(triageCandidate).toMatchObject(billCandidate);
+    expect(rows.rows[0]!.financial_plan).toBeNull();
   });
 
   it("routes high-risk payment mail directly to the strong model and stores usage", async () => {

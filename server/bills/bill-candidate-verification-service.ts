@@ -12,11 +12,6 @@ import { createOpenAiProvider } from "./bill-extractors/openai.ts";
 import { verifyBillAmounts } from "./billAmountVerifier.ts";
 import { verifyBillEvent } from "./billEventVerifier.ts";
 import { isIgnoredFinancialNotice } from "./financialEmailClassificationPolicy.ts";
-import {
-  rankFinancialTargetBundles,
-  type FinancialTargetRankingOption,
-  type FinancialTargetRankingResult,
-} from "./financialEmailTargetRanker.ts";
 
 /** Managed planning can durably admit/reuse each individual provider request. */
 export type BillProviderRequestRunner = (
@@ -82,40 +77,7 @@ export function createBillCandidateVerificationService({
     })).candidate;
   }
 
-  async function rankEmailTargetBundles({
-    email,
-    candidate,
-    options,
-    providerId,
-    model,
-    runProviderRequest,
-  }: {
-    email: BillEmailContext;
-    candidate: BillCandidate;
-    options: FinancialTargetRankingOption[];
-    providerId: string;
-    model: string;
-    runProviderRequest?: BillProviderRequestRunner;
-  }): Promise<FinancialTargetRankingResult> {
-    if (providerId !== "openai" && providerId !== "anthropic") {
-      return { status: "failed", key: null, confidence: null, evidence: null };
-    }
-    const content = trimBillBody({
-      subject: String(email.subject || ""),
-      from: String(email.from || email.from_address || ""),
-      body: String(email.body || email.body_snippet || ""),
-    });
-    return rankFinancialTargetBundles({
-      content,
-      candidate,
-      options,
-      provider: runProviderRequest ? { extract: (request) => runProviderRequest(providerId, request,
-        () => configuredProviders[providerId].extract(request)) } : configuredProviders[providerId],
-      model,
-    });
-  }
-
-  return { verifyEmailCandidate, rankEmailTargetBundles };
+  return { verifyEmailCandidate };
 }
 
 export { validateFinancialSemanticIdentity, hasVerbatimFinancialEvidence } from "./financialEmailClassificationPolicy.ts";

@@ -3,7 +3,7 @@ import { apiFetch } from "./apiFetch";
 import type { BillPaySeedRequest, FinancialEmailPlan } from "../../shared/types/bills";
 import type { FinancialEventCompletionRequest, FinancialEventDismissalRequest, FinancialEventReviewRequest } from "../../shared/types/financial-operations";
 
-export const resolveFinancialEmailPlan = (payload: BillPaySeedRequest): Promise<FinancialEmailPlan> =>
+export const resolveFinancialEmailPlan = (payload: BillPaySeedRequest): Promise<FinancialEmailPlan | null> =>
   apiFetch("/api/briefing/bills/resolve", { method: "POST", body: JSON.stringify(payload || {}) });
 
 // Demo completion is fictional and remains inside the in-memory dispatcher.

@@ -50,8 +50,7 @@
       "todoist-webhook.ts"
     ],
     "triage": [
-      "triage-worker.ts",
-      "financial-document-classifier.ts"
+      "triage-worker.ts"
     ],
     "financial-events": [
       "financial-event-service.ts",

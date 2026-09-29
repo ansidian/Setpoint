@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { createFinancialEmailPlanner } from "./financial-email-planner.ts";
-import { verifyBillEvent } from "./billEventVerifier.ts";
 import type { BillCandidate } from "../../shared/types/bills.ts";
 
 const fixedNow = () => new Date("2026-09-01T12:00:00.000Z");
@@ -49,7 +48,7 @@ describe("financial event admission planning", () => {
     expect(result).toMatchObject({operation:{intended:outcome === "nonfinancial" ? "no_write" : null,
       kind:outcome === "nonfinancial" ? "no_write" : "review"},automation:{eligible:false}});
   });
-  it.each(["accepted", "failed", "legacy_failed"])("plans a mapped payment with a %s event audit safely", async (audit) => {
+  it("plans a mapped card payment from an accepted event", async () => {
     const plan = createFinancialEmailPlanner({
       profileReader: async () => ({ budgetId: "budget-1", revision: 1, profiles: [{
         id: "card-payment", name: "Everyday Card", enabled: true, budgetId: "budget-1", senderAddresses: ["payments@card.example"],
@@ -87,28 +86,12 @@ describe("financial event admission planning", () => {
         account_last4_confidence: 0.99,
         account_last4_evidence: "Card ending in 4242",
       });
-    const body = "Your payment of $42.25 is scheduled for September 10, 2026. Card ending in 4242.";
-    const audited = audit === "accepted" ? payment : (await verifyBillEvent({
-      content: body, candidate: payment, requireAdmission: true,
-      provider: { extract: async () => { throw new Error("Provider unavailable"); } },
-      providerId: "openai", model: "fixture",
-    })).candidate;
-    // Saved failures from before admission outcomes existed must also block writes.
-    if (audit === "legacy_failed") delete audited.event_verification?.assessment;
     const result = await plan("u1", {
-      candidate: audited,
+      candidate: payment,
       sourceIdentity: { senderAddress: "payments@card.example", senderAuthentication: "pass" },
       email: { subject: "Your card payment is scheduled",
         body: "Your payment of $42.25 is scheduled for September 10, 2026. Card ending in 4242." },
     });
-
-    if (audit !== "accepted") {
-      expect(result.operation.kind).toBe("review");
-      expect(result.automation.eligible).toBe(false);
-      expect(result.reviewReasons).toContainEqual(expect.objectContaining({ code: "provider_unavailable", blocking: true }));
-      expect(result.candidate.event_verification?.status).toBe("failed");
-      return;
-    }
 
     expect(result.operation).toEqual({ intended: "create_transfer_schedule", kind: "create_transfer_schedule", reasons: [] });
     expect(result.targets).toMatchObject({

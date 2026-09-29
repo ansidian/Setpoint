@@ -15,10 +15,6 @@ import type {
   FinancialTargetProvenance,
 } from "../../shared/types/bills.ts";
 import type { TransactionRecord } from "../../shared/types/transactions.ts";
-import type {
-  FinancialTargetRankingOption,
-  FinancialTargetRankingResult,
-} from "./financialEmailTargetRanker.ts";
 import {
   exactImportedTargetEvidence,
   type TargetEvidence,
@@ -34,6 +30,19 @@ import { discoverCorroboratedMerchantHistory, rankMerchantPayeeEvidence } from "
 import { cashbackSettlementAccountEvidence, isCashbackIncome, semanticRewardCategoryEvidence, semanticRewardPayeeEvidence } from "./financialEmailRewardEvidence.ts";
 import { historyBundles, stableHistoryEvidence, rankHistoryBundles, modelEvidence } from "./financialEmailHistoryEvidence.ts";
 import { hasVerbatimFinancialEvidence } from "./financialEmailClassificationPolicy.ts";
+export interface FinancialTargetRankingOption {
+  key: string;
+  description: string;
+}
+
+export interface FinancialTargetRankingResult {
+  status: "selected" | "unresolved" | "failed";
+  key: string | null;
+  confidence: number | null;
+  evidence: string | null;
+}
+
+/** Injection seam for constrained target ranking; production planning supplies none. */
 export type FinancialTargetBundleRanker = (input: {
   candidate: BillCandidate;
   options: FinancialTargetRankingOption[];

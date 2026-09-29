@@ -3,12 +3,14 @@ import { createMigratedDb, queueEmail } from "./triage-worker.test-utils.ts";
 import { processNextEmailTriageJob } from "./triage-worker.ts";
 
 describe("financial workflow ownership during Inbox triage", () => {
-  it("preserves the Inbox decision while leaving managed financial planning in its own queue", async () => {
+  it("preserves the Inbox decision without planning and keeps a stored historical financial plan unchanged", async () => {
     const dbClient = await createMigratedDb();
     try {
       await queueEmail(dbClient, { subject: "Your receipt", body_text: "Purchase total $12.00", body_snippet: "Purchase total $12.00" });
       await dbClient.execute(`INSERT INTO ea_financial_documents (user_id, account_id, email_uid, created_at, updated_at)
         VALUES ('user-1', 'gmail-work', 'msg-1', 1, 1)`);
+      const historicalPlan = JSON.stringify({ version: 1, operation: { kind: "review" } });
+      await dbClient.execute({ sql: "UPDATE ea_email_triage SET financial_email_plan_json = ? WHERE email_id = 'msg-1'", args: [historicalPlan] });
       await processNextEmailTriageJob({
         dbClient,
         now: new Date("2026-05-03T12:20:00Z"),
@@ -23,7 +25,7 @@ describe("financial workflow ownership during Inbox triage", () => {
         },
       });
       expect((await dbClient.execute("SELECT triage_status, lane, financial_email_plan_json FROM ea_email_triage WHERE email_id = 'msg-1'")).rows[0])
-        .toEqual({ triage_status: "complete", lane: "fyi", financial_email_plan_json: null });
+        .toEqual({ triage_status: "complete", lane: "fyi", financial_email_plan_json: historicalPlan });
       expect((await dbClient.execute("SELECT status, candidate_json FROM ea_financial_documents WHERE email_uid = 'msg-1'")).rows[0])
         .toEqual({ status: "pending", candidate_json: null });
       expect((await dbClient.execute("SELECT id FROM ea_transaction_import_items")).rows).toEqual([]);

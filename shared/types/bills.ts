@@ -231,7 +231,6 @@ export interface FinancialEmailSourceIdentity {
 }
 
 export interface FinancialEmailInput {
-  assessmentMode?: "deterministic";
   providerId?: FinancialProviderId;
   email?: BillEmailContext;
   candidate?: BillCandidate | null;

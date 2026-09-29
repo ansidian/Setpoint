@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import type { Client } from "@libsql/client";
 import type { BillCandidate } from "../../shared/types/bills.ts";
+import type { FinancialProviderAssessment } from "../../shared/types/financial-parsers.ts";
 
 export const day = "2026-09-06";
 export const arrival = Date.parse(day + "T18:20:00Z");
@@ -50,6 +51,17 @@ export function authentication(source: Source) {
   };
 }
 
+/** Starts the provider parser epoch at a fixed instant: arrivals received and indexed after it become `provider_v1`. */
+export async function startProviderEpoch(db: Client, at: number): Promise<void> {
+  await db.execute({ sql: "UPDATE ea_financial_workflow_state SET provider_parser_cutover_at = ?", args: [new Date(at).toISOString()] });
+}
+
+/** Wraps a fictional candidate as the deterministic registry's parsed result; null reads as an unrecognized sender. */
+export function parsedAssessment(candidate: BillCandidate | null | undefined): FinancialProviderAssessment {
+  return candidate
+    ? { status: "parsed", providerId: "paypal", parserVersion: "fixture", templateId: "fixture", reasons: [], candidate: structuredClone(candidate) }
+    : { status: "unrecognized", providerId: null, reasons: [] };
+}
 
 /** Explicit fictional owner authority for receipt-worker scenarios. */
 export async function saveReceiptProfile(db: Client, enabled = true): Promise<void> {
@@ -97,4 +109,5 @@ export async function initializeFinancialEventTestSchema(db: Client): Promise<vo
     await addFinancialCorrectionSchema(db);
     await db.executeMultiple(readFileSync(new URL("../db/migrations/082_provider_legacy_admission.sql", import.meta.url), "utf8"));
     await db.executeMultiple(readFileSync(new URL("../db/migrations/083_financial_owner_requests.sql", import.meta.url), "utf8"));
+    await db.executeMultiple(readFileSync(new URL("../db/migrations/084_retire_legacy_financial_documents.sql", import.meta.url), "utf8"));
 }

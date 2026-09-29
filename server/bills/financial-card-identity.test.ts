@@ -22,7 +22,7 @@ function statement(extra = ""): FinancialEmailInput {
   const email = { ...source, body: `${source.body}\n${extra}` };
   const assessment = assessProviderFinancialEmail(email);
   if (assessment.status !== "parsed") throw new Error(`Statement did not parse: ${assessment.reasons.join(",")}`);
-  return { source: "financial_event", providerMessageId: "statement", providerId: "sofi", assessmentMode: "deterministic",
+  return { source: "financial_event", providerMessageId: "statement", providerId: "sofi",
     candidate: assessment.candidate, email: { subject: email.subject, body: email.body },
     sourceIdentity: { provider: "gmail", accountId: "mail", senderAddress: "sofi@o.sofi.org", senderAuthentication: "pass" } };
 }

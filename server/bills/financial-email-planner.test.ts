@@ -173,91 +173,24 @@ describe("financial email planner contract", () => {
     });
   });
 
-  it("does not call extraction or verification for a persisted complete candidate", async () => {
-    const plan = createFinancialEmailPlanner({
-      profileReader: async () => ({ budgetId: null, revision: 0, profiles: [] }),
-      candidateExtractor: async () => {
-        throw new Error("unexpected first-pass extraction");
-      },
-      candidateVerification: {
-        verifyEmailCandidate: async () => {
-          throw new Error("unexpected provider verification");
-        },
-      },
-      metadataReader: async () => ({
-        accounts: [], payees: [], payeeMap: {}, categories: [], schedules: [], recentTransactions: [],
-        syncHealth: { state: "current", lastSuccessAt: null },
-      }),
-      occurrenceReader: async () => ({ schedules: [] }),
-      transactionReader: async () => ({ transactions: [] }),
-      now: fixedNow,
-    });
-
-    const result = await plan("u1", { candidate: candidate("purchase") });
-
-    expect(result.classification.documentKind).toBe("one_time_transaction");
-    expect(result.reviewReasons.map((item) => item.code)).not.toContain("provider_unavailable");
-  });
-
-  it("converts verification failure into a reviewable plan", async () => {
-    const plan = createFinancialEmailPlanner({
-      profileReader: async () => ({ budgetId: null, revision: 0, profiles: [] }),
-      candidateVerification: {
-        verifyEmailCandidate: async () => {
-          throw new Error("provider down");
-        },
-      },
-      modelChoiceReader: async () => ({ provider: "openai", model: "fixture" }),
-      metadataReader: async () => ({
-        accounts: [], payees: [], payeeMap: {}, categories: [], schedules: [], recentTransactions: [],
-        syncHealth: { state: "current", lastSuccessAt: null },
-      }),
-      occurrenceReader: async () => ({ schedules: [] }),
-      transactionReader: async () => ({ transactions: [] }),
-      now: fixedNow,
-    });
-    const result = await plan("u1", {
+  it("keeps a candidate without an established event in review", async () => {
+    const result = await planner()("u1", {
       email: { subject: "Statement", body: "A statement is available." },
-      candidate: { payee: "Example", event_kind: null, semantic_enrichment: undefined },
+      candidate: { payee: "Example", event_kind: null },
     });
 
     expect(result.operation.kind).toBe("review");
-    expect(result.reviewReasons.map((item) => item.code)).toEqual(expect.arrayContaining([
-      "provider_unavailable",
-      "semantic_event_missing",
-    ]));
+    expect(result.reviewReasons.map((item) => item.code)).toContain("semantic_event_missing");
   });
 
-  it("does not silently no-write a low-confidence cancellation when verification fails", async () => {
-    const plan = createFinancialEmailPlanner({
-      profileReader: async () => ({ budgetId: null, revision: 0, profiles: [] }),
-      candidateVerification: {
-        verifyEmailCandidate: async () => {
-          throw new Error("provider down");
-        },
-      },
-      modelChoiceReader: async () => ({ provider: "openai", model: "fixture" }),
-      metadataReader: async () => ({
-        accounts: [], payees: [], payeeMap: {}, categories: [], schedules: [], recentTransactions: [],
-        syncHealth: { state: "current", lastSuccessAt: null },
-      }),
-      occurrenceReader: async () => ({ schedules: [] }),
-      transactionReader: async () => ({ transactions: [] }),
-      now: fixedNow,
-    });
-    const result = await plan("u1", {
+  it("does not silently no-write a low-confidence cancellation", async () => {
+    const result = await planner()("u1", {
       email: { body: "Your payment was cancelled." },
-      candidate: candidate("payment_cancelled", {
-        event_confidence: 0.4,
-        semantic_enrichment: undefined,
-      }),
+      candidate: candidate("payment_cancelled", { event_confidence: 0.4, semantic_enrichment: undefined }),
     });
 
     expect(result.operation).toMatchObject({ intended: "no_write", kind: "review" });
-    expect(result.reviewReasons.map((item) => item.code)).toEqual(expect.arrayContaining([
-      "provider_unavailable",
-      "semantic_event_ambiguous",
-    ]));
+    expect(result.reviewReasons.map((item) => item.code)).toEqual(["semantic_event_ambiguous"]);
   });
 
   it("maps an exact existing schedule to no-write with its Actual targets resolved", async () => {
@@ -532,6 +465,6 @@ describe("financial email planner contract", () => {
   });
 
   it("rejects malformed caller input instead of returning a plan", async () => {
-    await expect(planner()("u1", {})).rejects.toThrow("email body or persisted candidate is required");
+    await expect(planner()("u1", {})).rejects.toThrow("A parsed financial candidate is required");
   });
 });

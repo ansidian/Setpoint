@@ -2,12 +2,9 @@ import { assessProviderFinancialEmail } from "../financial-parsers/index.ts";
 import { FINANCIAL_PROVIDER_CATALOG, type FinancialProviderAssessment } from "../../shared/types/financial-parsers.ts";
 import { randomUUID } from "node:crypto";
 import { readFinancialProfiles } from "../bills/financial-profiles.ts";
-import { assessFinancialDocument, canAssessFinancialDocuments } from "../triage/financial-document-classifier.ts";
 import { planFinancialEmail, financialEmailSourceIdentity, financialProfileCycleKey, matchFinancialProfile, selectSemanticBillAmount, hasFinancialSemanticConflict, isIgnoredFinancialNotice } from "../bills/financial-email-planner.ts";
 import { invalidateActualAfterTransactionImport } from "../bills/bills-service.ts";
 import { publishCurrentDashboardEvent } from "../dashboard/current-events.ts";
-import { withAiUsageContext } from "../platform/ai-usage.ts";
-import { requireCompleteEmailEvidence } from "../email/email-evidence.ts";
 import { fetchFinancialEmailSourceForUid } from "../email/email-service.ts";
 import { getMetadata as actualGetMetadata } from "../actual/actual.ts";
 import { resolveFinancialDocumentDate, financialDocumentSupportsDate } from "./financial-event-date.ts";
@@ -21,6 +18,7 @@ import type { ActualFinancialOperationResult } from "../../shared/types/financia
 import { ownerCompletionNeedsAccountEvidence, ownerCompletionOperation, ownerCompletionPlan, ownerCompletionSourceChanged } from "./financial-event-completion-model.ts";
 
 const PROCESSING_RETRY_MS = 15 * 60_000;
+const LEGACY_ASSESSMENT_RETIRED = "Retired with the legacy financial assessment path.";
 
 function retryAt(now: number, attempts: number): number {
   return now + Math.min(30_000 * 2 ** Math.min(attempts, 7), 60 * 60_000);
@@ -44,8 +42,7 @@ function canCheckExistingBeforeReview(plan: FinancialEmailPlan): boolean {
 
 export function createFinancialEventWorker({
   store = financialEventStore,
-  assessDocument = assessFinancialDocument,
-  canRun = canAssessFinancialDocuments,
+  assessProvider = assessProviderFinancialEmail,
   planner = planFinancialEmail,
   execute = createFinancialEventExecutor(),
   metadataReader = actualGetMetadata,
@@ -55,8 +52,8 @@ export function createFinancialEventWorker({
   afterWrite = invalidateActualAfterTransactionImport,
 }: {
   store?: FinancialEventStore;
-  assessDocument?: typeof assessFinancialDocument;
-  canRun?: typeof canAssessFinancialDocuments;
+  /** Deterministic company-registry parsing; the only automatic candidate source. */
+  assessProvider?: typeof assessProviderFinancialEmail;
   planner?: typeof planFinancialEmail;
   execute?: ReturnType<typeof createFinancialEventExecutor>;
   metadataReader?: typeof actualGetMetadata;
@@ -73,23 +70,6 @@ export function createFinancialEventWorker({
     const metadata = ownerCompletionNeedsAccountEvidence(event)
       ? await metadataReader(event.userId).catch(() => null) : null;
     return ownerCompletionSourceChanged(event, metadata);
-  }
-
-  async function assessSource(document: FinancialDocument, contentHash: string) {
-    requireCompleteEmailEvidence(document.body);
-    const reusable = document.contentHash === contentHash && (document.candidate || document.processedRevision > 0);
-    if (reusable) return document.candidate;
-    if (!await canRun(document.userId)) throw new Error("Email AI is paused or disabled.");
-    const assessmentAttempt = await store.reserveDocumentAssessment(document, contentHash) || 0;
-    if (!assessmentAttempt) throw new Error("Assessment retry limit reached for this source, or source claim changed.");
-    const candidate = await withAiUsageContext({ userId: document.userId, origin: "transaction_import", accountId: document.accountId, emailId: document.emailUid },
-      () => assessDocument(document.userId, {
-        user_id: document.userId, account_id: document.accountId, email_id: document.emailUid,
-        from_name: document.fromName, from_address: document.fromAddress, subject: document.subject,
-        body_text: document.body, email_date: document.emailDate, email_date_utc: document.emailDate,
-        thread_id: document.threadId,
-      }));
-    return candidate;
   }
 
   async function acquireOriginal(document: FinancialDocument): Promise<FinancialDocument> {
@@ -122,10 +102,10 @@ export function createFinancialEventWorker({
         const senderAddress = document.fromAddress.trim().toLowerCase();
         const indexedSource = { fromAddress: senderAddress, subject: document.subject, body: document.body };
         const knownSender = FINANCIAL_PROVIDER_CATALOG.some(provider => (provider.senderAddresses as readonly string[]).includes(senderAddress)
-          && (provider.id !== "ebay" || assessProviderFinancialEmail(indexedSource).status !== "unrecognized"));
+          && (provider.id !== "ebay" || assessProvider(indexedSource).status !== "unrecognized"));
         if (knownSender) document = await acquireOriginal(document);
         contentHash = financialDocumentContentHash(document);
-        assessment = assessProviderFinancialEmail({ fromAddress: document.fromAddress, subject: document.subject, body: document.body, emailDate: document.emailDate });
+        assessment = assessProvider({ fromAddress: document.fromAddress, subject: document.subject, body: document.body, emailDate: document.emailDate });
         if (!await store.saveProviderAssessment(document, assessment)) throw new Error("The source changed during provider assessment.");
         document = { ...document, providerAssessment: assessment };
         if (assessment.status === "review" || assessment.status === "nonfinancial") {
@@ -143,36 +123,18 @@ export function createFinancialEventWorker({
           return true;
         }
       }
-      if (assessment?.status === "unrecognized") {
-        // Senders without a dedicated parser get no automatic AI assessment and
-        // never enter review; the owner records them explicitly from the reader.
+      if (assessment?.status !== "parsed") {
+        // Senders without a dedicated parser, and historical documents from before
+        // the provider epoch, get no automatic AI assessment and never enter review;
+        // the owner records them explicitly from the reader.
         const requested = document.ownerRequestedAt != null;
         await store.settleDocument(document, { candidate: requested ? document.candidate || {} : null, contentHash, assessment,
-          status: requested ? "retry" : "ignored", nextAttemptAt: null, error: requested ? document.error : null });
+          status: requested ? "retry" : "ignored", nextAttemptAt: null,
+          error: requested ? document.error : assessment ? null : LEGACY_ASSESSMENT_RETIRED });
         publish(document.userId);
         return true;
       }
-      let assessedCandidate = assessment?.status === "parsed" ? assessment.candidate : await assessSource(document, contentHash);
-      if (assessedCandidate && !isIgnoredFinancialNotice(assessedCandidate) && !document.acquiredSource
-        && (assessedCandidate.type === "bill" || assessedCandidate.type === "income" || assessedCandidate.event_kind === "payment_scheduled"
-          || (assessedCandidate.type === "transfer" && assessedCandidate.event_kind === "statement_issued")
-          || document.senderAuthentication?.status !== "pass")) {
-        // Preserve the initial assessment if acquisition retries. PDF evidence
-        // gets its own bounded assessment identity once the complete source lands.
-        document = { ...document, candidate: assessedCandidate, contentHash };
-        if (!await store.reserveDocumentSource(document)) throw new Error("Source acquisition retry limit reached, or source claim changed. Review the original email.");
-        const acquired = await sourceAcquirer(document.userId, document.emailUid);
-        if (!await store.saveDocumentSource(document, acquired)) throw new Error("The email changed during source acquisition.");
-        const refreshed = await store.getDocumentForEmail(document.userId, document.emailUid);
-        if (!refreshed || refreshed.revision !== document.revision || refreshed.claimToken !== document.claimToken) {
-          throw new Error("The email changed during source acquisition.");
-        }
-        const previousHash = contentHash;
-        document = { ...refreshed, candidate: assessedCandidate, contentHash: previousHash };
-        contentHash = financialDocumentContentHash(document);
-        if (contentHash !== previousHash) assessedCandidate = await assessSource(document, contentHash);
-      }
-      const candidate = resolveFinancialDocumentDate({ ...document, candidate: assessedCandidate }, new Date(now()));
+      const candidate = resolveFinancialDocumentDate({ ...document, candidate: assessment.candidate }, new Date(now()));
       if (!candidate || isIgnoredFinancialNotice(candidate)) {
         await store.settleDocument(document, { candidate: null, contentHash, status: "ignored" });
         publish(document.userId);
@@ -238,9 +200,9 @@ export function createFinancialEventWorker({
       publish(document.userId);
     } catch (error) {
       const terminalAssessment = error instanceof Error && "code" in error
-        && ["financial_assessment_exhausted", "email_evidence_incomplete", "email_evidence_oversized"].includes(String(error.code));
+        && ["email_evidence_incomplete", "email_evidence_oversized"].includes(String(error.code));
       const providerReview = document.processingPolicy === "provider_v1" && /Source acquisition retry limit/.test(errorText(error));
-      const failedAssessment = providerReview ? assessProviderFinancialEmail({fromAddress: document.fromAddress, subject: document.subject, body: document.body, emailDate: document.emailDate}) : null;
+      const failedAssessment = providerReview ? assessProvider({fromAddress: document.fromAddress, subject: document.subject, body: document.body, emailDate: document.emailDate}) : null;
       const reviewAssessment = failedAssessment && failedAssessment.status !== "unrecognized"
         ? { ...failedAssessment, status: "review" as const, reasons: ["original_source_unavailable"] } : undefined;
       await store.settleDocument(document, { candidate: document.candidate, contentHash: document.contentHash || "", status: "retry",
@@ -350,8 +312,8 @@ export function createFinancialEventWorker({
           await settle(event, null, "needs_review", "The provider template needs manual review before recording in Actual.");
           return true;
         }
-        if (!deterministic && !await canRun(event.userId)) {
-          await settle(event, plan, "waiting", "Financial processing is paused while email AI is disabled.");
+        if (!deterministic) {
+          await settle(event, null, "needs_review", "Automatic planning is retired for historical mail. Complete or dismiss this record manually.");
           return true;
         }
         const evidence = combineFinancialEventEvidence(event.documents);
@@ -365,10 +327,10 @@ export function createFinancialEventWorker({
           return true;
         }
         const primary = event.documents.find((document) => document.candidate && document.senderAuthentication?.status === "pass")!;
-        plan = await planner(event.userId, { ...(deterministic ? { assessmentMode: "deterministic" as const, providerId: primary.providerAssessment?.providerId ?? undefined } : {}), candidate: evidence.candidate, source: "financial_event", providerMessageId: event.id,
+        plan = await planner(event.userId, { providerId: primary.providerAssessment?.providerId ?? undefined, candidate: evidence.candidate, source: "financial_event", providerMessageId: event.id,
           email: { from: primary.fromAddress, subject: primary.subject, body: evidence.body },
           sourceIdentity: financialEmailSourceIdentity({ account_id: primary.accountId, from_address: primary.fromAddress,
-            sender_authentication_json: primary.senderAuthentication }) }, store.createAiRequestRunner(event));
+            sender_authentication_json: primary.senderAuthentication }) });
         const blocker = financialEventPlanBlocker(plan);
         if (blocker) {
           const existingCheck = canCheckExistingBeforeReview(plan) ? buildFinancialEventOperation(event.id, plan) : null;

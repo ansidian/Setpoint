@@ -154,32 +154,21 @@ describe("provider attempts to durable AI accounting", () => {
     });
   });
 
-  it("counts amount/event audits and a rejected matching result independently", async () => {
-    vi.stubGlobal("fetch", async (_input: unknown, options?: RequestInit) => {
-      const prompt = JSON.parse(String(options?.body)).instructions as string;
-      if (prompt.startsWith("Choose")) return billResponse({ target_policy_key: "invented", target_confidence: 0.99, target_evidence: "purchase" });
-      return billResponse({
-        amount: 20, amount_kind: "order_total", amount_candidates: [{ kind: "minimum_due", value: 10, evidence: "Minimum payment $10" }, { kind: "order_total", value: 20, evidence: "Your purchase total $20" }],
-        event_kind: "purchase", event_confidence: 0.99, event_evidence: "purchase",
-        type: "expense", type_confidence: 0.99, type_evidence: "purchase",
-      });
-    });
+  it("counts amount and event audits independently", async () => {
+    vi.stubGlobal("fetch", async () => billResponse({
+      amount: 20, amount_kind: "order_total", amount_candidates: [{ kind: "minimum_due", value: 10, evidence: "Minimum payment $10" }, { kind: "order_total", value: 20, evidence: "Your purchase total $20" }],
+      event_kind: "purchase", event_confidence: 0.99, event_evidence: "purchase",
+      type: "expense", type_confidence: 0.99, type_evidence: "purchase",
+    }));
     const service = createBillCandidateVerificationService({ credentialResolver: resolveApiKey });
-    await scoped(async () => {
-      const verified = await service.verifyEmailCandidate({
-        email: { body: "Your purchase total $20. Minimum payment $10." },
-        candidate: { amount: 10, amount_kind: "payment_amount", event_kind: "other" },
-        providerId: "openai", model,
-      });
-      expect(verified).toMatchObject({ amount: 20, event_kind: "purchase" });
-      const ranking = await service.rankEmailTargetBundles({
-        email: { body: "Your purchase total $20." }, candidate: verified,
-        options: [{ key: "option_1", description: "Household" }], providerId: "openai", model,
-      });
-      expect(ranking.status).toBe("unresolved");
-    });
+    const verified = await scoped(() => service.verifyEmailCandidate({
+      email: { body: "Your purchase total $20. Minimum payment $10." },
+      candidate: { amount: 10, amount_kind: "payment_amount", event_kind: "other" },
+      providerId: "openai", model,
+    }));
+    expect(verified).toMatchObject({ amount: 20, event_kind: "purchase" });
     const rows = await events();
-    expect(rows.map((row) => row.purpose)).toEqual(["verification", "verification", "matching"]);
+    expect(rows.map((row) => row.purpose)).toEqual(["verification", "verification"]);
     expect(rows.every((row) => row.outcome === "succeeded" && row.input_tokens === 80)).toBe(true);
   });
 
@@ -208,17 +197,6 @@ describe("provider attempts to durable AI accounting", () => {
     expect(rows).toHaveLength(2);
     expect(new Set(rows.map((row) => row.event_id)).size).toBe(2);
     expect(new Set(rows.map((row) => row.run_id)).size).toBe(2);
-  });
-
-  it("retains a transport failure swallowed by matching", async () => {
-    vi.stubGlobal("fetch", async () => { throw new Error("offline"); });
-    const service = createBillCandidateVerificationService({ credentialResolver: resolveApiKey });
-    const result = await scoped(() => service.rankEmailTargetBundles({
-      email: { body: "Purchase" }, candidate: { event_kind: "purchase" },
-      options: [{ key: "option_1", description: "Household" }], providerId: "openai", model,
-    }));
-    expect(result.status).toBe("failed");
-    expect(await events()).toMatchObject([{ purpose: "matching", outcome: "provider_error", input_tokens: null, http_status: null }]);
   });
 
   it("does not persist real-model evaluation calls and restores production accounting afterward", async () => {
@@ -264,6 +242,7 @@ describe("provider attempts to durable AI accounting", () => {
     await migrate("080_financial_connections.sql");
     await migrate("081_provider_financial_assessments.sql");
     await migrate("083_financial_owner_requests.sql");
+    await migrate("084_retire_legacy_financial_documents.sql");
     for (const file of ["030_owner_bootstrap.sql", "041_email_transaction_imports.sql", "042_transaction_import_item_subject.sql", "053_transaction_import_financial_plans.sql", "055_generic_financial_email_imports.sql", "056_generic_financial_email_automation.sql", "058_generic_financial_email_income_automation.sql", "059_generic_financial_email_transfer_automation.sql", "063_financial_activity.sql", "064_financial_corrections.sql"]) await migrate(file);
     const candidate = {
       amount: 20, type: "expense", type_confidence: 0.99, type_evidence: "purchase",

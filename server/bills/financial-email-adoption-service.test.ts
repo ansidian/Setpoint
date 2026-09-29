@@ -1,26 +1,30 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { Client } from "@libsql/client";
 import { createMigratedDb, queueEmail } from "../triage/triage-worker.test-utils.ts";
 import { resolveFinancialEmailSeed } from "./financial-email-adoption-service.ts";
 import type { BillCandidate, FinancialEmailPlan } from "../../shared/types/bills.ts";
 import { FINANCIAL_CANDIDATE_SEMANTICS_VERSION } from "./bill-semantic-prompt.ts";
 import { FINANCIAL_TARGET_INFERENCE_VERSION } from "./financialEmailTargetInference.ts";
-import { createFinancialEmailPlanner } from "./financial-email-planner.ts";
-import { readFinancialProfiles } from "./financial-profiles.ts";
 
-function reviewPlan(candidate: BillCandidate): FinancialEmailPlan {
+const candidate: BillCandidate = {
+  payee: "Costco", amount: 84.12, amount_kind: "order_total",
+  event_kind: "purchase", event_confidence: 0.99, event_evidence: "warehouse order",
+};
+
+function reviewPlan(value: BillCandidate, key = "financial-email:v1:test"): FinancialEmailPlan {
   return {
     version: 1,
     profile: { status: "missing", budgetId: null, revision: 0, reason: "Review this entry and configure a profile." },
     candidateSemanticsVersion: FINANCIAL_CANDIDATE_SEMANTICS_VERSION,
     targetInferenceVersion: FINANCIAL_TARGET_INFERENCE_VERSION,
-    identity: { version: 1, status: "resolved", key: "financial-email:v1:test" },
-    candidate: { ...candidate, payee: "Costco" },
+    identity: { version: 1, status: "resolved", key },
+    candidate: value,
     classification: { documentKind: "one_time_transaction", eventKind: "purchase", confidence: 0.99, reasons: [] },
     operation: { intended: "create_transaction", kind: "review", reasons: ["account_target_unresolved"] },
     targets: {
       account: { kind: "account", status: "unresolved", provenance: [] },
       payee: { kind: "payee", status: "resolved", id: "payee-costco", label: "Costco", provenance: [] },
-      category: { kind: "category", status: "resolved", id: "warehouse", label: "Warehouse", provenance: [] },
+      category: { kind: "category", status: "not_applicable", provenance: [] },
       fromAccount: { kind: "from_account", status: "not_applicable", provenance: [] },
       toAccount: { kind: "to_account", status: "not_applicable", provenance: [] },
       schedule: { kind: "schedule", status: "not_applicable", provenance: [] },
@@ -32,273 +36,78 @@ function reviewPlan(candidate: BillCandidate): FinancialEmailPlan {
 }
 
 describe("resolveFinancialEmailSeed", () => {
-  it("persists a planned triage candidate once and reuses the complete plan", async () => {
-    const dbClient = await createMigratedDb();
-    await queueEmail(dbClient, {
-      subject: "Your warehouse order",
-      body_snippet: "Order total $84.12",
-      body_text: "Your Costco warehouse order total is $84.12.",
-      from_name: "Costco",
-      from_address: "orders@costco.com",
-    });
-    const candidate = {
-      payee_hint: "Costco",
-      amount: 84.12,
-      amount_kind: "order_total" as const,
-      event_kind: "purchase" as const,
-      event_confidence: 0.99,
-      event_evidence: "warehouse order",
-    };
+  let dbClient: Client;
+  const payload = () => ({ emailId: "msg-1", accountId: "gmail-work", dbClient });
+
+  beforeEach(async () => {
+    dbClient = await createMigratedDb();
+  });
+  afterEach(() => dbClient.close());
+
+  async function storePlan(json: string | null) {
+    await queueEmail(dbClient, { subject: "Your warehouse order", from_address: "orders@costco.com",
+      body_text: "Your Costco warehouse order total is $84.12." });
     await dbClient.execute({
-      sql: "UPDATE ea_email_triage SET bill_candidate_json = ? WHERE user_id = ? AND account_id = ? AND email_id = ?",
-      args: [JSON.stringify(candidate), "user-1", "gmail-work", "msg-1"],
+      sql: "UPDATE ea_email_triage SET bill_candidate_json = ?, financial_email_plan_json = ? WHERE user_id = ? AND email_id = ?",
+      args: [JSON.stringify(candidate), json, "user-1", "msg-1"],
     });
-    const planner = vi.fn(async (_userId: string, input: { candidate?: BillCandidate | null }) => reviewPlan(input.candidate || {}));
+  }
 
-    const first = await resolveFinancialEmailSeed(
-      "user-1",
-      { emailId: "msg-1", accountId: "gmail-work", dbClient },
-      { planner: planner as never },
-    );
-    const second = await resolveFinancialEmailSeed(
-      "user-1",
-      { emailId: "msg-1", accountId: "gmail-work", dbClient },
-      { planner: planner as never },
-    );
-    const stored = await dbClient.execute({
-      sql: "SELECT bill_candidate_json, financial_email_plan_json FROM ea_email_triage WHERE email_id = ?",
-      args: ["msg-1"],
-    });
+  async function storedPlanJson() {
+    const rows = await dbClient.execute("SELECT financial_email_plan_json FROM ea_email_triage WHERE email_id = 'msg-1'");
+    return rows.rows[0]?.financial_email_plan_json ?? null;
+  }
 
-    expect(second).toEqual(first);
-    expect(JSON.parse(String(stored.rows[0]!.bill_candidate_json))).toEqual(first.candidate);
-    expect(JSON.parse(String(stored.rows[0]!.financial_email_plan_json))).toEqual(first);
-    // test-architecture: allow-boundary-interaction -- planner invocation is the outbound AI/Actual read boundary; durable plan reuse is observable only by proving the second resolution avoided that boundary.
-    expect(planner).toHaveBeenCalledTimes(1);
-    await dbClient.close();
-  });
-
-  it("plans pasted content without attempting triage persistence", async () => {
-    const dbClient = await createMigratedDb();
-    const candidate = { payee_hint: "Power", amount: 42 };
-    const planner = vi.fn(async () => reviewPlan(candidate));
-
-    const result = await resolveFinancialEmailSeed(
-      "user-1",
-      { body: "Power bill total $42", candidate, source: "pasted_text", dbClient },
-      { planner: planner as never },
-    );
-
-    expect(result.candidate).toMatchObject({ payee: "Costco", amount: 42 });
-    const rows = await dbClient.execute("SELECT financial_email_plan_json FROM ea_email_triage");
-    expect(rows.rows).toHaveLength(0);
-    await dbClient.close();
-  });
-
-  it("refreshes a cached unresolved payee once for the current target inference", async () => {
-    const dbClient = await createMigratedDb();
-    await queueEmail(dbClient, {
-      subject: "A transaction was made on your card",
-      body_snippet: "Merchant ACME STORE #104",
-      body_text: "Amount $42.25 Merchant ACME STORE #104 Card ending in 4242",
-      from_name: "Card Alerts",
-      from_address: "alerts@example.com",
-    });
-    const candidate = {
-      payee_hint: "ACME STORE #104",
-      amount: 42.25,
-      event_kind: "purchase" as const,
-      event_confidence: 0.99,
-      event_evidence: "Merchant ACME STORE #104",
-    };
+  it("returns a valid historical plan unchanged without rewriting it", async () => {
     const stale = reviewPlan(candidate);
     stale.targetInferenceVersion = 2;
-    stale.candidate = candidate;
-    stale.targets.payee = { kind: "payee", status: "unresolved", provenance: [] };
-    stale.operation = { intended: "create_transaction", kind: "review", reasons: ["payee_target_unresolved"] };
-    stale.reviewReasons = [{ code: "payee_target_unresolved", message: "Choose a payee.", field: "payee", blocking: true }];
-    await dbClient.execute({
-      sql: `UPDATE ea_email_triage
-            SET bill_candidate_json = ?, financial_email_plan_json = ?
-            WHERE user_id = ? AND account_id = ? AND email_id = ?`,
-      args: [JSON.stringify(candidate), JSON.stringify(stale), "user-1", "gmail-work", "msg-1"],
-    });
-    const refreshed = reviewPlan(candidate);
-    const planner = vi.fn(async () => refreshed);
-
-    const first = await resolveFinancialEmailSeed(
-      "user-1",
-      { emailId: "msg-1", accountId: "gmail-work", dbClient },
-      { planner: planner as never },
-    );
-    const second = await resolveFinancialEmailSeed(
-      "user-1",
-      { emailId: "msg-1", accountId: "gmail-work", dbClient },
-      { planner: planner as never },
-    );
-
-    expect(first).toEqual(refreshed);
-    expect(second).toEqual(refreshed);
-    // test-architecture: allow-boundary-interaction -- the planner is the outbound AI/Actual read boundary; one-time persisted upgrade behavior cannot be proven from the equal plan value alone.
-    expect(planner).toHaveBeenCalledTimes(1);
-    await dbClient.close();
-  });
-
-  it("refreshes and persists an old category-only utility blocker once", async () => {
-    const dbClient = await createMigratedDb();
-    await queueEmail(dbClient, {
-      subject: "Your Power Co bill", from_address: "bills@power.example",
-      body_text: "Your Power Co bill total is $42.25, due September 10, 2026.",
-    });
-    const candidate: BillCandidate = {
-      type: "bill", payee: "Power Co", amount: 42.25, amount_kind: "total_due",
-      amount_candidates: [{ kind: "total_due", value: 42.25, confidence: 0.99 }],
-      event_kind: "bill_issued", event_confidence: 0.99, event_evidence: "Your Power Co bill",
-      event_verification: { status: "kept_initial", provider: "openai", model: "fixture" },
-      due_date: "2026-09-10", currency: "USD",
-      semantic_enrichment: { status: "complete", provider: "openai", model: "fixture" },
-    };
-    const stale = reviewPlan(candidate);
-    stale.candidate = candidate;
-    stale.targetInferenceVersion = 5;
-    stale.operation = { intended: "create_schedule", kind: "review", reasons: ["category_target_unresolved"] };
-    stale.targets.category = { kind: "category", status: "unresolved", provenance: [] };
-    stale.reviewReasons = [{ code: "category_target_unresolved", message: "Choose a category.", field: "category", blocking: true }];
-    await dbClient.execute({
-      sql: "UPDATE ea_email_triage SET bill_candidate_json = ?, financial_email_plan_json = ? WHERE email_id = ?",
-      args: [JSON.stringify(candidate), JSON.stringify(stale), "msg-1"],
-    });
-    let metadataUnavailable = false;
-    const planner = createFinancialEmailPlanner({
-      profileReader: (userId) => readFinancialProfiles(userId, { dbClient }),
-      metadataReader: async () => {
-        if (metadataUnavailable) throw new Error("Actual metadata is temporarily unavailable");
-        return {
-          accounts: [{ id: "checking", name: "Checking", type: "checking" }],
-          payees: [{ id: "power", name: "Power Co" }], payeeMap: { power: "Power Co" },
-          categories: [], schedules: [], recentTransactions: [], syncHealth: { state: "current" },
-        };
-      },
-      transactionReader: async () => ({ transactions: [7, 8].map((month) => ({
-        id: `power-${month}`, date: `2026-0${month}-10`, amount: 42.25, direction: "expense" as const,
-        payee: "Power Co", payeeId: "power", category: "", account: "Checking", accountId: "checking", notes: "",
-      })) }),
-      occurrenceReader: async () => ({ schedules: [], syncHealth: { state: "current" } }),
-      now: () => new Date("2026-09-01T12:00:00.000Z"),
-    });
-    const dependencies = { planner };
-    const payload = { emailId: "msg-1", accountId: "gmail-work", dbClient };
-    const first = await resolveFinancialEmailSeed("user-1", payload, dependencies);
-    expect(first.targetInferenceVersion).toBe(FINANCIAL_TARGET_INFERENCE_VERSION);
-    expect(first.targets).toMatchObject({
-      account: { status: "resolved", id: "checking" }, payee: { status: "resolved", id: "power" },
-      category: { status: "unresolved" },
-    });
-    expect(first.automation.gates.find((gate) => gate.gate === "targets")).toEqual({ gate: "targets", status: "fail", reasons: ["profile_required"] });
-    expect(first.operation).toMatchObject({ intended: "create_schedule", kind: "review", reasons: ["profile_required"] });
-    expect(first.reviewReasons.map((reason) => reason.code)).not.toContain("category_target_unresolved");
-    metadataUnavailable = true;
-    expect(await resolveFinancialEmailSeed("user-1", payload, dependencies)).toEqual(first);
-    const stored = await dbClient.execute("SELECT financial_email_plan_json FROM ea_email_triage WHERE email_id = 'msg-1'");
-    expect(JSON.parse(String(stored.rows[0]!.financial_email_plan_json))).toEqual(first);
-    await dbClient.close();
-  });
-
-  it("preserves historical registered-provider decisions without reassessing them", async () => {
-    const dbClient = await createMigratedDb();
-    await queueEmail(dbClient, {
-      subject: "Your transfer request is processing",
-      body_snippet: "$22.25 to EXAMPLE BANK x-0001",
-      body_text: "Your $22.25 transfer request is processing from PayPal balance to EXAMPLE BANK x-0001.",
-      from_name: "PayPal",
-      from_address: "service@paypal.com",
-    });
-    const candidate = {
-      amount: 22.25,
-      event_kind: "payment_scheduled" as const,
-      event_confidence: 0.99,
-      event_evidence: "transfer request is processing",
-      type: "transfer",
-    };
-    const stale = reviewPlan(candidate);
     delete stale.candidateSemanticsVersion;
-    stale.candidate = candidate;
-    stale.operation = { intended: "create_transfer_schedule", kind: "review", reasons: ["from_account_target_unresolved"] };
-    stale.reviewReasons = [{ code: "from_account_target_unresolved", message: "Choose a funding account.", field: "from_account", blocking: true }];
-    await dbClient.execute({
-      sql: `UPDATE ea_email_triage
-            SET bill_candidate_json = ?, financial_email_plan_json = ?
-            WHERE user_id = ? AND account_id = ? AND email_id = ?`,
-      args: [JSON.stringify(candidate), JSON.stringify(stale), "user-1", "gmail-work", "msg-1"],
-    });
-    const first = await resolveFinancialEmailSeed("user-1", { emailId:"msg-1",accountId:"gmail-work",dbClient });
-    const second = await resolveFinancialEmailSeed("user-1", { emailId:"msg-1",accountId:"gmail-work",dbClient });
-    expect(first).toEqual(stale);
-    expect(second).toEqual(stale);
-    const saved=await dbClient.execute("SELECT financial_email_plan_json FROM ea_email_triage WHERE email_id='msg-1'");
-    expect(JSON.parse(String(saved.rows[0]!.financial_email_plan_json))).toEqual(stale);
-    await dbClient.close();
+    const json = JSON.stringify(stale);
+    await storePlan(json);
+
+    expect(await resolveFinancialEmailSeed("user-1", payload())).toEqual(stale);
+    expect(await resolveFinancialEmailSeed("user-1", payload())).toEqual(stale);
+    expect(await storedPlanJson()).toBe(json);
   });
 
-  it("refreshes a stored unavailable-authentication plan when indexed Gmail evidence now passes", async () => {
-    const dbClient = await createMigratedDb();
-    await queueEmail(dbClient, {
-      subject: "Your warehouse order",
-      body_snippet: "Order total $84.12",
-      body_text: "Your Costco warehouse order total is $84.12.",
-      from_name: "Costco",
-      from_address: "orders@costco.com",
-    });
-    const candidate = {
-      payee_hint: "Costco",
-      amount: 84.12,
-      amount_kind: "order_total" as const,
-      event_kind: "purchase" as const,
-      event_confidence: 0.99,
-      event_evidence: "warehouse order",
-    };
-    const stale = reviewPlan(candidate);
-    stale.automation.gates = [{
-      gate: "authenticity",
-      status: "fail",
-      reasons: ["sender_authentication_unavailable"],
-    }];
-    await dbClient.execute({
-      sql: `UPDATE ea_email_index
-            SET sender_authentication_json = ?
-            WHERE user_id = ? AND account_id = ? AND uid = ?`,
-      args: [JSON.stringify({
-        version: 1,
-        status: "pass",
-        provider: "gmail",
-        source: "gmail_authentication_results",
-        headerFromDomain: "costco.com",
-        dkim: [],
-        spf: null,
-        dmarc: { result: "pass", domain: "costco.com", aligned: true },
-        evaluatedAt: "2026-09-01T20:00:00.000Z",
-      }), "user-1", "gmail-work", "msg-1"],
-    });
-    await dbClient.execute({
-      sql: `UPDATE ea_email_triage
-            SET bill_candidate_json = ?, financial_email_plan_json = ?
-            WHERE user_id = ? AND account_id = ? AND email_id = ?`,
-      args: [JSON.stringify(candidate), JSON.stringify(stale), "user-1", "gmail-work", "msg-1"],
-    });
-    const refreshed = reviewPlan(candidate);
-    refreshed.automation.gates = [{ gate: "authenticity", status: "pass", reasons: [] }];
-    const planner = vi.fn(async (_userId: string, input: { sourceIdentity?: { senderAuthentication?: string } }) => {
-      expect(input.sourceIdentity?.senderAuthentication).toBe("pass");
-      return refreshed;
-    });
+  it.each([
+    ["missing", null],
+    ["malformed", "{not json"],
+    ["invalid", JSON.stringify({ version: 1, identity: { version: 1 } })],
+  ])("returns null for a %s stored plan without planning", async (_label, json) => {
+    await storePlan(json);
 
-    await expect(resolveFinancialEmailSeed(
-      "user-1",
-      { emailId: "msg-1", accountId: "gmail-work", dbClient },
-      { planner: planner as never },
-    )).resolves.toEqual(refreshed);
-    const stored = await dbClient.execute("SELECT financial_email_plan_json FROM ea_email_triage WHERE email_id = 'msg-1'");
-    expect(JSON.parse(String(stored.rows[0]!.financial_email_plan_json))).toEqual(refreshed);
-    await dbClient.close();
+    expect(await resolveFinancialEmailSeed("user-1", payload())).toBeNull();
+    expect(await storedPlanJson()).toBe(json);
+  });
+
+  it("returns null without an email id, even for pasted content", async () => {
+    expect(await resolveFinancialEmailSeed("user-1", {
+      body: "Power bill total $42", candidate: { payee: "Power", amount: 42 }, source: "pasted_text", dbClient,
+    })).toBeNull();
+  });
+
+  it("prefers the managed financial-event plan over a stored historical plan", async () => {
+    await storePlan(JSON.stringify(reviewPlan(candidate)));
+    // Mirrors the post-cutover arrival trigger that enrolls a managed financial document.
+    await dbClient.execute(`INSERT INTO ea_financial_documents (user_id, account_id, email_uid, created_at, updated_at)
+      VALUES ('user-1', 'gmail-work', 'msg-1', 1000, 1000)`);
+    const managed = reviewPlan({ ...candidate, payee: "Managed Costco" }, "financial-event:managed");
+    await dbClient.execute({
+      sql: `INSERT INTO ea_financial_events (id, user_id, status, reason, created_at, updated_at, plan_json, collection_required)
+            VALUES ('managed', 'user-1', 'needs_review', 'Review the details.', 1000, 1000, ?, 0)`,
+      args: [JSON.stringify(managed)],
+    });
+    const associated = await dbClient.execute({
+      sql: `UPDATE ea_financial_documents
+            SET event_id = 'managed', status = 'associated', candidate_json = ?, processed_revision = revision
+            WHERE user_id = 'user-1' AND email_uid = 'msg-1'`,
+      args: [JSON.stringify(managed.candidate)],
+    });
+    expect(associated.rowsAffected).toBe(1);
+
+    const result = await resolveFinancialEmailSeed("user-1", payload());
+
+    expect(result).toMatchObject({ identity: { key: "financial-event:managed" }, candidate: { payee: "Managed Costco" } });
   });
 });

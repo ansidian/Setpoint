@@ -32,7 +32,7 @@ function pruneBillResolutionCache(now: number): void {
   }
 }
 
-function resolvedValue(result: FinancialEmailPlan): BillResolutionValue {
+function resolvedValue(result: FinancialEmailPlan | null): BillResolutionValue {
   return {
     plan: result || null,
     resolvedBill: result?.candidate || null,

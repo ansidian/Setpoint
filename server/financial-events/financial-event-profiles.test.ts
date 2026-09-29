@@ -5,14 +5,13 @@ import type { BillCandidate } from "../../shared/types/bills.ts";
 import type { FinancialProfile } from "../../shared/types/financial-profiles.ts";
 import type { ActualUtilityScheduleInput } from "../../shared/types/financial-operations.ts";
 import type { ActualTransferScheduleInput } from "../../shared/types/transaction-imports.ts";
-import { createBillCandidateVerificationService } from "../bills/bill-candidate-verification-service.ts";
 import { createFinancialEmailPlanner } from "../bills/financial-email-planner.ts";
 import { readFinancialProfiles } from "../bills/financial-profiles.ts";
 import { createMigratedDb } from "../triage/triage-worker.test-utils.ts";
 import { createFinancialEventExecutor } from "./financial-event-operation.ts";
 import { createFinancialEventStore } from "./financial-event-store.ts";
 import { createFinancialEventWorker } from "./financial-event-service.ts";
-import { arrival, authentication, type Source } from "./financial-event-service.test-utils.ts";
+import { arrival, authentication, parsedAssessment, startProviderEpoch, type Source } from "./financial-event-service.test-utils.ts";
 import type { FinancialEmailSource } from "../email/financial-email-source.ts";
 import type { EmailAuthenticationProjection } from "../../shared/types/email.ts";
 
@@ -30,6 +29,9 @@ interface Schedule {
   amountCents: number; date: string; categoryId?: string; transferAccountId?: string;
 }
 type ScheduleInput = ActualUtilityScheduleInput | ActualTransferScheduleInput;
+/** Registry senders acquire their original message before assessment; other fictional senders do not. */
+const ACQUIRED_UTILITY_SENDER = "sce@message.sce.com";
+const ACQUIRED_CARD_SENDER = "no-reply@o.sofi.org";
 
 function notice(uid: string, date: string, amount: number, card = false): Source {
   const event = card ? "Your card payment is scheduled" : "Your new utility bill";
@@ -74,7 +76,6 @@ describe("financial profile schedule lifecycle", () => {
   let acquiredSources: Map<string, FinancialEmailSource>;
   let acquiredCandidates: Map<string, BillCandidate>;
   let sourceOffline: boolean;
-  let auditResponse: BillCandidate | null;
 
   function metadata(): ActualMetadata {
     return {
@@ -129,12 +130,7 @@ describe("financial profile schedule lifecycle", () => {
       profileReader,
       metadataReader: async () => ({ ...metadata(), syncHealth: { state: "current", lastSuccessAt: new Date(clock).toISOString() } }),
       occurrenceReader: async () => ({ schedules: [] }), transactionReader: async () => ({ transactions: [] }),
-      candidateVerification: createBillCandidateVerificationService({ credentialResolver: async () => null,
-        providers: { openai: { extract: async () => {
-          if (auditResponse) return { fields: structuredClone(auditResponse), usage: {} };
-          throw new Error("No additional email evidence is available");
-        } } } }),
-      modelChoiceReader: async () => ({ provider: "openai", model: "fixture" }), now: () => new Date(clock),
+      now: () => new Date(clock),
     });
     const execute = createFinancialEventExecutor({
       financial: async (_userId, input, mode) => {
@@ -160,14 +156,18 @@ describe("financial profile schedule lifecycle", () => {
       },
     });
     worker = createFinancialEventWorker({ store, planner, execute, profileReader, now: () => clock,
-      assessDocument: async (_userId, email) => structuredClone(
-        email.body_text === acquiredSources.get(email.email_id)?.body && acquiredCandidates.has(email.email_id)
-          ? acquiredCandidates.get(email.email_id)! : sources.get(email.email_id)!.candidate),
+      // Stands in for the deterministic company registry so profile planning and schedule admission can be
+      // exercised with fictional candidates; acquired originals supply their own facts.
+      assessProvider: email => {
+        const acquired = [...acquiredCandidates.keys()].find(uid => acquiredSources.get(uid)?.body === email.body);
+        const indexed = [...sources.values()].find(source => source.body === email.body);
+        return parsedAssessment(acquired ? acquiredCandidates.get(acquired) : indexed?.candidate);
+      },
       sourceAcquirer: async (_userId, uid) => {
         if (sourceOffline) throw new Error("Provider is offline");
         return structuredClone(acquiredSources.get(uid)!);
       },
-      canRun: async () => true, afterWrite: async () => {},
+      afterWrite: async () => {},
     });
   }
 
@@ -202,9 +202,9 @@ describe("financial profile schedule lifecycle", () => {
     db = await createMigratedDb();
     clock = arrival;
     await db.execute({ sql: "UPDATE ea_financial_workflow_state SET cutover_at=?", args: [new Date(clock - 60_000).toISOString()] });
+    await startProviderEpoch(db, clock - 60_000);
     await db.execute("INSERT INTO ea_settings (user_id,actual_budget_sync_id) VALUES ('owner','budget')");
     sources = new Map(); acquiredSources = new Map(); acquiredCandidates = new Map(); sourceOffline = false;
-    auditResponse = null;
     savedUpdates = []; duringPreview = null;
     schedules = [
       { id: "electric", name: "Electricity", type: "bill", accountId: "savings", payeeId: "power", categoryId: "electricity", amountCents: -5_000, date: "2026-08-21" },
@@ -215,8 +215,8 @@ describe("financial profile schedule lifecycle", () => {
   afterEach(() => db.close());
 
   it("uses acquired PDF facts through restart and settlement with their source provenance", async () => {
-    await saveProfiles([utilityProfile]);
-    const complete = notice("pdf-invoice", "2026-09-21", 97.2);
+    await saveProfiles([{ ...utilityProfile, senderAddresses: [ACQUIRED_UTILITY_SENDER] }]);
+    const complete = { ...notice("pdf-invoice", "2026-09-21", 97.2), from: ACQUIRED_UTILITY_SENDER };
     acquiredSources.set(complete.uid, { body: `Your new utility bill.\n[PDF attachment invoice.pdf, page 1]\n${complete.body}`,
       fromName: "Provider", fromAddress: complete.from, subject: "Bill or payment notice", emailDate: new Date(clock).toISOString(),
       threadId: null, messageId: null, senderAuthentication: authentication(complete) as EmailAuthenticationProjection,
@@ -237,8 +237,8 @@ describe("financial profile schedule lifecycle", () => {
   });
 
   it("uses freshly acquired sender authentication without promoting the old unavailable index verdict", async () => {
-    await saveProfiles([utilityProfile]);
-    const complete = notice("fresh-auth", "2026-09-21", 97.2);
+    await saveProfiles([{ ...utilityProfile, senderAddresses: [ACQUIRED_UTILITY_SENDER] }]);
+    const complete = { ...notice("fresh-auth", "2026-09-21", 97.2), from: ACQUIRED_UTILITY_SENDER };
     acquiredSources.set(complete.uid, { body: complete.body, fromName: "Provider", fromAddress: complete.from,
       subject: "Bill or payment notice", emailDate: new Date(clock).toISOString(), threadId: null, messageId: null,
       senderAuthentication: authentication(complete) as EmailAuthenticationProjection, attachments: [] });
@@ -252,9 +252,9 @@ describe("financial profile schedule lifecycle", () => {
   });
 
   it.each(["payment", "statement"])("checks the complete card %s source even when indexed sender authentication already passes", async kind => {
-    await saveProfiles([cardProfile]);
-    const initial = kind === "statement" ? cardStatement("changed-payment-source", "2026-09-25", 251.32)
-      : notice("changed-payment-source", "2026-09-25", 251.32, true);
+    await saveProfiles([{ ...cardProfile, senderAddresses: [ACQUIRED_CARD_SENDER] }]);
+    const initial = { ...(kind === "statement" ? cardStatement("changed-payment-source", "2026-09-25", 251.32)
+      : notice("changed-payment-source", "2026-09-25", 251.32, true)), from: ACQUIRED_CARD_SENDER };
     const body = "Your card payment was cancelled.";
     acquiredSources.set(initial.uid, { body, fromName: "Provider", fromAddress: initial.from,
       subject: "Bill or payment notice", emailDate: new Date(clock).toISOString(), threadId: null, messageId: null,
@@ -305,7 +305,6 @@ describe("financial profile schedule lifecycle", () => {
         candidate.amount_kind = "other";
         candidate.amount_candidates![0] = { kind: "other", value: 207.43, evidence: "Current balance $207.43" };
       }
-      auditResponse = candidate;
       await arrive(source);
       await processEvent();
       expect(await store.getEventForEmail("owner", source.uid)).toMatchObject({ status: "needs_review", operation: null,

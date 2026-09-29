@@ -21,7 +21,6 @@ describe("financial email planner optional categories", () => {
             payee: "Power Co", payeeId: "power", category: category === "missing" ? "" : name,
             account: "Checking", accountId: "checking", notes: "",
           })) }),
-          targetRanker: async () => { throw new Error("Category differences cannot trigger model guessing"); },
           now: () => new Date("2026-09-01T12:00:00.000Z"),
         });
         const result = await plan("u1", {
