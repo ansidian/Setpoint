@@ -69,8 +69,16 @@ it('ignores supported eBay packing notices while AI is paused',async()=>{
   expect((await readFinancialReviewChanges('owner',{dbClient:db})).items).toEqual([]);
   expect(await worker.processNextEvent()).toBe(false);
 });
-it('makes unsupported templates reviewable with no invented financial candidate',async()=>{
-  await email('unsupported',{subject:'New bill format',body:'Your bill is available online.'});
+it('ignores unsupported templates without bill facts and keeps them out of review',async()=>{
+  await email('unsupported',{subject:'Service notice',body:'Your service is available online.'});
+  const {store,worker}=setup();
+  await worker.processNextDocument();
+  expect(await store.getDocumentForEmail('owner','unsupported')).toMatchObject({status:'ignored',candidate:null,eventId:null,
+    providerAssessment:{status:'nonfinancial',providerId:'sce',templateId:'unsupported'}});
+  expect((await readFinancialReviewChanges('owner',{dbClient:db})).items).toEqual([]);
+});
+it('makes unsupported templates with labeled bill facts reviewable with no invented financial candidate',async()=>{
+  await email('unsupported',{subject:'New bill format',body:'Amount Due $84.20 Due Date October 15, 2026'});
   const {store,worker}=setup();
   await worker.processNextDocument();
   const document=(await store.getDocumentForEmail('owner','unsupported'))!;

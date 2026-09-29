@@ -27,7 +27,7 @@ const registry: Record<FinancialProviderId, { parse: ProviderParser; version: st
   "citi": { parse: parseCiti, version: CITI_PARSER_VERSION },
   "amazon": { parse: parseAmazon, version: AMAZON_PARSER_VERSION },
 };
-export const FINANCIAL_PROVIDER_PARSER_POLICY = `${NORMALIZATION_VERSION}:registry-v2:${Object.values(registry).map(entry => entry.version).join(",")}`;
+export const FINANCIAL_PROVIDER_PARSER_POLICY = `${NORMALIZATION_VERSION}:registry-v3:${Object.values(registry).map(entry => entry.version).join(",")}`;
 
 export function identifyFinancialProvider(fromAddress: string, source?: { subject?: string; body?: string }): FinancialProviderId | null {
   const sender = (fromAddress.match(/<([^<>]+)>/)?.[1] || fromAddress).trim().toLowerCase();

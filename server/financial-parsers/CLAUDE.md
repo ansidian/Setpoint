@@ -7,9 +7,9 @@ Pure, source-grounded company parsing. The public assessment facade returns pars
 - `index.ts` — explicit registry, exact mailbox identification, shared InvoiceCloud brand guard, public assessment and policy version
 - `parser-helpers.ts` — bounded source normalization, labeled monetary/date extraction, evidence projection, completeness and conflict checks; no provider SDKs or persistence
 - `sce.ts`, `socalgas.ts`, `sgv-water.ts`, `valley-vista.ts`, `spectrum.ts` — utility-owned templates, including Valley Vista extracted PDF tables
-- `sofi.ts`, `us-bank.ts`, `chase.ts`, `citi.ts` — issuer-owned statement, payment notice, transaction alert and reward templates
+- `sofi.ts`, `us-bank.ts`, `chase.ts`, `citi.ts` — issuer-owned statement, payment notice, transaction alert and reward templates; SoFi Zelle received/sent notices stay owner review
 - `paypal.ts` — Synchrony card statements/autopay/refunds, merchant receipts/refunds/authorizations, balance transfers and received-money notices; owns recognition of grounded PayPal balance movements in retained historical candidates
-- `amazon.ts` — initial order confirmation, refund and fulfillment families
+- `amazon.ts` — initial order confirmation, refund and fulfillment families; advance refunds and shipping delays are nonfinancial
 - `ebay.ts` — content-gated packing notifications only; other eBay templates retain AI assessment
 - `fixtures/historical.json` — sanitized historical text/table excerpts with fictional personal/account identities; retains label order and whitespace from real normalized sources
 
@@ -19,6 +19,7 @@ Pure, source-grounded company parsing. The public assessment facade returns pars
 
 - Accept complete normalized email/PDF evidence. Acquisition, authentication, profile resolution, event correlation, retries and Actual writes belong to their existing owners.
 - Company modules own template matching, label semantics and provider-specific recognition of retained candidates. Shared helpers do not choose a company's operational amount or infer accounting destinations.
+- Unmatched templates from a registered company fail closed through `unsupported()`: nonfinancial unless labeled amount-due and due-date facts are present, which keep them in review.
 - Keep multiple/conflicting values in review. Minimum due is never the full statement balance. Marketing amounts, funding suffixes, pending refunds and alert thresholds cannot become financial facts by proximity.
 - An initial Amazon confirmation may retain a null operation date with explicit initial-confirmation context. Only the financial-event owner derives source-bound email-date provenance.
 - Changing parser behavior requires changing the provider parser version; changing shared normalization or registry behavior requires changing `FINANCIAL_PROVIDER_PARSER_POLICY` as well.

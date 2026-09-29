@@ -1,6 +1,6 @@
 import { assessFacts, dateMatches, moneyMatches, referenceEvidence, result, text, unsupported, type ProviderParser } from "./parser-helpers.ts";
 
-export const AMAZON_PARSER_VERSION = "amazon-v3";
+export const AMAZON_PARSER_VERSION = "amazon-v4";
 
 function orderAmounts(body: string) {
   const amounts = moneyMatches(body, "Grand Total|Order Total|Total for this order", "order_total");
@@ -26,11 +26,13 @@ function orderBreakdown(body: string) {
 }
 
 export const parseAmazon: ProviderParser = source => {
-  if (/^(?:Shipped[: ]|Delivered[: ]|Out for delivery:|Delivery update:|Dropoff confirmed|Arriving|Return request confirmed)|return received|return reminder/i.test(source.subject)) return result("amazon", "fulfillment-notice", "nonfinancial", ["fulfillment_notice_no_new_transaction"]);
+  if (/^(?:Shipped[: ]|Delivered[: ]|Out for delivery:|Delivery update:|Dropoff confirmed|Arriving|Return request confirmed|Delay in shipping)|return received|return reminder/i.test(source.subject)) return result("amazon", "fulfillment-notice", "nonfinancial", ["fulfillment_notice_no_new_transaction"]);
   if (/Prime Day|Prime members|Enter (?:for a chance |to win)|Introducing:|Sign-in|subscription cancelled|membership (?:renews|change)|discount is coming|printing information/i.test(source.subject)) return result("amazon", "administrative", "nonfinancial", ["provider_administrative_notice"]);
   const body = text(source);
   if (/^\d+ weeks? until Prime Big Deal Days!?$/i.test(source.subject.trim()) && /shop (?:early )?deals/i.test(body)
     && !/Amount Due|Statement Amount|Grand Total|Order Total|Refund (?:total|amount)|Payment Amount/i.test(body)) return result("amazon", "sale-announcement", "nonfinancial", ["provider_administrative_notice"]);
+  // Advance refunds land on Amazon gift balance or are entered by the owner.
+  if (/^Advance refund issued/i.test(source.subject)) return result("amazon", "advance-refund", "nonfinancial", ["provider_advance_refund_not_recorded"]);
   const order = referenceEvidence(body, /(?:Order\s*#?|order number[:\s]*)\s*(\d{3}-\d{7}-\d{7})/i);
   if (/refund/i.test(source.subject)) return assessFacts(source, {
     providerId: "amazon", templateId: "refund", payee: "Amazon", event: "refund", type: "income", amountKind: "refund_amount",

@@ -26,11 +26,16 @@ export function result(providerId: FinancialProviderId, templateId: string, stat
 }
 
 export function unsupported(providerId: FinancialProviderId, source: FinancialProviderEmailSource): RecognizedFinancialProviderAssessment {
-  // Only explicit known administrative/marketing families are negative assessments.
   const known = /(?:terms|agreement|privacy|security alert|passkey|verification|update your income|credit summary|fico score|pre.?approved|pre.?qualified|offer|invitation|survey|feedback|climate credit|participation hearing|safety inspection|communication preference|account statement is available|banking statement|APY|stay logged in|expired card|update your card|legal agreements)/i;
-  return known.test(source.subject)
-    ? result(providerId, "administrative", "nonfinancial", ["provider_administrative_notice"])
-    : result(providerId, "unsupported", "review", ["provider_template_unsupported"]);
+  if (known.test(source.subject)) return result(providerId, "administrative", "nonfinancial", ["provider_administrative_notice"]);
+  // Unsupported templates fail closed. Labeled bill facts still reach review so
+  // a renamed statement template cannot silently drop an obligation.
+  const body = text(source);
+  const billFacts = moneyMatches(body, "Amount Due|Total Due|Balance Due|Statement Balance|New Balance|Payment Amount", "total_due").length > 0
+    && dateMatches(body, "Due Date|Payment Due(?: Date)?|Due on|Due by", source.emailDate).length > 0;
+  return billFacts
+    ? result(providerId, "unsupported", "review", ["provider_template_unsupported"])
+    : result(providerId, "unsupported", "nonfinancial", ["provider_template_unsupported"]);
 }
 
 export function moneyMatches(body: string, label: string, kind: BillAmountKind): BillAmountCandidate[] {

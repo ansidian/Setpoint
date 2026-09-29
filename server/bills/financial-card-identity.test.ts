@@ -141,6 +141,6 @@ describe("card identity authority through the financial planner", () => {
   it("keeps conflicting SoFi card numbers in provider review", () => {
     const source = fixtures.find(entry => entry.name === "sofi")!.source;
     expect(assessProviderFinancialEmail({ ...source, body: `${source.body} Credit card ending in 7849. Credit card ending in 9999.` }))
-      .toMatchObject({ status: "review", parserVersion: "sofi-v2", reasons: ["provider_account_conflict"] });
+      .toMatchObject({ status: "review", parserVersion: "sofi-v3", reasons: ["provider_account_conflict"] });
   });
 });

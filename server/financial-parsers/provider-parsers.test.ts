@@ -61,8 +61,8 @@ describe("provider financial assessment", () => {
     expect(r).toMatchObject({ status: "parsed", providerId, reasons: [], candidate: { amount, due_date, amount_kind, event_kind, currency: "USD" } });
     if (r.status !== "parsed") throw new Error("Expected parsed fixture");
     expect(r.candidate.amount_candidates?.find(a => a.kind === amount_kind)?.evidence).toBeTruthy();
-    expect(r.parserVersion).toBe(`${providerId}-${["sofi", "sce", "spectrum"].includes(providerId) ? "v2" : "v1"}`);
-    expect(r.policyVersion).toContain("provider-text-v1:registry-v2:");
+    expect(r.parserVersion).toBe(`${providerId}-${({ sofi: "v3", sce: "v2", spectrum: "v2" } as Record<string, string>)[providerId] ?? "v1"}`);
+    expect(r.policyVersion).toContain("provider-text-v1:registry-v3:");
     expect(r.policyVersion).toContain(r.parserVersion);
   });
 
@@ -87,10 +87,48 @@ describe("provider financial assessment", () => {
     expect(assessProviderFinancialEmail(fixture(name))).toMatchObject({ status: "review", reasons: expect.arrayContaining([reason]) });
   });
 
-  it("keeps an unknown company distinct from an unsupported registered template", () => {
+  it("fails closed on an unsupported registered template unless it carries labeled bill facts", () => {
     const source = { fromAddress: "sce@message.sce.com", subject: "A new kind of notice", body: "$99.99 due tomorrow" };
-    expect(assessProviderFinancialEmail(source)).toMatchObject({ status: "review", reasons: ["provider_template_unsupported"] });
+    expect(assessProviderFinancialEmail(source)).toMatchObject({ status: "nonfinancial", templateId: "unsupported", reasons: ["provider_template_unsupported"] });
+    expect(assessProviderFinancialEmail({ ...source, body: "Amount Due $99.99 Due Date October 15, 2026" }))
+      .toMatchObject({ status: "review", templateId: "unsupported", reasons: ["provider_template_unsupported"] });
     expect(assessProviderFinancialEmail({ ...source, fromAddress: "unknown@example.test" })).toMatchObject({ status: "unrecognized", providerId: null });
+  });
+
+  it.each(["Delay in shipping your order #111-1000000-1000001", "Delay in shipping your order ‎#111-1000000-1000001‎"])(
+    "treats an Amazon shipping delay as fulfillment, not a new order: %s", subject => {
+      expect(assessProviderFinancialEmail({ fromAddress: "no-reply@amazon.com", subject, body: "Your package is delayed. Order total $42.10." }))
+        .toMatchObject({ status: "nonfinancial", templateId: "fulfillment-notice" });
+    });
+
+  it.each([
+    ["store-news@amazon.com", "Check if a message is really from Amazon", "Scammers may ask you to pay $500 in gift cards. Amazon will never ask for payment by phone."],
+    ["store-news@amazon.com", "Are you ready? Prime Big Deal Days is Oct 6-7!", "Deals starting at $9.99. Shop now."],
+    ["sce@message.sce.com", "SCE Budget Assistant Alert for Service Account ending in 1234", "Your projected bill is $180.00, above your $150.00 budget."],
+  ])("ignores unsupported provider notices without bill facts: %s / %s", (fromAddress, subject, body) => {
+    expect(assessProviderFinancialEmail({ fromAddress, subject, body })).toMatchObject({ status: "nonfinancial", reasons: ["provider_template_unsupported"] });
+  });
+
+  it("ignores Amazon advance refunds, which land on gift balance or are entered by the owner", () => {
+    expect(assessProviderFinancialEmail({ fromAddress: "return@amazon.com", subject: "Advance refund issued for Example Desk Mat....",
+      body: "We've issued an advance refund of $24.99 to your Amazon gift card balance. Refund total: $24.99" }))
+      .toMatchObject({ status: "nonfinancial", templateId: "advance-refund" });
+  });
+
+  it.each([
+    ["Notification - ALEX RIVER sent you $85.00.", "The $85.00 sent to you by ALEX RIVER will be automatically deposited to your account. thanks",
+      { templateId: "zelle-received", candidate: { amount: 85, type: "income", payee_hint: "ALEX RIVER", due_date: null } }],
+    ["Notification - Your  $208.00 to Alex River was sent", "You've successfully sent $208.00 to Alex River dinner",
+      { templateId: "zelle-sent", candidate: { amount: 208, type: "expense", payee_hint: "Alex River", due_date: null } }],
+  ])("keeps SoFi Zelle notices in owner review with grounded amount and counterparty: %s", (subject, body, expected) => {
+    expect(assessProviderFinancialEmail({ fromAddress: "no-reply@o.sofi.org", subject, body: `${body} MemberID (12345678) ReferenceID (123456789)` }))
+      .toMatchObject({ status: "review", providerId: "sofi", ...expected });
+  });
+
+  it("does not accept a SoFi Zelle amount the body contradicts", () => {
+    const r = assessProviderFinancialEmail({ fromAddress: "no-reply@o.sofi.org", subject: "Notification - ALEX RIVER sent you $85.00.",
+      body: "The $58.00 sent to you by ALEX RIVER will be automatically deposited to your account." });
+    expect(r).toMatchObject({ status: "review", reasons: expect.arrayContaining(["provider_amount_conflict"]), candidate: { amount: null } });
   });
 
   it.each([
