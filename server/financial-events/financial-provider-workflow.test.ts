@@ -6,6 +6,7 @@ import { createFinancialEventStore } from './financial-event-store.ts';
 import { createFinancialEventWorker } from './financial-event-service.ts';
 import { activateFinancialProviderEpoch } from './financial-provider-policy.ts';
 import { readFinancialReviewChanges } from './financial-event-review.ts';
+import { createFinancialEventCompletion } from './financial-event-completion.ts';
 import admissionCases from '../triage/fixtures/financial-admission.json' with {type:'json'};
 import { EMAIL_EVIDENCE_CHAR_LIMIT, EMAIL_EVIDENCE_TRUNCATED } from '../email/email-evidence.ts';
 
@@ -172,6 +173,54 @@ it('keeps attempted historical recovery available without re-extraction or anoth
   expect(recovered).toBe(1);
   expect((await store.getEventForEmail('owner','admitted'))?.operation).toEqual(operation);
   expect((await store.getEventForEmail('owner','admitted'))?.status).toBe('needs_review');
+});
+async function revisions(uid: string, store: ReturnType<typeof createFinancialEventStore>) {
+  const document=(await store.getDocumentForEmail('owner',uid))!;
+  const event=await store.getEventForEmail('owner',uid);
+  return {emailUid:uid,documentRevision:document.revision,eventRevision:event?.revision??null};
+}
+it('lets the owner record an ignored unknown sender, optionally prefilled by one extraction, and keeps the request across policy refreshes',async()=>{
+  await email('manual',{from:'receipts@shop.example',subject:'Your receipt',body:'Order total $18.40'});
+  const {store,worker}=setup();
+  await worker.processNextDocument();
+  const extracted={type:'expense',event_kind:'purchase',payee:'Example Shop',amount:18.4,amount_kind:'transaction_amount',currency:'USD'} as const;
+  const completion=createFinancialEventCompletion({store,now:()=>now,extract:async()=>({candidate:{...extracted},provider:'fixture',model:'fixture',metadata:{accounts:[],categories:[],payees:[]} as never})});
+  const plan=await completion.request('owner',{...await revisions('manual',store),extract:true});
+  expect(plan).toMatchObject({candidate:{payee:'Example Shop',amount:18.4},workflow:{state:'needs_review',completion:{canComplete:true,canDismiss:true}}});
+  expect((await readFinancialReviewChanges('owner',{dbClient:db})).items.map(item=>item.emailUid)).toEqual(['manual']);
+  await db.execute(`UPDATE ea_financial_documents SET provider_assessment_json=json_set(provider_assessment_json,'$.policyVersion','obsolete')`);
+  await store.recoverStaleClaims();
+  expect(await store.getDocumentForEmail('owner','manual')).toMatchObject({status:'retry',candidate:{payee:'Example Shop'}});
+  const entry={kind:'expense' as const,amount:18.4,date:'2026-09-20',payee:'Example Shop',accountId:'card',categoryId:null};
+  expect(await completion.complete('owner',{...await revisions('manual',store),entry})).toMatchObject({workflow:{state:'pending'}});
+  await expect(completion.request('owner',await revisions('manual',store))).rejects.toMatchObject({status:409});
+});
+it('reopens a schedule-covered event for owner review without re-covering it',async()=>{
+  await email('covered',{from:'service@paypal.com',subject:'Apple Services: $0.99 USD',
+    body:'You paid $0.99 USD to Apple Services Transaction ID REFERENCE00000001 Transaction date Aug 18, 2026 Merchant Apple Services Total $0.99 USD'});
+  const metadataReader=async()=>({accounts:[],categories:[],payeeMap:{},payees:[{id:'apple',name:'Apple'}],recentTransactions:[],
+    schedules:[{id:'family',name:'Family Cloud',next_date:'2026-08-18',type:'bill' as const,conditions:[{field:'amount',op:'is',value:-99},{field:'payee',op:'is',value:'apple'}]}]});
+  const {store,worker}=setup({metadataReader,execute:async()=>{throw new Error('Owner review must not reach Actual');}});
+  await worker.processNextDocument();
+  await worker.processNextEvent();
+  expect(await store.getEventForEmail('owner','covered')).toMatchObject({status:'settled'});
+  const plan=await createFinancialEventCompletion({store,now:()=>now}).request('owner',await revisions('covered',store));
+  expect(plan).toMatchObject({workflow:{state:'needs_review',completion:{canComplete:true}}});
+  now+=60_000;
+  await db.execute("UPDATE ea_financial_events SET status='waiting', next_attempt_at=? WHERE status='needs_review'",[now]);
+  await worker.processNextEvent();
+  const reopened=(await store.getEventForEmail('owner','covered'))!;
+  expect(reopened.status).not.toBe('settled');
+  expect(reopened.reason).not.toContain('Covered by Actual schedule');
+});
+it('refuses to reopen dismissed candidates',async()=>{
+  await email('dismissed',{from:'receipts@shop.example',subject:'Your receipt',body:'Order total $18.40'});
+  const {store,worker}=setup();
+  await worker.processNextDocument();
+  const completion=createFinancialEventCompletion({store,now:()=>now});
+  await completion.request('owner',await revisions('dismissed',store));
+  await completion.dismiss('owner',await revisions('dismissed',store));
+  await expect(completion.request('owner',await revisions('dismissed',store))).rejects.toMatchObject({status:409,message:'This candidate was dismissed.'});
 });
 it('reassesses only unsubmitted post-epoch reviews on a parser upgrade',async()=>{
   await email('review',{subject:'New bill format',body:'Your bill is online.'});

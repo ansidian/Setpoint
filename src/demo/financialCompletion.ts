@@ -2,7 +2,7 @@ import { positiveUsdCents, validExpenseSplits } from "../../shared/financial-spl
 import { DEMO_RECEIPT_UID } from "./financialReceipt";
 import { getDemoCorrection } from './financialCorrections';
 import type { FinancialEmailPlan, FinancialPlanTarget } from '../../shared/types/bills';
-import type { FinancialEventCompletionRequest, FinancialEventDismissalRequest } from '../../shared/types/financial-operations';
+import type { FinancialEventCompletionRequest, FinancialEventDismissalRequest, FinancialEventReviewRequest } from '../../shared/types/financial-operations';
 import type { CorrectionSnapshot, FinancialCorrectionDraft } from '../../shared/types/financial-corrections';
 import { publishDemoFinanceSnapshot, announceDemoFinanceChange } from './financeProjection';
 import type { FinancialActivity, FinancialWriteEvidence } from '../../shared/types/financial-activity';
@@ -47,6 +47,10 @@ export function dismissDemoFinancialEvent(request: FinancialEventDismissalReques
   dismissed = true;
   announceDemoFinanceChange();
   return demoCompletionPlan();
+}
+/** Inert: the fictional receipt is the only managed record and is never ignored or covered. */
+export function requestDemoFinancialEventReview(request: FinancialEventReviewRequest): FinancialEmailPlan {
+  return request.emailUid === DEMO_RECEIPT_UID ? demoCompletionPlan() : demoNotFound(request.emailUid);
 }
 export function completeDemoFinancialEvent(request: FinancialEventCompletionRequest): FinancialEmailPlan {
   if (request.emailUid !== DEMO_RECEIPT_UID) return demoNotFound(request.emailUid);

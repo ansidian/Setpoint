@@ -18,7 +18,7 @@ Durable autonomous accounting for new email arrivals. Documents supply authentic
 - `financial-event-operation.ts` — maps a plan to existing SDK facades, binds the previewed budget and schedule fingerprint, and projects verified operation outcomes
 - `financial-event-status.ts` — public read-only ownership and live status facade with latest correction progress and verified outcome/type projection; managed-email reads never trigger the historical planner or another write path
 - `financial-event-review.ts` — managed attention projection shared by financial activity and owner-scoped notification changes; groups related receipts and keeps automatic retries silent without reading source bodies
-- `financial-event-completion.ts` — public owner-confirmation use case; validates current managed-source revisions, queues confirmed entries or dismisses unsubmitted candidates without writing to Actual
+- `financial-event-completion.ts` — public owner-confirmation use case; validates current managed-source revisions, queues confirmed entries, dismisses unsubmitted candidates, or reopens ignored/covered sources on owner request (optional extraction prefill) without writing to Actual
 - `financial-event-completion-model.ts` — confirmed-entry validation, immediate manual-review eligibility, immutable source snapshots, compatible later-evidence checks and exact operation construction
 
 ## Contracts

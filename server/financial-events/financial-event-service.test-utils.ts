@@ -96,4 +96,5 @@ export async function initializeFinancialEventTestSchema(db: Client): Promise<vo
     }
     await addFinancialCorrectionSchema(db);
     await db.executeMultiple(readFileSync(new URL("../db/migrations/082_provider_legacy_admission.sql", import.meta.url), "utf8"));
+    await db.executeMultiple(readFileSync(new URL("../db/migrations/083_financial_owner_requests.sql", import.meta.url), "utf8"));
 }

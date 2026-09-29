@@ -3,7 +3,7 @@ import { demoAlfredUsageStats } from "./alfredUsageData";
 import { DEMO_RECEIPT_UID } from "./financialReceipt";
 import { demoTaskFields } from "./taskFields";
 import { handleDemoFinances } from './financesWorkspace';
-import { completeDemoFinancialEvent, dismissDemoFinancialEvent, demoCompletionPlan } from "./financialCompletion";
+import { completeDemoFinancialEvent, dismissDemoFinancialEvent, demoCompletionPlan, requestDemoFinancialEventReview } from "./financialCompletion";
 import type { FinancialEventCompletionRequest } from "../../shared/types/financial-operations";
 import { updateDemoSettings } from "./financialProfiles";
 import { createDemoApiError } from "./config.ts";
@@ -302,6 +302,7 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
   if (pathname === "/api/briefing/bills/resolve" && method === "POST" && body.emailId === DEMO_RECEIPT_UID) return demoCompletionPlan();
   if (pathname === "/api/briefing/financial-events/dismiss" && method === "POST") return dismissDemoFinancialEvent(body as unknown as FinancialEventCompletionRequest);
   if (pathname === "/api/briefing/financial-events/complete" && method === "POST") return completeDemoFinancialEvent(body as unknown as FinancialEventCompletionRequest);
+  if (pathname === "/api/briefing/financial-events/request" && method === "POST") return requestDemoFinancialEventReview(body as unknown as FinancialEventCompletionRequest);
   const referenceResponse = getDemoReferenceResponse({ pathname, method, seed });
   if (referenceResponse !== NO_DEMO_REFERENCE_RESPONSE) return referenceResponse;
   const transactionImportResponse = handleDemoTransactionImportRequest({ pathname, method, url, body, seed });

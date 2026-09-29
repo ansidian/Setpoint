@@ -34,12 +34,12 @@ export async function activateFinancialProviderEpoch(userId: string, revision: n
 }
 
 /** Reassess unsubmitted post-epoch sources once after a parser-policy release.
- * Settled events, explicit dismissals, confirmations and admitted payloads never reopen. */
+ * Settled events, explicit dismissals, owner requests, confirmations and admitted payloads never reopen. */
 export async function refreshFinancialProviderAssessments(dbClient: Pick<Client, 'execute'>): Promise<void> {
   await dbClient.execute({sql: `UPDATE ea_financial_documents SET status='pending', revision=revision+1,
     next_attempt_at=NULL, last_error=NULL, claim_token=NULL, claimed_at=NULL,
     provider_assessment_json=NULL, updated_at=CAST(strftime('%s','now') AS INTEGER)*1000
-    WHERE processing_policy='provider_v1' AND dismissed_at IS NULL AND status IN ('retry','ignored','associated')
+    WHERE processing_policy='provider_v1' AND dismissed_at IS NULL AND owner_requested_at IS NULL AND status IN ('retry','ignored','associated')
       AND provider_assessment_json IS NOT NULL AND json_extract(provider_assessment_json,'$.policyVersion') IS NOT ?
       AND (event_id IS NULL OR EXISTS (SELECT 1 FROM ea_financial_events e WHERE e.user_id=ea_financial_documents.user_id
         AND e.id=ea_financial_documents.event_id AND e.attempted_at IS NULL AND e.owner_completion_json IS NULL

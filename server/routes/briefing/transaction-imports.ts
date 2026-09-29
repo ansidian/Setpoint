@@ -1,4 +1,5 @@
-import { Router } from "express";
+import { Router, type RequestHandler } from "express";
+import { billExtractLimiter } from "../../middleware/rate-limits.ts";
 import { transactionImportService } from "../../transaction-imports/transaction-import-service.ts";
 import { requestTransactionImportDrain } from "../../transaction-imports/transaction-import-runtime.ts";
 import { resolveManagedFinancialPlan } from "../../financial-events/financial-event-status.ts";
@@ -27,12 +28,16 @@ export function createTransactionImportRouter({
   financialCompletion = financialEventCompletion,
   financialReviewChanges = readFinancialReviewChanges,
   financialDismissal = financialEventCompletion.dismiss,
+  financialRequest = financialEventCompletion.request,
+  extractLimiter = billExtractLimiter,
 }: {
   service?: Service;
   wake?: () => void;
   financialStatus?: typeof resolveManagedFinancialPlan;
   financialCompletion?: Pick<typeof financialEventCompletion, "complete">;
   financialDismissal?: typeof financialEventCompletion.dismiss;
+  financialRequest?: typeof financialEventCompletion.request;
+  extractLimiter?: RequestHandler;
   financialReviewChanges?: typeof readFinancialReviewChanges;
 } = {}): Router {
   const router = Router();
@@ -56,6 +61,13 @@ export function createTransactionImportRouter({
   router.post("/financial-events/dismiss", async (req, res) => {
     try {
       res.json(await financialDismissal(ownerUserId(), req.body));
+    } catch (error) { errorResponse(res, error); }
+  });
+
+  // Extraction may call the configured AI model, so every request shares the extraction budget.
+  router.post("/financial-events/request", extractLimiter, async (req, res) => {
+    try {
+      res.json(await financialRequest(ownerUserId(), req.body));
     } catch (error) { errorResponse(res, error); }
   });
 

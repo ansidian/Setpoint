@@ -56,6 +56,8 @@ export interface FinancialDocument {
   correctedResolution?: 'kept_actual';
   ownerConfirmedEntry: FinancialEventCompletionEntry | null;
   ownerConfirmationConflict: boolean;
+  /** The owner asked to record this source; automatic ignore/coverage cannot undo that. */
+  ownerRequestedAt?: number | null;
   nextAttemptAt: number | null;
   error: string | null;
   createdAt: number;
@@ -164,6 +166,7 @@ export function documentFromRow(row: Row): FinancialDocument {
     ...(kept ? { correctedResolution: 'kept_actual' as const } : {}),
     ownerConfirmedEntry: result?.entry || (kept ? null : readJson<FinancialOwnerCompletion>(row.event_owner_completion_json)?.entry || null),
     ownerConfirmationConflict: Number(row.owner_confirmation_conflict) === 1,
+    ownerRequestedAt: nullableNumber(row.owner_requested_at),
     nextAttemptAt: nullableNumber(row.next_attempt_at), error: nullableString(row.last_error),
     createdAt: Number(row.created_at), updatedAt: Number(row.updated_at),
     subject: String(row.subject || ""), body: String(row.body_text || ""),
@@ -408,6 +411,36 @@ export function createFinancialEventStore(dbClient: StoreDb = db, now = Date.now
     return results[1]!.rowsAffected === 1;
   }
 
+  /** Reopen an ignored source, or a settled never-attempted event, for explicit owner review. */
+  async function requestOwnerReview(document: FinancialDocument, event: FinancialEvent | null,
+    input: { candidate: BillCandidate; reason: string }): Promise<boolean> {
+    const timestamp = now();
+    if (!event) {
+      const result = await dbClient.execute({
+        sql: `UPDATE ea_financial_documents SET status = 'retry', candidate_json = ?, owner_requested_at = ?,
+                revision = revision + 1, processed_revision = revision + 1, next_attempt_at = NULL, last_error = ?,
+                claim_token = NULL, claimed_at = NULL, updated_at = ?
+              WHERE user_id = ? AND id = ? AND revision = ? AND dismissed_at IS NULL AND event_id IS NULL AND status IN ('ignored', 'retry')`,
+        args: [writeJson(input.candidate), timestamp, input.reason, timestamp, document.userId, document.id, document.revision],
+      });
+      return result.rowsAffected === 1;
+    }
+    const results = await dbClient.batch([
+      { sql: `UPDATE ea_financial_events SET status = 'needs_review', reason = ?, revision = revision + 1,
+                next_attempt_at = NULL, claim_token = NULL, claimed_at = NULL, updated_at = ?
+              WHERE user_id = ? AND id = ? AND revision = ? AND status = 'settled' AND dismissed_at IS NULL
+                AND attempted_at IS NULL AND operation_json IS NULL AND owner_completion_json IS NULL AND outcome_json IS NULL
+                AND ${ORIGINAL_UNGUARDED}
+                AND EXISTS (SELECT 1 FROM ea_financial_documents WHERE user_id = ? AND id = ? AND revision = ? AND event_id = ?)`,
+        args: [input.reason, timestamp, document.userId, event.id, event.revision, document.userId, document.id, document.revision, event.id] },
+      { sql: `UPDATE ea_financial_documents SET owner_requested_at = ?, updated_at = ?
+              WHERE user_id = ? AND id = ? AND EXISTS (SELECT 1 FROM ea_financial_events
+                WHERE user_id = ? AND id = ? AND revision = ? AND status = 'needs_review' AND updated_at = ?)`,
+        args: [timestamp, timestamp, document.userId, document.id, document.userId, event.id, event.revision + 1, timestamp] },
+    ], "write");
+    return results[0]!.rowsAffected === 1;
+  }
+
   async function inheritReferenceDismissal(document: FinancialDocument, referenceKey: string | null, claimToken: string | null = null): Promise<boolean> {
     if (document.eventId || document.senderAuthentication?.status !== "pass" || !referenceKey) return false;
     const timestamp = now();
@@ -632,7 +665,7 @@ export function createFinancialEventStore(dbClient: StoreDb = db, now = Date.now
 
   return { ...createFinancialEventAiStore(dbClient, now), ...createFinancialDocumentSourceStore(dbClient, now), async isCorrected(userId: string, id: string) {
     return (await dbClient.execute({ sql: "SELECT 1 FROM ea_financial_corrected_sources WHERE user_id=? AND owner='event' AND record_id=? LIMIT 1", args: [userId, id] })).rows.length > 0;
-  }, claimDocument, settleDocument, saveProviderAssessment, associateDocument, listDocuments, findEventsByReference, completeEvent, dismissCandidate, inheritReferenceDismissal,
+  }, claimDocument, settleDocument, saveProviderAssessment, associateDocument, listDocuments, findEventsByReference, completeEvent, dismissCandidate, requestOwnerReview, inheritReferenceDismissal,
     acknowledgeOwnerCompletedDocument, claimEvent, saveEvent,
     rememberCycle, admitOperation, recoverStaleClaims, getNextWakeAt, isManagedEmail, getDocumentForEmail, getEventById, getEventForEmail };
 }

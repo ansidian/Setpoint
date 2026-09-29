@@ -1,10 +1,17 @@
 import { financialHref } from "../financial/financialNavigation";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { CheckCircle2, Clock3, Loader2 } from "lucide-react";
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
+import { requestFinancialEventReview } from "../../api";
+import { financialReviewHref } from "../../lib/financialReviewApi";
 import type { FinancialEmailPlan } from "../../../shared/types/bills";
 
+const actionClass = "inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs transition-[transform,background-color] hover:-translate-y-px hover:bg-white/5 focus-visible:-translate-y-px focus-visible:outline-2 focus-visible:outline-primary active:translate-y-0 disabled:cursor-default disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:bg-transparent motion-reduce:transform-none motion-reduce:transition-none";
+
 export default function FinancialEventStatus({ plan, style }: { plan: FinancialEmailPlan; style?: CSSProperties }) {
+  const navigate = useNavigate();
+  const [requesting, setRequesting] = useState<"record" | "extract" | null>(null);
+  const [requestError, setRequestError] = useState("");
   const workflow = plan.workflow;
   if (!workflow) return null;
   const correction = workflow.correction;
@@ -26,6 +33,23 @@ export default function FinancialEventStatus({ plan, style }: { plan: FinancialE
     workflow.relatedEmails > 1 ? `${workflow.relatedEmails} related emails describe this event.` : null,
     !settled && workflow.nextAttemptAt ? "Checks again automatically." : null,
   ].filter(Boolean).join(" ");
+  // Ignored or schedule-covered sources can still be recorded when the owner asks.
+  const completion = workflow.completion;
+  const canRequest = settled && !recorded && !scheduled && !correction && !workflow.dismissed && !!completion?.canComplete;
+  const covered = /^Covered by Actual schedule/.test(workflow.reason || "");
+  async function requestRecord(extract: boolean) {
+    if (!completion) return;
+    setRequesting(extract ? "extract" : "record");
+    setRequestError("");
+    try {
+      await requestFinancialEventReview({ emailUid: completion.emailUid, documentRevision: completion.documentRevision,
+        eventRevision: completion.eventRevision, extract });
+      navigate(financialReviewHref(completion.emailUid));
+    } catch (cause) {
+      setRequestError(cause instanceof Error ? cause.message : "Couldn’t open this email for recording.");
+      setRequesting(null);
+    }
+  }
   return (
     <div className="min-w-0 shrink-0 rounded-lg border px-3 py-2.5"
       style={{ color, borderColor: `color-mix(in srgb, ${color} 24%, transparent)`,
@@ -37,6 +61,17 @@ export default function FinancialEventStatus({ plan, style }: { plan: FinancialE
           <div className="mt-0.5 text-foreground/80">{details}</div>
         </div>
       </div>
+      {canRequest && <div className="mt-2 flex flex-wrap gap-2 text-foreground/90">
+        <button type="button" className={actionClass} disabled={!!requesting} onClick={() => void requestRecord(false)}>
+          {requesting === "record" && <Loader2 aria-hidden="true" size={12} className="animate-spin motion-reduce:animate-none" />}
+          {covered ? "Record anyway" : "Record in Actual"}
+        </button>
+        <button type="button" className={actionClass} disabled={!!requesting} onClick={() => void requestRecord(true)}>
+          {requesting === "extract" && <Loader2 aria-hidden="true" size={12} className="animate-spin motion-reduce:animate-none" />}
+          {requesting === "extract" ? "Extracting details…" : "Extract and record"}
+        </button>
+      </div>}
+      {requestError && <p role="alert" className="mt-2 text-[11px] leading-relaxed text-[var(--sp-cream)]">{requestError}</p>}
       {correction && <Link to={financialHref({ view: correcting ? 'needs_attention' : 'completed' }, { owner: 'event', id: workflow.id })}
         className="mt-2 inline-flex rounded-lg border border-white/10 px-3 py-2 text-xs transition-transform hover:-translate-y-px focus-visible:-translate-y-px focus-visible:outline-2 focus-visible:outline-primary active:translate-y-0 motion-reduce:transform-none motion-reduce:transition-none">View record</Link>}
     </div>

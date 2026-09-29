@@ -129,7 +129,7 @@ export function createFinancialEventWorker({
         if (!await store.saveProviderAssessment(document, assessment)) throw new Error("The source changed during provider assessment.");
         document = { ...document, providerAssessment: assessment };
         if (assessment.status === "review" || assessment.status === "nonfinancial") {
-          const covered = assessment.status === "review" && assessment.candidate
+          const covered = assessment.status === "review" && assessment.candidate && document.ownerRequestedAt == null
             ? await scheduleCoverageReason(document.userId, assessment.candidate, document.emailDate) : null;
           await store.settleDocument(document, { candidate: covered ? null : assessment.candidate || null, contentHash, assessment,
             status: assessment.status === "nonfinancial" || covered ? "ignored" : "retry", nextAttemptAt: null,
@@ -146,7 +146,9 @@ export function createFinancialEventWorker({
       if (assessment?.status === "unrecognized") {
         // Senders without a dedicated parser get no automatic AI assessment and
         // never enter review; the owner records them explicitly from the reader.
-        await store.settleDocument(document, { candidate: null, contentHash, assessment, status: "ignored", nextAttemptAt: null });
+        const requested = document.ownerRequestedAt != null;
+        await store.settleDocument(document, { candidate: requested ? document.candidate || {} : null, contentHash, assessment,
+          status: requested ? "retry" : "ignored", nextAttemptAt: null, error: requested ? document.error : null });
         publish(document.userId);
         return true;
       }
@@ -261,6 +263,7 @@ export function createFinancialEventWorker({
   }
 
   async function eventScheduleCoverageReason(event: FinancialEvent): Promise<string | null> {
+    if (event.documents.some(document => document.ownerRequestedAt != null)) return null;
     const evidence = combineFinancialEventEvidence(event.documents);
     if (!evidence.candidate || evidence.conflict) return null;
     const source = event.documents.find(document => document.candidate) || event.documents[0];
