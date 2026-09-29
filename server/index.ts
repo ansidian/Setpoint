@@ -190,7 +190,7 @@ const ownerRuntimeGate = createOwnerRuntimeGate(() => startOwnerRuntime(), {
 });
 
 timeAsync("local-engine", async () => {
-  if (process.env.NODE_ENV === "production" && resolveDatabaseClientConfig(process.env).adapter === "sqlite") {
+  if (resolveDatabaseClientConfig(process.env).mode === "production") {
     await assertNativeVectorSupport(db);
   }
 })

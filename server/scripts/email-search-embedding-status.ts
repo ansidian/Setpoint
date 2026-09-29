@@ -10,7 +10,7 @@ import {
 async function main() {
   const options = parseEmailSearchHarnessArgs(process.argv.slice(2), { command: "status" });
   const userId = requireHarnessUserId(options.userId);
-  const { config, dbClient } = createEmailSearchHarnessDb(options);
+  const { config, dbClient } = createEmailSearchHarnessDb();
   try {
     const capability = await detectEmailSearchVectorCapability(dbClient);
     const status = await getEmailSearchEmbeddingCoverageStatus(userId, {
@@ -18,7 +18,6 @@ async function main() {
       capability,
     });
     const payload = {
-      adapter: options.adapter,
       database_mode: config.mode,
       vector_capability: capability,
       user_id: userId,

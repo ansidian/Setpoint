@@ -1,6 +1,6 @@
 # Architecture
 
-Personal executive assistant dashboard that consolidates emails, calendars, weather, Todoist-backed deadlines/tasks, and finances into a current operational workspace. Single-user app built with React 19 + Express.js, backed by persistent SQLite through libSQL and provider-backed email triage. The owner’s live instance runs on Debian; Turso remains a supported alternative adapter.
+Personal executive assistant dashboard that consolidates emails, calendars, weather, Todoist-backed deadlines/tasks, and finances into a current operational workspace. Single-user app built with React 19 + Express.js, backed by persistent SQLite through libSQL and provider-backed email triage. The owner’s live instance is self-hosted in Docker on a Debian home server.
 
 ## System Overview
 
@@ -49,7 +49,7 @@ graph TB
 | Build | Vite 8, Tailwind CSS 4 | Bundling, dev server, utility-first CSS |
 | UI | shadcn/ui, Radix, Framer Motion | Component primitives, animations |
 | Backend | Express 4 | HTTP API server |
-| Database | SQLite through libSQL | Persistent application DB on Debian; optional Turso adapter |
+| Database | SQLite through libSQL | Persistent local application DB file (`EA_SQLITE_PATH` in production) |
 | AI | Anthropic Messages API, OpenAI Responses API | Email triage and bill signals |
 | Search | SQLite FTS5 | Full-text email search |
 | Email | Gmail API, ImapFlow (iCloud) | Multi-account email fetching |
@@ -1185,9 +1185,7 @@ Passkeys and API tokens are separate auth surfaces. A registered passkey can unl
 
 ## Deployment
 
-**Hosting:** The owner’s live instance runs in Docker on Debian with private Nginx ingress. Its application database is a persistent local SQLite file selected by `EA_DB_ADAPTER=sqlite` and an absolute `EA_SQLITE_PATH`. See [Debian operations](deploy/OPERATIONS-LIVE.md) for access and recovery, and [automatic releases](deploy/AUTOMATIC-DEPLOYMENT.md) for the verified image deployment pipeline. The retired Render instance and stale Turso copy are not live data sources.
-
-Turso remains supported for alternative installations; without an explicit adapter, production code still selects Turso. The retained `render.yaml` describes an alternative fresh installation.
+**Hosting:** The owner’s live instance runs in Docker on Debian with private Nginx ingress. Its application database is a persistent local SQLite file at the absolute `EA_SQLITE_PATH`; SQLite is the only supported database. See [Debian operations](deploy/OPERATIONS-LIVE.md) for access and recovery, and [automatic releases](deploy/AUTOMATIC-DEPLOYMENT.md) for the verified image deployment pipeline.
 
 **Build flow:**
 1. `npm run build` → Vite produces `dist/`
@@ -1198,6 +1196,6 @@ Turso remains supported for alternative installations; without an explicit adapt
 1. `npm run dev` → concurrently runs Vite (HMR) + Express (--watch)
 2. Vite proxies `/api/*` to Express on port 3001
 
-**Environment variables:** See `.env.example` for full reference. Key secrets: `EA_ENCRYPTION_KEY` (AES-256), `ANTHROPIC_API_KEY`, `GOOGLE_CLIENT_ID`/`SECRET`, and Turso database tokens only when that adapter is selected. `EA_USER_ID` plus `EA_PASSWORD_HASH` remain an optional legacy owner-import pair.
+**Environment variables:** See `.env.example` for full reference. Key secrets: `EA_ENCRYPTION_KEY` (AES-256), `ANTHROPIC_API_KEY`, `GOOGLE_CLIENT_ID`/`SECRET`, and `EA_SQLITE_PATH` in production. `EA_USER_ID` plus `EA_PASSWORD_HASH` remain an optional legacy owner-import pair.
 
 **Security defaults:** production enables HSTS + CSP + frame/referrer/permissions headers. `trust proxy` defaults to `1` only in production and can be overridden via `TRUST_PROXY`.

@@ -258,7 +258,7 @@ export async function getActiveSnapshotView(userId: string, {
   // getOrCreateActiveSnapshot must stay first — it may INSERT the snapshot and
   // copy carryover items, and the readers below consume its id. Once it
   // resolves, the six reads are mutually independent pure SELECTs, so run them
-  // concurrently instead of as six serial Turso round-trips (P1-7).
+  // concurrently instead of as six serial database round-trips (P1-7).
   const snapshot = await getOrCreateActiveSnapshot(userId, { dbClient, now, timeZone });
   // The previous frozen snapshot is needed by BOTH the catch-up and aged-out
   // reads. Resolve it once and share the single in-flight promise so the

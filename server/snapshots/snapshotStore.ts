@@ -319,7 +319,7 @@ export async function loadActiveSnapshotItemsForEmail(
 export async function loadProcessingState(dbClient: SnapshotReadDb, userId: string): Promise<SnapshotProcessingState> {
   // The job-count GROUP BY (ea_triage_jobs) and the triage-mode read (ea_settings)
   // hit disjoint tables with no ordering dependency, so resolve them concurrently
-  // instead of as two serial Turso round-trips on the every-/current snapshot-view
+  // instead of as two serial database round-trips on the every-/current snapshot-view
   // critical path (P1-7 pattern).
   const [result, mode] = await Promise.all([
     dbClient.execute({

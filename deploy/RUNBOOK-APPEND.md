@@ -43,8 +43,7 @@ The installer retains previous host scripts and runbook in a dated
 deliberate; application images cannot replace host scripts. Images are retained
 without automatic pruning and deployment blocks below10GB free. Daily and
 deployment backups share seven-archive retention (not necessarily seven days);
-the Mac keeps30 pulled archives. Render stays suspended and Turso stays retired
-from live use. No stale Render workers may resume.
+the Mac keeps30 pulled archives.
 
 Installer validation covers bundle checksums, deployment regression tests,
 shell/systemd/Compose syntax, anonymous image pull and GitHub CI identity.

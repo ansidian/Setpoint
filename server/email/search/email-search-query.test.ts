@@ -20,7 +20,7 @@ describe("sanitizeFtsQuery plural expansion", () => {
   // NOTE: joined with explicit "AND", not a bare space. FTS5's implicit-AND adjacency
   // only applies between bare phrases; a parenthesized OR-group next to anything else
   // is a syntax error in the real engine (verified against libsql's fts5 parser, the
-  // same parser Turso runs in prod) — confirmed with a live in-memory FTS5 table.
+  // same engine production runs) — confirmed with a live in-memory FTS5 table.
   it("ORs each token with its plural/singular variant, prefix on the last", () => {
     expect(sanitizeFtsQuery("paypal statement")).toBe(
       '("paypal" OR "paypals") AND ("statement"* OR "statements"*)',

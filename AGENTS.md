@@ -57,9 +57,14 @@ Commands: `npm test -- <test-file> ...` for focused tests, `npx eslint <file> ..
 - Give touched enabled buttons/icon buttons hover and focus motion plus visible focus and active states, including overlay close/cancel controls. Scan them before handoff; disabled controls and reduced-motion handling are exceptions to motion.
 - Follow `src/components/shared/pickers/AnchoredFloatingPanel.tsx` and `src/components/briefing/BriefingHistoryPanel.tsx` for floating panels: portal to `document.body`, fixed positioning from the trigger rect updated on scroll/resize, opaque `#16161e` background with `isolation: isolate`, contained overscroll/wheel edges, and document `pointerdown` dismissal checking both trigger and portal refs.
 
+## Live Instance
+
+- The owner’s instance is self-hosted in Docker on a Debian home server, alongside Actual Budget. Host administration, real endpoints, access, and live-state inspection belong to the owner’s private home-server workspace (sibling checkout `../home-server`; start with its `AGENTS.md` and `services/setpoint/`). This repository is public: keep private domains, addresses, and tailnet names out of it; tracked docs and deployment templates use example values.
+- Pushing `master` is a production release. After CI passes, the host deploys the new image automatically within minutes, and code rollback does not undo migrations. See [automatic releases](deploy/AUTOMATIC-DEPLOYMENT.md) and [Debian operations](deploy/OPERATIONS-LIVE.md).
+- SQLite is the only supported database. The live database is the persistent file at `EA_SQLITE_PATH` on Debian; diagnose production data there, read-only, via the home-server workspace. Local `server/db/ea.db` holds development data only; never use it for production diagnosis or repair. The earlier Render hosting and Turso database were retired at the 2026-09-18 cutover and removed from the code; do not reintroduce them.
+
 ## Provider Boundaries
 
-- The owner’s live database is the persistent SQLite file on Debian, selected with `EA_DB_ADAPTER=sqlite` and `EA_SQLITE_PATH`. Use [Debian operations](deploy/OPERATIONS-LIVE.md) to locate the live instance; the retired Turso copy is stale and must not be used for current diagnosis or repair. Normal development uses `server/db/ea.db`. Turso remains supported and is the code default when production has no explicit adapter; see `OPERATIONS.md` for alternative installations.
 - `npm run actual -- <command>` is for ad-hoc inspection only. Runtime paths use the in-process `@actual-app/api` singleton in `server/actual/actual.ts`.
 
 ## Demo Mode Contract

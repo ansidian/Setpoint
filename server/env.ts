@@ -1,14 +1,8 @@
-const BASE_REQUIRED_ENV = ["EA_ENCRYPTION_KEY"];
-const PRODUCTION_REQUIRED_ENV = [
-  "TURSO_DATABASE_URL",
-  "TURSO_AUTH_TOKEN",
-];
+// Production's EA_SQLITE_PATH requirement is enforced by db/config.ts.
+const REQUIRED_ENV = ["EA_ENCRYPTION_KEY"];
 
 export function getMissingRequiredEnv(env = process.env) {
-  const required = env.NODE_ENV === "production" && env.EA_DB_ADAPTER?.trim().toLowerCase() !== "sqlite"
-    ? [...BASE_REQUIRED_ENV, ...PRODUCTION_REQUIRED_ENV]
-    : BASE_REQUIRED_ENV;
-  return required.filter((key) => !env[key]);
+  return REQUIRED_ENV.filter((key) => !env[key]);
 }
 
 export function backgroundWorkersEnabled(env: NodeJS.ProcessEnv = process.env): boolean {

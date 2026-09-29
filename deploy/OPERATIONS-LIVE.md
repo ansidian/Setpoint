@@ -164,10 +164,7 @@ Setpoint's finance workers paused until Actual and the rebuilt cache are ready.
 
 ## Recovery target
 
-The owner intends to keep Setpoint on Debian and does not plan to restore it to
-Render. The earlier Render rollback procedure is retired. Retained Render/Turso
-resources are not required for the recovery plan; this documentation change does
-not delete them or verify their billing status.
+Setpoint lives on Debian; there is no other hosting fallback.
 
 For application release failures, follow the reviewed recovery procedure in
 [automatic releases](AUTOMATIC-DEPLOYMENT.md), preserving current data and checking
@@ -176,4 +173,4 @@ verified encrypted Setpoint and Actual backups described above to rebuild Debian
 Restore Actual before rehydrating Setpoint's cache and enabling finance workers.
 Preserve the shared private HTTPS configuration and exact Setpoint encryption key.
 If the latest data is unavailable, report the available backup timestamp before
-accepting data loss. Do not reactivate a stale Turso database or make Actual public.
+accepting data loss. Do not make Actual public.

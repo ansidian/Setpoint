@@ -8,10 +8,8 @@ export const EMAIL_SEARCH_BM25_RANK_SQL = "bm25(ea_email_fts, 0.0, 4.0, 4.0, 10.
 const MIN_VARIANT_TOKEN_LENGTH = 4;
 
 // Query-side singular/plural expansion (audit B2). Deliberately NOT a porter
-// tokenizer migration: prod FTS runs on Turso's hosted engine, and a one-shot
-// FTS rebuild against an engine we can't test locally is the works-locally/
-// breaks-prod class of change. Regular English noun inflection covers the
-// measured corpus gap.
+// tokenizer migration, which would require a one-shot rebuild of the production
+// FTS index. Regular English noun inflection covers the measured corpus gap.
 export interface EmailSearchQuery {
   textQuery: string;
   readFilter: 0 | 1 | null;

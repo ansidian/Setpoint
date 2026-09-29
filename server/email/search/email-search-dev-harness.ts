@@ -5,27 +5,19 @@ import type { Client } from "@libsql/client";
 const DEFAULT_STATUS_LIMIT = 25;
 const MAX_BACKFILL_LIMIT = 500;
 
-type EmailSearchHarnessAdapter = "local" | "turso";
 type EmailSearchHarnessCommand = "status" | "backfill";
 
 type ParsedHarnessArgs = Record<string, string | undefined>;
 
 interface HarnessParseOptions {
   command?: EmailSearchHarnessCommand;
-  defaultAdapter?: EmailSearchHarnessAdapter;
 }
 
 export interface EmailSearchHarnessArgs {
-  adapter: EmailSearchHarnessAdapter;
   limit: number | null;
   batchSize: number;
   userId: string | undefined;
   json: boolean;
-}
-
-export interface EmailSearchHarnessDbOptions {
-  adapter?: EmailSearchHarnessAdapter;
-  env?: NodeJS.ProcessEnv;
 }
 
 export interface EmailSearchHarnessDb {
@@ -65,14 +57,8 @@ function parseArgv(argv: string[] = []): ParsedHarnessArgs {
 
 export function parseEmailSearchHarnessArgs(argv: string[] = [], {
   command = "status",
-  defaultAdapter = "local",
 }: HarnessParseOptions = {}): EmailSearchHarnessArgs {
   const args = parseArgv(argv);
-  const adapterText = String(args.adapter || defaultAdapter).toLowerCase();
-  const adapter: EmailSearchHarnessAdapter = adapterText === "turso" ? "turso" : "local";
-  if (!["local", "turso"].includes(adapterText)) {
-    throw new Error("Invalid --adapter. Use --adapter=local or --adapter=turso.");
-  }
 
   const limit = parsePositiveInt(args.limit, {
     fallback: command === "backfill" ? null : DEFAULT_STATUS_LIMIT,
@@ -83,7 +69,6 @@ export function parseEmailSearchHarnessArgs(argv: string[] = [], {
   }
 
   return {
-    adapter,
     limit,
     batchSize: parsePositiveInt(args.batchSize, { fallback: 16, max: 100 })!,
     userId: args.userId || process.env.EA_USER_ID,
@@ -91,24 +76,8 @@ export function parseEmailSearchHarnessArgs(argv: string[] = [], {
   };
 }
 
-export function resolveEmailSearchHarnessDbConfig({ adapter = "local", env = process.env }: EmailSearchHarnessDbOptions = {}): ReturnType<typeof resolveDatabaseClientConfig> {
-  if (adapter === "turso") {
-    return resolveDatabaseClientConfig({
-      ...env,
-      EA_DEV_DB_ADAPTER: "turso",
-      AI_SEARCH_VECTOR_ADAPTER: "turso",
-    });
-  }
-  return resolveDatabaseClientConfig({
-    ...env,
-    NODE_ENV: env.NODE_ENV === "production" ? "development" : env.NODE_ENV,
-    EA_DEV_DB_ADAPTER: "",
-    AI_SEARCH_VECTOR_ADAPTER: "",
-  });
-}
-
-export function createEmailSearchHarnessDb(options: EmailSearchHarnessDbOptions = {}): EmailSearchHarnessDb {
-  const config = resolveEmailSearchHarnessDbConfig(options);
+export function createEmailSearchHarnessDb(env: NodeJS.ProcessEnv = process.env): EmailSearchHarnessDb {
+  const config = resolveDatabaseClientConfig(env);
   return {
     config,
     dbClient: createClient(config.client),

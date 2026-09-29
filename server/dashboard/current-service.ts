@@ -328,7 +328,7 @@ export async function getCurrentDashboard(userId: string, {
 }: { dbClient?: Client; now?: Date } = {}): Promise<CurrentDashboardResponse> {
   // loadCacheRows (ea_current_data_cache) and loadRefreshContext (todoist + bills
   // mirror health) read disjoint tables and nothing written before this point
-  // feeds either, so overlap them instead of paying two serial Turso round-trips
+  // feeds either, so overlap them instead of paying two serial database round-trips
   // up front on every poll. refreshMissingRows only writes on a cold/missing row,
   // which loadRefreshContext does not read.
   const [cacheRows, context] = await Promise.all([
@@ -481,7 +481,7 @@ export async function requestCurrentDashboardRefresh(userId: string, {
   // snapshot, which would blank the rendered briefing until the next poll and change the
   // /current/refresh contract.
   // These two tail reads are independent (a snapshot-view build and a
-  // provider-health read), so overlap them instead of paying their Turso
+  // provider-health read), so overlap them instead of paying their database
   // round-trips serially on every manual/return-to-dashboard refresh.
   const [activeSnapshot, providerHealth] = await Promise.all([
     getActiveSnapshotView(userId),

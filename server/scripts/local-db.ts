@@ -9,7 +9,6 @@ import { resolveDatabaseClientConfig } from "../db/config.ts";
 import { inspectLocalDatabase, snapshotLocalDatabase } from "../db/local-maintenance.ts";
 
 const config = resolveDatabaseClientConfig(process.env);
-if (config.adapter !== "sqlite") throw new Error("This command only accepts a local database");
 const client = createClient(config.client);
 try {
   const command = process.argv[2];

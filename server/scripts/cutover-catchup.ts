@@ -11,13 +11,13 @@ async function main(): Promise<void> {
     process.exitCode = 1;
     return;
   }
-  if (process.env.NODE_ENV !== "production" || process.env.EA_DB_ADAPTER !== "sqlite") {
-    console.error("Cutover recovery requires NODE_ENV=production and EA_DB_ADAPTER=sqlite");
+  if (process.env.NODE_ENV !== "production") {
+    console.error("Cutover recovery requires NODE_ENV=production");
     process.exitCode = 1;
     return;
   }
   const config = resolveDatabaseClientConfig();
-  if (config.adapter !== "sqlite" || !(await stat(new URL(config.client.url))).isFile()) {
+  if (!(await stat(new URL(config.client.url))).isFile()) {
     console.error("Cutover recovery requires an existing local production database file");
     process.exitCode = 1;
     return;

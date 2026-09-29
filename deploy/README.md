@@ -103,4 +103,4 @@ certificate; preserve both timers and certificates during shared maintenance.
 The public Funnel must be separately configured for port 8443 and pointed at
 `http://127.0.0.1:18765` only after the old PoC receiver has been stopped and the
 real restricted proxy has passed checks. No script in this directory performs
-that change, switches DNS, or starts/stops Render workers.
+that change or switches DNS.

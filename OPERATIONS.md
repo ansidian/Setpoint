@@ -11,7 +11,7 @@ Use Node.js 24.15 or later within Node 24, as specified in [package.json](packag
 3. Run `npm run dev` and open `http://localhost:5173`. Vite proxies `/api` to Express on port 3001.
 4. On a fresh database, enter the setup token, confirm the canonical URL, create the owner password, and save the displayed recovery codes. Connect providers in Settings.
 
-Development uses `server/db/ea.db`; Turso credentials are unnecessary unless explicitly opting in. The encryption key is required locally. Automatic email triage uses local rules outside production by default; select real AI or pause processing in Settings → Automation.
+Development uses the local SQLite file `server/db/ea.db`. The encryption key is required locally. Automatic email triage uses local rules outside production by default; select real AI or pause processing in Settings → Automation.
 
 For the fictional frontend alone, run `npm run demo`. It needs no backend or credentials and resets mutations on refresh. To inspect the static artifact, run `npm run build:demo` then `npm run preview:demo`.
 
@@ -19,39 +19,32 @@ The demo build adds public social metadata through `vite.config.ts`; normal priv
 
 ## Production
 
-The owner's live instance runs on Debian with a persistent SQLite application database,
-selected by `EA_DB_ADAPTER=sqlite` and an absolute `EA_SQLITE_PATH`. See
-[Debian operations](deploy/OPERATIONS-LIVE.md) for live access and recovery and
+The owner's live instance runs in Docker on a Debian home server. Its application
+database is a persistent local SQLite file at the absolute `EA_SQLITE_PATH`; SQLite
+is the only supported database, and production refuses to start without that path.
+See [Debian operations](deploy/OPERATIONS-LIVE.md) for live access and recovery and
 [automatic releases](deploy/AUTOMATIC-DEPLOYMENT.md) for deployment. Successful
 `master` push CI publishes the production image; the installed Debian deployment
-timer pulls and activates verified releases. The retained Render instance is
-suspended and must not resume against stale Turso data. Use the Debian database
-for current diagnosis and repair.
+timer pulls and activates verified releases. Use the Debian database for current
+diagnosis and repair.
 
 Back up **both the database and its exact `EA_ENCRYPTION_KEY`**. The app cannot recover that key, and the database alone cannot decrypt stored credentials. Back up uploaded Notes media separately from `EA_TLDRAW_ASSET_DIR`. Production Notes also requires a tldraw license configured in Settings → Connections. Database migrations run at server startup.
 
 Normal provider configuration lives in Settings. After connecting Actual, configure Financial providers in Settings → Finance: choose each utility’s existing schedule, funding/card endpoints for credit-card payments, and reusable receipt/refund destinations. Actual target names load automatically; unavailable targets show a readable status and retry instead of internal identifiers. Create profile appears for emails with a recognized financial event classification other than `other`. It seeds an unsaved, disabled provider draft with its sender and available context; select missing targets before saving. Migration 069 starts with no enabled profiles and does not adopt retired mappings or Utilities membership. Unmatched receipts/refunds wait for review; reminder and completed-payment notices are ignored. Review can also suggest an unsaved provider draft that starts disabled for explicit setup. Card profiles schedule the full statement balance on an explicitly supported due date, or the numeric payment amount/date from a scheduled-payment confirmation. Missing or conflicting statement facts stay in review. Minimum due, current balance and AutoPay enrollment alone cannot supply the scheduled amount. Optional host-managed credentials and startup/backfill timing switches remain documented in `.env.example`.
 
-### Alternative fresh installations: Turso and Render
+### Fresh installations
 
-Turso remains a supported adapter. Production code selects it when `EA_DB_ADAPTER`
-is unset; that default does not describe the owner's explicitly configured Debian
-instance. Supply `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` only for a Turso
-installation. Never use the retired production copy to initialize a replacement
-for the live instance; follow the Debian recovery runbook with current data.
+A new host needs an always-running Node process (or the production Docker image),
+`NODE_ENV=production`, an absolute persistent `EA_SQLITE_PATH`, a new
+`EA_ENCRYPTION_KEY` and `EA_SETUP_TOKEN`, and persistent storage for Notes assets
+(`EA_TLDRAW_ASSET_DIR`). The server builds with `npm ci && npm run build`, starts
+with `npm start`, and reports readiness at `/healthz`. To replace the owner's live
+instance, follow the Debian recovery runbook with current data instead.
 
-The [Render Blueprint](render.yaml) provisions an always-on Starter Node service
-and a persistent asset disk. It requires Turso credentials and generates
-`EA_ENCRYPTION_KEY` and `EA_SETUP_TOKEN`. The service builds with
-`npm ci && npm run build`, starts with `npm start`, and checks readiness at
-`/healthz`. Notes media uses `/var/data/tldraw-assets`.
-
-After deploying a fresh instance, retrieve its setup token from the service
-environment and claim it in the browser. The owner password must have at least
-12 characters. Save the one-time recovery codes, then use Settings to connect
-providers. Provider credentials are not required to boot; workers remain inactive
-until the owner claim succeeds. Other hosts need the same bootstrap values, an
-always-running Node process and persistent storage for Notes assets.
+After starting a fresh instance, claim it in the browser with the setup token. The
+owner password must have at least 12 characters. Save the one-time recovery codes,
+then use Settings to connect providers. Provider credentials are not required to
+boot; workers remain inactive until the owner claim succeeds.
 
 ## Sign-in and recovery
 
@@ -80,17 +73,16 @@ Some Google-managed calendars, including holidays, are readable but do not suppo
 
 Calendar cache refresh remains eligible after five minutes. The health indicator gives automatic recovery a one-hour window from the last successful data check; failed synchronization, expired/failed watches, reconnect requirements and browser connection failures remain visible. A working subscription by itself does not establish fresh calendar data.
 
-## Turso semantic search verification
+## Semantic search coverage
 
-For an explicit remote-adapter check, use a separate Turso test database and configure `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`, then run:
+Report and extend email embedding coverage against the configured SQLite database:
 
 ```bash
-npm run ai-search:embedding-status -- --adapter=turso
-npm run ai-search:backfill -- --adapter=turso --limit=25
-npm run dev:ai-search-turso
+npm run ai-search:embedding-status
+npm run ai-search:backfill -- --limit=25
 ```
 
-The backfill also needs `EA_USER_ID` and `OPENAI_API_KEY`. This development command disables the periodic embedding worker, so use bounded backfills to change coverage.
+Both need `EA_USER_ID`; the backfill also needs `OPENAI_API_KEY` and always requires a bounded `--limit`. Production startup verifies native vector support in the SQLite engine.
 
 ## Verification and diagnostics
 
@@ -187,10 +179,10 @@ For the disposable Actual lab, use its sanitized `lab/run.mjs` launcher. An inhe
 Domains and addresses below are public examples; use the private server runbook
 for the owner's real endpoints. Keep deployment-specific values outside Git.
 
-The private self-hosted copy supports `EA_DB_ADAPTER=sqlite` with an absolute
-`EA_SQLITE_PATH`. It uses the existing local libSQL engine without cloud sync or
-Turso credentials. Keep `NODE_ENV=production` and the exact production root key.
-Default development and hosted-production behavior are unchanged.
+The deployment uses an absolute `EA_SQLITE_PATH` on a persistent mount, the local
+libSQL engine, `NODE_ENV=production` and the exact production root key.
+`EA_DB_ADAPTER=sqlite` in the deployment files is accepted for compatibility; any
+other value fails startup.
 
 `EA_WEBHOOK_ORIGIN` separates public Gmail/Calendar/Todoist delivery from the
 canonical browser origin. Debian uses `https://setpoint.example.com` privately and
@@ -205,7 +197,7 @@ network isolation as well. Invalid enablement values fail startup.
 Deployment, ingress tests and certificate renewal: see [deploy/README.md](deploy/README.md).
 The current deployment, update commands, backup restoration, and recovery policy
 are recorded in [deploy/OPERATIONS-LIVE.md](deploy/OPERATIONS-LIVE.md).
-Debian is the recovery target; the retired Render deployment must remain inactive.
+Debian is the recovery target.
 
 Actual Budget is also hosted on Debian, at `https://actual.example.com` over
 Tailscale. The migration preserved the domain, password and budget/sync IDs, so
@@ -238,6 +230,4 @@ archive without that identity cannot be restored.
 Restore into a new private directory: decrypt with `age -d -i IDENTITY`, extract
 the archive, provide its exact root key privately and audit the restored DB with
 network disabled. Never overwrite the active data directory during a rehearsal.
-Recovery targets Debian using its current data or a verified encrypted backup,
-not the retired Render deployment or stale Turso copy. Retained cloud resources
-are not a required recovery dependency; their deletion is a separate operation.
+Recovery targets Debian using its current data or a verified encrypted backup.

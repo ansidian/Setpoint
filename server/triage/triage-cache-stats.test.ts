@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { getTriageCacheStats } from "./triage-cache-stats.ts";
 
 // Deterministic in-memory db stub: returns a fixed row set regardless of the
-// SQL/args, so the model test exercises pure aggregation rather than Turso.
+// SQL/args, so the model test exercises pure aggregation rather than the database.
 function fakeDb(rows: Record<string, unknown>[]) {
   return {
     execute: async () => ({ rows }),
