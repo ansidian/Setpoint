@@ -1,7 +1,5 @@
-import { identifyFinancialProvider } from '../financial-parsers/index.ts';
 export { extractBillCandidate } from './bill-extraction-service.ts';
 import {
-  sendBill as actualSendBill,
   markBillPaid as actualMarkBillPaid,
   testConnection as actualTestConnection,
   createQuickTxn as actualCreateQuickTxn,
@@ -12,9 +10,6 @@ import {
   type ActualConnectionCandidate,
 } from "../actual/actual.ts";
 import db from "../db/connection.ts";
-import { withAiUsageContext } from "../platform/ai-usage.ts";
-import { extractBillCandidate } from "./bill-extraction-service.ts";
-import { planFinancialEmail as planFinancialEmailCore } from "./financial-email-planner.ts";
 import {
   describeLocalActualCache,
 } from "../actual/actual-local-metadata.ts";
@@ -30,13 +25,7 @@ import {
 } from "./bills-mirror-sync.ts";
 import type { BillsMirrorDb } from "./bills-mirror-sync.ts";
 import type { LocalActualOptions } from "../actual/actual-local-metadata.ts";
-import type { ActualBillWriteInput, ActualQuickTransactionInput } from "../actual/actual.ts";
-import type {
-  BillCandidate,
-  BillExtractionInput,
-  FinancialEmailExtractionResponse,
-} from "../../shared/types/bills.ts";
-import type { BillExtractionDependencies } from "./bill-extraction-service.ts";
+import type { ActualQuickTransactionInput } from "../actual/actual.ts";
 import { capabilityStatusService } from "../capability-status-service.ts";
 
 type ReconciliationError = Error & {
@@ -49,13 +38,11 @@ function errorMessage(error: unknown): string {
 }
 export { resolveFinancialEmailSeed } from "./financial-email-adoption-service.ts";
 export { planFinancialEmail } from "./financial-email-planner.ts";
-export { evaluateFinancialEmail } from "./financial-email-evaluator.ts";
 export {
   getMetadata,
   readActualMetadataProjection,
   refreshActualMetadataProjection,
 } from "../actual/actual-metadata-projection.ts";
-export { extractBill } from "./bill-extraction-service.ts";
 export { shouldScheduleImmediateBillsRefresh } from "./bills-mirror-refresh-policy.ts";
 export {
   BILLS_MIRROR_MAINTENANCE_TTL_MS,
@@ -154,16 +141,6 @@ async function withLocalWriteReconciliation<T>(userId: string, run: () => Promis
   }
 }
 
-export async function sendBill(userId: string, billData: BillCandidate) {
-  return withLocalWriteReconciliation(userId, async () => {
-    const result = await actualSendBill(billData as ActualBillWriteInput, userId);
-    await invalidateActualAfterTransactionImport(userId).catch((err: unknown) => {
-      console.error("[EA] Actual write succeeded but projection publication failed:", errorMessage(err));
-    });
-    return result;
-  }, { delayMs: 60_000 });
-}
-
 export async function markBillPaid(userId: string, billId: string) {
   return withLocalWriteReconciliation(userId, async () => {
     const result = await actualMarkBillPaid(billId, userId);
@@ -215,29 +192,6 @@ export async function createQuickTxn(userId: string, payload: ActualQuickTransac
     });
     return result;
   }, { delayMs: 60_000 });
-}
-
-export async function extractFinancialEmail(
-  userId: string,
-  input: BillExtractionInput,
-  dependencies: BillExtractionDependencies = {},
-): Promise<FinancialEmailExtractionResponse> {
-  return withAiUsageContext({ userId, origin: "manual_extraction" }, async () => {
-    const extracted = await extractBillCandidate(userId, input, dependencies);
-    const plan = await planFinancialEmailCore(userId, {
-      email: { subject: input.subject, from: input.from, body: input.body },
-      candidate: extracted.candidate,
-      ...(extracted.provider === "deterministic" ? {assessmentMode:"deterministic" as const,providerId:identifyFinancialProvider(String(input.from || ""),{subject:String(input.subject || ""),body:String(input.body || "")}) || undefined} : {}),
-      source: "extract",
-      sourceIdentity: { senderAuthentication: "unavailable" },
-    });
-    return {
-      ...plan.candidate,
-      provider: extracted.provider,
-      model: extracted.model,
-      plan,
-    };
-  });
 }
 
 export async function hydrateActualCache(userId: string, {

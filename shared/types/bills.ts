@@ -509,12 +509,6 @@ export interface FinancialEmailPlan {
   automation: FinancialAutomationEligibility;
 }
 
-export interface FinancialEmailExtractionResponse extends BillCandidate {
-  provider: string;
-  model: string;
-  plan: FinancialEmailPlan;
-}
-
 export interface BillPayMetadata {
   accounts?: ActualMetadata["accounts"];
   payees?: ActualMetadata["payees"];

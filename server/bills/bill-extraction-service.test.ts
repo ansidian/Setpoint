@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { extractBill, extractBillCandidate, loadBillExtractChoice } from "./bill-extraction-service.ts";
+import { extractBillCandidate, loadBillExtractChoice } from "./bill-extraction-service.ts";
+
+async function extractFlat(...args: Parameters<typeof extractBillCandidate>) {
+  const extracted = await extractBillCandidate(...args);
+  return { ...extracted.candidate, provider: extracted.provider, model: extracted.model };
+}
 import { createAnthropicProvider } from "./bill-extractors/anthropic.ts";
 import { createOpenAiProvider } from "./bill-extractors/openai.ts";
 import { BILL_SEMANTIC_EXTRACTION_INSTRUCTIONS } from "./bill-semantic-prompt.ts";
@@ -105,9 +110,10 @@ describe("extractBillCandidate", () => {
         ? { output_text: JSON.stringify(fields), usage: {} }
         : { content: [{ type: "tool_use", name: "submit_bill", input: fields }], usage: {} } };
     }) as unknown as typeof fetch;
-    await expect(extractBill("u1", {
+    const result = await extractBillCandidate("u1", {
       from: "orders@example.test", subject: "Order update", body: "The seller is packing your order.",
-    }, dependencies())).rejects.toMatchObject({ status: 422, code: "FINANCIAL_EVENT_NOT_PRESENT" });
+    }, dependencies());
+    expect(result.candidate.event_verification?.assessment?.outcome).toBe("nonfinancial");
   });
 
   it("preserves verified initial confirmation context without inventing an operation date", async () => {
@@ -183,7 +189,7 @@ describe("extractBillCandidate", () => {
   });
 });
 
-describe("extractBill (Anthropic)", () => {
+describe("extractBillCandidate (Anthropic)", () => {
   it("translates category/account codes back to real ids and reports the model used", async () => {
     mockSettings("anthropic", "claude-haiku-4-5", { metadata: {
       categories: [
@@ -228,7 +234,7 @@ describe("extractBill (Anthropic)", () => {
     });
     global.fetch = fetchMock as unknown as typeof fetch;
 
-    const out = await extractBill("u1", { subject: "Bill", from: "x@y", body: "body" }, dependencies());
+    const out = await extractFlat("u1", { subject: "Bill", from: "x@y", body: "body" }, dependencies());
 
     expect(out.event_verification?.assessment?.outcome).toBe("uncertain");
     expect(out).toMatchObject({
@@ -267,12 +273,12 @@ describe("extractBill (Anthropic)", () => {
     });
 
     await expect(
-      extractBill("u1", { subject: "x", from: "y", body: "z" }, dependencies())
+      extractFlat("u1", { subject: "x", from: "y", body: "z" }, dependencies())
     ).rejects.toMatchObject({ status: 502 });
   });
 });
 
-describe("extractBill (OpenAI)", () => {
+describe("extractBillCandidate (OpenAI)", () => {
   it("returns verifier-corrected amount evidence for an incomplete multi-amount first pass", async () => {
     mockSettings("openai", "gpt-5.4-mini");
     const response = (fields: Record<string, unknown>) => ({
@@ -310,7 +316,7 @@ describe("extractBill (OpenAI)", () => {
         ],
       })) as unknown as typeof fetch;
 
-    const out = await extractBill("u1", {
+    const out = await extractFlat("u1", {
       subject: "Payment due",
       from: "billing@example.test",
       body: "Minimum payment $40.00. Plan balance $0.00. Remaining statement balance $391.20.",
@@ -365,7 +371,7 @@ describe("extractBill (OpenAI)", () => {
       });
       global.fetch = fetchMock as unknown as typeof fetch;
 
-      const out = await extractBill("u1", { subject: "Bill", from: "x@y", body: "body" }, dependencies());
+      const out = await extractFlat("u1", { subject: "Bill", from: "x@y", body: "body" }, dependencies());
 
       expect(out.event_verification?.assessment?.outcome).toBe("uncertain");
       expect(out).toMatchObject({
@@ -404,7 +410,7 @@ describe("extractBill (OpenAI)", () => {
     delete process.env.OPENAI_API_KEY;
 
     await expect(
-      extractBill("u1", { subject: "x", from: "y", body: "z" }, dependencies())
+      extractFlat("u1", { subject: "x", from: "y", body: "z" }, dependencies())
     ).rejects.toMatchObject({ status: 503, message: /OPENAI_API_KEY not set/ });
   });
 });

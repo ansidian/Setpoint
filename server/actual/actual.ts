@@ -36,13 +36,6 @@ export async function removeActualConnection(userId: string) {
   return result;
 }
 
-export interface ActualBillWriteInput {
-  amount: number;
-  due_date: string;
-  type?: string;
-  [key: string]: unknown;
-}
-
 export interface ActualQuickTransactionInput {
   accountName?: string;
   amount?: number;
@@ -159,12 +152,6 @@ async function markBillPaidInner(scheduleId: string, userId: string): Promise<un
   return result;
 }
 
-async function sendBillInner(billData: ActualBillWriteInput, userId: string): Promise<unknown> {
-  const result = await callActual<unknown>("sendBill", [billData, userId], WRITE_OPERATION_WORKER_OPTIONS);
-  clearMetadataCache();
-  return result;
-}
-
 async function createQuickTxnInner(userId: string, payload: ActualQuickTransactionInput): Promise<ActualQuickTransactionResult> {
   const result = await callActual<ActualQuickTransactionResult>("createQuickTxn", [userId, payload], WRITE_OPERATION_WORKER_OPTIONS);
   clearMetadataCache();
@@ -206,13 +193,6 @@ export async function markBillPaid(scheduleId: string, userId: string): Promise<
   return coordinateActualWrite(async () => {
     await guardOrdinaryActualWrite(userId);
     return markBillPaidInner(scheduleId, userId);
-  });
-}
-
-export async function sendBill(billData: ActualBillWriteInput, userId: string): Promise<unknown> {
-  return coordinateActualWrite(async () => {
-    await guardOrdinaryActualWrite(userId);
-    return sendBillInner(billData, userId);
   });
 }
 

@@ -51,7 +51,6 @@ import {
 } from "./actualTransactionImportModel.ts";
 import {
   createActualSdkScheduleWrites,
-  type ActualBillData,
   type ActualSdkSchedulePort,
 } from "./actualSdkScheduleWrites.ts";
 
@@ -103,6 +102,7 @@ interface ActualSdk extends ActualSdkSchedulePort {
   getBudgets(): Promise<Array<{ groupId?: string }>>;
   getAccounts(): Promise<ActualAccount[]>;
   getPayees(): Promise<ActualPayee[]>;
+  createPayee(input: { name: string }): Promise<string>;
   getCategoryGroups(): Promise<ActualCategoryGroup[]>;
   q(dataset: string): QueryBuilder;
   runQuery(query: QueryBuilder): Promise<{ data: unknown[] }>;
@@ -424,18 +424,6 @@ export function markBillPaid(scheduleId: string, userId: string) {
       await syncAfterWrite();
       clearMetadataCache();
       return { success: true };
-    });
-  });
-}
-
-export function sendBill(billData: ActualBillData, userId: string) {
-  return withLock(async () => {
-    return withActualBudget(userId, async () => {
-      await sdk.sync();
-      const result = await scheduleWrites.writeBill(billData);
-      await syncAfterWrite();
-      clearMetadataCache();
-      return result;
     });
   });
 }

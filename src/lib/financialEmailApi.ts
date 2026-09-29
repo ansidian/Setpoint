@@ -1,13 +1,8 @@
 import { isDemoMode } from "../demo/config";
 import { apiFetch } from "./apiFetch";
-import type { BillCandidate, BillExtractionInput, BillMutationResponse, BillPaySeedRequest,
-  FinancialEmailExtractionResponse, FinancialEmailPlan } from "../../shared/types/bills";
+import type { BillPaySeedRequest, FinancialEmailPlan } from "../../shared/types/bills";
 import type { FinancialEventCompletionRequest, FinancialEventDismissalRequest, FinancialEventReviewRequest } from "../../shared/types/financial-operations";
 
-export const sendToActualBudget = (bill: BillCandidate): Promise<BillMutationResponse> =>
-  apiFetch("/api/briefing/actual/send", { method: "POST", body: JSON.stringify(bill) });
-export const extractBillFromEmail = ({ subject, from, body }: BillExtractionInput): Promise<FinancialEmailExtractionResponse> =>
-  apiFetch("/api/briefing/bills/extract", { method: "POST", body: JSON.stringify({ subject, from, body }) });
 export const resolveFinancialEmailPlan = (payload: BillPaySeedRequest): Promise<FinancialEmailPlan> =>
   apiFetch("/api/briefing/bills/resolve", { method: "POST", body: JSON.stringify(payload || {}) });
 

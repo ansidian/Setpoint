@@ -4,7 +4,6 @@ import type { InStatement } from "@libsql/client";
 import { readFileSync } from "node:fs";
 
 const mockActual = {
-  sendBill: vi.fn(),
   markBillPaid: vi.fn(),
   getAccounts: vi.fn(),
   getCategories: vi.fn(),
@@ -120,7 +119,6 @@ afterEach(async () => {
 const {
   getMetadata,
   invalidateActualAfterTransactionImport,
-  sendBill,
   markBillPaid,
   createQuickTxn,
   listAccounts,
@@ -179,16 +177,16 @@ describe("settled Actual invalidation", () => {
   });
 });
 
-describe("sendBill", () => {
+describe("markBillPaid", () => {
   it("publishes a successful bill write immediately", async () => {
     const database = await useReconciliationDb();
     await database.execute("INSERT INTO ea_settings (user_id, actual_budget_url) VALUES ('u1', 'https://actual.example.test')");
-    mockActual.sendBill.mockResolvedValueOnce({ id: "bill-1" });
+    mockActual.markBillPaid.mockResolvedValueOnce({ success: true });
     mockActualLocal.readLocalActualMetadata.mockResolvedValueOnce({
       accounts: [], payees: [], payeeMap: {}, categories: [], schedules: [], recentTransactions: [],
     });
-    const out = await sendBill("u1", { payee: "x", amount: 10, type: "bill" });
-    expect(out).toEqual({ id: "bill-1" });
+    const out = await markBillPaid("u1", "sched-1");
+    expect(out).toEqual({ success: true });
     expect((await database.execute("SELECT status, pending_refresh_at FROM ea_bills_mirror_state")).rows)
       .toEqual([expect.objectContaining({ status: "current", pending_refresh_at: null })]);
   });
@@ -205,23 +203,6 @@ describe("SDK write reconciliation on sync failure", () => {
 
   afterEach(() => {
     stopBillsMirrorRefreshWorker();
-  });
-
-  it("sendBill: schedules a mirror refresh and returns partial success instead of throwing", async () => {
-    await useReconciliationDb();
-    mockActual.sendBill.mockRejectedValueOnce(localWriteSyncError());
-    mockActualLocal.readLocalActualMetadata.mockResolvedValueOnce({
-      accounts: [], payees: [], payeeMap: {}, categories: [], schedules: [], recentTransactions: [],
-    });
-
-    const out = await sendBill("u1", { payee: "x", amount: 10, type: "bill" });
-
-    expect(out).toMatchObject({
-      syncPending: true,
-      localWriteApplied: true,
-      code: "ACTUAL_SYNC_FAILED",
-    });
-    await expectReconciliationState();
   });
 
   it("markBillPaid: still reconciles and does not surface a hard failure", async () => {
@@ -252,11 +233,11 @@ describe("SDK write reconciliation on sync failure", () => {
 
   it("re-throws errors without localWriteApplied and skips mirror scheduling", async () => {
     await useReconciliationDb();
-    mockActual.sendBill.mockRejectedValueOnce(
+    mockActual.markBillPaid.mockRejectedValueOnce(
       Object.assign(new Error("worker boot failed"), { code: "ACTUAL_WORKER_FAILED" }),
     );
 
-    await expect(sendBill("u1", { payee: "x", amount: 10, type: "bill" }))
+    await expect(markBillPaid("u1", "sched-1"))
       .rejects.toMatchObject({ code: "ACTUAL_WORKER_FAILED" });
     const mirror = await reconciliationDb!.execute({
       sql: "SELECT status, pending_refresh_at FROM ea_bills_mirror_state WHERE user_id = ?",
@@ -267,8 +248,8 @@ describe("SDK write reconciliation on sync failure", () => {
 
   it.each(["ACTUAL_WORKER_TIMEOUT", "ACTUAL_WORKER_EXITED"])("retains reconciliation for an uncertain %s without claiming success", async (code) => {
     const database = await useReconciliationDb();
-    mockActual.sendBill.mockRejectedValueOnce(Object.assign(new Error("Unknown write outcome"), { code }));
-    await expect(sendBill("u1", { payee: "x", amount: 10, type: "bill" })).rejects.toMatchObject({ code });
+    mockActual.markBillPaid.mockRejectedValueOnce(Object.assign(new Error("Unknown write outcome"), { code }));
+    await expect(markBillPaid("u1", "sched-1")).rejects.toMatchObject({ code });
     expect((await database.execute("SELECT status, pending_refresh_at FROM ea_bills_mirror_state")).rows)
       .toEqual([expect.objectContaining({ status: "needs_sync", pending_refresh_at: expect.any(String) })]);
   });

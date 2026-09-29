@@ -6,7 +6,6 @@ import { readOriginalSchedule, readOriginalTransactions } from "./actualOriginal
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createTestTempDir, removeTempDir } from "../test-utils/temp-dir.ts";
 import { reconcileActualFinancialOperation, type ActualFinancialSdk } from "./actualFinancialOperations.ts";
-import { createActualSdkScheduleWrites, type ActualSdkSchedulePort } from "./actualSdkScheduleWrites.ts";
 import type { ActualCompletedTransferInput, ActualFinancialTransactionInput, ActualUtilityScheduleInput } from "../../shared/types/financial-operations.ts";
 
 let dataDir: string | null = null;
@@ -176,23 +175,6 @@ describe("Actual financial operation SDK compatibility", () => {
     expect(await reconcileActualFinancialOperation(sdk, "isolated-budget", purchase, "write_once", now)).toMatchObject({ outcome: "already_present" });
     expect(await actualApi.getTransactions(toAccountId, input.date, input.date)).toHaveLength(3);
     expect((await actualApi.getTransactions(toAccountId, input.date, input.date)).find((row) => row.id === firstPurchase.id)?.category).toBe(categoryId);
-
-    const legacy = createActualSdkScheduleWrites(actualApi as unknown as ActualSdkSchedulePort);
-    for (const type of ["expense", "bill"]) {
-      expect(await legacy.writeBill({
-        type, payee: `Legacy ${type}`, amount: 4.56, due_date: "2020-05-10",
-        account_id: fromAccountId, category_id: "removed-category",
-      })).toMatchObject({ success: true });
-    }
-    const manualTransactions = await actualApi.getTransactions(fromAccountId, "2020-05-10", "2020-05-10");
-    expect(manualTransactions).toHaveLength(2);
-    expect(manualTransactions.every((row) => row.amount === -456 && row.category == null)).toBe(true);
-    expect(await legacy.writeBill({
-      type: "expense", payee: "Categorized legacy expense", amount: 7.89, due_date: "2020-05-10",
-      account_id: fromAccountId, category_id: categoryId,
-    })).toMatchObject({ success: true });
-    expect((await actualApi.getTransactions(fromAccountId, "2020-05-10", "2020-05-10"))
-      .find((row) => row.amount === -789)?.category).toBe(categoryId);
   }, 30_000);
   it("updates and reactivates existing payment schedules without duplicates", async () => {
     dataDir = await createTestTempDir("actual-payment-schedule-reuse-");
@@ -410,7 +392,7 @@ describe("Actual financial operation SDK compatibility", () => {
     expect(await actualApi.getTransactions(accountId, "2026-09-01", "2026-10-31")).toEqual([]);
   }, 30_000);
 
-  it.each(["managed", "manual"])("keeps a recurring utility active and funded after a %s update and payment", async (writer) => {
+  it("keeps a recurring utility active and funded after a managed update and payment", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-09-12T12:00:00Z"));
     dataDir = await createTestTempDir("actual-recurring-utility-payment-");
@@ -432,19 +414,13 @@ describe("Actual financial operation SDK compatibility", () => {
     // Actual advances its next-date cursor only for a newer change timestamp.
     vi.setSystemTime(new Date("2026-09-12T12:00:01Z"));
     const sdk = { ...actualApi, sync: async () => undefined } as unknown as ActualFinancialSdk;
-    if (writer === "managed") {
-      const input: ActualUtilityScheduleInput = { kind: "utility_schedule", identityKey: "recurring-utility-update",
-        budgetId: "isolated", accountId, payeeId, payee: "Fictional power", scheduleId,
-        amountCents: -9_850, date: "2026-09-28", name: "Fictional power" };
-      const preview = await reconcileActualFinancialOperation(sdk, "isolated", input, "preview");
-      expect(await reconcileActualFinancialOperation(sdk, "isolated", { ...input,
-        expectedScheduleFingerprint: preview.scheduleFingerprint, preparedEvidence: preview.evidence }, "write_once"))
-        .toMatchObject({ outcome: "updated", scheduleId });
-    } else {
-      const writes = createActualSdkScheduleWrites(actualApi as unknown as ActualSdkSchedulePort);
-      expect(await writes.writeBill({ type: "bill", payee: "Fictional power", account_id: accountId,
-        category_id: categoryId, amount: 98.50, due_date: "2026-09-28" })).toMatchObject({ success: true });
-    }
+    const input: ActualUtilityScheduleInput = { kind: "utility_schedule", identityKey: "recurring-utility-update",
+      budgetId: "isolated", accountId, payeeId, payee: "Fictional power", scheduleId,
+      amountCents: -9_850, date: "2026-09-28", name: "Fictional power" };
+    const preview = await reconcileActualFinancialOperation(sdk, "isolated", input, "preview");
+    expect(await reconcileActualFinancialOperation(sdk, "isolated", { ...input,
+      expectedScheduleFingerprint: preview.scheduleFingerprint, preparedEvidence: preview.evidence }, "write_once"))
+      .toMatchObject({ outcome: "updated", scheduleId });
     expect(await actualApi.getSchedules()).toEqual([expect.objectContaining({ id: scheduleId, completed: false,
       next_date: "2026-09-28", date: { ...recurrence, start: "2026-09-28" } })]);
     await internal.send("budget/overwrite-goal-template", { month: "2026-09" });

@@ -100,7 +100,7 @@ describe("Actual worker runner", () => {
   it("drains admitted operations and awaits worker exit when stopping", async () => {
     const child = createChild();
     forkMock.mockReturnValueOnce(child);
-    const first = runActualWorkerOperation("sendBill", [{ amount: 10 }, "user-1"]);
+    const first = runActualWorkerOperation("createQuickTxn", ["user-1", { amount: 10 }]);
     const second = runActualWorkerOperation("syncMetadata", ["user-1"]);
     await Promise.resolve();
     const stopped = stopActualWorker();
@@ -167,7 +167,7 @@ describe("Actual worker runner", () => {
   it("preserves a committed local write when synchronization fails", async () => {
     const child = createChild();
     forkMock.mockReturnValueOnce(child);
-    const result = runActualWorkerOperation("sendBill", [{ amount: 10 }, "user-1"]);
+    const result = runActualWorkerOperation("createQuickTxn", ["user-1", { amount: 10 }]);
     await Promise.resolve();
     // test-architecture: allow-boundary-interaction -- child.send is the process IPC boundary; the worker response identifies a write that must be reconciled rather than replayed.
     const request = child.send.mock.calls[0]![0];
@@ -231,7 +231,7 @@ describe("Actual worker runner", () => {
     const child = createChild();
     forkMock.mockReturnValueOnce(child);
 
-    const resultPromise = runActualWorkerOperation("sendBill", [{ amount: 10 }, "user-1"], {
+    const resultPromise = runActualWorkerOperation("createQuickTxn", ["user-1", { amount: 10 }], {
       shutdownAfterOperation: true,
       timeoutMs: 1000,
     });
@@ -294,7 +294,7 @@ describe("Actual worker runner", () => {
     const child = createChild();
     forkMock.mockReturnValueOnce(child);
 
-    const resultPromise = runActualWorkerOperation("sendBill", [{ amount: 10 }, "user-1"], { timeoutMs: 1000 });
+    const resultPromise = runActualWorkerOperation("createQuickTxn", ["user-1", { amount: 10 }], { timeoutMs: 1000 });
     await Promise.resolve();
 
     // test-architecture: allow-boundary-interaction -- Actual worker IPC and fork configuration are process boundaries; request correlation, replacement, and memory ceilings are observable only on child messages and fork options.

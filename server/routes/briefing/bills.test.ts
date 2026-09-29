@@ -10,13 +10,10 @@ import {
   createRequireRecentPasswordAuth,
 } from "../../middleware/auth.ts";
 import { createBillsRouters } from "./bills.ts";
-import { makeBillExtractLimiter } from "../../middleware/rate-limits.ts";
 
 const mockBillsService = {
-  sendBill: vi.fn(),
   createQuickTxn: vi.fn(),
   extractBill: vi.fn(),
-  extractFinancialEmail: vi.fn(),
   resolveBillPaySeed: vi.fn(),
   resolveFinancialEmailSeed: vi.fn(),
   markBillPaid: vi.fn(),
@@ -39,7 +36,6 @@ function makeApp() {
   const { router } = createBillsRouters({
     service: mockBillsService as never,
     recentAuth: createRequireRecentPasswordAuth(db),
-    extractLimiter: makeBillExtractLimiter(),
   });
   const app = express();
   app.use(express.json());
@@ -98,16 +94,6 @@ describe("quick-txn amount validation", () => {
 });
 
 describe("Bill Pay routes", () => {
-  it("rejects a malformed due_date before writing to Actual (P2-39)", async () => {
-    const res = await request(makeApp())
-      .post("/api/briefing/actual/send")
-      .set("Cookie", ["ea_session=cookie-session"])
-      .send({ type: "bill", payee: "Power", amount: 42, due_date: "2026-13-40" });
-
-    expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/due_date/);
-  });
-
   it("resolves a financial email plan through briefing cookie auth", async () => {
     const plan = {
       version: 1,
@@ -243,28 +229,4 @@ describe("Bill Pay routes", () => {
       backupCount: 1,
     });
   });
-});
-
-describe("POST /bills/extract rate limiting (REL-08)", () => {
-  it("returns 429 on the 21st request and stops planning extracted emails after 20", async () => {
-    let extractCount = 0;
-    mockBillsService.extractFinancialEmail.mockImplementation(async () => {
-      extractCount += 1;
-      return { payee: "Power", amount: 42 };
-    });
-
-    const app = makeApp();
-    let lastRes;
-    for (let i = 0; i < 21; i += 1) {
-      lastRes = await request(app)
-        .post("/api/briefing/bills/extract")
-        .set("Cookie", ["ea_session=cookie-session"])
-        .send({ subject: "Power bill", from: "billing@example.test", body: "Statement balance: $42" });
-    }
-
-    expect(lastRes!.status).toBe(429);
-    expect(lastRes!.body).toEqual({ message: "Too many bill-extract requests, try again later" });
-    expect(extractCount).toBe(20);
-  });
-
 });

@@ -200,19 +200,3 @@ export async function extractBillCandidate(
     };
   });
 }
-
-export async function extractBill(
-  userId: string,
-  input: BillExtractionInput,
-  dependencies: BillExtractionDependencies = {},
-): Promise<BillCandidate & { provider: string; model: string }> {
-  const extracted = await extractBillCandidate(userId, input, dependencies);
-  if (extracted.candidate.event_verification?.assessment?.outcome === "nonfinancial") {
-    throw Object.assign(new Error("This email does not establish a financial event."), { status: 422, code: "FINANCIAL_EVENT_NOT_PRESENT" });
-  }
-  return {
-    ...extracted.candidate,
-    provider: extracted.provider,
-    model: extracted.model,
-  };
-}

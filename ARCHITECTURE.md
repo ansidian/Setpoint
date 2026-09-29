@@ -892,9 +892,7 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | POST | `/api/briefing/actual/connection` | `server/routes/briefing/bills.ts` |
 | GET | `/api/briefing/actual/metadata` | `server/routes/briefing/bills.ts` |
 | GET | `/api/briefing/actual/payees` | `server/routes/briefing/bills.ts` |
-| POST | `/api/briefing/actual/send` | `server/routes/briefing/bills.ts` |
 | POST | `/api/briefing/actual/test` | `server/routes/briefing/bills.ts` |
-| POST | `/api/briefing/bills/extract` | `server/routes/briefing/bills.ts` |
 | POST | `/api/briefing/bills/resolve` | `server/routes/briefing/bills.ts` |
 | POST | `/api/briefing/dev-reindex-emails` | `server/routes/briefing/dev.ts` |
 | POST | `/api/briefing/dismiss/:emailId` | `server/routes/briefing/email.ts` |

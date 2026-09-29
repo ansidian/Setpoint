@@ -2,7 +2,7 @@
 // schedule classification + matching, schedule-condition building, date helpers, and
 // the metadata/bill projections. No @actual-app/api, no DB — the residual owns the SDK
 // session lifecycle, the lock/cache singletons, and all IO.
-import { amountConditionBounds, amountConditionCents } from "./actual-amount-condition.ts";
+import { amountConditionCents } from "./actual-amount-condition.ts";
 import { buildBillOccurrencesFromSchedules, isSchedulePaid } from "./actual-bill-occurrences.ts";
 import type {
   ActualAccount,
@@ -65,60 +65,6 @@ export function classifySchedules(schedules: ActualSchedule[], rawPayees: Array<
       ...(type === "transfer" ? { transferAccountId: transferAccountsByPayee.get(payeeId!) || null } : {}),
     };
   });
-}
-
-export function findScheduleByPayee(schedules: ActualSchedule[], payeeId: string, accountId: string | null | undefined, amountCents: number | null): ActualSchedule | null {
-  const matches = schedules.filter(s =>
-    (s.conditions || []).some(c => c.field === 'payee' && c.value === payeeId)
-  );
-  if (matches.length === 0) return null;
-
-  // Transfers share a single payee (the transfer-payee of from_account), so a
-  // single payee-match is NOT sufficient — it may belong to a different card.
-  // Account must dominate even when matches.length === 1, otherwise creating a
-  // new CC transfer schedule silently rewrites the one existing one.
-  const acctMatches = accountId
-    ? matches.filter(s => (s.conditions || []).some(c => c.field === 'account' && c.value === accountId))
-    : matches;
-  if (acctMatches.length === 0) return null;
-  if (acctMatches.length === 1) return acctMatches[0] || null;
-
-  for (const s of acctMatches) {
-    const amtCond = (s.conditions || []).find(c => c.field === 'amount');
-    if (!amtCond || !amountCents) return s;
-
-    const amt = Math.abs(amountCents);
-    if (amtCond.op === 'is' && typeof amtCond.value === "number" && Math.abs(amtCond.value) === amt) return s;
-    if (amtCond.op === 'isapprox' && typeof amtCond.value === "number" && Math.abs(Math.abs(amtCond.value) - amt) / amt < 0.3) return s;
-    if (amtCond.op === 'isbetween') {
-      // Route through the shared amount-condition source of truth instead of reading
-      // num1/num2 inline, so a missing num2 defaults to num1 rather than going NaN.
-      const { lo, hi } = amountConditionBounds(amtCond);
-      const loA = Math.abs(lo), hiA = Math.abs(hi);
-      if (amt >= Math.min(loA, hiA) * 0.7 && amt <= Math.max(loA, hiA) * 1.3) return s;
-    }
-  }
-  return acctMatches[0] || null;
-}
-
-// Find a same-named schedule, refusing a cross-type reuse (bill <-> transfer): the
-// amount-condition sign distinguishes a payment (negative) from a transfer/income
-// (positive), so a transfer must not clobber a same-named bill. The amount read goes
-// through actual-amount-condition.ts so an `isbetween` range is interpreted by its
-// midpoint sign rather than skipped — the legacy `typeof value === "number"` guard
-// silently passed every isbetween object through, letting a transfer overwrite a range
-// bill (P3-76). Returns the matched schedule or null.
-export function findScheduleByName(schedules: ActualSchedule[], name: string, amountCents: number): ActualSchedule | null {
-  const byName = schedules.find(s => s.name === name);
-  if (!byName) return null;
-  const amtCond = (byName.conditions || []).find(
-    c => c.field === "amount" && typeof c.op === "string" && ["is", "isapprox", "isbetween"].includes(c.op),
-  );
-  const existingAmount = amountConditionCents(amtCond);
-  if (existingAmount !== 0 && Math.sign(existingAmount) !== Math.sign(amountCents)) {
-    return null;
-  }
-  return byName || null;
 }
 
 export function buildDateCondition(oldConditions: ActualScheduleCondition[], newDueDate: string): ActualScheduleCondition {

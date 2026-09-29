@@ -319,7 +319,7 @@ describe("actual.ts metadata cache", () => {
   });
 });
 
-describe("actual.ts sendBill mutex", () => {
+describe("actual write budget session", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
@@ -329,22 +329,16 @@ describe("actual.ts sendBill mutex", () => {
     actualLocalMock.pruneActualBudgetBackups.mockResolvedValue({ removed: 0, kept: 0 });
   });
 
-  it("loads a cached local Actual budget for bill pay writes instead of downloading cold", async () => {
+  it("loads a cached local Actual budget for writes instead of downloading cold", async () => {
     actualLocalMock.actualDataDir.mockReturnValue("/var/ea-actual");
     actualLocalMock.findLocalBudgetDir.mockResolvedValueOnce({
       budgetDir: "/var/ea-actual/Budget-Local",
       metadata: { id: "Budget-Local", groupId: "sync-123", cloudFileId: "file-1" },
     });
-    const { sendBill } = await import("./actual-core.ts");
+    const { createQuickTxn } = await import("./actual-core.ts");
     const actualApi = await importActualApiMock();
 
-    await sendBill({
-      type: "expense",
-      payee: "U.S. Bank",
-      amount: 42.25,
-      due_date: "2026-05-10",
-      account_id: "a1",
-    }, "user1");
+    await createQuickTxn("user1", { accountName: "Checking", amount: 42.25, payee: "U.S. Bank", date: "2026-05-10" });
 
     // test-architecture: allow-boundary-interaction -- SDK init is the outbound Actual boundary; server URL and local data directory are its compatibility contract.
     expect(actualApi.init).toHaveBeenCalledWith(expect.objectContaining({
@@ -362,10 +356,10 @@ describe("actual.ts sendBill mutex", () => {
 
   it("hydrates a missing development cache through the bounded downloader instead of the SDK archive path", async () => {
     actualLocalMock.actualDataDir.mockReturnValue("/var/ea-actual");
-    const { sendBill } = await import("./actual-core.ts");
+    const { createQuickTxn } = await import("./actual-core.ts");
     const actualApi = await importActualApiMock();
 
-    await sendBill({ type: "expense", payee: "U.S. Bank", amount: 42.25, due_date: "2026-05-10", account_id: "a1" }, "user1");
+    await createQuickTxn("user1", { accountName: "Checking", amount: 42.25, payee: "U.S. Bank", date: "2026-05-10" });
 
     // test-architecture: allow-boundary-interaction -- Bounded cache hydration is the filesystem/remote-download boundary; missing development caches must use the guarded downloader.
     expect(actualLocalMock.hydrateLocalActualCache).toHaveBeenCalledWith("user1", {
@@ -379,14 +373,13 @@ describe("actual.ts sendBill mutex", () => {
     expect(actualLocalMock.pruneActualBudgetBackups).toHaveBeenCalledWith("/var/ea-actual/Budget-Hydrated");
   });
 
-  it("safely bootstraps a missing production cache before recording a bill", async () => {
+  it("safely bootstraps a missing production cache before recording a transaction", async () => {
     const originalNodeEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = "production";
     try {
-      const { sendBill } = await import("./actual-core.ts");
+      const { createQuickTxn } = await import("./actual-core.ts");
       const actualApi = await importActualApiMock();
-      await sendBill({ type: "expense", payee: "U.S. Bank", amount: 42.25,
-        due_date: "2026-05-10", account_id: "a1" }, "user1");
+      await createQuickTxn("user1", { accountName: "Checking", amount: 42.25, payee: "U.S. Bank", date: "2026-05-10" });
       expect(actualApi.__getTransactions()).toHaveLength(1);
       // test-architecture: allow-boundary-interaction -- The SDK archive loader is an external download boundary; production bootstrap retains the bounded downloader.
       expect(actualApi.downloadBudget).not.toHaveBeenCalled();
@@ -396,11 +389,10 @@ describe("actual.ts sendBill mutex", () => {
   });
 
   it("preserves the local result when the post-write sync fails and allows later synchronization", async () => {
-    const { sendBill, getMetadata } = await import("./actual-core.ts");
+    const { createQuickTxn, getMetadata } = await import("./actual-core.ts");
     const actualApi = await importActualApiMock();
     actualApi.sync.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("server unavailable"));
-    await expect(sendBill({ type: "expense", payee: "U.S. Bank", amount: 42.25,
-      due_date: "2026-05-10", account_id: "a1" }, "user1")).rejects.toMatchObject({
+    await expect(createQuickTxn("user1", { accountName: "Checking", amount: 42.25, payee: "U.S. Bank", date: "2026-05-10" })).rejects.toMatchObject({
       code: "ACTUAL_SYNC_FAILED", localWriteApplied: true,
     });
     expect(actualApi.__getTransactions()).toHaveLength(1);
@@ -408,22 +400,14 @@ describe("actual.ts sendBill mutex", () => {
     expect(actualApi.__getTransactions()).toHaveLength(1);
   });
 
-  it("sendBill reuses the loaded budget after getMetadata", async () => {
-    const { getMetadata, sendBill } = await import("./actual.ts");
+  it("a queued write reuses the loaded budget after getMetadata", async () => {
+    const { getMetadata, createQuickTxn } = await import("./actual.ts");
     const actualApi = await importActualApiMock();
 
     const firstInit = holdFirstCall(actualApi.init);
 
-    const billData = {
-      type: "expense",
-      payee: "Test Payee",
-      amount: 10,
-      due_date: "2020-01-01", // past date triggers addTransactions path
-      account_id: "a1",
-    };
-
     const p1 = getMetadata("user1");
-    const p2 = sendBill(billData, "user1");
+    const p2 = createQuickTxn("user1", { accountName: "Checking", amount: 10, payee: "Test Payee", date: "2020-01-01" });
 
     await firstInit.started;
     firstInit.release();
@@ -432,42 +416,6 @@ describe("actual.ts sendBill mutex", () => {
     // test-architecture: allow-boundary-interaction -- SDK init is the outbound singleton-session boundary; metadata and the queued write must share one loaded session.
     expect(actualApi.init).toHaveBeenCalledTimes(1);
     expect(actualApi.__getTransactions()).toHaveLength(1);
-  });
-
-  it("does not reuse a same-named bill schedule for a transfer", async () => {
-    actualApiState.schedules = [
-      { id: "sched-bill", name: "Visa", rule: "rule-1", next_date: "2026-08-01", completed: false },
-    ];
-    actualApiState.rules = [
-      { id: "rule-1", conditions: [{ op: "is", field: "amount", value: -50000 }] },
-    ];
-    const tomorrow = new Date(Date.now() + 86400000).toLocaleDateString("en-CA", {
-      timeZone: "America/Los_Angeles",
-    });
-    const { sendBill } = await import("./actual-core.ts");
-    const actualApi = await importActualApiMock();
-
-    await sendBill({
-      type: "transfer",
-      payee: "",
-      schedule_name: "Visa",
-      amount: 500,
-      due_date: tomorrow,
-      from_account_id: "a2",
-      to_account_id: "a1",
-    }, "user1");
-
-    // test-architecture: allow-boundary-interaction -- createSchedule is an outbound financial-write boundary; a cross-type name collision must create the transfer schedule with the signed amount.
-    expect(actualApi.createSchedule).toHaveBeenCalledWith({
-      name: "Visa",
-      date: tomorrow,
-      amount: 50000,
-    });
-    // test-architecture: allow-boundary-interaction -- internal.send is the outbound Actual mutation boundary; a transfer must never clobber the same-named bill schedule.
-    expect(actualApi.internal.send).not.toHaveBeenCalledWith(
-      "schedule/update",
-      expect.objectContaining({ schedule: expect.objectContaining({ id: "sched-bill" }) }),
-    );
   });
 });
 

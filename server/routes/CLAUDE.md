@@ -12,7 +12,7 @@ The HTTP surface: Express routers that validate input, apply auth, and delegate 
 
 ### Briefing
 - `briefing/index.ts` — mounts briefing sub-routers, applies auth middleware
-- `briefing/bills.ts` — resolves financial-email plans, extracts manual financial emails, sends owner-confirmed bills to Actual Budget, and creates quick transactions
+- `briefing/bills.ts` — resolves financial-email plans, marks Actual bills paid, creates quick transactions, and manages the Actual connection/cache
 - `briefing/email.ts` — email bodies, dismiss/snooze, inbox search
 - `briefing/email-index.ts` — email index health checks, backfill queuing
 - `briefing/snapshot.ts` — snapshot fetch/sync, kanban lane reorder

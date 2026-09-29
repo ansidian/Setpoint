@@ -22,7 +22,6 @@ const OPERATIONS = new Set([
   "getUpcomingBills",
   "getCalendarBillsRange",
   "markBillPaid",
-  "sendBill",
   "createQuickTxn",
   "importTransactionGroups",
   "reconcileTransferSchedule",

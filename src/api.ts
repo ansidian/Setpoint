@@ -466,7 +466,7 @@ export const updateTodoistTask = (id: ApiId, data: DeadlineMutationRequest): Pro
 export const deleteTodoistTask = (id: ApiId): Promise<DeadlineDeleteResponse> => apiFetch(`/api/briefing/todoist/tasks/${encodeURIComponent(id)}`, { method: "DELETE" });
 
 // Actual Budget
-export { sendToActualBudget, extractBillFromEmail, resolveFinancialEmailPlan, completeFinancialEvent, dismissFinancialEvent, requestFinancialEventReview } from "./lib/financialEmailApi";
+export { resolveFinancialEmailPlan, completeFinancialEvent, dismissFinancialEvent, requestFinancialEventReview } from "./lib/financialEmailApi";
 export const markBillPaid = (id: ApiId): Promise<BillMutationResponse> => apiFetch(`/api/briefing/actual/bills/${encodeURIComponent(id)}/mark-paid`, { method: "POST" });
 export const getActualAccounts = (): Promise<ActualAccount[]> => apiFetch("/api/briefing/actual/accounts");
 export const getActualPayees = (): Promise<ActualPayee[]> => apiFetch("/api/briefing/actual/payees");
