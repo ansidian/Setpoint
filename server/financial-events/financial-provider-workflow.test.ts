@@ -26,7 +26,7 @@ async function email(uid: string, {from='sce@message.sce.com',subject='Bill is r
   await db.execute({sql:`INSERT INTO ea_email_index(uid,user_id,account_id,account_label,account_email,from_name,from_address,subject,body_text,email_date,email_date_utc,indexed_at,sender_authentication_json,read)
     VALUES(?,'owner','gmail','Mail','owner@example.test','Provider',?,?,?,?,?,?,?,0)`,args:[uid,from,subject,body,date,date,indexedAt,JSON.stringify(auth)]});
 }
-function setup() {
+function setup(overrides: Partial<Parameters<typeof createFinancialEventWorker>[0]> = {}) {
   const store = createFinancialEventStore(db,()=>now);
   const worker = createFinancialEventWorker({store,now:()=>now,canRun:async()=>false,
     assessDocument:async()=>{throw new Error('Financial AI must not be used');},
@@ -35,6 +35,7 @@ function setup() {
       const document = (await store.getDocumentForEmail('owner',uid))!;
       return {subject:document.subject,body:document.body,fromAddress:document.fromAddress,fromName:document.fromName,emailDate:document.emailDate,threadId:null,messageId:null,senderAuthentication:document.senderAuthentication,attachments:[]};
     },
+    ...overrides,
   });
   return {store,worker};
 }
@@ -85,6 +86,31 @@ it('makes unsupported templates with labeled bill facts reviewable with no inven
   expect((await readFinancialReviewChanges('owner',{dbClient:db})).items.map(item=>item.emailUid)).toEqual(['unsupported']);
   expect(await store.getNextWakeAt()).toBeNull();
   expect(await store.dismissCandidate(document,null,{eventId:'dismissed',referenceKey:null})).toBe(true);
+});
+it('settles a receipt that an Actual schedule already covers without review or an Actual operation',async()=>{
+  await email('covered',{from:'service@paypal.com',subject:'Apple Services: $0.99 USD',
+    body:'You paid $0.99 USD to Apple Services Transaction ID REFERENCE00000001 Transaction date Aug 18, 2026 Merchant Apple Services Total $0.99 USD'});
+  const {store,worker}=setup({
+    metadataReader:async()=>({accounts:[],categories:[],payeeMap:{},payees:[{id:'apple',name:'Apple'}],recentTransactions:[],
+      schedules:[{id:'family',name:'Family Cloud',next_date:'2026-08-18',type:'bill',conditions:[{field:'amount',op:'is',value:-99},{field:'payee',op:'is',value:'apple'}]}]}),
+    execute:async()=>{throw new Error('Covered events must not reach Actual');},
+  });
+  await worker.processNextDocument();
+  expect(await worker.processNextEvent()).toBe(true);
+  expect(await store.getEventForEmail('owner','covered')).toMatchObject({status:'settled',attemptedAt:null,
+    reason:'Covered by Actual schedule "Family Cloud" (Actual posts it on 2026-08-18).'});
+  expect((await readFinancialReviewChanges('owner',{dbClient:db})).items).toEqual([]);
+});
+it('keeps a provider review notice out of review when its Actual schedule already covers it',async()=>{
+  await email('autopay',{from:'no-reply@o.sofi.org',subject:'Your SoFi Credit Card autopay is scheduled for 10/05/2026',
+    body:'Your autopay for your SoFi Credit Card ending in 1234 is scheduled. Scheduled payment date: 10/05/2026'});
+  const {store,worker}=setup({metadataReader:async()=>({accounts:[],categories:[],payeeMap:{},payees:[],recentTransactions:[],
+    schedules:[{id:'card',name:'SoFi Credit Card (1234) Payment',next_date:'2026-10-05',type:'transfer',conditions:[{field:'amount',op:'is',value:-20743}]}]})});
+  await worker.processNextDocument();
+  expect(await store.getDocumentForEmail('owner','autopay')).toMatchObject({status:'ignored',candidate:null,eventId:null,
+    providerAssessment:{status:'review',templateId:'autopay-scheduled'},
+    error:'Covered by Actual schedule "SoFi Credit Card (1234) Payment" (Actual posts it on 2026-10-05).'});
+  expect((await readFinancialReviewChanges('owner',{dbClient:db})).items).toEqual([]);
 });
 it('preserves all Amazon orders through the stored manual review without scheduling an automatic write', async () => {
   await email('multi-order', { from: 'auto-confirm@amazon.com', subject: 'Ordered: Three items',

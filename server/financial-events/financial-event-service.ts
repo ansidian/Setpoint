@@ -11,11 +11,12 @@ import { requireCompleteEmailEvidence } from "../email/email-evidence.ts";
 import { fetchFinancialEmailSourceForUid } from "../email/email-service.ts";
 import { getMetadata as actualGetMetadata } from "../actual/actual.ts";
 import { resolveFinancialDocumentDate, financialDocumentSupportsDate } from "./financial-event-date.ts";
+import { describeScheduleCoverage, findScheduleCoverage } from "./financial-schedule-coverage.ts";
 import { financialEventStore, type FinancialEventStore, type FinancialEvent, type FinancialDocument } from "./financial-event-store.ts";
 import { combineFinancialEventEvidence, correlateFinancialDocument, financialDocumentContentHash, financialDocumentReferenceKey, financialEvidenceChangedAfterAttempt } from "./financial-event-evidence.ts";
 import { bindFinancialEventOperation, buildFinancialEventOperation, createFinancialEventExecutor,
   financialEventPlanBlocker, planWithActualResult, type FinancialEventOperation } from "./financial-event-operation.ts";
-import type { FinancialEmailPlan } from "../../shared/types/bills.ts";
+import type { BillCandidate, FinancialEmailPlan } from "../../shared/types/bills.ts";
 import type { ActualFinancialOperationResult } from "../../shared/types/financial-operations.ts";
 import { ownerCompletionNeedsAccountEvidence, ownerCompletionOperation, ownerCompletionPlan, ownerCompletionSourceChanged } from "./financial-event-completion-model.ts";
 
@@ -128,9 +129,11 @@ export function createFinancialEventWorker({
         if (!await store.saveProviderAssessment(document, assessment)) throw new Error("The source changed during provider assessment.");
         document = { ...document, providerAssessment: assessment };
         if (assessment.status === "review" || assessment.status === "nonfinancial") {
-          await store.settleDocument(document, { candidate: assessment.candidate || null, contentHash, assessment,
-            status: assessment.status === "nonfinancial" ? "ignored" : "retry", nextAttemptAt: null,
-            error: assessment.status === "review" ? assessment.reasons.includes("provider_multiple_orders")
+          const covered = assessment.status === "review" && assessment.candidate
+            ? await scheduleCoverageReason(document.userId, assessment.candidate, document.emailDate) : null;
+          await store.settleDocument(document, { candidate: covered ? null : assessment.candidate || null, contentHash, assessment,
+            status: assessment.status === "nonfinancial" || covered ? "ignored" : "retry", nextAttemptAt: null,
+            error: covered ? covered : assessment.status === "review" ? assessment.reasons.includes("provider_multiple_orders")
               ? "This email contains several orders. Review one split per order and confirm the total outflow."
               : assessment.providerId === "socalgas"
               && assessment.reasons.includes("provider_amount_missing") && assessment.reasons.includes("provider_date_missing")
@@ -246,6 +249,24 @@ export function createFinancialEventWorker({
     return true;
   }
 
+  /** An Actual schedule already records this money movement; neither review nor a write is needed. */
+  async function scheduleCoverageReason(userId: string, candidate: BillCandidate, emailDate: string | undefined): Promise<string | null> {
+    const metadata = await metadataReader(userId).catch(() => null);
+    if (!metadata) return null;
+    const received = emailDate ? new Date(emailDate) : null;
+    const fallbackDate = received && Number.isFinite(received.getTime())
+      ? received.toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" }) : null;
+    const coverage = findScheduleCoverage(candidate, metadata, fallbackDate);
+    return coverage ? describeScheduleCoverage(coverage) : null;
+  }
+
+  async function eventScheduleCoverageReason(event: FinancialEvent): Promise<string | null> {
+    const evidence = combineFinancialEventEvidence(event.documents);
+    if (!evidence.candidate || evidence.conflict) return null;
+    const source = event.documents.find(document => document.candidate) || event.documents[0];
+    return scheduleCoverageReason(event.userId, evidence.candidate, source?.emailDate);
+  }
+
   async function settle(event: FinancialEvent, plan: FinancialEmailPlan | null, state: "waiting" | "settled" | "needs_review", reason: string,
     result?: ActualFinancialOperationResult, retryDelay = PROCESSING_RETRY_MS): Promise<void> {
     const nextAttemptAt = state === "waiting" ? now() + retryDelay : null;
@@ -316,6 +337,11 @@ export function createFinancialEventWorker({
         plan = ownerCompletionPlan(event.id, event.ownerCompletion.entry);
         operation = ownerCompletionOperation(event.id, event.ownerCompletion.entry);
       } else {
+        const covered = await eventScheduleCoverageReason(event);
+        if (covered) {
+          await settle(event, null, "settled", covered);
+          return true;
+        }
         const deterministic = event.documents.length > 0 && event.documents.every(document => document.processingPolicy === "provider_v1");
         if (deterministic && event.documents.some(document => document.providerAssessment?.status !== "parsed" && document.status !== "ignored")) {
           await settle(event, null, "needs_review", "The provider template needs manual review before recording in Actual.");

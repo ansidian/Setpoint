@@ -64,6 +64,7 @@ export interface ActualQuickTransactionResult {
 }
 
 export { isSchedulePaid } from "./actual-bill-occurrences.ts";
+export { amountConditionBounds } from "./actual-amount-condition.ts";
 // Read-only transaction consumers use the same domain facade without starting the SDK.
 export { readJournalRange } from './actual-journal-read.ts';
 export { readTransactionsRange } from "./actual-transactions-read.ts";
