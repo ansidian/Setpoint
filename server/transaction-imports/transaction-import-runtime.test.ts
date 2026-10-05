@@ -212,6 +212,41 @@ describe("transaction import runtime", () => {
     }
   });
 
+  it("keeps draining financial documents while a correction cannot recover", async () => {
+    vi.useFakeTimers();
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const database = await createEmailIndexTestDb({ extraMigrations: ['030_owner_bootstrap.sql', '041_email_transaction_imports.sql', '042_transaction_import_item_subject.sql', '053_transaction_import_financial_plans.sql', '055_generic_financial_email_imports.sql', '056_generic_financial_email_automation.sql', '058_generic_financial_email_income_automation.sql', '059_generic_financial_email_transfer_automation.sql', '063_financial_activity.sql', '064_financial_corrections.sql', '069_financial_profiles.sql'] });
+    await database.execute("UPDATE ea_financial_workflow_state SET cutover_at = '2000-01-01T00:00:00Z'");
+    const store = createFinancialEventStore(database);
+    await seedIndexedEmail(database, { uid: "first" });
+    const runtime = createTransactionImportRuntime({
+      recoverStaleClaims: store.recoverStaleClaims,
+      getNextWakeAt: store.getNextWakeAt,
+      async processNextDocument() {
+        const document = await store.claimDocument("document");
+        if (!document) return false;
+        await store.settleDocument(document, { candidate: null, contentHash: "not-financial", status: "ignored" });
+        return true;
+      },
+      async processNextEvent() { return false; },
+    }, undefined, { async recoverPending() { throw new Error("Actual is unreadable"); } });
+    try {
+      await runtime.start();
+      await vi.advanceTimersByTimeAsync(0);
+      await flushDrain();
+      await seedIndexedEmail(database, { uid: "later" });
+      runtime.requestDrain();
+      await vi.advanceTimersByTimeAsync(0);
+      await flushDrain();
+      const documents = await database.execute("SELECT email_uid, status FROM ea_financial_documents ORDER BY id");
+      expect(documents.rows).toEqual([{ email_uid: "first", status: "ignored" }, { email_uid: "later", status: "ignored" }]);
+    } finally {
+      await runtime.stop();
+      database.close();
+      errors.mockRestore();
+    }
+  });
+
   it("waits for admitted financial work to persist before stopping and leaves later arrivals pending", async () => {
     vi.useFakeTimers();
     const database = await createEmailIndexTestDb({ extraMigrations: ['030_owner_bootstrap.sql', '041_email_transaction_imports.sql', '042_transaction_import_item_subject.sql', '053_transaction_import_financial_plans.sql', '055_generic_financial_email_imports.sql', '056_generic_financial_email_automation.sql', '058_generic_financial_email_income_automation.sql', '059_generic_financial_email_transfer_automation.sql', '063_financial_activity.sql', '064_financial_corrections.sql', '069_financial_profiles.sql'] });

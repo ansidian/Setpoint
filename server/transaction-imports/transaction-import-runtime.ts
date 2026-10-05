@@ -65,7 +65,13 @@ export function createTransactionImportRuntime(financeWorker?: FinancialEventWor
         await financeWorker?.recoverStaleClaims();
         await financeIntake?.recoverStaleClaims();
       }
-      await corrections?.recoverPending();
+      try {
+        await corrections?.recoverPending();
+      } catch (error) {
+        // A failed recovery is already durable as recovering and keeps ordinary
+        // Actual writes guarded; capture, parsing and event planning still drain.
+        console.error("[Transaction Imports] Correction recovery failed:", error instanceof Error ? error.message : String(error));
+      }
       let eventCount = 0;
       const drainEvents = async () => {
         while (financeWorker && !stopping && eventCount < MAX_FINANCIAL_EVENTS_PER_DRAIN) {
