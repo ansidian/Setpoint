@@ -132,13 +132,16 @@ async function reconcileTransferScheduleOperation(
     const date = conditions.find((c) => c.field === "date")?.value;
     const onDate = schedule.next_date === input.date || date === input.date;
     const involvesCard = account === input.toAccountId || other === input.toAccountId;
+    const amount = conditions.find((c) => c.field === "amount");
+    // A non-transfer charge on the card (a bill paid by card) is not a payment into it.
+    const chargesCard = account === input.toAccountId && other === undefined
+      && typeof amount?.value === "number" && amount.value < 0;
     if (schedule.id !== scheduleId && schedule.id !== requestedSchedule?.id) {
-      if (!samePair && !(involvesCard && onDate)) continue;
+      if (!samePair && !(involvesCard && onDate && !chargesCard)) continue;
       const reusableCompleted = input.allowUpdate && schedule.completed && !schedule.tombstone
         && schedule.next_date && schedule.next_date < input.date && normalizeName(schedule.name) === normalizeName(input.name);
       if ((schedule.tombstone || schedule.completed) && !onDate && !reusableCompleted) continue;
     }
-    const amount = conditions.find((c) => c.field === "amount");
     const expected = account === input.fromAccountId ? -input.amountCents : input.amountCents;
     const supported = !!rule && !rule.tombstone && rule.conditions_op === "and"
       && rule.actions.some((a) => a.op === "link-schedule" && a.value === schedule.id)

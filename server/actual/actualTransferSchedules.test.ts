@@ -90,8 +90,40 @@ function transferSdkWithCompletedPriorPayment() {
     },
   };
 
-  return { sdk, schedules };
+  return { sdk, rules, schedules };
 }
+
+function addCardSchedule(
+  fixture: { rules: RuleRow[]; schedules: ScheduleRow[] },
+  id: string,
+  payee: string,
+  amount: number,
+  nextDate: string,
+) {
+  fixture.rules.push({
+    id: `rule-${id}`,
+    conditions: [
+      { field: "account", op: "is", value: "card" },
+      { field: "payee", op: "is", value: payee },
+      { field: "amount", op: "is", value: amount },
+      { field: "date", op: "is", value: nextDate },
+    ],
+    conditions_op: "and",
+    actions: [{ op: "link-schedule", value: id }],
+    tombstone: false,
+  });
+  fixture.schedules.push({ id, name: id, rule: `rule-${id}`, next_date: nextDate, completed: false, tombstone: false });
+}
+
+const octoberStatement = {
+  identityKey: "statement-october",
+  fromAccountId: "funding",
+  toAccountId: "card",
+  date: "2026-10-10",
+  amountCents: 31_500,
+  name: "",
+  allowUpdate: true,
+};
 
 describe("reconcileActualTransferSchedule", () => {
   it("creates a later payment when a completed schedule already uses its base name", async () => {
@@ -110,5 +142,23 @@ describe("reconcileActualTransferSchedule", () => {
     expect(result.outcome).toBe("created");
     expect(schedules).toHaveLength(2);
     expect(schedules[1]!.name).toBe("Example Card Payment (2026-09-28)");
+  });
+
+  it("updates the card payment when a bill charged to the card falls on the statement due date", async () => {
+    const fixture = transferSdkWithCompletedPriorPayment();
+    addCardSchedule(fixture, "schedule-gas-bill", "payee-gas", -24_526, "2026-10-10");
+
+    const result = await reconcileActualTransferSchedule(fixture.sdk, "budget", octoberStatement, "preview", new Date("2026-10-01T12:00:00Z"));
+
+    expect(result).toMatchObject({ outcome: "would_update", scheduleId: "schedule-prior" });
+  });
+
+  it("still holds for review when another non-transfer payment into the card falls on the due date", async () => {
+    const fixture = transferSdkWithCompletedPriorPayment();
+    addCardSchedule(fixture, "schedule-manual-payment", "payee-manual", 31_500, "2026-10-10");
+
+    const result = await reconcileActualTransferSchedule(fixture.sdk, "budget", octoberStatement, "preview", new Date("2026-10-01T12:00:00Z"));
+
+    expect(result).toMatchObject({ outcome: "needs_review", reason: "An existing transfer schedule conflicts with this payment. Review it in Actual." });
   });
 });
