@@ -75,6 +75,13 @@ describe('canonical financial provider configuration',()=>{
     await expect(saveFinancialConnections('owner',{budgetId:'budget',revision:current.revision,connections:bad},{dbClient})).rejects.toMatchObject({status:400});
     expect((await readFinancialConnections('owner',{dbClient})).revision).toBe(current.revision);
   });
+  it('names the rejected and accepted senders when automation is enabled for an unsupported sender',async()=>{
+    await migrate();
+    const current=await readFinancialConnections('owner',{dbClient});
+    const connections=current.connections.map(row=>row.id==='citi-profile'?{...row,senderAddresses:['alerts@info6.citi.com','billing@new-biller.example']}:row);
+    await expect(saveFinancialConnections('owner',{budgetId:'budget',revision:current.revision,connections},{dbClient})).rejects.toMatchObject({status:400,message:expect.stringMatching(/^(?=.*billing@new-biller\.example)(?=.*citicards@info15\.citi\.com)/s)});
+    expect((await readFinancialConnections('owner',{dbClient})).revision).toBe(current.revision);
+  });
   it('requires exact available utility targets and safe pay links before atomic save',async()=>{
     await migrate();
     const current=await readFinancialConnections('owner',{dbClient});

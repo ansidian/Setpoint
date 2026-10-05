@@ -184,6 +184,7 @@ export default function FinancialProfilesCard({ settings, setSettings, metadata,
   }
 
   const target = editor?.profile.target;
+  const selectedProvider = target && target.kind !== "schedule_link" ? FINANCIAL_PROVIDER_CATALOG.find(provider => provider.id === editor?.profile.providerId) : undefined;
   const targetsDisabled = !liveMetadataAvailable || !sameBudget || metadataLoading || !!metadataError;
   const targetPickerState = { onOpen: onRequestMetadata, disabled: targetsDisabled, loading: sameBudget && metadataLoading };
   const normalized = editor ? {
@@ -330,7 +331,7 @@ export default function FinancialProfilesCard({ settings, setSettings, metadata,
                 <label className="min-w-0"><span className={LABEL}>Name</span><input ref={nameRef} value={editor.profile.name} maxLength={120} placeholder="e.g. Everyday card payment" onChange={event => updateProfile({ name: event.target.value })} className={INPUT} /></label>
                 <ProfilePicker label="Financial activity" value={editor.kindUnset ? "" : target.kind} options={PROFILE_KINDS} onChange={kind => changeTarget(emptyProfileTarget(kind as FinancialProfileTarget["kind"]))} onOpen={() => {}} disabled={false} />
               </div>
-              <ProfilePicker label="Provider" value={editor.profile.providerId || ""} options={FINANCIAL_PROVIDER_CATALOG.map(provider => ({ id: provider.id, name: provider.name }))} optional="Other / manual review" disabled={false} onOpen={() => {}} onChange={value => {
+              <ProfilePicker label="Provider" value={editor.profile.providerId || ""} options={FINANCIAL_PROVIDER_CATALOG.map(provider => ({ id: provider.id, name: provider.name }))} optional="Other (no automatic parsing)" disabled={false} onOpen={() => {}} onChange={value => {
                 const provider = FINANCIAL_PROVIDER_CATALOG.find(row => row.id === value);
                 updateProfile({ providerId: provider?.id || null, ...(!provider ? { enabled: false } : {}) });
                 if (provider && !editor.existing && !editor.senders.trim()) setEditor(current => current ? { ...current, senders: provider.senderAddresses.join("\n") } : current);
@@ -341,7 +342,7 @@ export default function FinancialProfilesCard({ settings, setSettings, metadata,
                 <div className="clear-both">
                   <label className={LABEL} htmlFor="profile-senders">Sender email addresses</label>
                   <textarea id="profile-senders" aria-describedby="profile-senders-help" value={editor.senders} rows={2} placeholder="payments@bank.example" autoCapitalize="none" spellCheck={false} onChange={event => { setEditor({ ...editor, senders: event.target.value }); setError(""); }} className={cn(INPUT, "resize-y")} />
-                  <p id="profile-senders-help" className={HINT}>Use the full From address in the email. Separate multiple addresses with commas or new lines.</p>
+                  <p id="profile-senders-help" className={HINT}>Use the full From address in the email. Separate multiple addresses with commas or new lines.{selectedProvider ? ` Automatic processing for ${selectedProvider.name} accepts only ${selectedProvider.senderAddresses.join(", ")}.` : ""}</p>
                   <button type="button" aria-expanded={filtersOpen} aria-controls={filtersOpen ? "profile-matching-filters" : undefined} onClick={() => setFiltersOpen(open => !open)} className={cn(BUTTON, "mt-3 -ml-2 gap-2 px-2 text-muted-foreground hover:-translate-y-px hover:bg-white/[0.04] hover:text-foreground active:bg-white/[0.06]")}>
                     <ChevronDown size={14} aria-hidden="true" className={cn("transition-transform duration-[160ms] motion-reduce:transition-none", filtersOpen && "rotate-180")} />
                     Narrow which emails match <span className="text-[11px] font-normal">(optional)</span>
@@ -412,7 +413,7 @@ export default function FinancialProfilesCard({ settings, setSettings, metadata,
               {target.kind !== "schedule_link" && <div className="flex items-center justify-between gap-4 border-t border-white/[0.08] pt-4">
                 <div>
                   <label htmlFor="profile-enabled" className="cursor-pointer text-[13px] font-medium text-foreground">Process matching emails automatically</label>
-                  <p id="profile-enabled-help" className={HINT}>{editor.profile.enabled ? "Matching emails can update Actual after you save." : "Matching emails remain in review until you enable automatic processing."}</p>
+                  <p id="profile-enabled-help" className={HINT}>{!editor.profile.providerId ? "Only supported providers have email parsers. Emails from other senders are ignored, not sent to review; record them from the email reader instead." : editor.profile.enabled ? "Matching emails can update Actual after you save." : "Matching emails remain in review until you enable automatic processing."}</p>
                 </div>
                 <Switch id="profile-enabled" aria-label="Automatic processing enabled" disabled={!editor.profile.providerId} aria-describedby="profile-enabled-help" checked={editor.profile.enabled} onCheckedChange={enabled => updateProfile({ enabled })} className="shrink-0 hover:scale-[1.04] hover:border-white/25 focus-visible:scale-[1.04] active:scale-[0.96] transition-[background-color,border-color,box-shadow,transform] duration-[160ms] motion-reduce:transition-none motion-reduce:transform-none motion-reduce:[&_[data-slot=switch-thumb]]:transition-none" />
               </div>}

@@ -29,7 +29,10 @@ function validateConnections(value:unknown,budgetId:string,metadata:ActualMetada
     if(!object(raw.target)) return fail(400,'Choose a financial destination.');
     if(raw.enabled && (!provider || raw.target.kind==='schedule_link')) return fail(400,'Payment links and unsupported providers cannot enable automatic processing.');
     const result={...raw} as unknown as FinancialConnection;
-    if(raw.enabled && provider && (!Array.isArray(raw.senderAddresses) || raw.senderAddresses.some(sender=>!(provider.senderAddresses as readonly unknown[]).includes(sender)))) return fail(400,'Automatic processing requires exact supported sender addresses.');
+    if(raw.enabled && provider) {
+      const rejected=Array.isArray(raw.senderAddresses)?raw.senderAddresses.filter(sender=>!(provider.senderAddresses as readonly unknown[]).includes(sender)):null;
+      if(!rejected || rejected.length) return fail(400,`Automatic processing for ${provider.name} accepts only ${provider.senderAddresses.join(', ')}.${rejected?.length?` Remove ${rejected.map(String).join(', ')} or turn off automatic processing.`:''}`);
+    }
     if(raw.target.kind==='schedule_link') {
       if(Object.keys(raw.target).some(key=>!['kind','scheduleId'].includes(key)) || !text(raw.target.scheduleId,128)) return fail(400,'Choose an exact schedule.');
       if(!Array.isArray(result.senderAddresses)||result.senderAddresses.some(sender=>typeof sender!=='string')) return fail(400,'Sender addresses must be strings.');
