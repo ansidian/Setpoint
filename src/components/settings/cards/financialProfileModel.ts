@@ -24,6 +24,12 @@ export function profileSenderAddresses(value: string): string[] {
   return [...new Set(value.split(/[\s,;]+/).map(address => address.trim().toLowerCase()).filter(Boolean))];
 }
 
+/** Statement-history senders for a saved utility: keep every existing member and append newly edited senders, so a no-op edit leaves the list untouched. */
+export function utilitySourceSenders(existing: readonly string[], edited: readonly string[]): string[] {
+  const known = new Set(existing.map(sender => sender.trim().toLowerCase()));
+  return [...existing, ...edited.filter(sender => !known.has(sender.trim().toLowerCase()))];
+}
+
 export function profileDraftFromRouteState(state: unknown): FinancialProfileDraft | undefined {
   if (!state || typeof state !== "object" || !("financialProfileDraft" in state)) return undefined;
   const raw = state.financialProfileDraft;

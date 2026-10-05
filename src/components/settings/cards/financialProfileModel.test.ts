@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ActualMetadataResponse } from "../../../../shared/types/bills";
 import type { FinancialConnection } from "../../../../shared/types/financial-connections";
-import { availableProfileSchedules, profileTargetProblem } from "./financialProfileModel";
+import { availableProfileSchedules, profileSenderAddresses, profileTargetProblem, utilitySourceSenders } from "./financialProfileModel";
 
 const metadata = (completed: boolean): ActualMetadataResponse => ({
   accounts: [
@@ -36,5 +36,23 @@ describe("card payment schedule pins", () => {
     ]);
     expect(availableProfileSchedules("card_payment", metadata(true))).toEqual([]);
     expect(availableProfileSchedules("utility", metadata(true), "pinned")).toEqual([]);
+  });
+});
+
+describe("utility statement-history senders", () => {
+  const saved = ["sce@message.sce.com", "donotreply@email.sce.com"];
+
+  it("adds a newly edited sender so its statements reach Finances history", () => {
+    expect(utilitySourceSenders(["bills@utility.example"], profileSenderAddresses("bills@utility.example\nNotices@Utility.example")))
+      .toEqual(["bills@utility.example", "notices@utility.example"]);
+  });
+
+  it("keeps senders removed from automation in statement history", () => {
+    expect(utilitySourceSenders(saved, profileSenderAddresses("sce@message.sce.com"))).toEqual(saved);
+  });
+
+  it("leaves the saved list unchanged when no sender is added, ignoring case", () => {
+    expect(JSON.stringify(utilitySourceSenders(["SCE@message.sce.com"], profileSenderAddresses("sce@message.sce.com"))))
+      .toBe(JSON.stringify(["SCE@message.sce.com"]));
   });
 });

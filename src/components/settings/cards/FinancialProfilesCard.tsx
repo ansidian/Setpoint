@@ -17,7 +17,7 @@ import type { FinancialConnectionsResponse } from "@/lib/financesApi";
 import { PayLinkSummary, UtilityPayUrlField } from "./UtilityPayLinksCard";
 type FinancialProfileTarget = FinancialProfile["target"];
 import type { FinancialProfileSeed } from "@/lib/financialProfileSeed";
-import { availableProfileSchedules, emptyProfileTarget, PROFILE_KINDS, profileAuthority, profileSenderAddresses, profileTargetProblem, profileTargetSummary, profileValidation } from "./financialProfileModel";
+import { availableProfileSchedules, emptyProfileTarget, PROFILE_KINDS, profileAuthority, profileSenderAddresses, profileTargetProblem, profileTargetSummary, profileValidation, utilitySourceSenders } from "./financialProfileModel";
 
 const BUTTON = "inline-flex min-h-9 max-[600px]:min-h-11 items-center justify-center gap-2 rounded-md px-3 py-1.5 text-[12px] font-medium outline-none transition-[background-color,border-color,color,transform,box-shadow] duration-[160ms] focus-visible:-translate-y-px focus-visible:ring-2 focus-visible:ring-primary/60 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0 motion-reduce:transition-none motion-reduce:transform-none";
 const INPUT = "min-h-9 max-[600px]:min-h-11 w-full min-w-0 rounded-md border border-white/[0.08] bg-input-bg px-2.5 py-1.5 text-[13px] max-[600px]:text-base text-foreground outline-none transition-[border-color,box-shadow] duration-[160ms] placeholder:text-muted-foreground hover:border-white/[0.16] focus-visible:border-primary/45 focus-visible:ring-2 focus-visible:ring-primary/20 aria-invalid:border-danger/60 aria-invalid:focus-visible:ring-danger/20 motion-reduce:transition-none";
@@ -194,7 +194,8 @@ export default function FinancialProfilesCard({ settings, setSettings, metadata,
     merchantName: editor.profile.merchantName?.trim() || undefined,
     accountLast4: editor.profile.accountLast4?.trim() || undefined,
     payLink: editor.profile.payLink?.trim() || undefined,
-    utility: editor.profile.utility ? { ...editor.profile.utility, ...(!editor.existing ? { sourceSenders: profileSenderAddresses(editor.senders) } : {}) } : undefined,
+    utility: editor.profile.utility ? { ...editor.profile.utility, sourceSenders: editor.existing
+      ? utilitySourceSenders(editor.profile.utility.sourceSenders, profileSenderAddresses(editor.senders)) : profileSenderAddresses(editor.senders) } : undefined,
   } : null;
   const targetProblem = normalized && !editor?.kindUnset && sameBudget && hasMetadata ? profileTargetProblem(normalized, metadata) : "";
 
