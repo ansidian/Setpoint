@@ -1,4 +1,5 @@
 import { financialHref } from "../financial/financialNavigation";
+import { financialReviewHref } from "../../lib/financialReviewApi";
 import { Link } from "react-router";
 import { CheckCircle2, Clock3, Loader2 } from "lucide-react";
 import type { CSSProperties } from "react";
@@ -36,6 +37,10 @@ export default function FinancialEventStatus({ plan, style }: { plan: FinancialE
   const canRequest = settled && !recorded && !scheduled && !correction && !workflow.dismissed && !!completion?.canComplete;
   const covered = /^Covered by Actual schedule/.test(workflow.reason || "");
   const requesting = completion && requestState.emailUid === completion.emailUid ? requestState.mode : null;
+  // The Finance email route resolves this email to its event or document record in any state.
+  const recordLink = correction
+    ? { to: financialHref({ view: correcting ? 'needs_attention' : 'completed' }, { owner: 'event', id: workflow.id }), label: "View record" }
+    : completion ? { to: financialReviewHref(completion.emailUid), label: settled ? "View record" : "Review in Finance" } : null;
   return (
     <div className="min-w-0 shrink-0 rounded-lg border px-3 py-2.5"
       style={{ color, borderColor: `color-mix(in srgb, ${color} 24%, transparent)`,
@@ -58,8 +63,8 @@ export default function FinancialEventStatus({ plan, style }: { plan: FinancialE
         </button>
       </div>}
       {completion && <RecordRequestNotice state={{ ...requestState, mode: null }} emailUid={completion.emailUid} className="mt-2" />}
-      {correction && <Link to={financialHref({ view: correcting ? 'needs_attention' : 'completed' }, { owner: 'event', id: workflow.id })}
-        className="mt-2 inline-flex rounded-lg border border-white/10 px-3 py-2 text-xs transition-transform hover:-translate-y-px focus-visible:-translate-y-px focus-visible:outline-2 focus-visible:outline-primary active:translate-y-0 motion-reduce:transform-none motion-reduce:transition-none">View record</Link>}
+      {recordLink && <Link to={recordLink.to}
+        className="mt-2 inline-flex rounded-lg border border-white/10 px-3 py-2 text-xs transition-transform hover:-translate-y-px focus-visible:-translate-y-px focus-visible:outline-2 focus-visible:outline-primary active:translate-y-0 motion-reduce:transform-none motion-reduce:transition-none">{recordLink.label}</Link>}
     </div>
   );
 }

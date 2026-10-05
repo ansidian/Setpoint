@@ -44,7 +44,7 @@ The desktop and mobile email detail pane: body loading/rendering, triage context
 - `useBillPayResolver.ts` — resolves or reuses the financial plan only for an already classified financial email; profile creation never forces extraction
 - `ActualActionStatus.tsx` — shared desktop/mobile status strip for canonical Actual reconciliation results
 - `actualActionStatusModel.ts` — pure copy/tone/actioned-state projection for Actual reconciliation status
-- `EmailActualStatus.tsx` — informational desktop/mobile status rendered from the reader's single `useTransactionImportStatus` read; prefers the live managed financial event, otherwise displays retained import/reconciliation status
+- `EmailActualStatus.tsx` — informational desktop/mobile status rendered from the reader's single `useTransactionImportStatus` read; prefers the live managed financial event (linking to its Finance record), otherwise displays retained import/reconciliation status
 - `emailActualStatusModel.ts` — pure precedence policy across transaction-import and statement reconciliation evidence
 - `TransactionImportStatus.tsx` — saved receipt history and correction status with focused Finance routing
 - `transactionImportStatusModel.ts` — pure saved item/correction-to-reader status projection; unsettled originals are saved history while unfinished corrections report progress
