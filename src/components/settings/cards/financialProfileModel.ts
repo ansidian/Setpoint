@@ -86,7 +86,7 @@ export function profileTargetProblem(profile: EditableProfile, metadata: ActualM
   }
   if (target.kind === "card_payment") {
     if (!accountExists(target.fromAccountId) || !accountExists(target.toAccountId)) return "A payment account is unavailable or closed. Choose both accounts again.";
-    if (target.scheduleId && !availableProfileSchedules("card_payment", metadata).some(schedule => schedule.id === target.scheduleId)) {
+    if (target.scheduleId && !availableProfileSchedules("card_payment", metadata, target.scheduleId).some(schedule => schedule.id === target.scheduleId)) {
       return "The saved payment schedule is unavailable. Choose an existing payment schedule or let Setpoint find the matching one.";
     }
     return "";
@@ -125,8 +125,13 @@ export function profileTargetSummary(target: EditableTarget, metadata: ActualMet
   return `${target.kind === "income" ? "Income" : "Expense"} · ${account(target.accountId)} · ${payee}${target.categoryId ? ` · ${category || "Category unavailable"}` : " · Uncategorized"}`;
 }
 
-export function availableProfileSchedules(kind: "utility" | "card_payment" | "schedule_link", metadata: ActualMetadataResponse) {
-  return (metadata.schedules || []).filter(schedule => schedule.id && !schedule.completed && (
+/** A pinned card payment schedule stays valid once completed: the writer reactivates it for the next statement. */
+export function availableProfileSchedules(kind: "utility" | "card_payment" | "schedule_link", metadata: ActualMetadataResponse, pinnedCardScheduleId?: string) {
+  const keepCompleted = (id: string) => kind === "card_payment" && !!pinnedCardScheduleId && id === pinnedCardScheduleId;
+  return (metadata.schedules || []).filter(schedule => schedule.id && (!schedule.completed || keepCompleted(schedule.id)) && (
     kind === "schedule_link" ? schedule.type !== "income" : kind === "card_payment" ? schedule.type === "transfer" : schedule.type !== "transfer" && schedule.type !== "income"
-  )).map(schedule => ({ id: schedule.id!, name: profileScheduleName(schedule.id!, metadata) }));
+  )).map(schedule => ({
+    id: schedule.id!,
+    name: `${profileScheduleName(schedule.id!, metadata)}${schedule.completed ? " (completed, reused next cycle)" : ""}`,
+  }));
 }
