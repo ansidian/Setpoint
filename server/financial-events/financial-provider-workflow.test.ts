@@ -112,6 +112,24 @@ it('keeps a provider review notice out of review when its Actual schedule alread
     error:'Covered by Actual schedule "SoFi Credit Card (1234) Payment" (Actual posts it on 2026-10-05).'});
   expect((await readFinancialReviewChanges('owner',{dbClient:db})).items).toEqual([]);
 });
+it('keeps a schedule-covered review notice settled across a parser release after its schedule window has passed',async()=>{
+  await email('autopay',{from:'no-reply@o.sofi.org',subject:'Your SoFi Credit Card autopay is scheduled for 10/05/2026',
+    body:'Your autopay for your SoFi Credit Card ending in 1234 is scheduled. Scheduled payment date: 10/05/2026'});
+  let nextDate='2026-10-05';
+  const {store,worker}=setup({metadataReader:async()=>({accounts:[],categories:[],payeeMap:{},payees:[],recentTransactions:[],
+    schedules:[{id:'card',name:'SoFi Credit Card (1234) Payment',next_date:nextDate,type:'transfer',conditions:[{field:'amount',op:'is',value:-20743}]}]})});
+  await worker.processNextDocument();
+  expect(await store.getDocumentForEmail('owner','autopay')).toMatchObject({status:'ignored',eventId:null});
+  // The schedule moves on to its next cycle, so the notice would no longer re-cover if reassessed.
+  // Trade-off: a later parser release never reassesses a covered notice, like settled events and dismissals.
+  nextDate='2026-11-05';
+  await db.execute(`UPDATE ea_financial_documents SET provider_assessment_json=json_set(provider_assessment_json,'$.policyVersion','obsolete')`);
+  await store.recoverStaleClaims();
+  expect(await worker.processNextDocument()).toBe(false);
+  expect(await store.getDocumentForEmail('owner','autopay')).toMatchObject({status:'ignored',eventId:null,
+    error:'Covered by Actual schedule "SoFi Credit Card (1234) Payment" (Actual posts it on 2026-10-05).'});
+  expect((await readFinancialReviewChanges('owner',{dbClient:db})).items).toEqual([]);
+});
 it('preserves all Amazon orders through the stored manual review without scheduling an automatic write', async () => {
   await email('multi-order', { from: 'auto-confirm@amazon.com', subject: 'Ordered: Three items',
     body: 'Order # 111-1000000-1000001 Grand Total: 10.97 USD Order # 111-1000000-1000002 Grand Total: 113.61 USD Order # 111-1000000-1000003 Grand Total: 14.35 USD' });
