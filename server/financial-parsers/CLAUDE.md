@@ -9,7 +9,7 @@ Pure, source-grounded company parsing. The public assessment facade returns pars
 - `sce.ts`, `socalgas.ts`, `sgv-water.ts`, `valley-vista.ts`, `spectrum.ts` — utility-owned templates, including Valley Vista extracted PDF tables
 - `sofi.ts`, `us-bank.ts`, `chase.ts`, `citi.ts` — issuer-owned statement, payment notice, transaction alert and reward templates; SoFi Zelle received/sent notices stay owner review
 - `paypal.ts` — Synchrony card statements/autopay/refunds, merchant receipts/refunds/authorizations, balance transfers and received-money notices; owns recognition of grounded PayPal balance movements in retained historical candidates
-- `amazon.ts` — initial order confirmation, refund and fulfillment families; advance refunds and shipping delays are nonfinancial
+- `amazon.ts` — initial order confirmation, refund and fulfillment families; advance refunds, shipping delays and single orders with a $0.00 total are nonfinancial
 - `ebay.ts` — content-gated packing notifications only; other eBay mail is an unrecognized sender
 - `fixtures/historical.json` — sanitized historical text/table excerpts with fictional personal/account identities; retains label order and whitespace from real normalized sources
 

@@ -1,6 +1,6 @@
 import { assessFacts, dateMatches, moneyMatches, referenceEvidence, result, text, unsupported, type ProviderParser } from "./parser-helpers.ts";
 
-export const AMAZON_PARSER_VERSION = "amazon-v4";
+export const AMAZON_PARSER_VERSION = "amazon-v5";
 
 function orderAmounts(body: string) {
   const amounts = moneyMatches(body, "Grand Total|Order Total|Total for this order", "order_total");
@@ -42,6 +42,9 @@ export const parseAmazon: ProviderParser = source => {
   if (!/^Ordered[: ]|your amazon\.com order|your order #|order confirmation|your digital order/i.test(source.subject)) return unsupported("amazon", source);
   const amounts = orderAmounts(body);
   const orders = orderBreakdown(body);
+  // A single order paid entirely from gift balance or promotion charges no tracked account.
+  const totals = [...new Set(amounts.map(item => item.value))];
+  if (!orders.multiple && order.provider_reference && totals.length === 1 && totals[0] === 0) return result("amazon", "zero-total-order", "nonfinancial", ["provider_order_total_zero"]);
   const dates = dateMatches(body, "Order date|Ordered on", source.emailDate);
   const assessment = assessFacts(source, { providerId: "amazon", templateId: "order-confirmation", payee: "Amazon", event: "purchase", type: "expense", amountKind: "order_total", amounts, dates,
     reasons: [...(order.provider_reference ? [] : ["provider_order_reference_missing_or_ambiguous"]), ...(orders.multiple ? ["provider_multiple_orders"] : [])],

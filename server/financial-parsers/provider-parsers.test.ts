@@ -115,6 +115,19 @@ describe("provider financial assessment", () => {
       .toMatchObject({ status: "nonfinancial", templateId: "advance-refund" });
   });
 
+  it("ignores a single Amazon order with a $0.00 total, which charges no tracked account", () => {
+    const source = fixture("amazon");
+    for (const total of ["0.00 USD", "$0.00"]) {
+      expect(assessProviderFinancialEmail({ ...source, body: source.body.replace("9.77 USD", total) }))
+        .toMatchObject({ status: "nonfinancial", templateId: "zero-total-order", reasons: ["provider_order_total_zero"] });
+    }
+    // A conflicting nonzero total or a multi-order receipt still needs review.
+    expect(assessProviderFinancialEmail({ ...source, body: source.body.replace("9.77 USD", "0.00 USD Order Total: $9.77") }))
+      .toMatchObject({ status: "review", reasons: expect.arrayContaining(["provider_amount_conflict"]) });
+    const multiple = fixture("amazon-multiple-orders");
+    expect(assessProviderFinancialEmail({ ...multiple, body: multiple.body.replace("3.07 USD", "0.00 USD") })).toMatchObject({ status: "review" });
+  });
+
   it.each([
     ["Notification - ALEX RIVER sent you $85.00.", "The $85.00 sent to you by ALEX RIVER will be automatically deposited to your account. thanks",
       { templateId: "zelle-received", candidate: { amount: 85, type: "income", payee_hint: "ALEX RIVER", due_date: null } }],
