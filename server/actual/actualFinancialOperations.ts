@@ -381,6 +381,13 @@ async function utilitySchedule(
     if (recurringDateOffset < 0) {
       return review("The statement date could not be verified as an upcoming occurrence of the saved utility schedule.");
     }
+  } else if (rule && typeof desiredDate.value === "object" && desiredDate.value?.frequency) {
+    // Actual recomputes a moved recurrence's next date from its own today, so a
+    // past due date would replace the current cycle's amount and never verify.
+    const upcoming = await sdk.internal.send("schedule/get-upcoming-dates", { config: desiredDate.value, count: 1 });
+    if (!Array.isArray(upcoming) || upcoming[0] !== input.date) {
+      return review("This statement's due date has passed. Actual cannot move the saved utility schedule back to it.");
+    }
   }
   if (mode === "preview") return result(selected ? "would_update" : "would_add",
     selected ? "The exact utility schedule can be updated." : "A utility schedule can be created.",

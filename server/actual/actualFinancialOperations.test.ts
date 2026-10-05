@@ -117,6 +117,8 @@ function fixture() {
         rule.conditions = payload.conditions!;
         const value = rule.conditions.find((item) => item.field === "date")!.value;
         schedule.next_date = typeof value === "object" ? String(value?.start) : String(value);
+      } else if (operation === "schedule/get-upcoming-dates") {
+        return [String((rawPayload as { config: { start: string } }).config.start)];
       } else if (operation === "rule-update") {
         rules.find((item) => item.id === payload.id)!.actions = payload.actions!;
       } else throw new Error(`Unexpected SDK operation ${operation}`);

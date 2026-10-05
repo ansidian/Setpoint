@@ -438,6 +438,40 @@ describe("Actual financial operation SDK compatibility", () => {
       .toEqual([expect.objectContaining({ amount: -9_850, schedule: scheduleId })]);
   }, 30_000);
 
+  it("refuses to move a monthly utility schedule back to a statement due date that has passed", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-08T12:00:00Z"));
+    dataDir = await createTestTempDir("actual-past-due-utility-");
+    const internal = await actualApi.init({ dataDir, verbose: false });
+    started = true;
+    await internal.send("create-budget", { budgetName: "Past-due utility statement", avoidUpload: true });
+    const accountId = await actualApi.createAccount({ name: "Fictional checking", offbudget: false }, 100_000);
+    const payeeId = await actualApi.createPayee({ name: "Fictional power" });
+    const recurrence = { start: "2026-10-14", interval: 1, frequency: "monthly" as const, patterns: [],
+      skipWeekend: false, weekendSolveMode: "after" as const, endMode: "never" as const,
+      endOccurrences: 1, endDate: "2026-10-14" };
+    const scheduleId = await actualApi.createSchedule({ name: "Fictional power", account: accountId, payee: payeeId,
+      amount: -30_000, amountOp: "is", date: recurrence, posts_transaction: false });
+    vi.setSystemTime(new Date("2026-10-08T12:00:01Z"));
+    const sdk = { ...actualApi, sync: async () => undefined } as unknown as ActualFinancialSdk;
+    const input: ActualUtilityScheduleInput = { kind: "utility_schedule", identityKey: "past-due-utility",
+      budgetId: "isolated", accountId, payeeId, payee: "Fictional power", scheduleId,
+      amountCents: -24_361, date: "2026-10-14", name: "Fictional power" };
+    const preview = await reconcileActualFinancialOperation(sdk, "isolated", input, "preview");
+    expect(preview).toMatchObject({ outcome: "would_update", scheduleId });
+
+    // The admitted write is retried only after the due date has passed.
+    vi.setSystemTime(new Date("2026-10-20T12:00:00Z"));
+    const pastDue = "This statement's due date has passed. Actual cannot move the saved utility schedule back to it.";
+    expect(await reconcileActualFinancialOperation(sdk, "isolated", input, "preview"))
+      .toMatchObject({ outcome: "needs_review", reason: pastDue });
+    expect(await reconcileActualFinancialOperation(sdk, "isolated", { ...input,
+      expectedScheduleFingerprint: preview.scheduleFingerprint, preparedEvidence: preview.evidence }, "write_once"))
+      .toMatchObject({ outcome: "needs_review", reason: pastDue });
+    expect(await actualApi.getSchedules()).toEqual([expect.objectContaining({ id: scheduleId, completed: false,
+      amount: -30_000, next_date: "2026-10-14", date: recurrence })]);
+  }, 30_000);
+
   it("updates successive quarterly utility statements without changing the recurrence or sibling rules", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-04-01T12:00:00Z"));
