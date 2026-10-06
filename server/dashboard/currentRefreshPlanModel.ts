@@ -107,44 +107,6 @@ export function planCurrentDataRefresh(rows: CurrentDashboardCacheRows, {
   return { scheduled, skipped };
 }
 
-export function applyProviderPassiveSuppression(
-  refreshPlan: CurrentDashboardRefreshPlan,
-  rows: CurrentDashboardCacheRows,
-  { now, context = {} }: { now: Date; context?: CurrentProviderContext },
-): void {
-  for (const provider of CURRENT_DATA_PROVIDERS) {
-    if (!provider.passiveSuppressReason) continue;
-    const reason = provider.passiveSuppressReason({ row: rows[provider.key], now, context });
-    if (!reason) continue;
-    const scheduledBefore = refreshPlan.scheduled.length;
-    refreshPlan.scheduled = refreshPlan.scheduled.filter((entry) => entry.key !== provider.key);
-    if (refreshPlan.scheduled.length !== scheduledBefore) {
-      refreshPlan.skipped.push(skippedEntry(provider.key, reason));
-    }
-  }
-}
-
-export function applyProviderMaintenanceRefresh(
-  refreshPlan: CurrentDashboardRefreshPlan,
-  rows: CurrentDashboardCacheRows,
-  { forceKeys, now, context = {} }: {
-    forceKeys?: Set<CurrentDashboardCacheKey>;
-    now: Date;
-    context?: CurrentProviderContext;
-  },
-): void {
-  for (const provider of CURRENT_DATA_PROVIDERS) {
-    if (!provider.maintenanceRefreshReason) continue;
-    const row = rows[provider.key];
-    const reason = provider.maintenanceRefreshReason({ row, now, context });
-    if (!reason) continue;
-    if (isInPassiveBackoff(row, now)) continue;
-    if (provider.passiveSuppressReason?.({ row, now, context })) continue;
-    ensureScheduled(refreshPlan, provider.key, reason);
-    forceKeys?.add(provider.key);
-  }
-}
-
 export function applyProviderManualRefresh(
   refreshPlan: CurrentDashboardRefreshPlan,
   rows: CurrentDashboardCacheRows,

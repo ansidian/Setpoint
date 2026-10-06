@@ -4,10 +4,6 @@ Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and
 
 ## Files
 
-- `financial-email-intake.ts` — public bounded received-Gmail capture across Inbox and archived labels; strict message fetch, explicit vanished-source counts and indexing facade without snapshot/triage insertion
-- `financial-email-source.ts` — complete source contract, typed acquisition errors, byte/time/worker budgets; parses original MIME in an isolated worker without changing the index
-- `financial-email-source-worker.ts` — bounded MIME normalization selecting reader HTML with plain-text fallback and original sender-authentication evaluation; preserves independent mixed parts and combines PDF evidence with exact part/hash provenance
-- `financial-pdf-evidence.ts` — worker-only PDF.js text extraction: page/byte/count/text limits, spatial rows/columns, complete-page validation, and conservative rejection of unsafe or unreadable documents
 
 - `snoozed-emails.ts` — owner-scoped deferred collection hydration from the index and captured snapshot; no provider fetches.
 
@@ -18,7 +14,7 @@ Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and
 - `email-fetch.ts` — cross-account email fetching for Gmail and iCloud; strict sweep reads distinguish empty inboxes from incomplete provider results
 - `email-history-acknowledgment.ts` — operator-only, dry-run-first exact-job acknowledgment; preserves failure evidence, binds application to a preview fingerprint, and atomically resolves health attention without claiming ingestion recovery
 - `email-sync-health.ts` — per-account successful inbox-check persistence and health projection; only completed fetch/index/queue sweeps advance freshness, with unresolved Gmail history and reconnect evidence taking precedence; terminal history failures remain visible until their durable job state is completed or explicitly acknowledged
-- `email-provider-adapters.ts` — per-account adapters: fetch, mark-read, trash, and owner-scoped complete financial source acquisition
+- `email-provider-adapters.ts` — per-account adapters: fetch, mark-read, trash, and attachments
 - `email-provider-types.ts` — provider/account normalization contracts and adapter boundary types
 - `email-mime-attachments.ts` — shared MIME attachment descriptor and bounded byte-selection helpers
 - `email-index.ts` — parses headers, truncates bodies, writes `ea_email_index`
@@ -58,7 +54,7 @@ Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and
 - All index writes go through `email-index.ts`; provider clients never write `ea_email_index` directly.
 - Verification-code detection runs locally in that shared index path; it never calls a provider/model and persists no surrounding evidence.
 - Provider differences are absorbed in `email-provider-adapters.ts`; consumers see one account-shaped interface.
-- Indexing and complete financial acquisition prefer readable HTML over an alternative plain body. Gmail/iCloud previews derive from that selected body so triage cannot reintroduce stale alternative text through a provider snippet. Independent mixed parts and attachments retain their existing boundaries.
+- Indexing prefers readable HTML over an alternative plain body. Gmail/iCloud previews derive from that selected body so triage cannot reintroduce stale alternative text through a provider snippet. Independent mixed parts and attachments retain their existing boundaries.
 - HTML evidence keeps aligned grids only for supported table sections, rows and cells. Malformed layout tables use the converter's ordinary traversal after visibility filtering, retaining visible content outside that structure.
 
 ## Related

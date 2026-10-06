@@ -11,8 +11,6 @@ interface CurrentServiceTestState {
   fetchTodoistTasks: TestMock;
   getTodoistSyncHealth: TestMock;
   hydrateRecurringTombstones: TestMock;
-  readLocalActualMetadata: TestMock;
-  syncActualMetadata: TestMock;
   getActiveSnapshotView: TestMock;
   syncActiveSnapshot: TestMock;
 }
@@ -25,8 +23,6 @@ const testState = vi.hoisted((): CurrentServiceTestState => ({
   fetchTodoistTasks: vi.fn(),
   getTodoistSyncHealth: vi.fn(),
   hydrateRecurringTombstones: vi.fn(),
-  readLocalActualMetadata: vi.fn(),
-  syncActualMetadata: vi.fn(),
   getActiveSnapshotView: vi.fn(),
   syncActiveSnapshot: vi.fn(),
 }));
@@ -49,7 +45,6 @@ vi.mock("../platform/config-service.ts", () => ({
       weather_lat: 34.1442,
       weather_lng: -117.9981,
       weather_location: "El Monte, CA",
-      actual_budget_url: "https://actual.example.test",
     },
   })),
 }));
@@ -74,14 +69,6 @@ vi.mock("../tasks/todoist.ts", () => ({
 vi.mock("../tasks/tombstones.ts", () => ({
   hydrateRecurringTombstones: (...args: unknown[]) => testState.hydrateRecurringTombstones(...args),
 }));
-// test-architecture: allow-boundary-mock -- Actual's local metadata reader is the filesystem/provider boundary; the real Bills mirror and dashboard services persist and compose its result.
-vi.mock("../actual/actual-local-metadata.ts", () => ({
-  readLocalActualMetadata: (...args: unknown[]) => testState.readLocalActualMetadata(...args),
-}));
-// test-architecture: allow-boundary-mock -- Actual SDK synchronization is the provider boundary; dashboard cases publish its synchronized budget into real mirror tables.
-vi.mock("../actual/actual.ts", () => ({
-  syncActualMetadata: (...args: unknown[]) => testState.syncActualMetadata(...args),
-}));
 // test-architecture: allow-boundary-mock -- Active snapshots are a separately persisted briefing boundary; dashboard tests compose controlled snapshot views while snapshot lifecycle suites own their durable behavior.
 vi.mock("../snapshots/snapshot-service.ts", () => ({
   getActiveSnapshotView: (...args: unknown[]) => testState.getActiveSnapshotView(...args),
@@ -93,24 +80,6 @@ process.env.EA_USER_ID = "u1";
 const EMPTY_DEADLINES_FOR_TEST = {
   upcoming: [],
   stats: null,
-};
-
-const ACTUAL_METADATA_FOR_TEST = {
-  accounts: [{ id: "checking", name: "Checking" }],
-  payees: [{ id: "payee-synced", name: "Synced Payee" }],
-  payeeMap: { "payee-synced": "Synced Payee" },
-  categories: [],
-  schedules: [{
-    id: "synced-bill",
-    name: "Synced Bill",
-    next_date: "2026-05-04",
-    type: "bill",
-    conditions: [
-      { field: "payee", value: "payee-synced" },
-      { field: "amount", value: -12345 },
-    ],
-  }],
-  recentTransactions: [],
 };
 
 const {
@@ -140,63 +109,6 @@ async function createMigratedDb() {
       refresh_failure_count INTEGER NOT NULL DEFAULT 0,
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       PRIMARY KEY (user_id, cache_key)
-    );
-
-    CREATE TABLE ea_bills_mirror_state (
-      user_id TEXT PRIMARY KEY,
-      status TEXT NOT NULL DEFAULT 'needs_sync',
-      actual_configured INTEGER NOT NULL DEFAULT 0,
-      actual_budget_url TEXT,
-      last_success_at TEXT,
-      last_attempt_at TEXT,
-      last_error TEXT,
-      pending_refresh_at TEXT,
-      refresh_started_at TEXT,
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE ea_bill_schedule_mirror (
-      user_id TEXT NOT NULL,
-      schedule_id TEXT NOT NULL,
-      name TEXT NOT NULL,
-      payee TEXT,
-      amount REAL NOT NULL,
-      type TEXT NOT NULL,
-      next_date TEXT NOT NULL,
-      paid INTEGER NOT NULL DEFAULT 0,
-      raw_json TEXT,
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      PRIMARY KEY (user_id, schedule_id)
-    );
-
-    CREATE TABLE ea_bill_occurrence_mirror (
-      user_id TEXT NOT NULL,
-      occurrence_id TEXT NOT NULL,
-      schedule_id TEXT NOT NULL,
-      occurrence_date TEXT NOT NULL,
-      name TEXT NOT NULL,
-      payee TEXT,
-      amount REAL NOT NULL,
-      type TEXT NOT NULL,
-      paid INTEGER NOT NULL DEFAULT 0,
-      open_action_disabled INTEGER NOT NULL DEFAULT 0,
-      raw_json TEXT,
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      PRIMARY KEY (user_id, occurrence_id)
-    );
-
-    CREATE TABLE ea_actual_metadata_mirror (
-      user_id TEXT PRIMARY KEY,
-      status TEXT NOT NULL DEFAULT 'needs_sync',
-      accounts_json TEXT,
-      payees_json TEXT,
-      categories_json TEXT,
-      schedules_json TEXT,
-      recent_transactions_json TEXT,
-      last_success_at TEXT,
-      last_attempt_at TEXT,
-      last_error TEXT,
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
     CREATE TABLE ea_reminders (
@@ -245,10 +157,9 @@ async function createMigratedDb() {
 
     CREATE TABLE ea_settings (
       user_id TEXT PRIMARY KEY,
-      todoist_needs_reauth INTEGER NOT NULL DEFAULT 0,
-      actual_budget_url TEXT
+      todoist_needs_reauth INTEGER NOT NULL DEFAULT 0
     );
-    INSERT INTO ea_settings (user_id, actual_budget_url) VALUES ('u1', 'https://actual.example.test');
+    INSERT INTO ea_settings (user_id) VALUES ('u1');
   `);
   await db.executeMultiple(readFileSync(new URL("../db/migrations/078_email_sync_health.sql", import.meta.url), "utf8"));
   // Existing provider queues are read by the email health projection.
@@ -320,8 +231,6 @@ export async function setupCurrentServiceTest() {
     ageMs: 30_000,
   });
   testState.hydrateRecurringTombstones.mockReset().mockResolvedValue([]);
-  testState.readLocalActualMetadata.mockReset().mockResolvedValue(ACTUAL_METADATA_FOR_TEST);
-  testState.syncActualMetadata.mockReset().mockResolvedValue(ACTUAL_METADATA_FOR_TEST);
   testState.getActiveSnapshotView.mockReset().mockResolvedValue({
     snapshot: { id: 42 },
     lanes: { needs_attention: [], fyi: [], noise: [] },
@@ -340,7 +249,6 @@ export async function cleanupCurrentServiceTest() {
 export {
   testState,
   EMPTY_DEADLINES_FOR_TEST,
-  ACTUAL_METADATA_FOR_TEST,
   applyDeadlineCurrentStatus,
   clearCurrentDashboardRefreshState,
   getCurrentDashboard,

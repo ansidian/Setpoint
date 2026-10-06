@@ -87,7 +87,6 @@ async function loadActiveSnapshotItem(dbClient: SnapshotWriteDb, userId: string,
   const result = await dbClient.execute({
     sql: `SELECT i.*,
                  idx.read,
-                 t.bill_candidate_json,
                  t.triage_status,
                  t.triage_source
           FROM ea_briefing_snapshot_items i
@@ -114,8 +113,7 @@ async function loadActiveSnapshotItem(dbClient: SnapshotWriteDb, userId: string,
 async function loadActiveHandledSnapshotItem(dbClient: SnapshotWriteDb, userId: string, itemId: number): Promise<MutationItemRow | null> {
   const result = await dbClient.execute({
     sql: `SELECT i.*,
-                 idx.read,
-                 t.bill_candidate_json
+                 idx.read
           FROM ea_briefing_snapshot_items i
           JOIN ea_briefing_snapshots s
             ON s.id = i.snapshot_id
@@ -124,8 +122,6 @@ async function loadActiveHandledSnapshotItem(dbClient: SnapshotWriteDb, userId: 
             ON idx.user_id = i.user_id
            AND idx.account_id = i.account_id
            AND idx.uid = i.email_id
-          LEFT JOIN ea_email_triage t
-            ON t.id = i.triage_id
           WHERE i.id = ?
             AND i.user_id = ?
             AND i.dismissed_from_today_at IS NULL
@@ -140,15 +136,12 @@ async function loadActiveHandledSnapshotItem(dbClient: SnapshotWriteDb, userId: 
 async function loadSnapshotItemById(dbClient: SnapshotWriteDb, userId: string, itemId: number): Promise<MutationItemRow | null> {
   const result = await dbClient.execute({
     sql: `SELECT i.*,
-                 idx.read,
-                 t.bill_candidate_json
+                 idx.read
           FROM ea_briefing_snapshot_items i
           LEFT JOIN ea_email_index idx
             ON idx.user_id = i.user_id
            AND idx.account_id = i.account_id
            AND idx.uid = i.email_id
-          LEFT JOIN ea_email_triage t
-            ON t.id = i.triage_id
           WHERE i.id = ?
             AND i.user_id = ?
           LIMIT 1`,

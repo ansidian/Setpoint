@@ -32,7 +32,6 @@ export interface CalendarItemLike {
   sourceColor?: string | null;
   color?: string | null;
   markerColor?: string | null;
-  agendaDotColor?: string | null;
   agendaSourceColor?: string | null;
   agendaSelectedColor?: string | null;
   agendaDateKey?: string | null;

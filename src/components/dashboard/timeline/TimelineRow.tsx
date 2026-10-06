@@ -26,7 +26,7 @@ import {
   getEventSelectionId,
   urgencyForDays,
 } from "../../../lib/shell-helpers";
-import { daysUntil } from "../../../lib/bill-utils";
+import { daysUntil } from "../../../lib/dashboard-helpers";
 import { PRIORITY_COLOR } from "./timeline-helpers";
 import { TODOIST_DEADLINE_COLOR } from "../../../../shared/deadline-source-colors";
 import type { LucideIcon } from "lucide-react";

@@ -6,11 +6,11 @@ describe("Settings tab routing", () => {
     [null, "connections"],
     ["connections", "connections"],
     ["automation", "automation"],
-    ["finance", "finance"],
     ["system", "system"],
     ["accounts", "connections"],
     ["briefing", "automation"],
-    ["actual", "finance"],
+    ["actual", "connections"],
+    ["finance", "connections"],
     ["unknown", "connections"],
   ] as const)("normalizes %s to %s", (value, expected) => {
     expect(normalizeSettingsTab(value)).toBe(expected);

@@ -34,7 +34,6 @@ describe("Alfred email content trust boundary", () => {
         lane: "needs_attention",
         urgency: "high",
         handled: true,
-        bill_candidate: true,
       },
       scores: { fused: 0.99 },
     });
@@ -42,7 +41,6 @@ describe("Alfred email content trust boundary", () => {
     expect(row).toMatchObject({
       uid: "gmail-1",
       handled: true,
-      bill: true,
     });
     expect(row.from).toContain("<email_content");
     expect(row.subject).toContain("<email_content");

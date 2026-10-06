@@ -12,7 +12,6 @@ import {
 import AlfredAnalyticsSection from "./analytics/AlfredAnalyticsSection";
 import EmailSearchAnalyticsSection from "./analytics/EmailSearchAnalyticsSection";
 import TriageAnalyticsSection from "./analytics/TriageAnalyticsSection";
-import FinancialEmailAnalyticsSection from "./analytics/FinancialEmailAnalyticsSection";
 
 import AnalyticsProviderFilter, { AnalyticsProviderComparison } from "./analytics/AnalyticsProviderFilter";
 import { providerComparison, selectProviderStats, type AnalyticsTabKey, type AnalyticsProvider } from "./analytics/analyticsProviderData";
@@ -36,7 +35,6 @@ const TABS: AnalyticsTab[] = [
   { key: "alfred", label: "Alfred", fetcher: getAlfredUsageStats, Section: AlfredAnalyticsSection as ComponentType<{ stats: never }> },
   { key: "search", label: "Email Search", fetcher: getEmailSearchStats, Section: EmailSearchAnalyticsSection as ComponentType<{ stats: never }> },
   { key: "triage", label: "Triage", fetcher: getEmailAiUsageStats, Section: TriageAnalyticsSection as ComponentType<{ stats: never }> },
-  { key: "financial", label: "Financial email", fetcher: getEmailAiUsageStats, Section: FinancialEmailAnalyticsSection as ComponentType<{ stats: never }> },
 ];
 
 // Each section fetches independently the first time the hub opens, so a slow or
@@ -147,7 +145,7 @@ export default function AiAnalyticsModal({ open, onClose }: { open: boolean; onC
                 <AnalyticsProviderFilter value={provider} onChange={setProvider} />
               </div>
               <DialogDescription className="col-span-2 mt-1 max-w-2xl text-[12px] leading-relaxed text-muted-foreground/75 sm:col-span-1">
-                Alfred, email search, triage, and financial-email model usage.
+                Alfred, email search, and triage model usage.
               </DialogDescription>
             </div>
           </div>

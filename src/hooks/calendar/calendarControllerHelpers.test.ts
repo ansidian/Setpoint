@@ -121,13 +121,11 @@ describe("calendarControllerHelpers", () => {
     expect(resolved!.status).toBe("complete");
   });
 
-  it("itemFromCalendarSearchResult maps event/deadline/bill shapes", () => {
+  it("itemFromCalendarSearchResult maps event/deadline shapes", () => {
     expect(itemFromCalendarSearchResult({ type: "event", itemId: "e1", title: "Lunch", itemDate: "2026-06-10", payload: { startMs: 1 } }))
       .toMatchObject({ id: "e1", title: "Lunch", agendaDateKey: "2026-06-10", startMs: 1 });
     expect(itemFromCalendarSearchResult({ type: "deadline", itemId: "deadline:5:2026-06-10", title: "Essay", itemDate: "2026-06-10" }))
       .toMatchObject({ id: "deadline:5:2026-06-10", agendaItemId: "deadline:5:2026-06-10", due_date: "2026-06-10", status: "open" });
-    expect(itemFromCalendarSearchResult({ type: "bill", itemId: "b1", title: "Rent", itemDate: "2026-06-01" }))
-      .toMatchObject({ id: "b1", name: "Rent", next_date: "2026-06-01" });
     expect(itemFromCalendarSearchResult(null)).toBeNull();
   });
 });

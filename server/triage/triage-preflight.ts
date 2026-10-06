@@ -130,11 +130,6 @@ function normalizeUrgency(value: unknown): TriageUrgency {
   return typeof value === "string" && VALID_URGENCIES.has(value) ? value as TriageUrgency : "normal";
 }
 
-function extractAmountHint(text: unknown): string | null {
-  const match = String(text || "").match(/\$\s*([0-9][0-9,]*(?:\.[0-9]{2})?)/);
-  return match ? `$${match[1]}` : null;
-}
-
 function domainFromAddress(address: unknown): string {
   const [, domain = ""] = String(address || "").toLowerCase().split("@");
   return domain;
@@ -339,7 +334,7 @@ function resultForRule(rule: TriageRule, match: TriageRuleMatch, action: TriageP
     matchedTextScope: parts ? "scoped" : "unknown",
     matchedInterest: null,
     interestPromotion: null,
-    metadata: metadataForRule(match, parts),
+    metadata: metadataForRule(match),
   };
 }
 
@@ -417,19 +412,8 @@ function resultForSenderInterest(matchedInterest: string): TriagePreflightResult
   };
 }
 
-function metadataForRule(match: TriageRuleMatch, parts: EmailTextParts): Record<string, unknown> | null {
-  const metadata: Record<string, unknown> = isRecord(match.metadata) ? { ...match.metadata } : {};
-  if (metadata.finance_candidate) {
-    if (parts.fromName.includes("citi")) metadata.finance_candidate_kind = "card_transaction";
-    else if (parts.fromName.includes("fidelity") || parts.fromName.includes("east west")) {
-      metadata.finance_candidate_kind = "transfer";
-    } else if (parts.fromName.includes("paypal") || parts.fromName.includes("steam") || parts.fromName.includes("apple") || parts.fromName.includes("freetaxusa")) {
-      metadata.finance_candidate_kind = "receipt";
-    }
-    const amountHint = extractAmountHint(parts.subject) || extractAmountHint(parts.snippet);
-    if (amountHint) metadata.amount_hint = amountHint;
-  }
-  return Object.keys(metadata).length ? metadata : null;
+function metadataForRule(match: TriageRuleMatch): Record<string, unknown> | null {
+  return isRecord(match.metadata) && Object.keys(match.metadata).length ? { ...match.metadata } : null;
 }
 
 export function evaluateTriagePreflight(email: Partial<TriageEmail>, {

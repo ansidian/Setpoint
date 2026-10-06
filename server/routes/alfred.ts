@@ -17,8 +17,6 @@ import { htmlToPlainText } from "../email/html-to-text.ts";
 import { fetchCalendar, getCalendarSourceGroups, pacificDayBoundaries } from "../calendar/calendar.ts";
 import { loadUserConfig } from "../platform/config-service.ts";
 import { readCalendarDeadlineRange } from "../tasks/deadlines-read.ts";
-import { readBillsMirrorRange } from "../bills/bills-service.ts";
-import { queryTransactions, summarizeTransactions } from "../transactions/transactions-service.ts";
 import type { AlfredRunEvent } from "../../shared/types/alfred.ts";
 import type { AlfredDependencies } from "../alfred/alfred-types.ts";
 import { errorMessage } from "../alfred/alfred-types.ts";
@@ -42,9 +40,6 @@ const ALFRED_DEPS = {
   loadUserConfig,
   getCalendarSourceGroups,
   readCalendarDeadlineRange,
-  readBillsMirrorRange,
-  queryTransactions,
-  summarizeTransactions,
 } as unknown as AlfredDependencies;
 
 const EMAIL_CONTEXT_DEPS = { getEmailBody };

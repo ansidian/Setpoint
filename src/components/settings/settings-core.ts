@@ -10,7 +10,6 @@ export const SETTINGS_GHOST_BUTTON_CLASS =
 export const TABS = [
   { id: "connections", label: "Connections" },
   { id: "automation", label: "Automation" },
-  { id: "finance", label: "Finance" },
   { id: "system", label: "System" },
 ] as const;
 
@@ -19,7 +18,8 @@ export type SettingsTab = typeof TABS[number]["id"];
 const LEGACY_TAB_ALIASES: Record<string, SettingsTab> = {
   accounts: "connections",
   briefing: "automation",
-  actual: "finance",
+  actual: "connections",
+  finance: "connections",
 };
 
 export function normalizeSettingsTab(tab: unknown): SettingsTab {

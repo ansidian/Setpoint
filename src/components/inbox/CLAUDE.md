@@ -4,7 +4,7 @@ The email triage and reading surface, desktop and mobile: active snapshots (tria
 
 ## Sub-maps
 
-- `reader/` — desktop/mobile detail pane, bodies, triage, financial profile creation and saved financial status (see `reader/CLAUDE.md`)
+- `reader/` — desktop/mobile detail pane, bodies, triage, and actions (see `reader/CLAUDE.md`)
 
 ## Files
 

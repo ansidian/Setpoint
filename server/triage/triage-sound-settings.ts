@@ -22,7 +22,6 @@ export const TRIAGE_SOUND_TRIGGER_KEYS = {
   TRIAGE_FAILED: "triage_failed",
   EVENT_UPCOMING: "event_upcoming",
   TASK_COMPLETED: "task_completed",
-  ACTUAL_RECORDED: "actual_recorded",
 } as const;
 
 export const TRIAGE_NOTIFICATION_SOUNDS = JSON.parse(
@@ -31,7 +30,7 @@ export const TRIAGE_NOTIFICATION_SOUNDS = JSON.parse(
 
 const SOUND_IDS = new Set(TRIAGE_NOTIFICATION_SOUNDS.map((sound) => sound.id));
 const TRIGGER_KEYS = new Set<TriageSoundTriggerKey>(Object.values(TRIAGE_SOUND_TRIGGER_KEYS));
-const LEGACY_TRIGGER_KEYS = new Set(["weak_security_grace"]);
+const LEGACY_TRIGGER_KEYS = new Set(["weak_security_grace", "actual_recorded"]);
 const LANE_SCOPES = new Set<TriageSoundLaneScope>(Object.values(TRIAGE_SOUND_LANE_SCOPES));
 
 export const DEFAULT_TRIAGE_SOUND_SETTINGS: TriageSoundSettings = {
@@ -57,10 +56,6 @@ export const DEFAULT_TRIAGE_SOUND_SETTINGS: TriageSoundSettings = {
     [TRIAGE_SOUND_TRIGGER_KEYS.EVENT_UPCOMING]: {
       enabled: true,
       soundId: "threshold",
-    },
-    [TRIAGE_SOUND_TRIGGER_KEYS.ACTUAL_RECORDED]: {
-      enabled: true,
-      soundId: "resolve",
     },
     [TRIAGE_SOUND_TRIGGER_KEYS.TASK_COMPLETED]: {
       enabled: true,

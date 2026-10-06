@@ -1,26 +1,15 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Activity } from "react";
-import { MemoryRouter } from "react-router";
 import Reader from "./Reader";
 
-// test-architecture: allow-boundary-mock -- Reader, AddTaskPanel, body loading, and bill resolution run together while authenticated HTTP/provider responses are deterministic.
+// test-architecture: allow-boundary-mock -- Reader, AddTaskPanel, and body loading run together while authenticated HTTP/provider responses are deterministic.
 vi.mock("../../../api", async () => {
   const actual = await vi.importActual("../../../api");
   return {
     ...actual,
     getEmailBody: vi.fn().mockResolvedValue({ body: "Loaded email body" }),
     peekEmailBody: vi.fn(() => null),
-    resolveFinancialEmailPlan: vi.fn().mockResolvedValue({
-      version: 1,
-      candidate: {},
-      classification: { documentKind: "informational", eventKind: null, confidence: 1, reasons: ["informational_event"] },
-      operation: { intended: "no_write", kind: "no_write", reasons: ["informational_event"] },
-      targets: {},
-      reconciliation: { status: "not_checked", disposition: "no_write" },
-      reviewReasons: [],
-      automation: { eligible: false, gates: [], reasons: ["informational_event"] },
-    }),
     getTodoistProjects: vi.fn().mockResolvedValue([]),
     getTodoistLabels: vi.fn().mockResolvedValue([]),
     listReminders: vi.fn().mockResolvedValue({ reminders: [] }),
@@ -40,11 +29,11 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 function Harness({ mobile = false }: { mobile?: boolean }) {
-  return <MemoryRouter><Reader
-    email={{ id: "mail-1", uid: "gmail-work-abc", account_id: "work", account_email: "me@example.test", subject: "Renew coverage", from: "Agent", fromEmail: "agent@example.test", summary: "Coverage expires.", action: "Submit renewal", deadline_at: "2126-08-03", hasBill: true, _activeSnapshot: true, _lane: "needs_attention" }}
+  return <Reader
+    email={{ id: "mail-1", uid: "gmail-work-abc", account_id: "work", account_email: "me@example.test", subject: "Renew coverage", from: "Agent", fromEmail: "agent@example.test", summary: "Coverage expires.", action: "Submit renewal", deadline_at: "2126-08-03", _activeSnapshot: true, _lane: "needs_attention" }}
     account={{ name: "Work" }} accent="#cba6da" onAction={() => {}} onClose={() => {}}
     showTriage={false} showDraft={false} isMobile={mobile}
-  /></MemoryRouter>;
+  />;
 }
 
 describe("Inbox Remind me workspace", () => {
@@ -69,7 +58,7 @@ describe("Inbox Remind me workspace", () => {
 
   it("closes after success and announces without mutating email lifecycle", async () => {
     function SuccessHarness() {
-      return <MemoryRouter><Reader email={{ id: "mail-1", subject: "Renew", action: "Renew", deadline_at: "2126-08-03" }} accent="#cba6da" onAction={() => {}} onClose={() => {}} showTriage={false} showDraft={false} /></MemoryRouter>;
+      return <Reader email={{ id: "mail-1", subject: "Renew", action: "Renew", deadline_at: "2126-08-03" }} accent="#cba6da" onAction={() => {}} onClose={() => {}} showTriage={false} showDraft={false} />;
     }
     render(<SuccessHarness />);
     fireEvent.click(screen.getByRole("button", { name: "Remind me" }));

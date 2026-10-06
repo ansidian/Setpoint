@@ -233,45 +233,7 @@ describe("GET /api/calendar/search", () => {
     expect(res.status).toBe(400);
     expect(res.body).toEqual({
       code: "calendar_search_scope_invalid",
-      message: "scope must be events or bills",
+      message: "scope must be events",
     });
-  });
-
-  it("returns mirrored bill occurrences through the real bills search path", async () => {
-    await currentDb().execute({
-      sql: `INSERT INTO ea_bills_mirror_state
-              (user_id, status, actual_configured, actual_budget_url, last_success_at)
-            VALUES (?, 'current', 1, ?, ?)`,
-      args: ["user-1", "http://actual.local", "2026-05-03T18:59:00.000Z"],
-    });
-    await currentDb().execute({
-      sql: `INSERT INTO ea_bill_occurrence_mirror
-              (user_id, occurrence_id, schedule_id, occurrence_date, name, payee, amount, type, paid)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'bill', 0)`,
-      args: ["user-1", "schedule-rent:2026-05-15", "schedule-rent", "2026-05-15", "Rent", "Apartment", 1900],
-    });
-
-    const res = await request(makeApp())
-      .get("/api/calendar/search?scope=bills&q=rent")
-      .set("Cookie", authenticated());
-
-    expect(res.status).toBe(200);
-    expect(res.body.results).toEqual([
-      expect.objectContaining({
-        type: "bill",
-        itemId: "schedule-rent:2026-05-15",
-        itemDate: "2026-05-15",
-        title: "Rent",
-        sourceLabel: "Bills",
-        activation: expect.objectContaining({ view: "bills", scheduleId: "schedule-rent" }),
-      }),
-    ]);
-    expect(res.body.coverage.sources).toEqual([
-      expect.objectContaining({
-        key: "bills_mirror",
-        syncHealth: expect.objectContaining({ state: "current" }),
-        actualBudgetUrl: "http://actual.local",
-      }),
-    ]);
   });
 });

@@ -16,19 +16,6 @@ export interface ActualMetadataSyncHealth {
 }
 type ProjectedActualMetadata = ActualMetadata & { syncHealth: ActualMetadataSyncHealth };
 
-export const EMPTY_ACTUAL_METADATA: ActualMetadata = {
-  accounts: [],
-  payees: [],
-  payeeMap: {},
-  categories: [],
-  schedules: [],
-  recentTransactions: [],
-};
-
-function isoNow(now: Date = new Date()): string {
-  return now.toISOString();
-}
-
 function safeJson<T>(value: unknown, fallback: T): T {
   if (!value) return fallback;
   try {
@@ -139,58 +126,4 @@ export async function readActualMetadataProjection(userId: string, { dbClient = 
     args: [userId],
   });
   return metadataFromRow(result.rows?.[0] || null);
-}
-
-function metadataUnavailableError(projected: ProjectedActualMetadata | null): Error & { status: number } {
-  const detail = projected?.syncHealth?.lastError ? `: ${projected.syncHealth.lastError}` : "";
-  return Object.assign(new Error(`Actual metadata projection is unavailable${detail}`), { status: 503 });
-}
-
-export async function getMetadata(userId: string, { allowRefresh = false }: { allowRefresh?: boolean } = {}): Promise<ProjectedActualMetadata> {
-  const projected = await readActualMetadataProjection(userId).catch(() => null);
-  if (projected?.syncHealth?.state === "current") return projected;
-  if (projected && hasActualMetadataRows(projected)) return projected;
-  if (!allowRefresh) throw metadataUnavailableError(projected);
-  return refreshActualMetadataProjection(userId).catch((err: unknown) => {
-    console.error("[EA] Actual metadata projection refresh failed:", err instanceof Error ? err.message : err);
-    if (projected && hasActualMetadataRows(projected)) return projected;
-    throw err;
-  });
-}
-
-export async function refreshActualMetadataProjection(userId: string, {
-  dbClient = db,
-  now = new Date(),
-  metadata = null,
-}: { dbClient?: ActualMetadataProjectionDb; now?: Date; metadata?: ActualMetadataInput | null } = {}): Promise<ProjectedActualMetadata> {
-  const timestamp = isoNow(now);
-  try {
-    const actualMetadata = metadataWithPayeeMap(metadata || await loadActualMetadataForProjection(userId));
-    await dbClient.execute(upsertMetadataProjectionQuery(userId, actualMetadata, timestamp));
-    return {
-      ...actualMetadata,
-      syncHealth: {
-        state: "current",
-        lastSuccessAt: timestamp,
-        lastAttemptAt: timestamp,
-        lastError: null,
-      },
-    };
-  } catch (err: unknown) {
-    await dbClient.execute({
-      sql: `INSERT INTO ea_actual_metadata_mirror
-              (user_id, status, last_attempt_at, last_error, updated_at)
-            VALUES (?, 'degraded', ?, ?, ?)
-            ON CONFLICT(user_id) DO UPDATE SET
-              status = CASE
-                WHEN ea_actual_metadata_mirror.last_success_at IS NULL THEN 'needs_sync'
-                ELSE 'degraded'
-              END,
-              last_attempt_at = excluded.last_attempt_at,
-              last_error = excluded.last_error,
-              updated_at = excluded.updated_at`,
-      args: [userId, timestamp, String(err instanceof Error ? err.message : err).slice(0, 500), timestamp],
-    }).catch(() => {});
-    throw err;
-  }
 }

@@ -17,7 +17,6 @@ interface IndexedSearchResultLike extends InboxEmailLike {
   body_snippet?: string | null;
   body_highlight?: string | null;
   web_url?: string | null;
-  bill_candidate?: Record<string, unknown>;
 }
 
 interface IndexedSearchResponseLike {
@@ -94,9 +93,6 @@ function normalizeSearchEmail(
     _activeSnapshot: false,
     _resurfaced: false,
     _resurfacedAt: null,
-    hasBill: !!result.hasBill,
-    bill_candidate: result.bill_candidate || null,
-    extractedBill: result.extractedBill || null,
   } as NormalizedInboxRow;
 }
 

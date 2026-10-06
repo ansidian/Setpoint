@@ -3,19 +3,15 @@ import WeatherCard from "./WeatherCard";
 import ComingUpCard from "./ComingUpCard";
 import InboxPeek from "../rails/InboxPeek";
 import { buildComingUp } from "./comingUpModel";
-import type { ActualBillOccurrence } from "../../../../shared/types/actual";
 import type { DashboardWeather } from "./weatherCardModel";
 import type { ComingUpRow } from "./comingUpModel";
 import type { ActiveSnapshotView } from "../../../../shared/types/snapshots";
 import type { DashboardDeadline } from "../../../context/dashboardTaskProjection";
 
 type ContextDeadline = DashboardDeadline;
-type ContextBill = Partial<ActualBillOccurrence> & { id: string; next_date?: string };
-type ContextRecord = ContextDeadline | ContextBill;
 interface ContextColumnProps {
   liveWeather?: DashboardWeather | null;
   liveDeadlines?: { upcoming?: ContextDeadline[] } | ContextDeadline[] | null;
-  liveBills?: ContextBill[] | null;
   activeSnapshot?: ActiveSnapshotView | null;
   excludedEmailIds?: readonly string[];
   accent?: string;
@@ -27,33 +23,25 @@ interface ContextColumnProps {
 }
 
 export default function ContextColumn({
-  liveWeather, liveDeadlines, liveBills, activeSnapshot,
+  liveWeather, liveDeadlines, activeSnapshot,
   excludedEmailIds = [], accent = "#cba6da", isMobile = false,
   showInboxPeek = true, onJump, onOpenInbox, onCompleteDeadline,
 }: ContextColumnProps) {
   const comingUp = buildComingUp({ liveDeadlines, days: 7, includeToday: false });
 
   const recordsById = useMemo(() => {
-    const map = new Map<string, ContextRecord>();
+    const map = new Map<string, ContextDeadline>();
     const deadlineList = Array.isArray(liveDeadlines) ? liveDeadlines : liveDeadlines?.upcoming || [];
     for (const d of deadlineList) {
       map.set(`deadline:${d.id}:${d.due_date}`, d);
       if (!map.has(`deadline:${d.id}`)) map.set(`deadline:${d.id}`, d);
     }
-    for (const b of liveBills || []) map.set(`bill:${b.id}`, b);
     return map;
-  }, [liveDeadlines, liveBills]);
+  }, [liveDeadlines]);
 
   const handleComingUpJump = (row: ComingUpRow, anchor: HTMLElement) => {
     const record = recordsById.get(row.occurrenceKey || row.id);
-    if (!record) return;
-    if (row.kind === "deadline") onJump?.({ kind: "deadline", id: record.id, data: record }, anchor);
-    else onJump?.({
-      kind: "bill",
-      id: record.id,
-      data: record,
-      date: "next_date" in record && typeof record.next_date === "string" ? record.next_date : null,
-    }, anchor);
+    if (record) onJump?.({ kind: "deadline", id: record.id, data: record }, anchor);
   };
 
   // Coming-up deadlines complete through the same canonical completer the band

@@ -3,17 +3,13 @@
 // DashboardShell can warm the chunk and the lazy() mount below reuse one dynamic
 // import — the const-arrow export trips Fast Refresh, hence the file-level
 // disable (matching the convention in src/components/calendar/views/*).
-import { lazy, Suspense, useMemo } from "react";
+import { lazy, Suspense } from "react";
 import WorkspaceLoading from "../shared/WorkspaceLoading";
-import { makeCalendarBillsData } from "./calendarBillsData";
 import { dashboardCalendarDeadlineData } from "./dashboardCalendarModalModel";
-import { useUtilityPayLinks } from "@/hooks/useUtilityPayLinks";
 import type { ComponentProps, ReactNode } from "react";
 import type { DashboardBriefingProjection, CurrentDashboardLiveData } from "../../hooks/currentDashboardModel";
-import type { DashboardCalendarBillsData } from "./calendarBillsData";
 import type { CalendarView } from "../../../shared/types/calendar";
 import type { DashboardCalendarEventsRange } from "./useCalendarWorkspaceState";
-import type { ActualBillOccurrence } from "../../../shared/types/actual";
 import type { CalendarEventCreateRequest } from "../../hooks/calendar/calendarEventCreateBridge";
 
 export const importCalendar = () => import("../calendar/CalendarModal");
@@ -33,13 +29,11 @@ export interface DashboardCalendarModalMountProps {
   calendarForceOverlays?: { events: boolean; deadlines: boolean; completedDeadlines: boolean };
   eventsData: CalendarModalProps["eventsData"];
   handleCalendarEventsRangeChange: (range: DashboardCalendarEventsRange | null) => void;
-  liveData: Partial<Omit<CurrentDashboardLiveData, "liveDeadlines" | "allSchedules">> & {
+  liveData: {
     liveDeadlines?: { upcoming?: Array<Record<string, unknown>>; stats?: unknown; syncHealth?: unknown };
-    allSchedules?: Array<Partial<ActualBillOccurrence>>;
+    liveWeather?: CurrentDashboardLiveData["liveWeather"];
   };
   briefing: Partial<DashboardBriefingProjection> | null;
-  calendarBillsData?: Partial<DashboardCalendarBillsData> | null;
-  calendarBillRange: CalendarModalProps["billsRangeData"];
   calendarDeadlines?: {
     upcoming?: readonly unknown[];
     stats?: unknown;
@@ -65,18 +59,11 @@ export default function DashboardCalendarModalMount({
   handleCalendarEventsRangeChange,
   liveData,
   briefing,
-  calendarBillsData,
-  calendarBillRange,
   calendarDeadlines,
   calendarDeadlinesLoading,
   calendarDeadlineRange,
   calendarDeadlineActions,
 }: DashboardCalendarModalMountProps) {
-  const payLinksByScheduleId = useUtilityPayLinks();
-  const billsDataWithLinks = useMemo(
-    () => ({ ...(calendarBillsData || makeCalendarBillsData(liveData as CurrentDashboardLiveData)), payLinksByScheduleId }),
-    [calendarBillsData, liveData, payLinksByScheduleId],
-  );
   const seededDeadlines = calendarDeadlines ?? liveData?.liveDeadlines ?? {};
 
   return (
@@ -98,8 +85,6 @@ export default function DashboardCalendarModalMount({
         eventsData={eventsData}
         onEventsVisibleRangeChange={handleCalendarEventsRangeChange}
         weatherData={liveData.liveWeather || briefing?.weather || null}
-        billsData={billsDataWithLinks}
-        billsRangeData={calendarBillRange}
         deadlinesData={dashboardCalendarDeadlineData(
           seededDeadlines,
           calendarDeadlinesLoading && !calendarDeadlines,

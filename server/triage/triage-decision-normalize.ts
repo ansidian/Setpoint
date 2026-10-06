@@ -39,7 +39,6 @@ export function createTriageDecision(overrides: TriageDecisionOverrides = {}): T
     latency_ms: null,
     cheap_model_result: null,
     strong_model_result: null,
-    bill_candidate: null,
     decision_metadata: null,
     last_decision_reason: null,
     error: null,
@@ -99,9 +98,6 @@ export function normalizeModelDecision(result: TriageModelResult | Record<string
     latency_ms: Number.isFinite(Number(result.latency_ms)) ? Number(result.latency_ms) : null,
     cheap_model_result: tier === "cheap" ? result : null,
     strong_model_result: tier === "strong" ? result : null,
-    bill_candidate: isRecord(decision.bill_candidate)
-      ? decision.bill_candidate
-      : isRecord(result.bill_candidate) ? result.bill_candidate : null,
   });
 }
 

@@ -18,8 +18,6 @@ describe("dashboard shell model", () => {
     expect(resolveCalendarOpenState({
       isMobile: false,
       viewKey: "deadlines",
-      currentView: "bills",
-      showBills: true,
       focusDate: "2026-05-07",
       focusItemId: 42,
       options: { openDetail: true, forceDeadlineOverlay: true },
@@ -32,28 +30,7 @@ describe("dashboard shell model", () => {
       forceDeadlineOverlay: true,
       forceCompletedDeadlineOverlay: false,
       shouldLoadDeadlines: true,
-      shouldLoadBills: false,
       eventCreateRequest: null,
-    });
-
-    expect(resolveCalendarOpenState({
-      isMobile: false,
-      viewKey: "bills",
-      currentView: "events",
-      showBills: false,
-    })).toMatchObject({
-      view: "events",
-      shouldLoadBills: false,
-    });
-
-    expect(resolveCalendarOpenState({
-      isMobile: false,
-      viewKey: null,
-      currentView: "deadlines",
-      showBills: true,
-    })).toMatchObject({
-      view: "events",
-      shouldLoadBills: false,
     });
   });
 
@@ -70,9 +47,7 @@ describe("dashboard shell model", () => {
     };
 
     expect(resolveCalendarOpenState({
-      viewKey: "bills",
-      currentView: "bills",
-      showBills: true,
+      viewKey: "events",
       focusDate: "2026-01-01",
       focusItemId: "old-item",
       options: { eventCreateRequest },
@@ -105,7 +80,7 @@ describe("dashboard shell model", () => {
       .toEqual({ action: "toggle-analytics" });
   });
 
-  it("builds dashboard deadline and bill calendar requests through stable shell commands", () => {
+  it("builds dashboard deadline and event calendar requests through stable shell commands", () => {
     expect(dashboardDeadlineCalendarRequest({
       id: "todo-42",
       due_date: "2026-04-20",

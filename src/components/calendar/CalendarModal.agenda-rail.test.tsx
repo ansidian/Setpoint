@@ -19,7 +19,6 @@ describe("CalendarModal agenda rail state behavior", () => {
         focusItemId="deadline:deadline-1:2026-04-20"
         focusOpenDetail
         eventsData={{ getEvents: () => [] }}
-        billsData={{}}
         deadlinesData={{
           upcoming: [
             { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "complete" },

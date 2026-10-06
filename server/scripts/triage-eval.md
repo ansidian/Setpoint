@@ -30,8 +30,7 @@ Fixture shape:
           "summary": "Tuition payment is due.",
           "action": "Review payment",
           "deadline_at": "2026-05-08T16:00:00.000Z",
-          "confidence": 0.9,
-          "bill_candidate": null
+          "confidence": 0.9
         }
       }
     }

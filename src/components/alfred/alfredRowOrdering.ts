@@ -8,16 +8,10 @@ import type { AlfredItemKind } from "../../../shared/types/alfred";
 export interface AlfredRow extends Record<string, unknown> {
   id?: string | number;
   uid?: string;
-  name?: string;
   title?: string;
   content?: string;
   subject?: string | null;
-  payee?: string;
-  category?: string;
-  amount?: number;
-  date?: string;
   due_date?: string | null;
-  next_date?: string | null;
   email_date?: string | null;
   email_date_utc?: string | null;
   time?: string;
@@ -28,11 +22,9 @@ export interface AlfredRow extends Record<string, unknown> {
   startMs?: number;
   endMs?: number;
   allDay?: boolean;
-  paid?: boolean;
   completed?: boolean;
   status?: string;
   priority?: number | null;
-  openActionDisabled?: boolean;
   read?: boolean;
   from?: { name?: string | null; address?: string | null } | string | null;
   metadata?: { lane?: string | null } | null;
@@ -194,49 +186,6 @@ function groupDeadlines(list: AlfredRow[], nowMs: number): AlfredRowGroup[] {
   ]);
 }
 
-function groupBills(list: AlfredRow[]): AlfredRowGroup[] {
-  const due = list.filter((item) => !item?.paid).sort(byDateAsc((i) => i.next_date));
-  const paid = list.filter((item) => !!item?.paid).sort(byDateAsc((i) => i.next_date));
-  return finalize([
-    { section: { label: "Due", tone: "time" }, items: due },
-    { section: { label: "Paid", tone: "paid" }, items: paid },
-  ]);
-}
-
-function monthLabel(ymd: string): string {
-  const parts = parseYmd(ymd);
-  if (!parts) return ymd || "";
-  return new Date(parts.year, parts.month, 1)
-    .toLocaleDateString("en-US", { month: "long", year: "numeric" });
-}
-
-function groupTransactions(list: AlfredRow[]): AlfredRowGroup[] {
-  const sorted = list.slice().sort((a, b) => {
-    const da = ymdOf(a.date);
-    const db = ymdOf(b.date);
-    if (da === db) return 0;
-    return da < db ? 1 : -1; // date DESC
-  });
-  const byMonth = new Map<string, AlfredRowGroup>();
-  for (const item of sorted) {
-    const ymd = ymdOf(item.date);
-    const key = ymd.slice(0, 7); // YYYY-MM
-    if (!byMonth.has(key)) {
-      byMonth.set(key, { section: { label: monthLabel(ymd), tone: "time" }, items: [] });
-    }
-    byMonth.get(key)!.items.push(item);
-  }
-  return finalize([...byMonth.values()]);
-}
-
-// Sum of what's still owed — the "Total due" footer. Unpaid only.
-export function billsTotalDue(items: AlfredRow[]): number {
-  return (items || []).reduce(
-    (sum, item) => (item?.paid ? sum : sum + (Number(item?.amount) || 0)),
-    0,
-  );
-}
-
 // A YYYY-MM-DD strictly before today's YYYY-MM-DD.
 export function isOverdueYmd(ymd: unknown, todayYmd: unknown): boolean {
   return typeof ymd === "string" && ymd !== "" && typeof todayYmd === "string" && ymd < todayYmd;
@@ -275,8 +224,6 @@ export function groupAlfredRows(
     case "email": return groupEmail(list, nowMs);
     case "event": return groupEvents(list, nowMs);
     case "deadline": return groupDeadlines(list, nowMs);
-    case "bill": return groupBills(list);
-    case "transaction": return groupTransactions(list);
     default: return [{ section: null, items: list }];
   }
 }

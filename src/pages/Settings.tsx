@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router";
 import ConnectionsSettingsSection from "@/components/settings/sections/ConnectionsSettingsSection";
-import ActualBudgetSettingsSection from "@/components/settings/sections/ActualBudgetSettingsSection";
 import EmailAutomationSettingsSection from "@/components/settings/sections/EmailAutomationSettingsSection";
 import SystemSettingsSection from "@/components/settings/sections/SystemSettingsSection";
 import {
@@ -99,7 +98,7 @@ export default function Settings() {
         window.addEventListener("scrollend", finishScroll, { once: true });
         document.addEventListener("scrollend", finishScroll, { once: true });
       }
-      target.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: target.id === "utility-mappings" ? "start" : "center" });
+      target.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
       target.focus({ preventScroll: true });
       if (reduceMotion) finishScroll();
       else scrollFallbackTimer = window.setTimeout(finishScroll, 700);
@@ -185,15 +184,6 @@ export default function Settings() {
           onCredentialMetadataChange={updateInstanceCredentialMetadata}
           onRefreshCredentialMetadata={refreshInstanceCredentials}
           onRefreshConnections={refreshConnections}
-        />
-      );
-    } else if (tab === "finance") {
-      content = (
-        <ActualBudgetSettingsSection
-          settings={settings}
-          setSettings={setSettings}
-          patch={patch}
-          connections={connections}
         />
       );
     } else if (tab === "automation") {

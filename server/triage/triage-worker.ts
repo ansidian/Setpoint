@@ -381,7 +381,6 @@ export async function processNextEmailTriageJob({
         dbClient,
         now,
         status,
-        inferBillCandidate: mode.effective_email_triage_mode !== "no_model",
       });
       await completeJob(job, dbClient, now, status === "failed" ? decision.error || "" : "");
     } catch (caught) {

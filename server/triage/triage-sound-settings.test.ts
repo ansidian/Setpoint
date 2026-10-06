@@ -24,14 +24,17 @@ describe("validateTriageSoundSettings", () => {
     expect(validateTriageSoundSettings(settings)).toEqual({ valid: true });
   });
 
-  it("accepts and drops the retired weak-security trigger from persisted settings", () => {
+  it("accepts and drops retired triggers from persisted settings", () => {
     const settings = validSettings();
     settings.triggers = {
       weak_security_grace: { enabled: true, soundId: "check" },
+      actual_recorded: { enabled: true, soundId: "resolve" },
     };
 
     expect(validateTriageSoundSettings(settings)).toEqual({ valid: true });
-    expect(normalizeTriageSoundSettings(settings).triggers).not.toHaveProperty("weak_security_grace");
+    const { triggers } = normalizeTriageSoundSettings(settings);
+    expect(triggers).not.toHaveProperty("weak_security_grace");
+    expect(triggers).not.toHaveProperty("actual_recorded");
   });
 
   it("rejects a non-object value", () => {

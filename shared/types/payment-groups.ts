@@ -1,17 +1,15 @@
-/** Stable display identity; assigning a group never changes Actual or automation targets. */
+/** Stable display identity for one Actual schedule; assigning a group never changes Actual. */
 export interface PaymentItem {
   id: string;
   name: string;
   provider: string;
-  kind: 'utility' | 'credit_card' | 'recurring';
-  utilityId?: string;
-  scheduleId?: string;
+  scheduleId: string;
 }
 
 export interface PaymentGroup {
   id: string;
   name: string;
-  /** Ordered stable utility:<id> / schedule:<id> identities, independent of monthly occurrences. */
+  /** Ordered stable schedule:<id> identities, independent of monthly occurrences. */
   itemIds: string[];
 }
 

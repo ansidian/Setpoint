@@ -1,7 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useState, type ComponentProps, type SetStateAction } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter } from "react-router";
 import DesktopReader from "./DesktopReader";
 import type { InboxEmailLike } from "../inboxTypes";
 
@@ -39,7 +38,6 @@ function renderReader(overrides: ReaderOverrides = {}) {
       onClose={() => {}}
       showTriage={false}
       showDraft={overrides.showDraft ?? false}
-      onCreateProfile={() => {}}
       snoozeOpen={snoozeOpen}
       setSnoozeOpen={updateSnooze}
       bodyState={{ loading: false, error: null, body: "", source: "loaded" }}
@@ -49,8 +47,7 @@ function renderReader(overrides: ReaderOverrides = {}) {
     />;
   }
 
-  // The reader always renders inside the app router (financial record actions navigate).
-  render(<MemoryRouter><Harness /></MemoryRouter>);
+  render(<Harness />);
 }
 
 function openMoreMenu() {

@@ -41,13 +41,6 @@ export function makeInboxAccounts(): InboxAccount[] {
       important: [
         makeInboxEmail({
           id: "email-action",
-          hasBill: true,
-          extractedBill: {
-            payee: "Vendor",
-            amount: 125,
-            due_date: "2026-04-20",
-            type: "expense",
-          },
           claude: {
             summary: "Requires a fast approval decision.",
             draftReply: "Approved. Please proceed.",

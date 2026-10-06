@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { buildNeedsYouModel, collectNeedsYouCandidateIds } from "./needsYouModel";
-import type { NeedsYouBill, NeedsYouDeadline, NeedsYouEmail, NeedsYouLanes } from "./needsYouModel";
+import type { NeedsYouDeadline, NeedsYouEmail, NeedsYouLanes } from "./needsYouModel";
 
 // Classification flows through daysUntil() (real Pacific wall clock), so freeze
 // time here rather than threading an injected `now` — mirrors comingUpModel /
@@ -34,17 +34,10 @@ const deadlines: { upcoming: NeedsYouDeadline[] } = {
     { id: "later", title: "Walkthrough notes", due_date: "2026-06-22", status: "open", priority: 2, class_name: "Portfolio" }, // future → backfill
   ],
 };
-const bills: NeedsYouBill[] = [
-  { id: "rent", name: "Rent — Northstar Lofts", payee: "Northstar", amount: 2450, next_date: "2026-06-19", paid: false }, // due today
-  { id: "electric", name: "Demo Electric", payee: "Demo Electric", amount: 146.32, next_date: "2026-06-23", paid: false }, // future bill stays outside Needs You
-];
-
-// Include financial context to prove it never becomes an action candidate.
-const billContext = { liveBills: bills };
 
 describe("buildNeedsYouModel count", () => {
   it("counts urgent emails and overdue/due-today deadlines only", () => {
-    const m = buildNeedsYouModel({ snapshotLanes: lanes(), liveDeadlines: deadlines, ...billContext });
+    const m = buildNeedsYouModel({ snapshotLanes: lanes(), liveDeadlines: deadlines });
     expect(m.countN).toBe(4);
   });
 
@@ -57,7 +50,7 @@ describe("buildNeedsYouModel count", () => {
 
 describe("buildNeedsYouModel breakdown + cards", () => {
   it("interleaves urgent cards by rank: overdue deadline, due-today deadline, then emails; capped at maxCards", () => {
-    const m = buildNeedsYouModel({ snapshotLanes: lanes(), liveDeadlines: deadlines, ...billContext, maxCards: 4 });
+    const m = buildNeedsYouModel({ snapshotLanes: lanes(), liveDeadlines: deadlines, maxCards: 4 });
     expect(m.urgentCards.map((c) => c.id)).toEqual(["deadline:pr", "deadline:demolink", "email:1", "email:2"]);
     expect(m.urgentCards.every((c) => c.kind === "urgent")).toBe(true);
     expect(m.backfillCards).toEqual([]);
@@ -80,7 +73,6 @@ describe("buildNeedsYouModel breakdown + cards", () => {
     const m = buildNeedsYouModel({
       snapshotLanes: lanes(),
       liveDeadlines: deadlines,
-      ...billContext,
       maxCards: Infinity,
     });
 
@@ -104,23 +96,21 @@ describe("collectNeedsYouCandidateIds", () => {
     // whole point is to compute the full server-derived id universe BEFORE the
     // handled filters remove anything, so a previously-handled-but-re-surfaced
     // id is still recognized as a live candidate.
-    const ids = collectNeedsYouCandidateIds({ snapshotLanes: lanes(), liveDeadlines: deadlines, ...billContext });
+    const ids = collectNeedsYouCandidateIds({ snapshotLanes: lanes(), liveDeadlines: deadlines });
     // Urgent: overdue/due-today deadlines, urgent emails.
     expect(ids.has("deadline:pr")).toBe(true);
     expect(ids.has("email:1")).toBe(true);
     expect(ids.has("email:2")).toBe(true);
-    expect(ids.has("bill:rent")).toBe(false);
     expect(ids.has("deadline:demolink")).toBe(true);
-    // Backfill (future, not yet urgent): deadline:later; bills never become candidates.
+    // Backfill (future, not yet urgent): deadline:later.
     expect(ids.has("deadline:later")).toBe(true);
-    expect(ids.has("bill:electric")).toBe(false);
   });
 
   it("still returns an id that the handled filter would otherwise have removed", () => {
     const emailId = `email:${lanes().needs_attention[0]!.id}`;
-    const ids = collectNeedsYouCandidateIds({ snapshotLanes: lanes(), liveDeadlines: deadlines, ...billContext });
+    const ids = collectNeedsYouCandidateIds({ snapshotLanes: lanes(), liveDeadlines: deadlines });
     // Sanity: buildNeedsYouModel WOULD drop this id from urgentCards when handled.
-    const modelWithHandled = buildNeedsYouModel({ snapshotLanes: lanes(), liveDeadlines: deadlines, ...billContext, handled: [emailId] });
+    const modelWithHandled = buildNeedsYouModel({ snapshotLanes: lanes(), liveDeadlines: deadlines, handled: [emailId] });
     expect(modelWithHandled.urgentCards.find((c) => c.id === emailId)).toBeUndefined();
     // But the candidate set still contains it — pruning is keyed off this, not the model.
     expect(ids.has(emailId)).toBe(true);
@@ -138,10 +128,9 @@ describe("buildNeedsYouModel email open/handled transitions + inbox rows", () =>
     expect(card!.opened).toBe(true);
   });
 
-  it("keeps deadline completion available without admitting bills", () => {
-    const m = buildNeedsYouModel({ snapshotLanes: { needs_attention: [], fyi: [], carryover: [] }, liveDeadlines: deadlines, ...billContext });
+  it("keeps deadline completion available", () => {
+    const m = buildNeedsYouModel({ snapshotLanes: { needs_attention: [], fyi: [], carryover: [] }, liveDeadlines: deadlines });
     expect(m.urgentCards.find((c) => c.id === "deadline:pr")!.completable).toBe(true);
-    expect(m.urgentCards.find((c) => c.id === "bill:rent")).toBeUndefined();
   });
 
   it("Mark handled removes the email from BOTH the band and the inbox peek", () => {

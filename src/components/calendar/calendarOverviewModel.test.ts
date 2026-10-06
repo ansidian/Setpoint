@@ -33,33 +33,4 @@ describe("calendarOverviewModel", () => {
     ]);
     expect(model.description).toMatch(/^2 active days\b/);
   });
-
-  it("summarizes bill totals from day state objects", () => {
-    const model = getOverviewModel({
-      view: "bills",
-      viewYear: 2026,
-      viewMonth: 4,
-      currentYear: 2026,
-      currentMonth: 4,
-      todayDate: 2,
-      itemsByDay: {
-        1: { totalCount: 2, activeCount: 1, completedCount: 1, activeItems: [{}] },
-        2: { totalCount: 1, activeCount: 1, completedCount: 0, activeItems: [{}] },
-      },
-      computed: {
-        monthTotal: 1250,
-      },
-      data: {},
-    });
-
-    expect(model.spotlight).toMatchObject({
-      label: "Scheduled this month",
-      value: "$1,250",
-      detail: "2 billing days on the grid",
-    });
-    expect(model.stats).toEqual([
-      expect.objectContaining({ label: "Unpaid", value: "2" }),
-      expect.objectContaining({ label: "Paid", value: "1" }),
-    ]);
-  });
 });

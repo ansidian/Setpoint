@@ -1,4 +1,4 @@
-import { AlertCircle, ArrowUpRight, Check, Circle, Clock, CreditCard, Mail, MailOpen } from "lucide-react";
+import { AlertCircle, ArrowUpRight, Check, Circle, Clock, Mail, MailOpen } from "lucide-react";
 import type { CSSProperties } from "react";
 import type { NeedsYouCard } from "./needsYouModel";
 import "./StartHereStrip.css";
@@ -7,11 +7,10 @@ function recommendationDetail(card: NeedsYouCard) {
   return [card.pill.label, card.meta].filter(Boolean).join(" · ");
 }
 
-const SOURCE_ICONS = { AlertCircle, Circle, CreditCard, Mail, MailOpen, Clock };
+const SOURCE_ICONS = { AlertCircle, Circle, Mail, MailOpen, Clock };
 
 function recommendationAction(card: NeedsYouCard, isMobile: boolean) {
   if (card.email) return isMobile ? "Open email" : "Preview email";
-  if (card.jumpKind === "bill") return "Review bill";
   return "Open task";
 }
 

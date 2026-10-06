@@ -10,11 +10,6 @@ export interface FeatureDependencies {
     showEmailControls: boolean;
     showAiControls: boolean;
   };
-  finance: {
-    actual: FeatureDependencyState;
-    showSettings: boolean;
-    allowLiveMetadata: boolean;
-  };
 }
 
 const EMAIL_CONNECTION_IDS = ["google-workspace", "icloud-mail"] as const;
@@ -56,13 +51,13 @@ export function projectProviderModelControl({
 }
 
 export function projectAiSettingsSelectionPatch(
-  surface: "alfred" | "bill_extract" | "email_ai",
+  surface: "alfred" | "triage_fast" | "email_ai",
   provider: string,
   model: string,
 ) {
   if (surface === "alfred") return { alfred_provider: provider, alfred_model: model };
-  if (surface === "bill_extract") {
-    return { bill_extract_provider: provider, bill_extract_model: model };
+  if (surface === "triage_fast") {
+    return { triage_fast_provider: provider, triage_fast_model: model };
   }
   return { email_ai_provider: provider, email_ai_model: model };
 }
@@ -82,7 +77,6 @@ export function projectFeatureDependencies(
 ): FeatureDependencies {
   const email = dependencyState(connections, EMAIL_CONNECTION_IDS);
   const ai = dependencyState(connections, AI_CONNECTION_IDS);
-  const actual = dependencyState(connections, ["actual-budget"]);
 
   return {
     automation: {
@@ -90,11 +84,6 @@ export function projectFeatureDependencies(
       ai,
       showEmailControls: email === "connected",
       showAiControls: email === "connected" && ai !== "not_connected",
-    },
-    finance: {
-      actual,
-      showSettings: actual !== "not_connected",
-      allowLiveMetadata: actual === "connected",
     },
   };
 }

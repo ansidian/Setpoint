@@ -1,13 +1,12 @@
 import { useEffect,useState } from 'react';
-import { useNavigate } from 'react-router';
-import { useWorkspaceLocation } from '../../context/WorkspaceLocationContext';
+import { useLocation, useNavigate } from 'react-router';
 import { readDemoSafeLocalStorage,writeDemoSafeLocalStorage } from '../../demo/demoSafeLocalStorage';
 import { initialWorkspaceTab, type DashboardTab } from './dashboardShellModel';
 
-/** Accepted locations preserve the shell behind foreground drafts and on Back. */
+/** Locations preserve the shell tab behind the Settings foreground and on Back. */
 export default function useWorkspaceTabRoute(isMobile:boolean,demoMode:boolean) {
-  const location=useWorkspaceLocation(),navigate=useNavigate();
-  const settingsOpen=location.pathname==='/settings',financialOpen=location.pathname==='/finance';
+  const location=useLocation(),navigate=useNavigate();
+  const settingsOpen=location.pathname==='/settings';
   const [tab,setTab]=useState<DashboardTab>(()=>{
     return initialWorkspaceTab(location.pathname,readDemoSafeLocalStorage('ea:tab'),isMobile,demoMode);
   });
@@ -21,5 +20,5 @@ export default function useWorkspaceTabRoute(isMobile:boolean,demoMode:boolean) 
     else if(location.pathname==='/')setTab(tabs.get(location.key)||location.state?.shellTab||'dashboard');
   }
   useEffect(()=>{writeDemoSafeLocalStorage('ea:tab',tab);},[tab]);
-  return {search,mounted,tab,setTab,location,navigate,settingsOpen,financialOpen};
+  return {search,mounted,tab,setTab,location,navigate,settingsOpen};
 }

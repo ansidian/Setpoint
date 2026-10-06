@@ -18,7 +18,6 @@ const TRIGGER_TO_SETTING_KEY = {
   triage_failed: TRIAGE_SOUND_TRIGGER_KEYS.TRIAGE_FAILED,
   event_upcoming: TRIAGE_SOUND_TRIGGER_KEYS.EVENT_UPCOMING,
   task_completed: TRIAGE_SOUND_TRIGGER_KEYS.TASK_COMPLETED,
-  actual_recorded: TRIAGE_SOUND_TRIGGER_KEYS.ACTUAL_RECORDED,
 } as const satisfies Record<string, TriageSoundTriggerKey>;
 
 export type DashboardSoundTriggerType = keyof typeof TRIGGER_TO_SETTING_KEY;

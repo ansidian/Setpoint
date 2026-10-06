@@ -29,7 +29,6 @@ export interface EmailSearchRankingRow extends Record<string, unknown> {
   snapshot_resurfaced_at?: unknown;
   triage_updated_at?: unknown;
   triage_provider_state?: unknown;
-  triage_bill_candidate_json?: unknown;
   snapshot_handled_at?: unknown;
   triage_handled_at?: unknown;
   rank?: unknown;
@@ -69,11 +68,6 @@ function queryTerms(query: unknown): string[] {
     .split(/\s+/)
     .map((term) => term.replace(/^"+|"+$/g, ""))
     .filter((term) => term && !/^is:[^\s]+$/.test(term));
-}
-
-export function hasJsonPayload(value: unknown): boolean {
-  const text = String(value || "").trim();
-  return !!text && text !== "{}" && text !== "null";
 }
 
 function parseTime(value: unknown): number {
@@ -129,7 +123,7 @@ export function scoreEmailSearchRow(row: EmailSearchRankingRow, { query = "", no
   // email. Once the item is handled or its deadline has passed they are stale, and a
   // recurring bill/statement would otherwise outrank its own newer sibling forever
   // (needs_attention+high+badge ≈ +60 vs a recency ceiling of 20). Traits that aid
-  // findability (bill_candidate, useful_category, urgency_low demotion) do not expire.
+  // findability (useful_category, urgency_low demotion) do not expire.
   const resolved = Boolean(handledAt) || Boolean(deadlineMs && deadlineMs < nowMs);
 
   if (lane === "needs_attention" || lane === "action") {
@@ -145,7 +139,6 @@ export function scoreEmailSearchRow(row: EmailSearchRankingRow, { query = "", no
   }
   if (urgency === "low") add(details, "urgency_low", -2);
   if (escalationBadge && !resolved) add(details, "escalation_badge", 14);
-  if (hasJsonPayload(row.triage_bill_candidate_json)) add(details, "bill_candidate", 16);
 
   if (deadlineMs && !resolved) {
     const daysUntil = (deadlineMs - nowMs) / DAY_MS;

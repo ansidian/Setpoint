@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertCircle, Circle, CreditCard, Mail, MailOpen, Clock, Check, Calendar, ArrowUpRight } from "lucide-react";
+import { AlertCircle, Circle, Mail, MailOpen, Clock, Check, Calendar, ArrowUpRight } from "lucide-react";
 import { StatusChip } from "../../shared/StatusChip";
 import Tooltip from "../../shared/Tooltip";
 import MarkDoneAction from "../MarkDoneAction";
@@ -8,7 +8,7 @@ import type { NeedsYouCard } from "./needsYouModel";
 
 export type PriorityCardModel = NeedsYouCard;
 
-const SOURCE_ICONS = { AlertCircle, Circle, CreditCard, Mail, MailOpen, Clock };
+const SOURCE_ICONS = { AlertCircle, Circle, Mail, MailOpen, Clock };
 
 const baseCardStyle: CSSProperties = {
   position: "relative", textAlign: "left", display: "flex", flexDirection: "column",
@@ -68,8 +68,7 @@ export function PriorityCard({ card, variant = "urgent", isMobile = false, onOpe
   const style = { ...baseCardStyle, background: "rgba(255,255,255,0.015)",
     border: "1px solid rgba(255,255,255,0.07)", cursor: bodyClickable ? "pointer" : "default" };
 
-  // Footer action: emails open the reader, deadlines get a real "Mark done",
-  // bills get none (they aren't completable here — body click opens the calendar).
+  // Footer action: emails open the reader, deadlines get a real "Mark done".
   // Backfill (upcoming) cards show their "Coming up" foot at rest; completable
   // ones (deadlines) reveal the same quiet text-only Mark-done on hover/focus —
   // subordinate to the urgent cards' filled button, since they aren't urgent.

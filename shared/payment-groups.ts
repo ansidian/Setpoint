@@ -13,7 +13,7 @@ function boundedText(value: unknown, limit: number): value is string {
     && [...value].every(character => character.charCodeAt(0) > 31 && character.charCodeAt(0) !== 127);
 }
 
-/** Display configuration only: it cannot change provider accounts or financial automation. */
+/** Display configuration only: it cannot change Actual. */
 export function validatePaymentOrganization(input: unknown): OrganizationValidation {
   const invalid = (message: string): OrganizationValidation => ({ valid: false, message });
   if (!isRecord(input) || Object.keys(input).some(key => !['budgetId', 'revision', 'groups'].includes(key))
@@ -39,7 +39,7 @@ export function validatePaymentOrganization(input: unknown): OrganizationValidat
     if (!Array.isArray(raw.itemIds)) return invalid('Each payment must belong to one group.');
     const ordered: string[] = [];
     for (const id of raw.itemIds) {
-      if (!boundedText(id, 256) || id.trim() !== id || !/^(?:utility|schedule):\S/.test(id) || itemIds.has(id)) {
+      if (!boundedText(id, 256) || id.trim() !== id || !/^schedule:\S/.test(id) || itemIds.has(id)) {
         return invalid('Each payment must appear in exactly one group.');
       }
       itemIds.add(id);
@@ -65,8 +65,7 @@ export function initializePaymentOrganization(budgetId: string, items: PaymentIt
   for (const item of items) {
     if (seen.has(item.id)) continue;
     seen.add(item.id);
-    const groupId = item.kind === 'utility' ? 'utilities' : item.kind === 'credit_card' ? 'credit-cards' : 'ungrouped';
-    groups.find(group => group.id === groupId)!.itemIds.push(item.id);
+    groups.find(group => group.id === 'ungrouped')!.itemIds.push(item.id);
   }
   return { budgetId, revision: 0, groups };
 }

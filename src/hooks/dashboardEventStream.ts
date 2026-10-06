@@ -1,18 +1,12 @@
 import { isDemoMode } from '../demo/config';
 
-/** One transport for current-dashboard changes; demo publishes only local mutations. */
+/** One transport for current-dashboard changes; demo mode has no live event source. */
 export function subscribeDashboardEventStream({ changed, connectionChanged, reconnected }: {
   changed: (event: Event) => void;
   connectionChanged: (disconnected: boolean) => void;
   reconnected: () => void;
 }): (() => void) | undefined {
-  if (isDemoMode()) {
-    const update = () => changed(new MessageEvent('dashboard-current-changed', {
-      data: JSON.stringify({ source: 'bills', reason: 'financial_event_changed', state: 'current' }),
-    }));
-    window.addEventListener('ea-demo-financial-changed', update);
-    return () => window.removeEventListener('ea-demo-financial-changed', update);
-  }
+  if (isDemoMode()) return;
   if (typeof EventSource === 'undefined') return;
   const source = new EventSource('/api/dashboard/current/events');
   let interrupted = false;

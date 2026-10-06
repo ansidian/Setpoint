@@ -35,13 +35,6 @@ export interface SnapshotRecord extends SnapshotWindow {
   updated_at?: string;
 }
 
-export interface SnapshotBillCandidate extends Record<string, unknown> {
-  payee: string;
-  amount: unknown;
-  due_date: string | null;
-  type: string;
-}
-
 export interface SnapshotVerificationCode {
   code: string;
   kind: VerificationCodeKind;
@@ -87,9 +80,6 @@ export interface SnapshotItem {
   handled_at: string | null;
   provider_removed_at: string | null;
   read: boolean;
-  hasBill: boolean;
-  bill_candidate: Record<string, unknown> | null;
-  extractedBill: SnapshotBillCandidate | null;
   _catchUp: boolean;
   previous_snapshot_item_id: number | null;
   verification_code: SnapshotVerificationCode | null;

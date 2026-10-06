@@ -1,22 +1,7 @@
 export type ActualWorkerOperation =
-  | "testConnection"
-  | "getMetadata"
-  | "clearMetadataCache"
   | "hydrateCache"
   | "syncMetadata"
-  | "shutdownActual"
-  | "getAccounts"
-  | "getRecentTransactions"
-  | "getPayees"
-  | "getCategories"
-  | "getUpcomingBills"
-  | "getCalendarBillsRange"
-  | "markBillPaid"
-  | "createQuickTxn"
-  | "reconcileTransferSchedule"
-  | "inspectCorrection"
-  | "dispatchCorrection"
-  | "reconcileFinancialOperation";
+  | "shutdownActual";
 
 export interface ActualWorkerRequest {
   id: string;
@@ -30,7 +15,6 @@ export interface ActualWorkerErrorPayload {
   status: number | null;
   code: string | null;
   stack: string | null;
-  localWriteApplied?: boolean;
 }
 
 export type ActualWorkerResponse =
@@ -58,24 +42,9 @@ export interface ActualWorkerOptions {
 }
 
 const OPERATIONS: ReadonlySet<string> = new Set<ActualWorkerOperation>([
-  "testConnection",
-  "getMetadata",
-  "clearMetadataCache",
   "hydrateCache",
   "syncMetadata",
   "shutdownActual",
-  "getAccounts",
-  "getRecentTransactions",
-  "getPayees",
-  "getCategories",
-  "getUpcomingBills",
-  "getCalendarBillsRange",
-  "markBillPaid",
-  "createQuickTxn",
-  "reconcileTransferSchedule",
-  "inspectCorrection",
-  "dispatchCorrection",
-  "reconcileFinancialOperation",
 ]);
 
 export function isActualWorkerOperation(value: unknown): value is ActualWorkerOperation {
@@ -108,7 +77,6 @@ export function parseActualWorkerResponse(value: unknown): ActualWorkerResponse 
       status: typeof payload.status === "number" ? payload.status : null,
       code: typeof payload.code === "string" ? payload.code : null,
       stack: typeof payload.stack === "string" ? payload.stack : null,
-      ...(payload.localWriteApplied === true ? { localWriteApplied: true } : {}),
     },
   };
 }

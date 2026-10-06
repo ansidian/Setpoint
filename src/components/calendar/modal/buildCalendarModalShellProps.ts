@@ -131,9 +131,6 @@ export default function buildCalendarModalShellProps({
       eventsRange: data.eventsRange,
       deadlinesRange: data.deadlinesRange,
       dataRevision: data.dataRevision,
-      getMonthBills: data.getMonthBills,
-      billsRange: data.billsRange,
-      billsDataRevision: data.billsDataRevision,
     },
     selection: {
       selectedDay: selection.activeSelectedDay,

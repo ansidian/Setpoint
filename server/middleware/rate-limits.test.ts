@@ -4,7 +4,6 @@ import request from "../test-utils/supertest.ts";
 import type { RequestHandler } from "express";
 import type { Response as SuperTestResponse } from "../test-utils/supertest.ts";
 import {
-  makeBillExtractLimiter,
   makeAlfredRunLimiter,
   makeEmailSearchLimiter,
   makePlacesLimiter,
@@ -28,14 +27,6 @@ async function exhaustLimiter(limiter: RequestHandler, requestCount: number) {
 }
 
 describe("rate-limits", () => {
-  it("billExtractLimiter allows up to max (20) requests then 429s with the JSON message and standard headers", async () => {
-    const lastRes = await exhaustLimiter(makeBillExtractLimiter(), 21);
-
-    expect(lastRes.status).toBe(429);
-    expect(lastRes.body).toEqual({ message: "Too many bill-extract requests, try again later" });
-    expect(lastRes.headers).toHaveProperty("ratelimit-limit");
-  });
-
   it("alfredRunLimiter allows up to max (30) requests then 429s", async () => {
     const lastRes = await exhaustLimiter(makeAlfredRunLimiter(), 31);
 

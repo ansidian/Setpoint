@@ -1,5 +1,3 @@
-import type { BillsMirrorHealth } from "./bills.ts";
-import type { ActualBillOccurrence } from "./actual.ts";
 import type { NormalizedCalendarEvent } from "./calendar.ts";
 import type { ActiveSnapshotView } from "./snapshots.ts";
 import type { DeadlinePayload } from "./tasks.ts";
@@ -9,7 +7,6 @@ export const CURRENT_DASHBOARD_CACHE_KEYS = [
   "weather_current",
   "calendar_current",
   "deadlines_current",
-  "bills_current",
 ] as const;
 
 export type CurrentDashboardCacheKey = typeof CURRENT_DASHBOARD_CACHE_KEYS[number];
@@ -94,7 +91,6 @@ export interface CurrentDashboardEmailHealth {
 export interface CurrentDashboardProviderHealth extends Record<string, unknown> {
   currentData: CurrentDashboardDataHealth;
   todoist: TodoistMirrorHealth;
-  bills: BillsMirrorHealth;
   activeSnapshot?: {
     state?: string;
     processing?: { active?: boolean };
@@ -153,12 +149,6 @@ export interface CurrentDashboardResponse extends Record<string, unknown> {
   weather: CurrentDashboardWeather | null;
   calendar: NormalizedCalendarEvent[];
   deadlines: DeadlinePayload;
-  bills: ActualBillOccurrence[];
-  allSchedules: ActualBillOccurrence[];
-  payeeMap: Record<string, string>;
-  actualConfigured: boolean;
-  actualBudgetUrl: string | null;
-  billsSyncHealth: BillsMirrorHealth | null;
   activeSnapshot: ActiveSnapshotView;
   providerHealth: CurrentDashboardProviderHealth;
   systemStatus: CurrentDashboardSystemStatus;

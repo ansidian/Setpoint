@@ -1,30 +1,23 @@
 .fin-workspace{max-width:1440px;margin:0 auto;padding:24px 24px 40px;color:var(--sp-text,#cdd6f4);font-size:12px;line-height:1.5;min-width:0;overflow:auto;height:100%;scrollbar-color:#45455c transparent;color-scheme:dark}
 .fin-workspace h1,.fin-workspace h2,.fin-workspace h3,.fin-workspace p{margin:0}.fin-workspace h1{font-size:25px;font-weight:600;letter-spacing:-.02em}.fin-workspace h2{font-size:16px;font-weight:600}.fin-workspace h3{font-size:12px;font-weight:600}.fin-workspace button:not([data-slot="select-trigger"]),.fin-workspace input{font:inherit;color:inherit}.fin-workspace button:not([data-slot="select-trigger"]){display:inline-flex;align-items:center;gap:8px;background:transparent;border:1px solid transparent;border-radius:6px;padding:8px 12px;cursor:pointer;text-align:left;transition:background 160ms,transform 160ms,border-color 160ms}.fin-workspace button:not([data-slot="select-trigger"]):hover,.fin-workspace summary:hover{background:#313244;transform:translateY(-1px)}.fin-workspace button:not([data-slot="select-trigger"]):focus-visible:where([data-sp-keyboard-focus="true"] *),.fin-workspace summary:focus-visible:where([data-sp-keyboard-focus="true"] *),.fin-workspace input:focus-visible:where([data-sp-keyboard-focus="true"] *){outline:2px solid var(--ea-accent);outline-offset:2px;transform:translateY(-1px)}.fin-workspace button:not([data-slot="select-trigger"]):active,.fin-workspace summary:active{transform:translateY(1px);background:#45455c}.fin-workspace button:not([data-slot="select-trigger"]):disabled{opacity:.45;cursor:default;transform:none}.fin-workspace button:not([data-slot="select-trigger"])[aria-pressed=true],.fin-workspace button:not([data-slot="select-trigger"])[aria-current=page]{background:color-mix(in srgb,var(--ea-accent) 12%,transparent);border-color:color-mix(in srgb,var(--ea-accent) 32%,transparent)}.fin-workspace input{background:#24243a;border:1px solid #45455c;border-radius:6px;padding:8px;max-width:100%;caret-color:var(--ea-accent)}.fin-workspace ::selection{background:#685570;color:#fff}
-.fin-heading,.fin-between,.fin-detail-heading{display:flex;align-items:center;justify-content:space-between;gap:16px}.fin-view-nav{display:flex;align-items:center;gap:8px;padding:16px 0;border-bottom:1px solid #39394e}.fin-view-nav>span{margin-left:auto;color:#a6adc8;font-size:11px}.fin-foreground-links{display:flex;gap:4px;padding:8px 0 20px;color:#a6adc8}.fin-grid{display:grid;grid-template-columns:minmax(300px,1.15fr) minmax(360px,.85fr);gap:24px}.fin-detail{background:#11111b;border:1px solid #39394e;border-radius:8px;padding:20px;min-width:0}.fin-overview{min-width:0}.fin-search{display:block;margin-top:16px}.fin-search input{width:100%}.fin-utility-group{margin-top:24px}.fin-utility-group>h3{color:#a6adc8;margin-bottom:8px}.fin-workspace .fin-utility-row{display:flex;width:100%;justify-content:space-between;align-items:center;gap:16px;padding:14px 12px;border-bottom:1px solid #39394e;border-radius:6px}.fin-utility-row strong,.fin-journal-row strong{font-weight:600;font-variant-numeric:tabular-nums}.fin-utility-row small,.fin-journal-row small{display:block;font-size:11px;color:#a6adc8;margin-top:4px}.fin-row-amount{text-align:right}.fin-workspace .fin-paid{color:var(--sp-income)}.fin-income{color:var(--sp-income)}.fin-muted,.fin-detail-heading p{color:#a6adc8}.fin-empty{padding:32px 0;color:#a6adc8}.fin-notice{color:#f9e2af;padding:8px 0}.fin-detail-heading{align-items:flex-start}.fin-detail-heading p{font-size:11px;margin-top:4px}.fin-bill-hero{padding:20px 0;border-bottom:1px solid #39394e}.fin-bill-hero .fin-between{font-size:11px;color:#a6adc8}.fin-bill-amount{font-size:28px;line-height:1.2;font-weight:500;letter-spacing:-.02em;font-variant-numeric:tabular-nums;padding:12px 0}.fin-bill-amount>span{font-size:16px}.fin-bill-hero p+p{margin-top:8px}.fin-period{padding:16px 0 8px}.fin-month-dropdown{width:140px;max-width:50%;flex-shrink:0}.fin-chart{display:flex;gap:4px;height:124px;margin:12px 0 16px;align-items:stretch}.fin-workspace .fin-chart button{display:flex;flex:1;min-width:0;flex-direction:column;justify-content:flex-end;padding:4px 2px;gap:8px;text-align:center}.fin-bar-space{display:flex;align-items:flex-end;justify-content:center;width:100%;height:88px}.fin-bar-space i{display:block;width:70%;background:color-mix(in srgb,var(--ea-accent) 65%,#313244);border-radius:3px 3px 0 0}.fin-workspace .fin-chart button[aria-pressed=true]{background:transparent;border-color:transparent}.fin-chart button[aria-pressed=true] i{background:var(--ea-accent)}.fin-month-label{font-size:11px}.fin-workspace .fin-link{color:var(--ea-accent);padding-left:0;max-width:100%}.fin-history{border-top:1px solid #39394e;margin-top:24px}.fin-workspace .fin-disclosure{display:flex;justify-content:space-between;width:100%;padding:16px 0}.fin-disclosure>span{font-size:11px;color:#a6adc8}.fin-history-content{padding:4px 0 20px}.fin-workspace dt{font-size:11px;color:#a6adc8}.fin-workspace dd{margin:4px 0 0}.fin-external-actions{display:flex;gap:8px;flex-wrap:wrap;padding-top:16px}.fin-journal{max-width:860px;margin:0 auto;padding-top:8px}.fin-journal-tools{display:flex;align-items:center;gap:12px;margin:20px 0}.fin-datehead{padding:24px 0 8px;color:#a6adc8}.fin-split[data-selected=true]{background:#353044;outline:1px solid var(--ea-accent)}
+.fin-heading,.fin-between,.fin-detail-heading{display:flex;align-items:center;justify-content:space-between;gap:16px}.fin-view-nav{display:flex;align-items:center;gap:8px;padding:16px 0;border-bottom:1px solid #39394e}.fin-view-nav>span{margin-left:auto;color:#a6adc8;font-size:11px}.fin-grid{display:grid;grid-template-columns:minmax(300px,1.15fr) minmax(360px,.85fr);gap:24px}.fin-detail{background:#11111b;border:1px solid #39394e;border-radius:8px;padding:20px;min-width:0}.fin-overview{min-width:0}.fin-search{display:block;margin-top:16px}.fin-search input{width:100%}.fin-journal-row strong{font-weight:600;font-variant-numeric:tabular-nums}.fin-journal-row small{display:block;font-size:11px;color:#a6adc8;margin-top:4px}.fin-workspace .fin-paid{color:var(--sp-income)}.fin-income{color:var(--sp-income)}.fin-muted,.fin-detail-heading p{color:#a6adc8}.fin-empty{padding:32px 0;color:#a6adc8}.fin-notice{color:#f9e2af;padding:8px 0}.fin-detail-heading{align-items:flex-start}.fin-detail-heading p{font-size:11px;margin-top:4px}.fin-chart{display:flex;gap:4px;height:124px;margin:12px 0 16px;align-items:stretch}.fin-workspace .fin-chart button{display:flex;flex:1;min-width:0;flex-direction:column;justify-content:flex-end;padding:4px 2px;gap:8px;text-align:center}.fin-bar-space{display:flex;align-items:flex-end;justify-content:center;width:100%;height:88px}.fin-bar-space i{display:block;width:70%;background:color-mix(in srgb,var(--ea-accent) 65%,#313244);border-radius:3px 3px 0 0}.fin-workspace .fin-chart button[aria-pressed=true]{background:transparent;border-color:transparent}.fin-chart button[aria-pressed=true] i{background:var(--ea-accent)}.fin-month-label{font-size:11px}.fin-workspace .fin-link{color:var(--ea-accent);padding-left:0;max-width:100%}.fin-history{border-top:1px solid #39394e;margin-top:24px}.fin-history-content{padding:4px 0 20px}.fin-workspace dt{font-size:11px;color:#a6adc8}.fin-workspace dd{margin:4px 0 0}.fin-external-actions{display:flex;gap:8px;flex-wrap:wrap;padding-top:16px}.fin-journal{max-width:860px;margin:0 auto;padding-top:8px}.fin-journal-tools{display:flex;align-items:center;gap:12px;margin:20px 0}.fin-datehead{padding:24px 0 8px;color:#a6adc8}.fin-split[data-selected=true]{background:#353044;outline:1px solid var(--ea-accent)}
 @media(max-width:1000px){.fin-grid{grid-template-columns:minmax(260px,.8fr) minmax(340px,1.2fr);gap:24px}.fin-detail{padding:16px}.fin-month-label{transform:rotate(-45deg);transform-origin:center}.fin-workspace{padding:20px}}
-@media(max-width:767px){.fin-workspace{padding:20px 16px 28px}.fin-grid{display:block}.fin-detail{padding:16px;margin-top:16px}.fin-heading h1{font-size:22px}.fin-workspace button:not([data-slot="select-trigger"]),.fin-workspace summary{min-height:44px}.fin-workspace input{font-size:16px}.fin-view-nav>span{max-width:140px;text-align:right}.fin-foreground-links{flex-wrap:wrap;padding-bottom:12px}.fin-workspace .fin-chart button{padding:4px 0}.fin-bill-amount{font-size:28px}}
+@media(max-width:767px){.fin-workspace{padding:20px 16px 28px}.fin-grid{display:block}.fin-detail{padding:16px;margin-top:16px}.fin-heading h1{font-size:22px}.fin-workspace button:not([data-slot="select-trigger"]),.fin-workspace summary{min-height:44px}.fin-workspace input{font-size:16px}.fin-view-nav>span{max-width:140px;text-align:right}.fin-workspace .fin-chart button{padding:4px 0}}
 @media(prefers-reduced-motion:reduce){.fin-workspace button:not([data-slot="select-trigger"]),.fin-workspace summary{transition:none!important;transform:none!important}}
-
 /* Page tabs and secondary actions have distinct silhouettes. */
 .fin-view-nav{gap:20px;padding:0;margin:12px 0 24px}
 .fin-workspace .fin-view-nav>button{position:relative;border:0;border-radius:6px 6px 0 0;padding:12px 4px;color:#a6adc8;font-weight:500;background:transparent}
 .fin-workspace .fin-view-nav>button[aria-current=page]{color:var(--ea-accent);background:transparent}
 .fin-view-nav>button[aria-current=page]::after{content:'';position:absolute;bottom:-1px;left:0;right:0;height:2px;background:var(--ea-accent)}
 .fin-workspace .fin-view-nav>button:hover{color:#cdd6f4;background:#24243a66}
-.fin-foreground-links{padding:0}
-.fin-workspace .fin-foreground-links>button{color:#a6adc8;padding:8px;gap:6px}
-.fin-workspace .fin-foreground-links>button:hover{color:#cdd6f4;background:#313244}
 .fin-search{position:relative;transition:opacity 240ms ease}
 .fin-search>svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#a6adc8;pointer-events:none}
 .fin-workspace .fin-search input{padding:10px 12px 10px 38px;background:#11111b80;border-color:#39394e;border-radius:8px}
-
 .fin-workspace .fin-due{color:var(--sp-outflow)}
-
 .fin-search input::placeholder{color:#a6adc8;opacity:1}
 .fin-search:has(input:disabled){opacity:.55;cursor:not-allowed}
 .fin-workspace .fin-search input:disabled{cursor:not-allowed;background:transparent}
 @media(prefers-reduced-motion:reduce){.fin-search{transition:none}}
-
 .fin-disclosure-chevron{flex-shrink:0;transition:transform 160ms;color:#a6adc8}
 /* Journal rows expand into a quiet record with aligned facts and separate notes. */
 .fin-workspace .fin-date-trigger,.fin-workspace .fin-recent-days{border-color:#45455c;background:#24243a}
@@ -44,21 +37,13 @@
 .fin-journal-notes,.fin-journal-splits{margin-top:16px;padding-top:12px;border-top:1px solid #39394e}
 .fin-journal-notes p{max-width:65ch;white-space:pre-wrap}.fin-journal-detail>.fin-link{margin-top:12px;font-size:11px}
 .fin-split{display:flex;justify-content:space-between;gap:16px;padding:8px 0;font-variant-numeric:tabular-nums}.fin-split+.fin-split{border-top:1px solid #39394e}
-@media(max-width:767px){.fin-workspace .fin-journal-row{gap:8px;padding:14px 8px}.fin-journal-detail{padding:4px 12px 16px}.fin-journal-facts{gap:16px}.fin-history-title{min-width:0}.fin-history .fin-disclosure{gap:8px}.fin-history .fin-disclosure>span:last-child{white-space:nowrap}}
+@media(max-width:767px){.fin-workspace .fin-journal-row{gap:8px;padding:14px 8px}.fin-journal-detail{padding:4px 12px 16px}.fin-journal-facts{gap:16px}}
 @media(prefers-reduced-motion:reduce){.fin-disclosure-chevron{transition:none}}
-
 /* Selection and recurring records use the same compact detail hierarchy. */
 .fin-detail{align-self:start}
-.fin-detail-empty{min-height:380px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px 24px;gap:12px}
-.fin-detail-empty>svg{color:var(--ea-accent);margin-bottom:8px;opacity:.8}
-.fin-detail-empty p{max-width:34ch;color:#a6adc8;font-size:12px;line-height:1.7}
-.fin-detail-identity{display:flex;align-items:center;gap:12px;min-width:0}.fin-detail-identity h2{overflow-wrap:anywhere}
-.fin-detail-icon{display:grid;place-items:center;flex-shrink:0;width:40px;height:40px;border-radius:8px;background:color-mix(in srgb,currentColor 8%,transparent)}
-.fin-record-status,.fin-fact-line{display:flex;align-items:center;gap:6px}.fin-fact-line{color:#a6adc8}
+.fin-record-status{display:flex;align-items:center;gap:6px}
 .fin-recurring-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;margin:20px 0}
-.fin-recurring-facts dt,.fin-recurring-record h3{display:flex;align-items:center;gap:6px}.fin-recurring-facts dt svg{color:#a6adc8}.fin-recurring-facts dd{overflow-wrap:anywhere}
-.fin-recurring-record{border-top:1px solid #39394e;padding-top:20px}.fin-recurring-record h3{font-weight:500}.fin-recurring-record h3 svg{color:#a6adc8;flex-shrink:0}
-.fin-recurring-record p{margin-top:8px;max-width:50ch;color:#a6adc8;font-size:11px;line-height:1.7}.fin-recurring-record .fin-link{margin-top:12px}
+.fin-recurring-facts dt{display:flex;align-items:center;gap:6px}.fin-recurring-facts dt svg{color:#a6adc8}.fin-recurring-facts dd{overflow-wrap:anywhere}
 /* Direction gives Journal records a restrained tint; status retains its own meaning. */
  .fin-workspace [data-direction=outflow]{--fin-direction:var(--sp-outflow)}.fin-workspace [data-direction=income]{--fin-direction:var(--sp-income)}.fin-workspace [data-direction=transfer]{--fin-direction:var(--sp-transfer)}
 .fin-journal-direction{display:grid;place-items:center;width:28px;height:28px;border-radius:6px;flex-shrink:0;color:var(--fin-direction);background:color-mix(in srgb,var(--fin-direction) 7%,transparent)}
@@ -68,16 +53,7 @@
 .fin-journal-detail h4 svg{color:#a6adc8}.fin-journal-recording>span:first-child svg{color:var(--sp-income)}
 .fin-journal-status{display:inline-flex;align-items:center;gap:5px}.fin-journal-status[data-settled=true]{color:var(--sp-income);border-color:color-mix(in srgb,var(--sp-income) 20%,transparent);background:color-mix(in srgb,var(--sp-income) 4%,transparent)}
 .fin-journal-notes{padding:12px;border:0;border-radius:6px;background:#11111b40}
-@media(max-width:767px){.fin-detail-empty{min-height:300px;padding:28px 16px}.fin-recurring-facts{gap:16px}.fin-journal-direction{width:24px;height:24px}.fin-workspace .fin-journal-row{column-gap:8px}.fin-journal-detail{padding-inline:12px}}
-
-/* Notices without payment dates stay discoverable outside the monthly chart. */
-.fin-notices{margin-top:16px;padding-top:16px;border-top:1px solid #39394e}
-.fin-notices>h3{margin-bottom:8px;font-size:11px;font-weight:500;color:#a6adc8}
-.fin-workspace .fin-notice-row{display:flex;width:100%;gap:10px;padding:12px 8px}
-.fin-notice-row>svg{flex-shrink:0;color:#a6adc8}.fin-notice-row>svg:first-child{color:var(--ea-accent)}
-.fin-notice-row>span{min-width:0;flex:1}.fin-notice-row strong{display:block;font-size:12px;font-weight:500;overflow-wrap:anywhere}
-.fin-notice-row small{display:block;margin-top:4px;font-size:11px;color:#a6adc8}
-
+@media(max-width:767px){.fin-recurring-facts{gap:16px}.fin-journal-direction{width:24px;height:24px}.fin-workspace .fin-journal-row{column-gap:8px}.fin-journal-detail{padding-inline:12px}}
 /* The calendar supplements a bounded ledger instead of stretching its rows. */
 .fin-workspace[data-view=journal]{max-width:1680px}
 .fin-journal{max-width:none}
@@ -96,31 +72,16 @@
 @media(min-width:768px) and (max-width:1199px){.fin-journal-layout{grid-template-columns:minmax(0,1fr) 300px;gap:24px}.fin-journal-title{align-items:flex-start;flex-direction:column;gap:4px}.fin-activity-calendar{padding:12px}}
 @media(max-width:767px){.fin-journal-layout{display:flex;flex-direction:column;gap:24px}.fin-journal-layout>.fin-activity-calendar,.fin-journal-ledger{width:100%}.fin-journal-title{flex-wrap:wrap;gap:8px}.fin-journal-tools{margin:12px 0}.fin-journal-period{flex-basis:100%}.fin-journal-day{scroll-margin-top:12px}}
 @media(prefers-reduced-motion:reduce){.fin-journal-day{transition:none}}
-
 @media(max-width:375px){.fin-workspace[data-view=journal]{padding-inline:8px}}
-
 /* Payments belong to a visible section; the calendar shares the selected month. */
 .fin-companion{min-width:0;display:flex;flex-direction:column;gap:20px;align-self:start}
 .fin-companion .fin-activity-calendar{position:static}
-.fin-payments{margin-top:32px;padding-top:24px;border-top:1px solid #45455c}
-.fin-payment-group{margin-top:20px}
-.fin-payment-group>h3{display:flex;align-items:center;gap:6px;color:#a6adc8;margin-bottom:8px}
-.fin-payment-group>h3>span{margin-left:auto;font-weight:400;font-variant-numeric:tabular-nums}
-.fin-workspace .fin-payment-row{display:flex;width:100%;gap:10px;border-bottom:1px solid #39394e;border-radius:6px;padding:12px}
-.fin-payment-row>svg{flex-shrink:0}.fin-payment-row>span{flex:1;min-width:0}
-.fin-payment-row strong{font-size:12px;font-weight:500;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
-.fin-payment-row>strong{white-space:nowrap}.fin-payment-row small{display:block;font-size:11px;color:#a6adc8;margin-top:4px}
-.fin-workspace .fin-payment-row[data-selected=true],.fin-workspace .fin-utility-row[data-selected=true]{outline:1px solid #cdd6f4;outline-offset:-1px;border-radius:6px}
-.fin-workspace .fin-payment-empty{padding:12px;color:#a6adc8;font-size:11px}
-.fin-detail .fin-bill-amount{color:var(--fin-amount-color,var(--sp-outflow))}
 @media(max-width:767px){
   .fin-grid{display:flex;flex-direction:column;gap:24px}
   .fin-companion{display:contents}.fin-payment-calendar-wrap{order:-1;width:100%}.fin-overview{width:100%}
   .fin-grid .fin-detail{margin-top:0;width:100%}
   .fin-view-nav{gap:16px}.fin-workspace .fin-view-nav>button{padding:12px 2px}
-  .fin-payments{margin-top:24px}
 }
-
 /* Both views share a frame; the Utilities list and calendar keep their own scroll positions. */
 .fin-workspace,.fin-workspace[data-view=journal]{max-width:1680px;width:100%}
 @media(min-width:768px){
@@ -138,15 +99,6 @@
   .fin-grid{gap:32px}
   .fin-journal-layout{grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:48px}
 }
-
-/* Details overlay the workspace without changing its column widths. */
-.fin-workspace.fin-drawer{position:fixed;z-index:45;top:72px;right:24px;bottom:24px;width:min(560px,calc(100vw - 48px));height:auto;max-width:none;margin:0;padding:24px;display:block;overflow-y:auto;overscroll-behavior:contain;isolation:isolate;background:#16161e;border-radius:12px;box-shadow:-12px 16px 40px -12px #0009;scrollbar-gutter:stable}
-.fin-drawer>.fin-detail{padding:0;border:0;border-radius:0;background:transparent}
-.fin-drawer .fin-detail-heading{position:sticky;top:-24px;z-index:1;background:#16161e;padding:16px 0;margin-top:-16px}
-.fin-drawer .fin-detail-heading>button{flex-shrink:0}
-.fin-drawer .fin-link{margin-top:16px}
-.fin-drawer .fin-journal-notes p{margin-top:8px}
-
 /* Mobile details protect focus while generous backdrop edges remain tappable. */
 .fin-workspace.fin-mobile-detail{display:block;width:calc(100vw - 48px);max-width:560px;height:auto;max-height:calc(100dvh - 96px);margin:0;padding:20px;overflow-y:auto;overscroll-behavior:contain;isolation:isolate;background:#16161e;border-radius:12px;box-shadow:0 16px 40px -12px #0009}
 .fin-mobile-detail>.fin-detail{padding:0;margin:0;border:0;background:transparent}
@@ -154,11 +106,6 @@
 .fin-mobile-detail .fin-detail-heading>button{flex-shrink:0}
 .fin-mobile-detail .fin-link{margin-top:16px}
 @media(prefers-reduced-motion:reduce){.fin-mobile-detail{animation:none!important;transition:none!important}}
-
-.fin-workspace button.fin-pay-online{justify-content:center;background:var(--ea-accent);border-color:var(--ea-accent);color:#11111b;font-weight:600}
-.fin-workspace button.fin-pay-online:hover:not(:disabled),.fin-workspace button.fin-pay-online:focus-visible{background:color-mix(in srgb,var(--ea-accent) 85%,white);border-color:color-mix(in srgb,var(--ea-accent) 85%,white)}
-.fin-workspace button.fin-pay-online:active:not(:disabled){background:color-mix(in srgb,var(--ea-accent) 85%,#11111b);border-color:color-mix(in srgb,var(--ea-accent) 85%,#11111b)}
-
 /* Payment facts share one scan path; selection occupies the calendar column. */
 .fin-payment-toolbar{display:flex;align-items:center;justify-content:space-between;gap:24px;min-width:0;flex-shrink:0}
 .fin-month-control{display:flex;align-items:center;gap:8px;white-space:nowrap}
@@ -185,14 +132,7 @@
 .fin-detail-panel>.fin-detail{padding:0;border:0;background:transparent}
 .fin-detail-panel:focus{outline:none}
 .fin-payment-summary{padding:24px 0 20px;border-bottom:1px solid #39394e}
-.fin-payment-summary .fin-bill-amount{padding:12px 0 4px;color:var(--fin-amount-color,var(--sp-text))}
 .fin-payment-summary>p{color:#a6adc8;font-size:11px;line-height:1.6}
-.fin-payment-history{padding-top:24px}.fin-payment-history h3{margin-bottom:12px}
-.fin-payment-history-list{list-style:none;padding:0;margin:0}
-.fin-payment-history-list>li{padding:16px 0;border-bottom:1px solid #39394e}
-.fin-payment-history-list>li:first-child{padding-top:0}
-.fin-payment-history-list .fin-recurring-facts{margin:12px 0;gap:12px}
-.fin-payment-note{font-size:11px;line-height:1.6;color:#a6adc8;margin-top:8px!important}
 .fin-payment-detail .fin-link{font-size:11px}
 .fin-payment-detail .fin-detail-heading{position:sticky;top:-24px;background:#16161e;z-index:1;padding:12px 0;margin-top:-12px}
 .fin-payment-detail .fin-detail-heading>button{flex-shrink:0}
@@ -237,7 +177,6 @@
  .fin-payment-calendar-wrap:not([data-mobile-open=true]){display:none}
  .fin-status-date{align-self:start}
 }
-
 /* Section identity and column labels remain together while the ledger scrolls. */
 .fin-ledger-heading{position:sticky;top:0;margin-bottom:6px;z-index:2;background:#1e1e2e;isolation:isolate;border-top:1px solid #45455c}
 .fin-ledger-heading>h2{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 12px;margin:0;font-size:14px;font-weight:600;background:#24243a}
@@ -250,12 +189,6 @@
 .fin-workspace .fin-status-columns>button{min-width:0;padding:4px 0;font-size:10px;gap:4px;border-radius:4px;color:#a6adc8}
 .fin-status-columns>button:nth-child(4){justify-content:flex-end}
 .fin-status-columns>button>svg{flex-shrink:0;color:var(--ea-accent)}
-.fin-mobile-sort{display:none}
-@media(max-width:767px){
- .fin-mobile-sort{display:flex;align-items:center;justify-content:space-between;padding:4px 8px;background:#1e1e2e}
- .fin-mobile-sort label{display:flex;align-items:center;gap:8px;color:#a6adc8;font-size:11px}
- .fin-mobile-sort select{background:#24243a;color:#cdd6f4;border:1px solid #45455c;border-radius:6px;min-height:44px;padding:4px 8px;font-size:16px}
-}
 .fin-schedule-evidence{margin-top:24px;border-top:1px solid #39394e;padding-top:12px}
 .fin-schedule-evidence summary{cursor:pointer;border-radius:6px;padding:8px;transition:background 160ms,transform 160ms}
 .fin-schedule-evidence summary>span{float:right;color:#a6adc8}
@@ -291,8 +224,6 @@
 .fin-month-records button:active{background:#45455c;transform:translateY(1px)}
 @media(prefers-reduced-motion:reduce){.fin-month-records button{transition:none}.fin-month-records button:hover,.fin-month-records button:focus-visible,.fin-month-records button:active{transform:none}}
 .fin-month-records .fin-month-journal{padding:6px 8px;margin:6px 0 0 -8px;color:var(--ea-accent)}
-.fin-month-source-actions{display:flex;flex-wrap:wrap;gap:4px 8px;margin:4px 0 0 -8px}
-.fin-month-records .fin-month-source-actions>button{padding:6px 8px;color:var(--ea-accent)}
 @media(max-width:767px){.fin-month-records .fin-month-records-close{top:4px;right:0;min-width:44px;min-height:44px}.fin-month-record-facts{padding-right:44px}}
 /* Journal keeps navigation above the scrolling ledger and its date tools. */
 .fin-workspace[data-view=journal]{display:flex;flex-direction:column;overflow:hidden}
@@ -328,10 +259,7 @@
  .fin-journal-period-compact,.fin-date-trigger-compact{display:inline}
  .fin-journal-day{scroll-margin-top:100px}
 }
-.fin-calendar-preview h3{font-size:14px;font-weight:600;line-height:1.4;padding-right:24px;margin:0 0 16px}.fin-preview-dates{display:grid;gap:8px;margin:16px 0}.fin-preview-dates>div{display:flex;justify-content:space-between;gap:16px}.fin-preview-dates dt{color:#a6adc8}.fin-preview-dates dd{margin:0}.fin-preview-actions{display:flex;flex-wrap:wrap;gap:4px 16px}.fin-calendar-preview .fin-month-record-facts{padding-right:0}
-.fin-preview-summary{display:flex;align-items:center;justify-content:space-between;gap:20px;font-variant-numeric:tabular-nums}.fin-preview-summary>div{text-align:right}.fin-preview-summary strong{font-weight:600}.fin-preview-summary small{display:block;color:#a6adc8;font-size:11px;margin-top:3px}
 @media(min-width:768px){.fin-journal-controls{margin-bottom:20px}}
-
 /* Journal picker is portaled outside the workspace. */
 .fin-journal-date-picker button:enabled{transition:background 160ms,color 160ms,transform 160ms !important}
 .fin-journal-date-picker button:enabled:hover{transform:translateY(-1px)}
@@ -339,18 +267,11 @@
 .fin-journal-date-picker button:enabled:active{transform:scale(.97)}
 .fin-journal-date-picker button:disabled{opacity:.4;cursor:default !important}
 @media(prefers-reduced-motion:reduce){.fin-journal-date-picker button{transition:none !important;transform:none !important}}
-.fin-payment-account { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 12px; margin:6px 0 0; font-size:11px; }
-.fin-payment-account dt { color:#a6adc8; }
-.fin-payment-account dd { margin:0; color:var(--sp-text); overflow-wrap:anywhere; }
-.fin-payment-date { display:block; }
-.fin-record-status { flex-wrap:wrap; }
-
+.fin-payment-account{ display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 12px; margin:6px 0 0; font-size:11px; }
+.fin-payment-account dt{ color:#a6adc8; }
+.fin-payment-account dd{ margin:0; color:var(--sp-text); overflow-wrap:anywhere; }
+.fin-payment-date{ display:block; }
+.fin-record-status{ flex-wrap:wrap; }
 .fin-mobile-surface{display:flex;flex-direction:column;height:100%;min-height:0}
 .fin-mobile-surface>.fin-workspace{flex:1;width:100%;height:auto;min-height:0;padding-top:0}
 .fin-mobile-heading h1{font-size:18px;font-weight:650}
-.fin-mobile-heading .fin-foreground-links{padding:0;flex-wrap:nowrap;font-size:11px}
-.fin-mobile-heading .fin-foreground-links>button{display:inline-flex;align-items:center;gap:4px;min-height:var(--sp-touch-min);padding:8px;border:0;border-radius:6px;background:transparent;color:inherit;font:inherit;cursor:pointer;transition:background 160ms,transform 160ms}
-.fin-mobile-heading .fin-foreground-links>button:hover{background:#ffffff12;transform:translateY(-1px)}
-.fin-mobile-heading .fin-foreground-links>button:focus-visible{outline:2px solid var(--ea-accent);outline-offset:-2px;background:#ffffff12;transform:translateY(-1px)}
-.fin-mobile-heading .fin-foreground-links>button:active{background:#ffffff1b;transform:scale(.98)}
-@media(prefers-reduced-motion:reduce){.fin-mobile-heading .fin-foreground-links>button{transition:none;transform:none!important}}

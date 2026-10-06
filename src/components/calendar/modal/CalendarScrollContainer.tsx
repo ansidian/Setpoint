@@ -159,7 +159,6 @@ export default function CalendarScrollContainer({
   const spacerBackground = `repeating-linear-gradient(to bottom, rgba(255,255,255,0.025) 0, rgba(255,255,255,0.025) 1px, transparent 1px, transparent ${spacerRowPitch}px)`;
 
   const activeMonthData = { viewData, itemsByDay, itemsByDate, cellMetaByDate };
-  const shareItemsByDate = !!activeView?.monthAgnosticItemsByDate;
 
   const blocks: ReactNode[] = [];
   for (let i = -SCROLL_RANGE; i <= SCROLL_RANGE; i++) {
@@ -196,7 +195,6 @@ export default function CalendarScrollContainer({
         activeView={activeView}
         cached={cachedMonthData}
         activeMonthData={activeMonthData}
-        shareItemsByDate={shareItemsByDate}
         previewByIndex={previewByIndex}
         isMonthCached={isMonthCached}
         showGridSkeleton={showGridSkeleton}

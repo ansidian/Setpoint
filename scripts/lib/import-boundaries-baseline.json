@@ -4,11 +4,7 @@
       "actual.ts"
     ],
     "bills": [
-      "bills-service.ts",
-      "bill-candidate-verification-service.ts",
-      "bill-semantic-prompt.ts",
-      "financial-email-planner.ts",
-      "financial-profiles.ts"
+      "bills-service.ts"
     ],
     "calendar": [
       "calendar.ts",
@@ -23,7 +19,6 @@
       "email-service.ts",
       "email-sync-health.ts",
       "email-evidence.ts",
-      "financial-email-intake.ts",
       "email-backfill-worker.ts",
       "gmail-pubsub.ts",
       "gmail-pull.ts",
@@ -50,25 +45,15 @@
       "todoist-webhook.ts"
     ],
     "triage": [
-      "triage-worker.ts"
-    ],
-    "financial-events": [
-      "financial-event-service.ts",
-      "financial-event-intake.ts",
-      "financial-event-completion.ts",
-      "financial-event-review.ts",
-      "financial-event-status.ts",
-      "financial-provider-policy.ts"
+      "triage-worker.ts",
+      "triage-fast-model.ts"
     ]
   },
   "edges": [
-    "server/bills/bill-extraction-service.ts -> server/actual/actual-metadata-projection.ts",
     "server/bills/bills-mirror-sync.ts -> server/actual/actual-metadata-projection.ts",
     "server/bills/bills-service.ts -> server/actual/actual-local-metadata.ts",
-    "server/bills/bills-service.ts -> server/actual/actual-metadata-projection.ts",
     "server/bills/billsMirrorModel.ts -> server/actual/actual-bill-occurrences.ts",
     "server/bills/billsMirrorModel.ts -> server/actual/actual-metadata-projection.ts",
-    "server/bills/statementActualStatusModel.ts -> server/actual/scheduleMatchModel.ts",
     "server/dashboard/current-providers/calendar-provider.ts -> server/calendar/calendar-google-client.ts",
     "server/dashboard/current-service.ts -> server/reminders/reminder-hydration.ts",
     "server/dashboard/current-service.ts -> server/tasks/deadline-helpers.ts",
@@ -85,7 +70,6 @@
     "server/routes/calendar.ts -> server/calendar/calendar-google-client.ts",
     "server/routes/calendar.ts -> server/reminders/reminder-hydration.ts",
     "server/routes/reminders.ts -> server/reminders/discord-reminders.ts",
-    "server/routes/settings.ts -> server/bills/bill-extractors/catalog.ts",
     "server/routes/settings.ts -> server/email/email-ai-models.ts",
     "server/routes/settings.ts -> server/email/search/email-search-cost-stats.ts",
     "server/routes/settings.ts -> server/tasks/todoist-token.ts",
@@ -101,10 +85,7 @@
     "server/snapshots/snapshotStore.ts -> server/triage/triage-mode.ts",
     "server/snapshots/snooze-waker.ts -> server/email/gmail.ts",
     "server/tasks/deadlines-read.ts -> server/reminders/reminder-hydration.ts",
-    "server/transactions/transactions-service.ts -> server/actual/actual-transactions-read.ts",
-    "server/transactions/transactions-service.ts -> server/bills/bills-mirror-sync.ts",
     "server/triage/triage-finalize-store.ts -> server/snapshots/snapshot-types.ts",
-    "server/triage/triage-model-client.ts -> server/bills/bill-extractors/catalog.ts",
     "server/triage/triage-model-client.ts -> server/email/email-ai-models.ts",
     "server/triage/triage-worker.ts -> server/snapshots/arrival-grace.ts"
   ]

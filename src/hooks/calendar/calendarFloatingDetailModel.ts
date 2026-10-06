@@ -3,7 +3,7 @@ import type { CalendarView } from "../../../shared/types/calendar";
 
 export type FloatingDetailMode = "detail" | "create" | "edit" | string;
 export type FloatingDetailSide = "left" | "right";
-export type FloatingDetailKind = "deadline" | "transaction" | null;
+export type FloatingDetailKind = "deadline" | null;
 
 export interface CalendarFloatingDetailState {
   open?: boolean;
@@ -72,9 +72,7 @@ export function preservedReanchorSide(
 
 export function floatingDetailTypeLabel(view: CalendarView | string, detailKind: FloatingDetailKind = null): string {
   if (detailKind === "deadline") return "Deadline";
-  if (detailKind === "transaction") return "Transaction";
   if (view === "events") return "Event";
-  if (view === "bills") return "Bill";
   return "Item";
 }
 

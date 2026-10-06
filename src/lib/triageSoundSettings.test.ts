@@ -60,7 +60,6 @@ describe("triage sound settings registry", () => {
         triage_failed: { enabled: false, soundId: "check" },
         event_upcoming: { enabled: true, soundId: "threshold" },
         task_completed: { enabled: true, soundId: "settled" },
-        actual_recorded: { enabled: true, soundId: "resolve" },
       },
     });
     expect(normalizeServerSettings(saved)).toEqual(normalized);

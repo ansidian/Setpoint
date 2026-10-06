@@ -42,10 +42,6 @@ export function hashSessionToken(raw: string) {
   return `sha256:${crypto.createHash("sha256").update(raw).digest("hex")}`;
 }
 
-export function hashApiToken(raw: string) {
-  return crypto.createHash("sha256").update(raw).digest("hex");
-}
-
 export async function createAuthTestDb() {
   const tempDir = await createTestTempDir("auth-db-");
   const db = createClient({ url: `file:${join(tempDir, "auth.db")}` });

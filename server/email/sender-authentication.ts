@@ -268,7 +268,7 @@ function evaluateAuthenticationResults(
 }
 
 // This is the observed iCloud SMTP ingress layout, not a generic search for an
-// Apple-looking authserv-id. Unknown layouts must not authorize financial writes.
+// Apple-looking authserv-id. Unknown layouts are never trusted as a pass.
 // As with Gmail, provider verdicts rely on the receiver sanitizing forged copies.
 const ICLOUD_AUTH_SERVICES = ["bimi.icloud.com", "arc.icloud.com", "dmarc.icloud.com", "dkim-verifier.icloud.com", "spf.icloud.com"];
 const ICLOUD_PROCESSING_HEADERS = new Set([

@@ -5,10 +5,10 @@ import AiUsageFailures from "./AiUsageFailures";
 import { Metric, Stat } from "./analyticsPrimitives";
 import { formatCompactNumber, formatUsdEstimate } from "./analyticsFormat";
 
-const PURPOSES: Record<"triage" | "financialEmail", { key: AiUsagePurpose; label: string }[]> = {
-  triage: [{ key: "triage_cheap", label: "Cheap pass" }, { key: "triage_strong", label: "Strong pass" }],
-  financialEmail: [{ key: "extraction", label: "Extraction" }, { key: "verification", label: "Verification" }, { key: "matching", label: "Matching" }],
-};
+const PURPOSES: { key: AiUsagePurpose; label: string }[] = [
+  { key: "triage_cheap", label: "Cheap pass" },
+  { key: "triage_strong", label: "Strong pass" },
+];
 
 function measured(value: number | null | undefined, calls: number, format: (value: number) => string = formatCompactNumber): string {
   return calls === 0 ? format(0) : value == null ? "Unknown" : format(value);
@@ -26,11 +26,8 @@ function coverageNote(stats?: AiUsageTotals): string {
   ].filter(Boolean).join(" · ");
 }
 
-export default function EmailAiUsageSection({ stats, category }: {
-  stats: EmailAiUsageStats;
-  category: "triage" | "financialEmail";
-}) {
-  const usage = stats.contexts.production[category];
+export default function EmailAiUsageSection({ stats }: { stats: EmailAiUsageStats }) {
+  const usage = stats.contexts.production.triage;
   const note = coverageNote(usage);
   return (
     <div className="space-y-3">
@@ -65,7 +62,7 @@ export default function EmailAiUsageSection({ stats, category }: {
                 <tr><th scope="col" className="pb-2 font-semibold">Pass</th><th scope="col" className="pb-2 text-right font-semibold">Calls</th><th scope="col" className="pb-2 pl-2 text-right font-semibold">Failed</th><th scope="col" className="pb-2 pl-2 text-right font-semibold">{usage.unpricedCalls ? "Known $" : "Cost"}</th><th scope="col" className="pb-2 pl-2 text-right font-semibold">Avg.</th></tr>
               </thead>
               <tbody>
-                {PURPOSES[category].map(({ key, label }) => {
+                {PURPOSES.map(({ key, label }) => {
                   const purpose = usage.byPurpose[key];
                   const calls = purpose?.calls ?? 0;
                   return (
@@ -91,11 +88,11 @@ export default function EmailAiUsageSection({ stats, category }: {
           <ChevronDown size={12} className="transition-transform group-open:rotate-180 motion-reduce:transition-none" />Usage details
         </summary>
         <div className="space-y-2 pt-2 leading-relaxed">
-          <p>{category === "financialEmail" ? "Extraction, verification, and Actual target matching. Initial classification is counted in Triage." : "Initial classification only, including financial-email classification."} Cached reuse and deterministic checks do not count as calls.</p>
+          <p>Model classification only. Cached reuse and deterministic rules do not count as calls.</p>
           <p>Tracked since {new Date(stats.ledgerStartedAt).toLocaleDateString()}; earlier calls are excluded. Unknown means usage was not reported. Partial totals include known measurements only. Unknown outcomes are not counted as failures.</p>
           <p>Cost is an estimate. Average call time measures the provider request, not the full workflow.</p>
           {usage.models.length > 0 && <p className="break-words">Models: {usage.models.join(", ")}</p>}
-          {usage.calls > 0 && PURPOSES[category].map(({ key, label }) => {
+          {usage.calls > 0 && PURPOSES.map(({ key, label }) => {
             const purpose = usage.byPurpose[key];
             const calls = purpose?.calls ?? 0;
             return (

@@ -40,7 +40,7 @@ describe("AlfredComposer", () => {
 
   it("restores the submitted prompt when Alfred returns an error", async () => {
     render(<AlfredComposer {...baseProps} onSubmit={async () => ({ status: "error", message: "Failed" })} />);
-    const input = screen.getByPlaceholderText<HTMLTextAreaElement>("Ask across mail, calendar, and finances…");
+    const input = screen.getByPlaceholderText<HTMLTextAreaElement>("Ask across mail, calendar, and deadlines…");
     fireEvent.change(input, { target: { value: "Do not lose this" } });
     fireEvent.keyDown(input, { key: "Enter" });
     await waitFor(() => expect(input.value).toBe("Do not lose this"));

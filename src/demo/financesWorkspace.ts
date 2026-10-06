@@ -1,98 +1,24 @@
 import type { DemoSeed } from './store';
-import type { FinanceWorkspace, JournalRange, JournalTransaction, RecurringStatement, UtilityStatement } from '../../shared/types/finances';
+import type { FinanceWorkspace, JournalRange, JournalTransaction } from '../../shared/types/finances';
 import type { PaymentItem, PaymentOrganization } from '../../shared/types/payment-groups';
 import { initializePaymentOrganization, reconcilePaymentOrganization, validatePaymentOrganization } from '../../shared/payment-groups';
-import { getDemoFinancialActivities } from './financialActivity';
 import { NO_DEMO_API_RESPONSE } from './apiHandler';
 
 let savedOrganization: PaymentOrganization | null = null;
-const prior = (date:string) => {const value=new Date(`${date.slice(0,7)}-01T12:00:00Z`);value.setUTCMonth(value.getUTCMonth()-1);return value.toISOString().slice(0,10);};
 
-function cardStatements(seed: DemoSeed): RecurringStatement[] {
-  if (!seed.bills.some(row => row.scheduleId === 'demo-card' && row.type === 'transfer')) return [];
-  const shifted = (days: number, base = seed.dateKey) => {
-    const date = new Date(`${base}T12:00:00Z`); date.setUTCDate(date.getUTCDate() + days);
-    return date.toISOString().slice(0, 10);
-  };
-  const cycles = [
-    { id: 'current', statementDate: shifted(-22), dueDate: shifted(3), amountCents: 64215 },
-    { id: 'previous', statementDate: shifted(-25, prior(seed.dateKey)), dueDate: prior(seed.dateKey), amountCents: 48723 },
-  ];
-  return cycles.map(cycle => {
-    const id = `demo-card-statement-${cycle.id}`;
-    const emailUid = `finance-${id}`;
-    seed.emailBodies[emailUid] = {
-      uid: emailUid,
-      body: `Fictional Everyday Card statement, account ending 2048. Statement date ${cycle.statementDate}. Full statement balance $${(cycle.amountCents / 100).toFixed(2)}. Payment due ${cycle.dueDate}.`,
-      attachments: [],
-    };
-    return {
-      id, emailUid, scheduleId: 'demo-card', budgetId: 'demo-budget', subject: 'Everyday Card statement',
-      receivedAt: cycle.statementDate, statementDate: cycle.statementDate, dueDate: cycle.dueDate,
-      amountCents: cycle.amountCents, amountKind: 'statement_balance', nothingDue: false,
-      creditCents: null, newChargesCents: null, carriedBalanceCents: null, providerReference: id,
-      activity: null, paymentTransactionIds: [], paymentDate: null, recordedTotalCents: null, feeCents: null, issue: null,
-    };
-  });
-}
-
+/** Read-only Actual projection: fictional schedules, their occurrences and the shared ledger. */
 export function demoFinances(seed:DemoSeed):FinanceWorkspace {
-  const previous=prior(seed.dateKey);
-  const activities=getDemoFinancialActivities();
-  const shifted=(days:number)=>{const value=new Date(`${seed.dateKey}T12:00:00Z`);value.setUTCDate(value.getUTCDate()+days);return value.toISOString().slice(0,10);};
-  const billed:Record<string,{provider:string;dueDate:string;amountCents:number}>= {
-    electricity:{provider:'Fictional Electric',dueDate:shifted(14),amountCents:8200},
-    water:{provider:'Northstar Water',dueDate:shifted(8),amountCents:5811},
-    internet:{provider:'Fiber Co-op',dueDate:shifted(-1),amountCents:7999},
-  };
-  const definitions=[['electricity','Electricity','demo-shared-schedule'],['water','Water','demo-water'],['internet','Internet','demo-internet'],['gas','Gas','demo-gas'],['trash','Trash','demo-trash']];
-  const utilities=definitions.flatMap(([id,label,defaultScheduleId])=>{
-    const connection = seed.financialConnections.connections.find(row => row.utility?.id === id);
-    if (!connection?.utility || !("scheduleId" in connection.target)) return [];
-    const scheduleId = connection.target.scheduleId || defaultScheduleId;
-    const occurrence=seed.bills.find(row=>row.scheduleId===scheduleId);
-    const provider=billed[id!]?.provider || (id==='gas'?'County Gas':'Valley Collection');
-    const source=(dueDate:string|null,amountCents:number,sourceId:string,nothingDue=false):UtilityStatement=>{
-      const emailUid=`finance-${sourceId}`;
-      seed.emailBodies[emailUid]={uid:emailUid,body:`Fictional statement from ${provider}. ${nothingDue?'No Payment Required (Credit Balance). Total Balance $0.29 Credit.':`Amount billed $${(amountCents/100).toFixed(2)}. Due ${dueDate}.`}`,attachments:[]};
-      return {id:sourceId,utilityId:id!,emailUid,subject:`${provider} statement`,receivedAt:dueDate && dueDate < seed.dateKey ? dueDate : seed.dateKey,statementDate:null,dueDate,amountCents,amountKind:'total_due',nothingDue,creditCents:nothingDue?29:null,newChargesCents:null,carriedBalanceCents:null,providerReference:sourceId,activity:id==='electricity'&&sourceId.endsWith('-current')?{owner:'event',id:'demo-event-partial'}:null,paymentTransactionIds:[],paymentDate:null,recordedTotalCents:null,feeCents:null,issue:null};
-    };
-    const bill=billed[id!];
-    const statements=id==='gas'?[source(null,0,'gas-credit',true)]:bill?[source(bill.dueDate,bill.amountCents,`${id}-current`),source(previous,({electricity:8100,water:5400,internet:7999}[id!] || 0),`${id}-previous`)]:[];
-    if(id==='electricity'&&statements[0]) {
-      const row=statements[0];
-      const activity=activities.find(item=>item.reference.id==='demo-event-partial');
-      const email=activity?.history?.emails.find(item=>item.uid==='demo-electric-original');
-      row.emailUid='demo-electric-original'; row.subject=email?.subject || row.subject;
-      row.receivedAt=email?.receivedAt ? new Date(email.receivedAt).toISOString() : row.receivedAt;
-      const result=activity?.effectiveResult as {entry?:{type?:string;amountCents?:number;date?:string}} | null;
-      if(activity?.correction?.state==='completed'&&result?.entry?.type==='bill') {
-        row.originalStatement={amountCents:row.amountCents,dueDate:row.dueDate};
-        row.amountCents=result.entry.amountCents ?? row.amountCents;row.dueDate=result.entry.date || row.dueDate;
-      }
-    }
-    for(const statement of statements){const payment=seed.transactions.find(row=>row.scheduleId===scheduleId&&row.date===statement.dueDate);if(payment){statement.paymentRecorded=true;statement.paymentTransactionIds=[payment.id];statement.paymentDate=payment.date;statement.recordedTotalCents=Math.round(payment.amount*100);}}
-    const mappedOccurrences = occurrence ? [occurrence] : [];
-    return [{identity:{...connection.utility,label:connection.utility.label || label!,budgetId:'demo-budget',payeeId:connection.utility.payeeId,scheduleIds:[scheduleId!]},statements,occurrences:mappedOccurrences.map(row => ({...row,type:row.type as "bill"|"transfer"|"income"}))}];
-  });
-  const ids=new Set(utilities.flatMap(row=>row.identity.scheduleIds));
   const start=`${Number(seed.dateKey.slice(0,4))-1}${seed.dateKey.slice(4)}`;
   const recordedHistory=demoJournal(seed,new URL(`https://demo.invalid/api/briefing/finances/journal?start=${start}&end=${seed.dateKey}`));
-  const recurring = seed.bills.filter(row => !ids.has(row.scheduleId)).map(row => ({ ...row, type: row.type as 'bill' | 'transfer' | 'income' }));
-  const paymentItems: PaymentItem[] = utilities.map(({ identity }) => ({
-    id: `utility:${identity.id}`, name: identity.label, provider: identity.provider, kind: 'utility', utilityId: identity.id,
-  }));
-  const schedules = new Map(seed.actualMetadata.schedules.filter(row => !row.completed).map(row => [row.id, { id: row.id, name: row.name, provider: '', type: row.type }]));
-  for (const row of recurring) schedules.set(row.scheduleId, { id: row.scheduleId, name: row.name, provider: row.payee, type: row.type });
-  for (const row of schedules.values()) {
-    if (ids.has(row.id)) continue;
-    paymentItems.push({ id: `schedule:${row.id}`, name: row.name, provider: row.provider, scheduleId: row.id,
-      kind: row.id === 'demo-card' && row.type === 'transfer' ? 'credit_card' : 'recurring' });
-  }
+  const recurring = seed.bills.map(row => ({ ...row, type: row.type as 'bill' | 'transfer' | 'income' }));
+  const items = new Map<string, PaymentItem>();
+  for (const row of seed.actualSchedules) if (!row.completed) items.set(row.id, { id: `schedule:${row.id}`, name: row.name, provider: '', scheduleId: row.id });
+  for (const row of recurring) items.set(row.scheduleId, { id: `schedule:${row.scheduleId}`, name: row.name, provider: row.payee, scheduleId: row.scheduleId });
+  const paymentItems = [...items.values()];
   const paymentOrganization = savedOrganization
     ? reconcilePaymentOrganization(savedOrganization, paymentItems)
     : initializePaymentOrganization('demo-budget', paymentItems);
-  return {budgetId:'demo-budget',utilities,recurring,recurringStatements:cardStatements(seed),paymentItems,paymentOrganization,start,end:seed.dateKey,recordedHistory,updatedAt:new Date().toISOString(),issues:[],truncated:recordedHistory.truncated};
+  return {budgetId:'demo-budget',recurring,paymentItems,paymentOrganization,start,end:seed.dateKey,recordedHistory,updatedAt:new Date().toISOString(),issues:[],truncated:recordedHistory.truncated};
 }
 export function demoJournal(seed:DemoSeed,url:URL):JournalRange {
   const start=url.searchParams.get('start') || seed.dateKey,end=url.searchParams.get('end') || seed.dateKey;
@@ -117,9 +43,6 @@ export function handleDemoFinances(url:URL,method:string,seed:DemoSeed,body:Reco
     }
     savedOrganization = { ...reconcilePaymentOrganization(parsed.value, current.paymentItems!), revision: parsed.value.revision + 1 };
     return structuredClone(savedOrganization);
-  }
-  if (url.pathname.startsWith('/api/briefing/finances/utility-mappings')) {
-    throw Object.assign(new Error('Use Financial providers to update financial configuration.'), { status: 410 });
   }
   if(url.pathname==='/api/briefing/finances'&&method==='GET')return demoFinances(seed);
   if(url.pathname==='/api/briefing/finances/journal'&&method==='GET')return demoJournal(seed,url);

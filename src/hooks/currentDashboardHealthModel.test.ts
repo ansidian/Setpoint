@@ -26,7 +26,7 @@ describe("calendar client health", () => {
     });
   });
 
-  it.each(["calendar", "weather", "todoist", "bills", "email:account"])("does not hide an overdue %s check behind an active refresh", (key) => {
+  it.each(["calendar", "weather", "todoist", "email:account"])("does not hide an overdue %s check behind an active refresh", (key) => {
     const input = status("refreshing");
     input.sources[0]!.key = key;
     const expired = projectDashboardHealth(input, observation("2026-09-06T13:00:00.000Z"));

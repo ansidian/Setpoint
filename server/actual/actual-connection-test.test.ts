@@ -1,3 +1,4 @@
+import { createCipheriv, pbkdf2Sync, randomBytes } from "node:crypto";
 import { createClient, type Client } from "@libsql/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { testActualConnectionHttp } from "./actual-connection-test.ts";
@@ -12,7 +13,8 @@ beforeEach(async () => {
       user_id TEXT PRIMARY KEY,
       actual_budget_url TEXT,
       actual_budget_password_encrypted TEXT,
-      actual_budget_sync_id TEXT
+      actual_budget_sync_id TEXT,
+      actual_budget_encryption_password_encrypted TEXT
     );
   `);
   delete process.env.EA_ACTUAL_TEST_TIMEOUT_MS;
@@ -63,7 +65,7 @@ describe("testActualConnectionHttp", () => {
 
     const result = await testActualConnectionHttp("u1", null, dependencies(fetchFn));
 
-    expect(result).toEqual({ success: true, budgetCount: 2, budgetFound: true });
+    expect(result).toEqual({ success: true, budgetCount: 2, budgetFound: true, budgetEncrypted: false });
     // test-architecture: allow-boundary-interaction -- Actual login is an outbound HTTP wire contract; the password placement and redirect policy are not observable in the normalized result.
     expect(fetchFn).toHaveBeenNthCalledWith(1, "https://actual.example.com/account/login", expect.objectContaining({
       method: "POST",
@@ -145,5 +147,48 @@ describe("testActualConnectionHttp", () => {
       status: 502,
       message: "Actual Budget connection test timed out",
     });
+  });
+});
+
+// The same derivation Actual uses for its key test: PBKDF2-SHA512 over the
+// password and server salt, then AES-256-GCM over a random test payload.
+function actualKeyTest(password: string) {
+  const salt = randomBytes(32).toString("base64");
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", pbkdf2Sync(password, salt, 10_000, 32, "sha512"), iv);
+  const value = Buffer.concat([cipher.update(randomBytes(32)), cipher.final()]);
+  const test = JSON.stringify({ value: value.toString("base64"), meta: { algorithm: "aes-256-gcm", iv: iv.toString("base64"), authTag: cipher.getAuthTag().toString("base64") } });
+  return { status: "ok", data: { id: "key-1", salt, test } };
+}
+
+describe("end-to-end encrypted budgets", () => {
+  const encryptedFetch = (keyTest = actualKeyTest("budget-key")) => vi.fn()
+    .mockResolvedValueOnce(jsonResponse({ status: "ok", data: { token: "token-1" } }))
+    .mockResolvedValueOnce(jsonResponse({ status: "ok", data: [{ groupId: "sync-123", fileId: "file-1", encryptKeyId: "key-1" }] }))
+    .mockResolvedValueOnce(jsonResponse(keyTest)) as unknown as typeof fetch;
+  const overrides = (encryptionPassword?: string | null) => ({
+    serverURL: "https://actual.example.com", syncId: "sync-123", password: "server",
+    ...(encryptionPassword === undefined ? {} : { encryptionPassword }),
+  });
+
+  it("verifies the encryption password against the server key test before reporting success", async () => {
+    await expect(testActualConnectionHttp("u1", overrides("budget-key"), dependencies(encryptedFetch())))
+      .resolves.toEqual({ success: true, budgetCount: 1, budgetFound: true, budgetEncrypted: true });
+  });
+
+  it("rejects an incorrect encryption password", async () => {
+    await expect(testActualConnectionHttp("u1", overrides("wrong-key"), dependencies(encryptedFetch())))
+      .rejects.toMatchObject({ status: 400, code: "ACTUAL_ENCRYPTION_PASSWORD_INCORRECT" });
+  });
+
+  it("requires an encryption password, using the stored one when none is supplied", async () => {
+    await expect(testActualConnectionHttp("u1", overrides(), dependencies(encryptedFetch())))
+      .rejects.toMatchObject({ status: 400, code: "ACTUAL_ENCRYPTION_PASSWORD_REQUIRED" });
+    await db.execute({
+      sql: "INSERT INTO ea_settings (user_id, actual_budget_url, actual_budget_sync_id, actual_budget_encryption_password_encrypted) VALUES ('u1', ?, 'sync-123', 'stored')",
+      args: ["https://actual.example.com"],
+    });
+    const stored = { ...dependencies(encryptedFetch(actualKeyTest("budget-key"))), decryptValue: () => "budget-key" };
+    await expect(testActualConnectionHttp("u1", overrides(), stored)).resolves.toMatchObject({ budgetEncrypted: true });
   });
 });

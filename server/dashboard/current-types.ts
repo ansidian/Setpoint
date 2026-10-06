@@ -1,5 +1,4 @@
 import type { Client } from "@libsql/client";
-import type { BillsMirrorHealth } from "../../shared/types/bills.ts";
 import type { TodoistMirrorHealth } from "../../shared/types/tasks.ts";
 import type {
   CurrentDashboardCacheKey,
@@ -10,11 +9,6 @@ import type { UserConfig } from "../platform/config-service.ts";
 
 export interface CurrentProviderContext {
   todoistHealth?: TodoistMirrorHealth | null;
-  billsMirror?: {
-    row?: Record<string, unknown> | null;
-    syncHealth?: BillsMirrorHealth;
-    actualBudgetUrl?: string | null;
-  } | null;
 }
 
 export interface CurrentProviderOptions {
@@ -36,25 +30,8 @@ export interface CurrentDashboardProvider {
   hasUsablePayload(payload: unknown): boolean;
   fetchFresh(userId: string, config: UserConfig, options?: CurrentProviderOptions): Promise<unknown>;
   fetchedAt?(payload: unknown): string | null;
-  visibleProjection?(payload: unknown): unknown;
-  shouldPublishChange?(
-    previousRow: CurrentDashboardCacheRow | null | undefined,
-    previousPayload: unknown,
-    nextPayload: unknown,
-  ): boolean;
   refreshReasonOverride?(input: CurrentProviderHookInput): string | null;
   manualRefreshReason?(input: CurrentProviderHookInput): string | null;
-  passiveSuppressReason?(input: CurrentProviderHookInput): string | null;
-  maintenanceRefreshReason?(input: CurrentProviderHookInput): string | null;
-  onRefreshed?(
-    userId: string,
-    previous: {
-      previousRow: CurrentDashboardCacheRow | undefined;
-      previousPayload: unknown;
-    },
-    nextPayload: unknown,
-    options?: { now?: Date; refreshReason?: string | null },
-  ): void;
 }
 
 export interface DeadlinesPayload extends Record<string, unknown> {
@@ -70,7 +47,6 @@ export interface CurrentDashboardServiceOptions {
 export interface CurrentRefreshRunnerOptions extends CurrentDashboardServiceOptions {
   force?: boolean;
   forceKeys?: Set<CurrentDashboardCacheKey>;
-  refreshReasons?: Partial<Record<CurrentDashboardCacheKey, string>>;
 }
 
 export type { CurrentDashboardCacheRow, CurrentDashboardCacheRows };

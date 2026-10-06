@@ -102,7 +102,7 @@ describe("recurring-family newest-first dominance", () => {
         body_snippet: "Statement balance attached.",
         email_date: "2026-03-25T12:00:00Z",
         triage_category: "finance",
-        triage_bill_candidate_json: "{\"amount\":42}",
+        triage_escalation_badge: "Review",
       },
       {
         ...family,
@@ -131,7 +131,6 @@ describe("recurring-family newest-first dominance", () => {
         triage_lane: "needs_attention",
         triage_deadline_at: "2026-04-01T00:00:00Z",
         triage_handled_at: "2026-04-02T00:00:00Z",
-        triage_bill_candidate_json: "{\"amount\":42}",
       },
       {
         ...family,
@@ -213,7 +212,7 @@ describe("recurring-family newest-first dominance", () => {
         body_snippet: "Statement balance attached.",
         email_date: "2026-03-25T12:00:00Z",
         triage_category: "finance",
-        triage_bill_candidate_json: "{\"amount\":42}",
+        triage_escalation_badge: "Review",
       },
       {
         ...family,
@@ -238,7 +237,7 @@ describe("recurring-family newest-first dominance", () => {
         body_snippet: "Statement note.",
         email_date: "2026-03-25T12:00:00Z",
         triage_category: "finance",
-        triage_bill_candidate_json: "{\"amount\":42}",
+        triage_escalation_badge: "Review",
       },
       {
         ...family,
@@ -276,7 +275,7 @@ describe("thread-recency newest-first dominance", () => {
         body_snippet: "Quote attached.",
         email_date: "2026-03-25T12:00:00Z",
         triage_category: "finance",
-        triage_bill_candidate_json: "{\"amount\":42}",
+        triage_escalation_badge: "Review",
       },
       {
         ...base,
@@ -303,7 +302,7 @@ describe("thread-recency newest-first dominance", () => {
         body_snippet: "Note.",
         email_date: "2026-03-25T12:00:00Z",
         triage_category: "finance",
-        triage_bill_candidate_json: "{\"amount\":42}",
+        triage_escalation_badge: "Review",
       },
       {
         ...base,

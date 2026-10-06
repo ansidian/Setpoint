@@ -1,56 +1,21 @@
 # Server Bills Map
 
-Bill domain logic: owner-requested AI extraction, deterministic profile-authorized financial-email planning, and the bills mirror. Entry point is `bills-service.ts`, which drives the `server/actual/` engine layer and owns Actual-metadata invalidation fan-out on writes.
+The Actual schedule mirror that feeds the read-only Finances page, plus the Actual connection/cache facade. Nothing here writes to Actual.
 
 ## Files
 
-- `bills-service.ts` — public bills API; owns Actual-metadata invalidation fan-out on writes; verified imports persist a fallback before immediate metadata/occurrence publication from the synchronized local budget
-- `bill-extract.ts` — supplies complete bounded semantic email evidence for financial extraction; rejects incomplete source bodies
-- `bill-extraction-service.ts` — owns candidate-only LLM extraction/verification for owner-requested Extract and record (deterministic for registered providers)
-- `bill-semantic-prompt.ts` — public bills-domain entry that owns first-pass bill-semantic extraction instructions shared by email triage and manual extraction
-- `bill-extractors/catalog.ts` — bill-extraction defaults and validation facade over the centralized AI model catalog
-- `bill-extractors/anthropic.ts` — Claude tool-use extraction call; records provider usage before field parsing
-- `bill-extractors/openai.ts` — OpenAI structured-JSON extraction call; records provider usage before field parsing
-- `billAmountVerifier.ts` — bounded second-pass LLM audit for incomplete amount coverage or ungrounded/conflicting monetary labels; failed audits block canonical selection
-- `billEventVerifier.ts` — second-pass event admission and semantic audit; grounded financial/nonfinancial/uncertain outcomes, type/account evidence and persisted attempt markers
-- `bill-candidate-verification-service.ts` — public bills-domain facade for semantic amount and event verification of triage and extraction candidates
-- `financial-email-planner.ts` — deterministic financial-email contract seam with saved owner context; requires a parsed candidate, classifies purpose, preserves intended versus final operation, derives stable identity, adapts reconciliation, calls no AI, and never writes to Actual or persists plans
-- `financial-profiles.ts` — public owner-profile persistence and validation facade; exact sender identities, budget-bound Actual destinations, with revisions for write admission
-- `financialProfilePlanning.ts` — exact profile matching, grounded account-conflict checks, current target resolution and schedule-cycle identity independent of profile IDs
-- `financialProfileSuggestion.ts` — source-grounded missing-profile drafts using only unambiguous existing Actual targets; suggestions grant no automation authority
-- `financial-email-adoption-service.ts` — read-only reader resolution: managed event plan, otherwise a saved historical plan, otherwise null; never plans or writes
-- `financial-email-observe-report.ts` — read-only legacy planner sample plus owner/window document/event outcomes; separates expected review, operational failures and retired history, groups provider/template/parser-version dispositions, and counts writes once per event
-- `financialEmailClassificationPolicy.ts` — validates source-grounded semantic identity and classifies document/intent independently of resolved Actual targets; ambiguous payment purposes stay review
-- `financialEmailAutomationPolicy.ts` — semantic consistency, saved profile authority, amount/date, authentication and Actual gates; automatic classes are expenses, income, utility bills and card-payment schedules from statements or scheduled-payment confirmations
-- `financialEmailIdentity.ts` — one-way, versioned stable identity derived from owner, provider account, provider message, and optional candidate hint
-- `financialEmailSourceIdentity.ts` — validates normalized email authentication projections and adapts them into planner source identity
-- `financialEmailTargetInference.ts` — Package 2 deterministic Actual target inference from metadata, schedules, and bounded direction-aware history; returns provenance and competing candidates; owns the optional constrained-ranking seam types (no production ranker)
-- `financialEmailAccountEvidence.ts` — exact card-product identity, constrained existing-account ranking, and signed schedule topology for transfer targets; never guesses a funding account
-- `financialEmailHistoryEvidence.ts` — bounded account/payee history bundles, repeated compatible target evidence and constrained history ranking; categories never split identity bundles
-- `financialEmailPlanningEvidence.ts` — pure required semantic, canonical amount and operation-date reasons for the planner
-- `financialEmailImportedHistory.ts` — exact imported-ID target evidence projected from Actual transaction history
-- `financialEmailMerchantCandidates.ts` — bounded generic merchant similarity retrieval over real Actual payees plus repeated direction/account-compatible history; unresolved merchants also rank existing non-transfer payees without requiring history, and unresolved plausible matches block new-payee creation
-- `financialEmailRewardEvidence.ts` — owner accounting policy for provider-recognized external income plus evidence-gated Cashback payee/category and settlement-account discovery; ambiguous Actual evidence remains unresolved
-- `billSemanticAmountPolicy.ts` — canonical semantic amount selection for the planner; card statements require the full statement balance and minimum due is never operational
-- `statementActualStatusModel.ts` — strict pure matcher for statement candidates against Actual schedules, occurrences, and exact transactions
-- `bills-mirror-sync.ts` — syncs bill occurrences into `ea_bills_mirror_*`, runs five-minute maintenance with one-minute failure retry; thin IO + scheduler + refresh-orchestration over billsMirrorModel.ts
+- `bills-service.ts` — public facade: Actual connection save/remove/test, local cache hydration and status, and mirror re-exports
+- `bills-mirror-sync.ts` — syncs Actual schedule occurrences into `ea_bills_mirror_*`, runs five-minute maintenance with one-minute failure retry; thin IO + scheduler + refresh-orchestration over billsMirrorModel.ts
 - `billsMirrorModel.ts` — pure derivation: date/range math, mirror row<->object projections, upsert arg builders, and the maintenance-due predicate
-- `bills-mirror-refresh-policy.ts` — pure guard: should a reader kick an immediate mirror refresh, or is a settle window already armed
 
 (Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)
 
 ## Local patterns
 
-- Bills write through `server/actual/actual.ts`; this domain decides *what* to write, the actual domain decides *how*.
-- Generic card/account last-four references may resolve through the exact saved profile without a product name in the email or suffix in Actual; named destinations and conflicting suffixes still require agreement.
-- Only an enabled, unambiguous profile in the current budget authorizes automatic writes. Unmatched inference stays review-only; reminder and completed card-payment notices are ignored before missing-fact audits. Saved profile revisions are rechecked at first write admission.
-- Categories are optional for all planning sources. Only deterministic evidence may prefill a category; missing or conflicting category evidence never blocks a resolved account/payee, and old category-only blockers refresh once on read.
-- Extraction leaves unstated operation dates null. The shared timing context distinguishes initial undated purchase confirmations from follow-ups without merchant/subject rules; independent audits can revoke that context. The managed event worker alone derives an original-email date with server-owned provenance.
-- Extraction providers are registered in `bill-extractors/catalog.ts`; add new providers there, not inline.
-- Provider adapters record actual extraction/verification attempts under their caller's AI usage context (owner extraction or triage). Planning itself creates no usage events.
+- The mirror is a read model of Actual. The SDK worker in `server/actual/` alone syncs the local budget; this domain only projects it.
 
 ## Related
 
-- `server/actual/` — engine layer this domain drives
-- `server/routes/briefing/bills.ts` — HTTP surface
-- `FLOWS.md` — bill-pay/Actual sync flow, hop by hop
+- `server/actual/` — SDK worker and local budget readers this domain drives
+- `server/routes/briefing/actual-connection.ts` — HTTP surface
+- `server/finances/` — the Finances page composition that reads the mirror

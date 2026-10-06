@@ -47,7 +47,7 @@ function shellProps(overrides: Record<string, unknown> = {}) {
     },
     floating: { floatingDetail: { open: false }, onCloseFloatingDetail: () => {} },
     handlers: { navigateMonth: () => {}, onViewChange: () => {}, focusDeadlineTask: () => {}, navigateToToday: () => {} },
-    availableCalendarViews: ["events", "bills"],
+    availableCalendarViews: ["events"],
     ...overrides,
   };
 }

@@ -1,14 +1,10 @@
 import { demoTodoistProjects } from "./taskFields";
-import type { DemoSeed } from "./store.ts";
 import { demoEmailAiUsageStats, demoLegacyTriageStats } from "./emailAiUsageData.ts";
-import { buildDemoDashboardFinance } from "./dashboardFinance.ts";
 import { getDemoTodoistSetupResponse, NO_DEMO_TODOIST_SETUP_RESPONSE } from "./todoistSetupAdapter.ts";
 
 export const NO_DEMO_REFERENCE_RESPONSE = Symbol("NO_DEMO_REFERENCE_RESPONSE");
 
-export function getDemoReferenceResponse({ pathname, method, seed }: { pathname: string; method: string; seed: DemoSeed }): unknown {
-  if (pathname === "/api/briefing/financial-events/review-changes" && method === "GET") return { items: [], cursor: null, hasMore: false };
-  if (pathname === "/api/dashboard/finance" && method === "GET") return buildDemoDashboardFinance(seed);
+export function getDemoReferenceResponse({ pathname, method }: { pathname: string; method: string }): unknown {
   if (pathname === "/api/ea/triage/cache-stats") return demoLegacyTriageStats();
   if (pathname === "/api/ea/email-ai/usage") return structuredClone(demoEmailAiUsageStats());
   const todoistSetupResponse = getDemoTodoistSetupResponse(pathname, method, pathname);
@@ -30,8 +26,5 @@ export function getDemoReferenceResponse({ pathname, method, seed }: { pathname:
   }
   if (pathname.match(/^\/api\/alfred\/conversations\/[^/]+$/) && method === "DELETE") return { ok: true };
   if (pathname === "/api/ea/geocode") return [];
-  if (pathname === "/api/briefing/actual/accounts") return structuredClone(seed.actualMetadata.accounts);
-  if (pathname === "/api/briefing/actual/payees") return structuredClone(seed.actualMetadata.payees);
-  if (pathname === "/api/briefing/actual/categories") return structuredClone(seed.actualMetadata.categories);
   return NO_DEMO_REFERENCE_RESPONSE;
 }

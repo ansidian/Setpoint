@@ -9,19 +9,12 @@ export interface CalendarDomainItem {
   due_date?: string;
   dueDate?: string;
   date?: string;
-  next_date?: string;
   points_possible?: number;
-  scheduleId?: unknown;
-  direction?: unknown;
-  payee?: unknown;
-  amount?: unknown;
   [key: string]: unknown;
 }
 
 export interface CalendarDomainDataShape {
   upcoming?: CalendarDomainItem[];
-  schedules?: CalendarDomainItem[];
-  transactions?: CalendarDomainItem[];
   stats?: Record<string, unknown>;
   [key: string]: unknown;
 }
@@ -105,17 +98,6 @@ export function filterCalendarDomainDataForMonth<T>(data: T, key: string): T {
   if (Array.isArray(shape.upcoming)) {
     return filterSectionForMonth(next, key);
   }
-  // Bills range data is { schedules: [...occurrences], payeeMap, ... }. Keep only
-  // the occurrences whose date falls in this month so each month-key caches its
-  // own slice (the server caps a single range request at ~2 months, so wide
-  // windows arrive as several month-group fetches that get split here).
-  if (Array.isArray(shape.schedules)) {
-    shape.schedules = shape.schedules.filter((occurrence) => monthKeyFromDate(occurrence?.next_date) === key);
-    if (Array.isArray(shape.transactions)) {
-      shape.transactions = shape.transactions.filter((transaction) => monthKeyFromDate(transaction?.date) === key);
-    }
-    return next;
-  }
   return next;
 }
 
@@ -155,43 +137,6 @@ function combineDeadlineDataForRange<T>(
   } as T;
 }
 
-function combineBillsDataForRange<T>(
-  entries: CalendarDomainCacheEntry<T>[],
-  start: string,
-  end: string,
-  emptyData: T,
-): T {
-  const baseValue = clone(entries.find((entry) => Array.isArray(asDomainShape(entry?.data)?.schedules))?.data)
-    || clone(emptyData) || { schedules: [] } as T;
-  const base = asDomainShape(baseValue) ?? { schedules: [] };
-  const seen = new Set<unknown>();
-  const schedules: CalendarDomainItem[] = [];
-  const seenTransactions = new Set<unknown>();
-  const transactions: CalendarDomainItem[] = [];
-  for (const entry of entries) {
-    for (const occurrence of asDomainShape(entry?.data)?.schedules || []) {
-      const date = occurrence?.next_date;
-      if (!date || date < start || date > end) continue;
-      const identity = occurrence?.id ?? `${occurrence?.scheduleId ?? ""}:${date}`;
-      if (seen.has(identity)) continue;
-      seen.add(identity);
-      // Shallow copy: bill occurrences have no mutation flow at all today
-      // (nothing calls updateData for the bills range) — a top-level copy is
-      // enough to sever aliasing with the cache should that ever change.
-      schedules.push({ ...occurrence });
-    }
-    for (const transaction of asDomainShape(entry?.data)?.transactions || []) {
-      const date = transaction?.date;
-      if (!date || date < start || date > end) continue;
-      const identity = transaction?.id ?? `${date}:${transaction?.direction ?? ""}:${transaction?.payee ?? ""}:${transaction?.amount ?? ""}`;
-      if (seenTransactions.has(identity)) continue;
-      seenTransactions.add(identity);
-      transactions.push({ ...transaction });
-    }
-  }
-  return { ...base, schedules, transactions } as T;
-}
-
 export function combineCalendarDomainDataForRange<T>(
   cache: Map<string, CalendarDomainCacheEntry<T>>,
   keys: readonly string[],
@@ -206,9 +151,6 @@ export function combineCalendarDomainDataForRange<T>(
   if (Array.isArray(shape?.upcoming)) {
     return combineDeadlineDataForRange(entries, start, end, emptyData);
   }
-  if (Array.isArray(shape?.schedules)) {
-    return combineBillsDataForRange(entries, start, end, emptyData);
-  }
   return base;
 }
 
@@ -217,14 +159,6 @@ export function monthKeysFromCalendarDomainData(data: unknown): string[] {
   const shape = asDomainShape(data);
   for (const item of shape?.upcoming || []) {
     const key = monthKeyFromDate(dueDateOf(item));
-    if (key) keys.add(key);
-  }
-  for (const occurrence of shape?.schedules || []) {
-    const key = monthKeyFromDate(occurrence?.next_date);
-    if (key) keys.add(key);
-  }
-  for (const transaction of shape?.transactions || []) {
-    const key = monthKeyFromDate(transaction?.date);
     if (key) keys.add(key);
   }
   return [...keys];

@@ -1,30 +1,23 @@
 # Finances shell workspace
 
-Payments-first `/finances` surface; `/finance` remains the retained record/review foreground.
+Read-only `/finances` view of Actual Budget: Payments (schedules and their recorded transactions) and Journal (recorded transactions). Setpoint never writes financial data; the only persisted edit is the Payments display layout (Organize), which never changes Actual.
 
-- `FinancesWorkspace.tsx` — view composition, refresh and foreground entrances; mobile uses one compact title/Activity header with shared app actions
+- `FinancesWorkspace.tsx` — view composition, refresh and row/detail routing; calendar day entries open the same row details as the ledger; mobile uses one compact title header with shared app actions
 - `src/components/shared/WorkspaceLoading.tsx` — app-level loading owner; Finances registers its wallet hero through startup, lazy code and initial Payments/Journal reads without remounting the animation
-- `financesNavigation.ts` — discriminated Utilities, schedule and Journal URL targets
+- `financesNavigation.ts` — discriminated Payments, schedule and Journal URL targets
 - `financeWorkspaceModel.ts` — date/currency presentation and exact Journal topology
 - `FinanceDetailDrawer.tsx` — desktop calendar-replacement panel and full-height mobile sheet with focus restoration and Escape dismissal
-- `PaymentDetail.tsx` — unified payment facts and monthly payment history composition
+- `PaymentDetail.tsx` — payment facts, unconfirmed schedule claims, monthly payment history and an Open in Actual link when the budget URL is configured
 - `PaymentStatusList.tsx` — aligned status, due/payment dates and amounts within saved user-defined groups
 - `paymentLedgerSort.ts` — recurring ledger ordering with unknown values last
-- `MonthlyPaymentChart.tsx` — twelve-month Actual payment history and original-bill markers, with month selection and Journal actions
-- `CalendarPaymentPreview.tsx` — calendar-origin quick facts and actions, anchored on desktop and a sheet on mobile, preserving day context
-- `PaymentMonthDetails.tsx` — bounded floating desktop and inline mobile month activity, with direct original-email modal actions
-- `monthlyPaymentModel.ts` — monthly recorded totals, deduplicated transactions, and original sources associated by exact payment IDs or bill date within the same twelve months
-- `paymentPresentationModel.ts` — exact occurrence settlement, independent recorded history and shared row/calendar projection
-- `UtilityDetail.tsx` — direct original-email preview and saved-record actions for a month’s bill
+- `MonthlyPaymentChart.tsx` — twelve-month Actual payment history with month selection
+- `PaymentMonthDetails.tsx` — bounded floating desktop and inline mobile month records with View in Journal actions
+- `monthlyPaymentModel.ts` — per-month totals of unique recorded payments (reciprocal transfer pairs count once)
+- `paymentPresentationModel.ts` — exact occurrence settlement from Actual schedules and recorded history, plus the shared row/calendar projection
+- `recurringPaymentModel.ts` — exact Actual schedule links
 - `FinanceJournal.tsx` — month-scoped Actual rows with split/pair expansion and calendar-linked day selection; mobile selection filters to that day until Show all days or a month change, desktop selection scrolls the full ledger; calendar UI/model live in the calendar area
+- `PaymentGroupEditor.tsx` and `payment-groups.css` — staged inline organization, direct row/group dragging, keyboard moves, rename validation and Save/Cancel; persistence is budget-bound display layout keyed by `schedule:<id>` and independent from Actual categories
+- `PaymentRowContent.tsx` — shared ledger, editor and drag-preview payment facts
 - `finances.css` — dense desktop/mobile layout and control states
 
-No provider calls or inferred financial joins in render trees. Source email uses the existing protected reader. Reads refresh on financial publication, Actual invalidation, focus and tab restoration. Statement history grows from future financial events; there is no backfill workflow.
-
-Statements retain one original source per managed bill record and preserve prior cycles. Settled facts come from the original receipt; later related emails remain in saved-record history. Payment activity comes from exact Actual evidence, never follow-up email notices. Original sources live in the chart’s existing twelve months, attached to exact recorded payments when available; source-only months never imply a payment amount. The compact month preview scrolls within a bounded region, and Original email opens the shared preview modal above it while preserving selection and focus. There is no separate source-history accordion or chart legend; older records remain available in Activity.
-
-- `recurringPaymentModel.ts` — shared exact schedule/provider links
-- `RecurringPaymentCard.tsx` — Dashboard recurring-payment glance with recorded semantics
-
-- `PaymentGroupEditor.tsx` and `payment-groups.css` — staged inline organization, direct row/group dragging, keyboard moves, rename validation and Save/Cancel; persistence is budget-bound and independent from Actual financial categories
-- `PaymentRowContent.tsx` — shared ledger, editor and drag-preview payment facts
+No provider calls or inferred financial joins in render trees. Only explicit transaction links settle an occurrence; schedule membership supplies history, and a paid schedule claim without a matching recorded transaction stays unconfirmed. Reads refresh on focus and tab restoration.

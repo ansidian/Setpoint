@@ -69,10 +69,6 @@ export interface InboxEmailLike {
   pinned_at?: string;
   provider_state?: string | null;
   verification_code?: SnapshotVerificationCode | null;
-  hasBill?: boolean;
-  extractedBill?: Record<string, unknown> | null;
-  bill_candidate?: Record<string, unknown> | null;
-  billModel?: string | null;
   web_url?: string | null;
   claude?: {
     summary?: string;

@@ -37,8 +37,6 @@ export interface CalendarModalControllerOptions {
   onViewChange?: (view: string) => void;
   eventsData?: ControllerEventsData | null;
   onEventsVisibleRangeChange?: (range: { start: string; end: string }) => void;
-  billsData?: Record<string, unknown>;
-  billsRangeData?: ControllerRangeData<Record<string, unknown>> | null;
   deadlinesData?: unknown;
   deadlinesRangeData?: ControllerRangeData<unknown> | null;
   weatherData?: unknown;
@@ -63,8 +61,6 @@ export default function useCalendarModalController({
   onViewChange,
   eventsData,
   onEventsVisibleRangeChange,
-  billsData,
-  billsRangeData,
   deadlinesData,
   deadlinesRangeData,
   weatherData,
@@ -292,8 +288,6 @@ export default function useCalendarModalController({
     planningReadiness,
     deadlinesData,
     deadlineOverlay,
-    billsData,
-    billsRangeData,
   });
 
   const {
@@ -324,7 +318,7 @@ export default function useCalendarModalController({
       handleFloatingDeadlineDeleted,
     },
     workspace: {
-      view, onViewChange, billsAvailable: !!billsRangeData?.ensureRange,
+      view, onViewChange,
       floatingDetailRef, setFloatingDetail, shakeFloatingEditor, focusDateKey,
       setSelectedItemId, setDeadlineEditor, setDeadlineDraftPreview,
     },
@@ -412,9 +406,7 @@ export default function useCalendarModalController({
 
   const { calendarSearch, calendarSearchShell } = useCalendarSearchActivation({
     open,
-    view,
     eventsRevision,
-    onViewChange,
     viewYear,
     viewMonth,
     activeView,
@@ -441,24 +433,12 @@ export default function useCalendarModalController({
     activeSelectedItemId,
   });
 
-  const shellViewData = viewData;
-  const domainEnsureRange = "ensureRange" in viewData ? viewData.ensureRange : undefined;
   useCalendarControllerLifecycle({
     open,
     view,
-    fetchYear,
-    fetchMonth,
     completedDeadlineOverlayVisible,
     activeView,
-    computed,
-    viewData: { ensureRange: domainEnsureRange as never, revision: viewData.revision },
-    selection: {
-      activeDateKey: activeSelectedDateKey,
-      activeItemId: activeSelectedItemId,
-      setDateKey: setSelectedDateKey,
-      setDay: setSelectedDay,
-      setItemId: setSelectedItemId,
-    },
+    selection: { setItemId: setSelectedItemId },
     floating: { detail: floatingDetail, detailRef: floatingDetailRef, setDetail: setFloatingDetail },
     eventEditor: {
       editable: eventEditor.editable,
@@ -544,7 +524,7 @@ export default function useCalendarModalController({
     editorState: { deadlineEditor, setDeadlineEditor, setDeadlineDraftPreview },
     refs: { panelRef, scrollRef, agendaRailRef, contextRailRef },
     viewState: { view, viewYear, viewMonth, currentYear, currentMonth, todayDate },
-    data: { activeView, viewData: shellViewData, weatherData, isMonthCached: eventsHasMonth, getMonthEvents: visibleGetMonthEvents, getMonthDeadlines: deadlinesRangeData?.getMonthData || null, eventsRange: eventsData || null, deadlinesRange: deadlinesRangeData || null, dataRevision: eventsCacheStamp + (deadlinesRangeData?.revision ?? 0), getMonthBills: billsRangeData?.getMonthData || null, billsRange: billsRangeData || null, billsDataRevision: billsRangeData?.revision ?? 0 },
+    data: { activeView, viewData, weatherData, isMonthCached: eventsHasMonth, getMonthEvents: visibleGetMonthEvents, getMonthDeadlines: deadlinesRangeData?.getMonthData || null, eventsRange: eventsData || null, deadlinesRange: deadlinesRangeData || null, dataRevision: eventsCacheStamp + (deadlinesRangeData?.revision ?? 0) },
     viewModel,
     selection: { activeSelectedDay, activeSelectedDateKey, setSelectedDay, setSelectedDateKey, setSelectedItemId, setViewDate },
     quickActions: { eventQuickActions, deadlineQuickActions },

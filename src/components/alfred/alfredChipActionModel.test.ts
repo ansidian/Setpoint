@@ -48,19 +48,9 @@ describe("resolveAlfredChipAction", () => {
     expect(action.request.options.forceDeadlineOverlay).toBe(true);
   });
 
-  it("opens both due and paid bill occurrences in Finances", () => {
-    for(const paid of [false,true])expect(resolveAlfredChipAction("bill", {id:"b1:2026-06-14",scheduleId:"b1",next_date:"2026-06-14",paid,openActionDisabled:paid})).toEqual({type:"finances",target:{view:"schedule",scheduleId:"b1",date:"2026-06-14"}});
-  });
-
-  it("returns null for missing items, missing ids, and unknown kinds", () => {
+  it("returns null for missing items and missing ids", () => {
     expect(resolveAlfredChipAction("event", null)).toBeNull();
     expect(resolveAlfredChipAction("event", { title: "no id" })).toBeNull();
     expect(resolveAlfredChipAction("deadline", {})).toBeNull();
-    expect(resolveAlfredChipAction("bill", {})).toBeNull();
-  });
-
-  it("transaction chips require an exact dated target", () => {
-    expect(resolveAlfredChipAction("transaction", { id: "t1", payee: "Trader Joes", amount: 42.1 })).toBeNull();
-    expect(resolveAlfredChipAction("transaction", {id:"t1",date:"2026-07-23"})).toEqual({type:"finances",target:{view:"journal",transactionId:"t1",date:"2026-07-23"}});
   });
 });

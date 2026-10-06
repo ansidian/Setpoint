@@ -9,19 +9,17 @@ function freezeToJan15() {
 }
 
 describe("buildComingUp", () => {
-  it("merges deadlines and bills into one list sorted soonest-first within the window", () => {
+  it("lists deadlines sorted soonest-first within the window", () => {
     freezeToJan15();
     const liveDeadlines = [
       { id: "d1", title: "Finalize notes", due_date: "2026-01-16", status: "open", class_name: "Portfolio" },
       { id: "d2", title: "Runbook", due_date: "2026-01-17", status: "open", project_name: "Engineering" },
     ];
-    const liveBills = [{ id: "b1", name: "Demo Electric", payee: "PG&E", amount: 146.32, next_date: "2026-01-18", paid: false }];
-    const out = buildComingUp({ liveDeadlines, liveBills, days: 7 });
-    expect(out.map((x) => x.id)).toEqual(["deadline:d1", "deadline:d2", "bill:b1"]);
-    expect(out.map((x) => x.kind)).toEqual(["deadline", "deadline", "bill"]);
+    const out = buildComingUp({ liveDeadlines, days: 7 });
+    expect(out.map((x) => x.id)).toEqual(["deadline:d1", "deadline:d2"]);
   });
 
-  it("excludes paid bills, completed deadlines, overdue items, and anything past the window", () => {
+  it("excludes completed deadlines, overdue items, and anything past the window", () => {
     freezeToJan15();
     const liveDeadlines = [
       { id: "done", title: "Done", due_date: "2026-01-16", status: "complete" },
@@ -29,18 +27,14 @@ describe("buildComingUp", () => {
       { id: "far", title: "Far", due_date: "2026-02-01", status: "open" },
       { id: "ok", title: "OK", due_date: "2026-01-17", status: "open" },
     ];
-    const liveBills = [
-      { id: "paid", name: "Paid bill", amount: 10, next_date: "2026-01-16", paid: true },
-      { id: "unpaid", name: "Rent", amount: 2450, next_date: "2026-01-19", paid: false },
-    ];
-    const out = buildComingUp({ liveDeadlines, liveBills, days: 7 });
-    expect(out.map((x) => x.id)).toEqual(["deadline:ok", "bill:unpaid"]);
+    const out = buildComingUp({ liveDeadlines, days: 7 });
+    expect(out.map((x) => x.id)).toEqual(["deadline:ok"]);
   });
 
   it("accepts the { upcoming } wrapper for liveDeadlines as well as a raw array", () => {
     freezeToJan15();
     const wrapped = { upcoming: [{ id: "w", title: "W", due_date: "2026-01-16", status: "open" }] };
-    const out = buildComingUp({ liveDeadlines: wrapped, liveBills: [], days: 7 });
+    const out = buildComingUp({ liveDeadlines: wrapped, days: 7 });
     expect(out.map((x) => x.id)).toEqual(["deadline:w"]);
   });
 
@@ -52,14 +46,10 @@ describe("buildComingUp", () => {
       { id: "boundary", due_date: "2026-01-22" },
       { id: "outside", due_date: "2026-01-23" },
     ];
-    const liveBills = [
-      { id: "today", next_date: "2026-01-15" },
-      { id: "tomorrow", next_date: "2026-01-16" },
-    ];
-    expect(buildComingUp({ liveDeadlines, liveBills, includeToday: false }).map((row) => row.id))
-      .toEqual(["deadline:tomorrow", "bill:tomorrow", "deadline:boundary"]);
-    expect(buildComingUp({ liveDeadlines, liveBills }).filter((row) => row.sortDays === 0).map((row) => row.id))
-      .toEqual(["deadline:today", "bill:today"]);
+    expect(buildComingUp({ liveDeadlines, includeToday: false }).map((row) => row.id))
+      .toEqual(["deadline:tomorrow", "deadline:boundary"]);
+    expect(buildComingUp({ liveDeadlines }).filter((row) => row.sortDays === 0).map((row) => row.id))
+      .toEqual(["deadline:today"]);
   });
 
 });

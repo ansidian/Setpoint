@@ -1,7 +1,7 @@
 import db from "../db/connection.ts";
 import { loadUserConfig } from "../platform/config-service.ts";
 import { providerFor } from "./current-providers/index.ts";
-import { CURRENT_CACHE_KEYS, expiresAtFor, parsePayload } from "./current-sources.ts";
+import { CURRENT_CACHE_KEYS, expiresAtFor } from "./current-sources.ts";
 import { loadCacheRows, saveCacheRow, markCacheRowRefreshFailed } from "./currentCacheStore.ts";
 import type {
   CurrentDashboardCacheKey,
@@ -75,7 +75,6 @@ export async function refreshRows(
   dbClient = db,
   now = new Date(),
   force = false,
-  refreshReasons = {},
   }: CurrentRefreshRunnerOptions = {},
 ): Promise<CurrentDashboardCacheRows> {
   if (!refreshKeys.length) return rows;
@@ -114,10 +113,6 @@ export async function refreshRows(
           last_refresh_error: null,
           refresh_failure_count: 0,
       };
-      provider.onRefreshed?.(userId, {
-        previousRow,
-        previousPayload: parsePayload(previousRow, null),
-      }, payload, { now, refreshReason: refreshReasons[key] || null });
     } catch (err) {
       console.error(`[Dashboard] ${key} refresh failed:`, err instanceof Error ? err.message : String(err));
       refreshedRows[key] = await markCacheRowRefreshFailed(userId, key, err, {
@@ -145,7 +140,6 @@ export function scheduleBackgroundCurrentRefresh(
   now = new Date(),
   force = false,
   forceKeys = new Set(),
-  refreshReasons = {},
   }: CurrentRefreshRunnerOptions = {},
 ): Promise<boolean> {
   const pending: Promise<unknown>[] = [];
@@ -161,7 +155,6 @@ export function scheduleBackgroundCurrentRefresh(
         dbClient,
         now,
         force: force || forceKeys.has(cacheKey),
-        refreshReasons,
       }))
       .catch((err: unknown) => console.error(
         "[Dashboard] background current refresh failed:",

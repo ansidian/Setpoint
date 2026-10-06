@@ -4,17 +4,15 @@ Engine for the `/api/dashboard/current` envelope: cache rows, refresh planning/s
 
 ## Files
 
-- `current-service.ts` — public current-dashboard entrypoints + response composition; wires store/model/runner together, exposes the read-only finance projection and narrow awaited Calendar cache refresh used by provider push
+- `current-service.ts` — public current-dashboard entrypoints + response composition; wires store/model/runner together, exposes the narrow awaited Calendar cache refresh used by provider push
 - `current-service.test-utils.ts` — shared ephemeral dashboard database and external-provider fixtures for service behavior tests
 - `current-types.ts` — server-only provider, context, dependency, and payload contracts
 - `current-sources.ts` — cache-key registry + pure row/health helpers (TTL, usable-payload, content key)
 - `current-events.ts` — SSE event fan-out for current-dashboard changes
-- `currentSystemStatusModel.ts` — per-source successful-check deadlines (Weather/Calendar/Tasks 60m, Bills 15m), per-account email ingestion health and persisted push failures, reconnect evidence, impact text, and Connections repair actions → systemStatus
+- `currentSystemStatusModel.ts` — per-source successful-check deadlines (Weather/Calendar/Tasks 60m), per-account email ingestion health and persisted push failures, reconnect evidence, impact text, and Connections repair actions → systemStatus
 - `currentRefreshPlanModel.ts` — pure refresh planning: `(rows, opts) → { scheduled, skipped }`
 - `currentCacheStore.ts` — all `ea_current_data_cache` reads/writes (load, save, mark-failed, mark-refreshing)
 - `currentRefreshRunner.ts` — async orchestration: fetch-timeout race, refreshRows, background dedup map
-- `dashboard-finance.ts` — read-only finance card facade: bounded local Actual spending, freshness, and independently degraded saved import history
-- `dashboard-finance-model.ts` — Pacific month-to-date comparison ranges and expense/category aggregation
 
 (Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)
 

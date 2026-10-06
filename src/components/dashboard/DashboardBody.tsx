@@ -1,5 +1,3 @@
-import { useNavigate } from 'react-router';
-import { financesHref } from '../finances/financesNavigation';
 import { memo, useState, useEffect, useMemo, useCallback, useRef } from "react";
 import TodayTimeline from "./TodayTimeline";
 import NeedsYouBand from "./needsYou/NeedsYouBand";
@@ -15,11 +13,9 @@ import type { NormalizedCalendarEvent } from "../../../shared/types/calendar";
 import type { ActiveSnapshotView } from "../../../shared/types/snapshots";
 import type { DashboardDeadline, DashboardDeadlineRoot } from "../../context/dashboardTaskProjection";
 import type { CurrentDashboardLiveData } from "../../hooks/currentDashboardModel";
-import type { NeedsYouBill, NeedsYouEmail } from "./needsYou/needsYouModel";
+import type { NeedsYouEmail } from "./needsYou/needsYouModel";
 import { buildNeedsYouModel } from "./needsYou/needsYouModel";
 import { DashboardScheduleNotices } from "./timeline/DashboardScheduleNotices";
-import DashboardFinance from "./finance/DashboardFinance";
-import "./finance/finance-cards.css";
 import "./dashboard-interactions.css";
 
 interface DashboardBodyCalendarRange {
@@ -45,8 +41,6 @@ interface DashboardJumpPayload {
 
 interface DashboardBodyProps {
   liveData: {
-    liveBills?: NeedsYouBill[];
-    allSchedules?: NeedsYouBill[];
     liveCalendar?: DashboardCalendarEvent[] | null;
     liveWeather?: CurrentDashboardLiveData["liveWeather"];
     liveDeadlines?: CurrentDashboardLiveData["liveDeadlines"] | Partial<DashboardDeadlineRoot>;
@@ -63,7 +57,6 @@ interface DashboardBodyProps {
   onOpenEmail: (id: string | number | null) => void;
   onOpenInbox?: (lane?: "needs_attention" | "carryover" | "fyi" | "queued") => void;
   onOpenDeadline: (task: DashboardDeadline, anchor?: HTMLElement) => void;
-  onOpenBillsCalendar: (date: string | null, itemId: string | number | null, item?: Record<string, unknown>, anchor?: HTMLElement) => void;
   onOpenEventsCalendar: (date: string | null, itemId: string | number | null, item?: Record<string, unknown>, anchor?: HTMLElement) => void;
 }
 
@@ -72,9 +65,8 @@ function DashboardBodyInner({
   isMobile = false, calendarDeadlines = undefined, calendarDeadlinesLoading = false,
   calendarDeadlinesError = false,
   domainRefreshing = false,
-  onOpenEmail, onPreviewEmail, onOpenInbox, onOpenDeadline, onOpenBillsCalendar, onOpenEventsCalendar,
+  onOpenEmail, onPreviewEmail, onOpenInbox, onOpenDeadline, onOpenEventsCalendar,
 }: DashboardBodyProps) {
-  const navigate = useNavigate();
   const liveData = liveDataInput as unknown as CurrentDashboardLiveData;
   const { handleCompleteTask } = useDashboard();
   const seededEvents = useMemo(() => liveData.liveCalendar || [], [liveData.liveCalendar]);
@@ -190,17 +182,13 @@ function DashboardBodyInner({
       onOpenEmail(payload.id);
     } else if (payload.kind === "deadline") {
       onOpenDeadline((data || payload) as DashboardDeadline, anchor);
-    } else if (payload.kind === "bill") {
-      const nextDate = typeof data?.next_date === "string" ? data.next_date : payload.date || null;
-      const dataId = typeof data?.id === "string" || typeof data?.id === "number" ? data.id : null;
-      onOpenBillsCalendar(nextDate, payload.id || dataId, data, anchor);
     } else if (payload.kind === "event" && typeof data?.startMs === "number") {
       const ymd = new Intl.DateTimeFormat("en-CA", {
         timeZone: "America/Los_Angeles",
       }).format(new Date(data.startMs));
       onOpenEventsCalendar(ymd, payload.id || getEventSelectionId(data), data, anchor);
     }
-  }, [onPreviewEmail, onOpenEmail, onOpenDeadline, onOpenBillsCalendar, onOpenEventsCalendar]);
+  }, [onPreviewEmail, onOpenEmail, onOpenDeadline, onOpenEventsCalendar]);
 
   // Stable inbox-open handler shared by the band and the context column, so a
   // pure poll/refresh re-render does not hand them a fresh arrow identity.
@@ -253,10 +241,6 @@ function DashboardBodyInner({
         {timeline}
       </DashboardSurface>
       {isMobile && contextColumn}
-      <DashboardFinance bills={liveData.allSchedules || []} billsLoading={liveData.billsLoading} configured={liveData.actualConfigured}
-        health={liveData.billsSyncHealth} refreshing={domainRefreshing}
-        onOpenBill={(bill, anchor) => handleRailJump({ kind: "bill", id: bill.id, date: bill.next_date, data: bill }, anchor)}
-        onOpenTransactions={() => navigate(financesHref({view:"journal"}))} />
     </div>
   );
 

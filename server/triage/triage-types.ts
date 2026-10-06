@@ -74,7 +74,6 @@ export interface TriageDecision extends Record<string, unknown> {
   latency_ms: number | null;
   cheap_model_result: Record<string, unknown> | null;
   strong_model_result: Record<string, unknown> | null;
-  bill_candidate: Record<string, unknown> | null;
   decision_metadata: Record<string, unknown> | null;
   last_decision_reason: string | null;
   error: string | null;

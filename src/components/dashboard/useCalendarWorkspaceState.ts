@@ -23,7 +23,6 @@ interface CalendarWorkspaceOptions {
   setCalendarMounted: Dispatch<SetStateAction<boolean>>;
   liveData: CurrentDashboardLiveData;
   loadCalendarDeadlines: (options?: { force?: boolean }) => void;
-  loadCalendarBills: (options?: { force?: boolean; refreshLive?: boolean }) => void;
   onCalendarWorkspaceChange?: (workspace: DashboardCalendarWorkspaceState) => void;
 }
 
@@ -52,11 +51,9 @@ export default function useCalendarWorkspaceState({
   const calendarEventCreateRequestTokenRef = useRef<symbol | null>(null);
   // Bumped when the active Calendar nav tab is re-tapped on mobile; the calendar
   // controller consumes the counter to scroll the agenda back to today + recenter
-  // the month (the bare navigateToToday reset, overlay-preserving — same semantics
-  // as re-tapping the in-agenda Events/Bills toggle).
+  // the month (the bare navigateToToday reset, overlay-preserving).
   const [calendarJumpTodayRequestId, setCalendarJumpTodayRequestId] = useState(0);
   const [calendarView, setCalendarView] = useState<CalendarView>("events");
-  const showBills = false;
   const [calendarFocus, setCalendarFocus] = useState<string | null>(null);
   const [calendarFocusItemId, setCalendarFocusItemId] = useState<string | null>(null);
   const [calendarFocusOpenDetail, setCalendarFocusOpenDetail] = useState(false);
@@ -70,7 +67,6 @@ export default function useCalendarWorkspaceState({
     const request = resolveCalendarOpenState({
       viewKey,
       currentView: calendarView,
-      showBills,
       focusDate,
       focusItemId,
       options,
@@ -107,7 +103,7 @@ export default function useCalendarWorkspaceState({
     setCalendarMounted(true);
     setShellTab("calendar");
     if (request.shouldLoadDeadlines) loadCalendarDeadlines();
-  }, [calendarView, showBills, loadCalendarDeadlines, setShellTab, setCalendarMounted]);
+  }, [calendarView, loadCalendarDeadlines, setShellTab, setCalendarMounted]);
 
   const jumpCalendarToToday = useCallback(() => {
     setCalendarJumpTodayRequestId((value) => value + 1);

@@ -20,7 +20,7 @@ interface SelectedDayEmptyProps extends EmptyDayActionOptions {
 
 export function CalendarSelectedDayEmptyRail(props: SelectedDayEmptyProps) {
   const primaryAction = emptyDayPrimaryAction(props);
-  const model = getCalendarViewMeta(props.view);
+  const model = getCalendarViewMeta();
   const handleSelectDay = (day: number) => {
     props.setDeadlineEditor?.(null);
     props.setSelectedItemId?.(null);

@@ -25,7 +25,6 @@ import { RowsBlock } from "./AlfredRows";
 import { presentAlfredMessages } from "./alfredMessagePresentation";
 import AlfredComposer from "./AlfredComposer";
 import AlfredEmailPreview from "./AlfredEmailPreview";
-import AlfredTransactionBreakdown from "./AlfredTransactionBreakdown";
 import AlfredBreakdown from "./AlfredBreakdown";
 import AlfredCalendarProposalCard from "./AlfredCalendarProposalCard";
 import type { AlfredEmailItem } from "../../../shared/types/alfred";
@@ -48,8 +47,6 @@ import {
   type AlfredPendingEmailContext,
 } from "./alfredEmailContextModel";
 
-import type { FinanceDestination } from "../finances/financesNavigation";
-
 const text = "var(--sp-text)";
 
 export interface AlfredPanelProps {
@@ -60,12 +57,11 @@ export interface AlfredPanelProps {
   handoff: { id: string | number; query: string } | null;
   emailHandoff?: { id: string | number; source: AlfredEmailContextSource } | null;
   newChatTick: number;
-  onOpenFinances?: (target: FinanceDestination) => void;
   onOpenCalendarItem?: (request: CalendarOpenRequest) => void;
   onReviewCalendarProposal?: (request: CalendarOpenRequest) => void;
 }
 
-function AlfredPanel({ dockTarget = null, open, onClose, accent, handoff, emailHandoff = null, newChatTick, onOpenFinances, onOpenCalendarItem, onReviewCalendarProposal }: AlfredPanelProps) {
+function AlfredPanel({ dockTarget = null, open, onClose, accent, handoff, emailHandoff = null, newChatTick, onOpenCalendarItem, onReviewCalendarProposal }: AlfredPanelProps) {
   const {
     messages,
     busy,
@@ -271,14 +267,11 @@ function AlfredPanel({ dockTarget = null, open, onClose, accent, handoff, emailH
   const onActivateChip = useCallback((action: AlfredChipAction) => {
     if (action.type === "email") {
       setPreviewItem(action.item);
-    } else if (action.type === "finances") {
-      setPreviewItem(null);
-      onOpenFinances?.(action.target);
     } else if (action.type === "calendar") {
       setPreviewItem(null);
       onOpenCalendarItem?.(action.request);
     }
-  }, [onOpenCalendarItem, onOpenFinances]);
+  }, [onOpenCalendarItem]);
 
   const onPreviewAttachment = useCallback((attachment: AlfredEmailAttachmentRef) => {
     setPreviewItem(emailAttachmentPreviewItem(attachment));
@@ -390,7 +383,7 @@ function AlfredPanel({ dockTarget = null, open, onClose, accent, handoff, emailH
                 {pendingEmail ? "Start with this email." : "What would you like to connect?"}
               </div>
               <div style={{ fontSize: 11.5, color: "var(--color-text-faint)", marginTop: 6, lineHeight: 1.55 }}>
-                {pendingEmail ? "Bring in related mail, calendar events, or payments as you need them." : "Find the thread between your mail, calendar, and finances. Calendar events are prepared for your review."}
+                {pendingEmail ? "Bring in related mail, calendar events, or deadlines as you need them." : "Find the thread between your mail, calendar, and deadlines. Calendar events are prepared for your review."}
               </div>
             </div>
             {suggestions ? <div>
@@ -410,7 +403,6 @@ function AlfredPanel({ dockTarget = null, open, onClose, accent, handoff, emailH
               if (m.type === "work-history") return <WorkHistory key={m.id} messages={m.messages} done={m.done} accent={accent} />;
               if (m.type === "say") return <SayBlock key={m.id} text={m.text} done={m.done} preamble={m.preamble} />;
               if (m.type === "rows") return <RowsBlock key={m.id} kind={m.kind} items={m.items as AlfredRow[]} accent={accent} onActivateItem={onActivateChip} />;
-              if (m.type === "summary") return <AlfredTransactionBreakdown key={m.id} buckets={m.buckets} period={m.period} group_by={m.group_by} accent={accent} />;
               if (m.type === "breakdown") return <AlfredBreakdown key={m.id} kind={m.kind} title={m.title} caption={m.caption} total={m.total} buckets={m.buckets as Array<{ label: string; count: number; items: AlfredRow[] }>} accent={accent} onActivateItem={onActivateChip} />;
               if (m.type === "calendar-proposal") return (
                 <AlfredCalendarProposalCard

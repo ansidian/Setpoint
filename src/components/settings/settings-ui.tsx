@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
-import { Check, AlertCircle, AlertTriangle, Info, Loader2 } from "lucide-react";
+import { Check, AlertCircle, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TABS } from "@/components/settings/settings-core";
 import type { SettingsTab } from "@/components/settings/settings-core";
@@ -75,28 +75,6 @@ export function FieldHint({ children, className }: { children: ReactNode; classN
     <p className={cn(FIELD_HINT_CLASS, className)}>
       {children}
     </p>
-  );
-}
-
-export function SettingsNotice({ id, title, tone = "warning", children, className }: {
-  id?: string;
-  title: string;
-  tone?: "warning" | "danger" | "neutral";
-  children: ReactNode;
-  className?: string;
-}) {
-  const Icon = tone === "danger" ? AlertCircle : tone === "warning" ? AlertTriangle : Info;
-  return (
-    <div id={id} role={tone === "danger" ? "alert" : "status"} className={cn(
-      "flex items-start gap-2.5 rounded-md border p-3 text-[12px] leading-relaxed",
-      STATUS_TONE_CLASSES[tone], className,
-    )}>
-      <Icon size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
-      <div className="min-w-0 flex-1">
-        <p className="font-semibold">{title}</p>
-        <div className="mt-1 max-w-[70ch] break-words">{children}</div>
-      </div>
-    </div>
   );
 }
 
@@ -221,7 +199,7 @@ export function SettingsLayout({ activeTab, onTabChange, headerAction, children 
             {headerAction}
           </div>
           <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-            Connections, automation, finance, and owner security.
+            Connections, automation, and owner security.
           </p>
         </header>
 

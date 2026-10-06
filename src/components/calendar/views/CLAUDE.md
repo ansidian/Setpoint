@@ -49,7 +49,6 @@
 - Model files export pure transforms from domain data to display descriptors; components stay thin.
 - Cell content components measure layout tiers and delegate overflow to `CalendarCellItemStack` in `../modal/`.
 - Color precedence: deadline color > source color > default.
-- Bills-view day ledgers order unpaid bills, paid bills, inflows, then outflows; transactions stay read-only.
 
 ## Related
 

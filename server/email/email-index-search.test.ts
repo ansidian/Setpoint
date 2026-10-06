@@ -112,37 +112,4 @@ describe("indexed email search", () => {
     expect(response.results[0]).not.toHaveProperty("search_score");
   });
 
-  it("projects valid triage bill metadata into the existing search result shape", async () => {
-    await seedIndexedEmail(db, {
-      uid: "gmail-gmail-work-bill",
-      subject: "Utility bill",
-    });
-    const billCandidate = {
-      payee_hint: "City Utilities",
-      amount_due: 84.25,
-      dueDate: "2026-05-10",
-    };
-    await db.execute({
-      sql: `INSERT INTO ea_email_triage
-              (user_id, account_id, email_id, triage_status, bill_candidate_json)
-            VALUES (?, ?, ?, 'complete', ?)`,
-      args: ["user-1", "gmail-work", "gmail-gmail-work-bill", JSON.stringify(billCandidate)],
-    });
-
-    const response = await searchEmails("user-1", {
-      q: "utility",
-      dbClient: db,
-    });
-
-    expect(response.results[0]).toMatchObject({
-      hasBill: true,
-      bill_candidate: billCandidate,
-      extractedBill: {
-        payee: "City Utilities",
-        amount: 84.25,
-        due_date: "2026-05-10",
-        type: "expense",
-      },
-    });
-  });
 });

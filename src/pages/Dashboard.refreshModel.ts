@@ -75,9 +75,7 @@ export function resolveDashboardRefreshPlan({
       : null,
     markCalendarEventsStale: explicit && !shouldRefreshVisibleEvents,
     markDeadlineRangeStale: explicit,
-    markBillRangeStale: explicit,
-    markBillsRefreshRequested: explicit,
-    refreshCalendarDomains: explicit ? { force: true, includeBills: true } : null,
+    refreshCalendarDomains: explicit ? { force: true } : null,
   };
 }
 
@@ -90,33 +88,19 @@ export function resolveDashboardCurrentEventPlan(event: CurrentDashboardEventInp
       refreshVisibleEvents: calendarWorkspace.open && calendarWorkspace.view === "events" && range?.start && range.end
         ? { start: range.start, end: range.end }
         : null,
-      markBillsRefreshRequested: false,
-      markBillRangeStale: false,
-      markDeadlineRangeStale: false,
-      refreshCalendarDomains: null,
-    };
-  }
-  if (source === "bills") {
-    return {
-      markBillsRefreshRequested: true,
-      markBillRangeStale: true,
       markDeadlineRangeStale: false,
       refreshCalendarDomains: null,
     };
   }
   if (source === "todoist") {
     return {
-      markBillsRefreshRequested: false,
-      markBillRangeStale: false,
       markDeadlineRangeStale: true,
       refreshCalendarDomains: event.state === "current"
-        ? { force: true, includeBills: false }
+        ? { force: true }
         : null,
     };
   }
   return {
-    markBillsRefreshRequested: false,
-    markBillRangeStale: false,
     markDeadlineRangeStale: false,
     refreshCalendarDomains: null,
   };

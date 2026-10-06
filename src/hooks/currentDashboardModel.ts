@@ -1,5 +1,3 @@
-import type { ActualBillOccurrence } from "../../shared/types/actual";
-import type { BillsMirrorHealth } from "../../shared/types/bills";
 import type { NormalizedCalendarEvent } from "../../shared/types/calendar";
 import type {
   CurrentDashboardProviderHealth,
@@ -49,15 +47,8 @@ export interface CurrentDashboardLiveDataBulk {
   liveNextWeekCalendar: null;
   liveTomorrowCalendar: null;
   liveWeather: CurrentDashboardWeather | null;
-  liveBills: ActualBillOccurrence[];
-  recentTransactions: [];
-  allSchedules: ActualBillOccurrence[];
-  payeeMap: Record<string, string>;
   importantSenders: [];
   lastFetched: string | null;
-  actualConfigured: boolean;
-  actualBudgetUrl: string | null;
-  billsSyncHealth: BillsMirrorHealth | null;
   snoozedEntries: [];
   resurfacedEntries: [];
   providerHealth: CurrentDashboardProviderHealth | null;
@@ -67,7 +58,6 @@ export interface CurrentDashboardLiveDataBulk {
 
 export interface CurrentDashboardLiveData extends CurrentDashboardLiveDataBulk {
   isPolling: boolean;
-  billsLoading: boolean;
 }
 
 export function mergeActiveSnapshotIntoCurrent(
@@ -164,15 +154,8 @@ export function currentToLiveDataBulk(
     liveNextWeekCalendar: null,
     liveTomorrowCalendar: null,
     liveWeather: current?.weather || null,
-    liveBills: current?.bills || [],
-    recentTransactions: [],
-    allSchedules: current?.allSchedules || [],
-    payeeMap: current?.payeeMap || {},
     importantSenders: [],
     lastFetched: current?.fetchedAt || null,
-    actualConfigured: !!current?.actualConfigured,
-    actualBudgetUrl: current?.actualBudgetUrl || null,
-    billsSyncHealth: current?.billsSyncHealth || null,
     snoozedEntries: [],
     resurfacedEntries: [],
     providerHealth: current?.providerHealth || null,

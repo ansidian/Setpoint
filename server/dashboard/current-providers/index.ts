@@ -11,18 +11,13 @@
 //     // Optional hooks consumed by current-service.ts:
 //     refreshReasonOverride({ row, now, context }),  // schedule even when fresh (reason string)
 //     manualRefreshReason({ row, now, context }),    // always-schedule reason on manual refresh
-//     passiveSuppressReason({ row, now, context }),  // veto a scheduled passive refresh (reason string)
-//     maintenanceRefreshReason({ row, now, context }), // schedule + force on the maintenance tick
-//     onRefreshed(userId, { previousRow, previousPayload }, payload, { now, refreshReason }),
-//     visibleProjection(payload),                    // user-visible subset for change detection
 //   }
 //
 // `context` carries cross-provider state loaded by the engine per request:
-// { todoistHealth, billsMirror }.
+// { todoistHealth }.
 import weatherProvider from "./weather-provider.ts";
 import calendarProvider from "./calendar-provider.ts";
 import deadlinesProvider from "./deadlines-provider.ts";
-import billsProvider from "./bills-provider.ts";
 import type { CurrentDashboardCacheKey } from "../../../shared/types/dashboard.ts";
 import type { CurrentDashboardProvider } from "../current-types.ts";
 
@@ -30,7 +25,6 @@ export const CURRENT_DATA_PROVIDERS: readonly CurrentDashboardProvider[] = [
   weatherProvider,
   calendarProvider,
   deadlinesProvider,
-  billsProvider,
 ] as const;
 
 const PROVIDERS_BY_KEY = new Map<string, CurrentDashboardProvider>(

@@ -20,7 +20,7 @@ const groupKey = (id: string) => `group:${id}`;
 const headingKey = (id: string) => `heading:${id}`;
 const transition = { duration: 180, easing: 'cubic-bezier(.2,.7,.2,1)' };
 const animation = (args: Parameters<typeof defaultAnimateLayoutChanges>[0]) => defaultAnimateLayoutChanges({ ...args, wasDragging: true });
-const itemIdentity = (row: PaymentPresentationRow) => row.utilityId ? `utility:${row.utilityId}` : `schedule:${row.scheduleId}`;
+const itemIdentity = (row: PaymentPresentationRow) => `schedule:${row.scheduleId}`;
 
 function moveItem(value: PaymentOrganization, id: string, groupId: string, index: number): PaymentOrganization {
   const source = value.groups.find(group => group.itemIds.includes(id));
@@ -97,8 +97,8 @@ export default function PaymentGroupEditor({ organization, items, rows, onSave, 
   const sensors = useSensors(useSensor(MouseSensor, { activationConstraint: { distance: 6 } }), useSensor(TouchSensor, { activationConstraint: { delay: 160, tolerance: 5 } }));
   const knownItems = new Map(items.map(item => [item.id, item]));
   const rowByItem = new Map<string, PaymentPresentationRow>();
-  // Prefer a received statement as the representative in Organize; all occurrences move together.
-  for (const row of rows) if (!rowByItem.has(itemIdentity(row)) || row.amountKind === 'statement') rowByItem.set(itemIdentity(row), row);
+  // The first occurrence represents its schedule in Organize; all occurrences move together.
+  for (const row of rows) if (!rowByItem.has(itemIdentity(row))) rowByItem.set(itemIdentity(row), row);
   const changed = JSON.stringify(draft) !== JSON.stringify(organization) || !!rename && rename.value.trim() !== draft.groups.find(group => group.id === rename.id)?.name;
   const disabled = saving || !!rename || !!settlingGroup && !picked;
   const focus = (kind: Picked['kind'], id: string) => requestAnimationFrame(() => {

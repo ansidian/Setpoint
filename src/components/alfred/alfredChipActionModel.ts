@@ -1,4 +1,4 @@
-// Exact financial targets open Finances; event and deadline targets open Calendar.
+// Event and deadline targets open Calendar; email targets open the panel-local preview.
 import {
   dashboardDeadlineCalendarRequest,
 } from "../dashboard/dashboardShellModel";
@@ -6,10 +6,7 @@ import { pacificYMD } from "../calendar/calendarDateUtils";
 import type { AlfredEmailItem, AlfredItemKind } from "../../../shared/types/alfred";
 import type { CalendarOpenRequest } from "../dashboard/dashboardShellModel";
 
-import type { FinanceDestination } from "../finances/financesNavigation";
-
 export type AlfredChipAction =
-  | { type: "finances"; target: FinanceDestination }
   | { type: "email"; item: AlfredEmailItem }
   | { type: "calendar"; request: CalendarOpenRequest };
 
@@ -38,14 +35,6 @@ export function resolveAlfredChipAction(
   if (kind === "deadline") {
     if (!item.id) return null;
     return { type: "calendar", request: dashboardDeadlineCalendarRequest(item) };
-  }
-  if (kind === "bill") {
-    if (!item.id) return null;
-    return { type: "finances", target: { view: "schedule", scheduleId: String(item.scheduleId || item.id).replace(/:\d{4}-\d{2}-\d{2}$/, ""), date: typeof item.next_date === "string" ? item.next_date : undefined } };
-  }
-  if (kind === "transaction") {
-    if (!item.id || typeof item.date !== "string") return null;
-    return { type: "finances", target: { view: "journal", transactionId: String(item.id), date: item.date } };
   }
   return null;
 }

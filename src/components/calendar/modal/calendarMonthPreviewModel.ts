@@ -119,7 +119,6 @@ export function buildCalendarMonthPreviewComputed<TEvent extends CalendarPreview
   fullDataEvents?: TEvent[];
   hasFullData: boolean;
   activeView: {
-    monthAgnosticItemsByDate?: boolean;
     compute?: (options: {
       data: { events: TEvent[]; deadlineOverlay: CalendarDeadlineOverlay<TDeadline> | null };
       viewYear: number;
@@ -132,7 +131,6 @@ export function buildCalendarMonthPreviewComputed<TEvent extends CalendarPreview
   viewYear: number;
 }): TComputed | null {
   if (typeof activeView.compute !== "function") return null;
-  if (activeView.monthAgnosticItemsByDate) return null;
 
   const mergedEvents = hasFullData
     ? mergeAdjacentEventLists(fullDataEvents, previewEvents)
@@ -204,8 +202,7 @@ function sameInputs<TEvent extends CalendarPreviewEvent, TDeadline>(prior: Calen
 // its last snapshot; every other mounted month renders empty — EXCEPT for data
 // that is already keyed by absolute date. Cell metadata contains the shared
 // forecast window, so every mounted month must receive the live map or weather
-// disappears whenever its date is outside the active month. Bills opt into the
-// same treatment for their range-wide itemsByDate map.
+// disappears whenever its date is outside the active month.
 export interface MountedMonthData {
   viewData: unknown;
   itemsByDay: unknown;
@@ -218,14 +215,12 @@ export function resolveMountedMonthData({
   isCached,
   cached,
   active,
-  shareItemsByDate = false,
   empty = {},
 }: {
   isActive: boolean;
   isCached?: boolean | null;
   cached?: MountedMonthData | null;
   active: MountedMonthData;
-  shareItemsByDate?: boolean;
   empty?: unknown;
 }): MountedMonthData {
   if (isActive) return active;
@@ -237,7 +232,6 @@ export function resolveMountedMonthData({
         cellMetaByDate: cached.cellMetaByDate,
       }
     : { viewData: null, itemsByDay: empty, itemsByDate: empty, cellMetaByDate: empty };
-  if (shareItemsByDate) base.itemsByDate = active.itemsByDate;
   base.cellMetaByDate = active.cellMetaByDate;
   return base;
 }

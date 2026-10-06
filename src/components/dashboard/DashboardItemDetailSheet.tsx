@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowUpRight, CalendarDays, Check, CircleCheck, CreditCard, ExternalLink, Mail, Pencil, ReceiptText, Video } from "lucide-react";
+import { CalendarDays, Check, CircleCheck, ExternalLink, Mail, Pencil, Video } from "lucide-react";
 import AnchoredFloatingPanel from "../shared/pickers/AnchoredFloatingPanel";
 import { RailAction, RailActionGroup } from "../calendar/DetailRailPrimitives";
 import DeadlineDetailCard from "../calendar/views/deadlines/DeadlineDetailCard";
 import EventSelectedCard from "../calendar/views/events/EventSelectedCard";
-import RecurringPaymentCard from "../finances/RecurringPaymentCard";
 import { eventAccent } from "../calendar/views/events/eventDetailModel";
 import { deadlineAccentFor } from "../calendar/views/deadlines/deadlinesModel";
 import { useDashboard } from "../../context/DashboardContext";
@@ -18,7 +17,7 @@ import useIsMobile from "../../hooks/useIsMobile";
 import { selectGlanceActions } from "./glanceActionsModel";
 import type { RefObject } from "react";
 import type { DashboardDeadline } from "../../context/dashboardTaskProjection";
-import type { GlanceActionContext, GlanceActionKey, GlanceKind } from "./glanceActionsModel";
+import type { GlanceActionKey, GlanceKind } from "./glanceActionsModel";
 import type { TodoistEditorTask } from "../todoist/add-task-panel/types";
 
 export type DashboardSheetItem = DashboardDeadline | (Record<string, unknown> & { id?: string });
@@ -27,7 +26,6 @@ interface DashboardItemDetailSheetProps {
   item: DashboardSheetItem | null;
   anchorRef?: RefObject<HTMLElement | null>;
   accent?: string;
-  ctx?: GlanceActionContext;
   onClose: () => void;
   onOpenInCalendar?: () => void;
   onOpenEmail?: (uid: string | number) => void;
@@ -39,15 +37,13 @@ interface DashboardItemDetailSheetProps {
 // detail and Calendar's event/deadline workspaces in a single anchored panel
 // on desktop or bottom sheet on mobile. Cancel/save restore this detail view.
 
-const KIND_LABEL = { deadline: "Deadline", bill: "Bill", event: "Event", email: "Email" };
-const KIND_ICON = { deadline: CircleCheck, bill: ReceiptText, event: CalendarDays, email: Mail };
+const KIND_LABEL = { deadline: "Deadline", event: "Event", email: "Email" };
+const KIND_ICON = { deadline: CircleCheck, event: CalendarDays, email: Mail };
 
 const ACTION_ICON = {
   complete: Check,
   edit: Pencil,
   todoist: ExternalLink,
-  actual: ExternalLink,
-  pay: CreditCard,
   zoom: Video,
   eventUrl: ExternalLink,
   gcal: ExternalLink,
@@ -59,7 +55,6 @@ export default function DashboardItemDetailSheet({
   item,
   anchorRef,
   accent = "#cba6da",
-  ctx,
   onClose,
   onOpenInCalendar,
   onOpenEmail,
@@ -136,7 +131,6 @@ export default function DashboardItemDetailSheet({
   const actions = !item || kind === "email" ? [] : selectGlanceActions({
     kind,
     item: item as Parameters<typeof selectGlanceActions>[0]["item"],
-    ctx,
   });
   const canEdit = actions.some((action) => action.key === "edit");
   const openEdit = useCallback(() => {
@@ -187,7 +181,7 @@ export default function DashboardItemDetailSheet({
     return true;
   };
   const KindIcon = KIND_ICON[kind];
-  const detailAccent = kind === "email" ? "var(--sp-rose)" : kind === "bill" ? "var(--sp-outflow)" : kind === "deadline" ? deadlineAccentFor(item) : eventAccent(item);
+  const detailAccent = kind === "email" ? "var(--sp-rose)" : kind === "deadline" ? deadlineAccentFor(item) : eventAccent(item);
 
   function doComplete() {
     setCompleting(true);
@@ -208,7 +202,7 @@ export default function DashboardItemDetailSheet({
   const actionRow = actions.length ? (
     <RailActionGroup>
       {actions.map((action) => {
-        const Icon = kind === "bill" && action.key === "openInCalendar" ? ArrowUpRight : ACTION_ICON[action.key];
+        const Icon = ACTION_ICON[action.key];
         if (action.type === "link") {
           return (
             <RailAction
@@ -231,7 +225,7 @@ export default function DashboardItemDetailSheet({
             label={isComplete && completing ? "Completing…" : action.label}
             onClick={commandHandlers[action.key]}
             href={undefined}
-            tone={kind === "bill" && action.key === "openInCalendar" ? "default" : action.tone}
+            tone={action.tone}
             size="compact"
             accent={accent}
             disabled={isComplete && completing}
@@ -259,8 +253,6 @@ export default function DashboardItemDetailSheet({
         actions={actionRow}
       />
     );
-  } else if (kind === "bill") {
-    card = <RecurringPaymentCard bill={item} actions={actionRow} />;
   } else {
     card = <EventSelectedCard ev={item} accent={eventAccent(item)} actions={actionRow} />;
   }

@@ -22,7 +22,6 @@ import { MOBILE_MEDIA_QUERY } from "./lib/breakpoints";
 import WorkspaceRoute from "./pages/WorkspaceRoute";
 import MouseSpotlightCanvas from "./components/layout/MouseSpotlightCanvas";
 import useKeyboardFocusIndicators from "./hooks/useKeyboardFocusIndicators";
-import useFinancialReviewNotifications from "./hooks/useFinancialReviewNotifications";
 import ChunkLoadBoundary from "./components/layout/ChunkLoadBoundary";
 import RecoverableErrorBoundary from "./components/layout/RecoverableErrorBoundary";
 // Single import factory so we can both lazy-mount the Dashboard and warm its
@@ -71,11 +70,6 @@ function SettingsShortcut({ enabled }: SettingsShortcutProps): null {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [enabled, navigate]);
 
-  return null;
-}
-
-function FinancialReviewNotifications({ enabled }: { enabled: boolean }): null {
-  useFinancialReviewNotifications(enabled);
   return null;
 }
 
@@ -128,7 +122,6 @@ function AppContent(): ReactElement {
       <MouseSpotlightCanvas />
       <BrowserRouter basename={resolveRouterBasename()}>
         <SettingsShortcut enabled={authenticated === true} />
-        <FinancialReviewNotifications enabled={authenticated === true && bootstrap.onboardingFinished && !demoMode} />
         <Routes>
           <Route path="/setup" element={
             redirectElement("/setup", bootstrap, (
@@ -164,7 +157,6 @@ function AppContent(): ReactElement {
             ))
           }>
             <Route index element={null} />
-            <Route path="/finance" element={null} />
             <Route path="/finances" element={null} />
             <Route path="/settings" element={
               <RecoverableErrorBoundary>

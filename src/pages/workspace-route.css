@@ -1,0 +1,22 @@
+/* Size the workspace, not the page: useful space grows while reading/form measures stay bounded. */
+[data-workspace-foreground] {
+  --workspace-inline-inset:16px;
+  --workspace-block-inset:16px;
+  --workspace-width:clamp(1024px,88vw,1920px);
+  --workspace-height:min(1600px,calc(100dvh - 2 * var(--workspace-block-inset)));
+  width:min(var(--workspace-width),calc(100% - 2 * var(--workspace-inline-inset)));
+  max-width:none;
+  max-height:var(--workspace-height);
+  transition-property:opacity;
+}
+.workspace-foreground-frame { display:flex; flex-direction:column; height:var(--workspace-height); max-height:var(--workspace-height); }
+@media (min-width:1200px) {
+  [data-workspace-foreground] { --workspace-inline-inset:clamp(16px,2vw,64px); --workspace-block-inset:clamp(16px,3dvh,64px); }
+}
+@media (max-width:639px) { [data-workspace-foreground] { --workspace-inline-inset:8px; } }
+/* Settings spends additional room on navigation and scroll capacity, with bounded form rows. */
+.settings-content { max-width:1280px; margin-inline:auto; }
+@media (min-width:1200px) {
+  .settings-header { padding:clamp(24px,1.5vw,40px) clamp(24px,2vw,48px); padding-right:80px; }
+  .settings-body { grid-template-columns:clamp(180px,13vw,240px) minmax(0,1fr); gap:clamp(24px,2vw,48px); padding:clamp(24px,2vw,48px); }
+}

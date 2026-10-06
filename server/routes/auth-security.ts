@@ -1,9 +1,7 @@
 import { Router } from "express";
 import type { Response } from "express";
 import bcrypt from "bcrypt";
-import crypto from "crypto";
 import rateLimit from "express-rate-limit";
-import db from "../db/connection.ts";
 import {
   getPasswordStepUpThrottle,
   markSessionPasswordAuthenticated,
@@ -36,19 +34,8 @@ import canonicalOriginRoutes from "./auth-canonical-origin.ts";
 const router = Router();
 wrapRouterAsync(router);
 
-const API_TOKEN_TTL_DAYS = Number.parseInt(process.env.EA_API_TOKEN_TTL_DAYS || "90", 10) || 90;
-const API_TOKEN_TTL_MS = API_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000;
-const KNOWN_SCOPES = new Set(["actual:write"]);
 
 class RecoveryFailedError extends Error {}
-
-const tokenMintLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
-  message: { message: "Too many token creations, try again later" },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
 
 const recoveryLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -216,7 +203,6 @@ router.post("/recovery", recoveryLimiter, async (req, res) => {
     nextGeneration = await ownerSecurityTransitionService.transition({
       userId: owner.userId,
       expectedGeneration: owner.securityGeneration,
-      revokeApiTokens: true,
       mutate: async (tx) => {
         const consumed = await tx.execute({
           sql: `UPDATE ea_owner_recovery_codes
@@ -263,110 +249,5 @@ router.post("/recovery", recoveryLimiter, async (req, res) => {
   res.clearCookie(PENDING_AUTH_COOKIE_NAME, { path: "/" });
   return res.json({ authenticated: true, recoveryCodes });
 });
-
-router.get("/api-tokens", requireCookieSession, async (_req, res) => {
-  try {
-    const result = await db.execute({
-      sql: "SELECT id, label, scopes, created_at, last_used_at, expires_at FROM ea_api_tokens ORDER BY created_at DESC",
-      args: [],
-    });
-    const rows = result.rows.map((row) => ({
-      id: row.id,
-      label: row.label,
-      scopes: safeParseScopes(row.scopes),
-      created_at: row.created_at,
-      last_used_at: row.last_used_at,
-      expires_at: row.expires_at,
-    }));
-    res.json(rows);
-  } catch (error) {
-    console.error("Error listing api tokens:", error);
-    res.status(500).json({ message: "Failed to list tokens" });
-  }
-});
-
-// Authenticate before consuming the per-IP mint budget so outsiders cannot
-// lock the owner out of token creation from a shared egress address.
-router.post("/api-tokens", requireRecentPasswordAuth, tokenMintLimiter, async (req, res) => {
-  const { label, scopes } = req.body || {};
-  if (!label || typeof label !== "string" || !label.trim()) {
-    return res.status(400).json({ message: "label is required" });
-  }
-  const requestedScopes = Array.isArray(scopes) && scopes.length ? scopes : ["actual:write"];
-  const invalid = requestedScopes.filter((scope) => !KNOWN_SCOPES.has(scope));
-  if (invalid.length) {
-    return res.status(400).json({ message: `Unknown scopes: ${invalid.join(", ")}` });
-  }
-
-  try {
-    const owner = await getOwner();
-    if (!owner) return res.status(409).json({ message: "Instance is not claimed" });
-    const session = passwordSessionContext(res);
-    if (owner.securityGeneration !== session.securityGeneration) return staleSecurityState(res);
-    const raw = `eatk_${crypto.randomBytes(32).toString("base64url")}`;
-    const hash = crypto.createHash("sha256").update(raw).digest("hex");
-    const expiresAt = Date.now() + API_TOKEN_TTL_MS;
-    const nextGeneration = await ownerSecurityTransitionService.transition({
-      userId: owner.userId,
-      expectedGeneration: session.securityGeneration,
-      mutate: async (tx) => {
-        await tx.execute({
-          sql: "INSERT INTO ea_api_tokens (token_hash, label, scopes, created_at, expires_at) VALUES (?, ?, ?, ?, ?)",
-          args: [hash, label.trim(), JSON.stringify(requestedScopes), Date.now(), expiresAt],
-        });
-      },
-    });
-    if (!nextGeneration) return staleSecurityState(res);
-    if (!await issueReplacementPasswordSession(res, nextGeneration, session)) {
-      return staleSecurityState(res);
-    }
-    res.json({ token: raw, label: label.trim(), scopes: requestedScopes, expires_at: expiresAt });
-  } catch (error) {
-    console.error("Error creating api token:", error);
-    res.status(500).json({ message: "Failed to create token" });
-  }
-});
-
-router.delete("/api-tokens/:id", requireRecentPasswordAuth, async (req, res) => {
-  const id = Number.parseInt(req.params.id!, 10);
-  if (!Number.isFinite(id)) {
-    return res.status(400).json({ message: "invalid id" });
-  }
-  try {
-    const owner = await getOwner();
-    if (!owner) return res.status(409).json({ message: "Instance is not claimed" });
-    const session = passwordSessionContext(res);
-    if (owner.securityGeneration !== session.securityGeneration) return staleSecurityState(res);
-    const existing = await db.execute({ sql: "SELECT id FROM ea_api_tokens WHERE id = ?", args: [id] });
-    if (!existing.rows.length) return res.status(404).json({ message: "Token not found" });
-    const nextGeneration = await ownerSecurityTransitionService.transition({
-      userId: owner.userId,
-      expectedGeneration: session.securityGeneration,
-      mutate: async (tx) => {
-        await tx.execute({ sql: "DELETE FROM ea_api_tokens WHERE id = ?", args: [id] });
-      },
-    });
-    if (!nextGeneration) return staleSecurityState(res);
-    if (!await issueReplacementPasswordSession(res, nextGeneration, session)) {
-      return staleSecurityState(res);
-    }
-    res.json({ success: true });
-  } catch (error) {
-    console.error("Error deleting api token:", error);
-    res.status(500).json({ message: "Failed to delete token" });
-  }
-});
-
-function safeParseScopes(raw: unknown): string[] {
-  if (typeof raw !== "string") return [];
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed)
-      ? parsed.filter((scope): scope is string => typeof scope === "string")
-      : [];
-  } catch {
-    return [];
-  }
-}
 
 export default router;

@@ -130,9 +130,6 @@ export interface EmailSearchResult extends Record<string, unknown> {
   account_email: string;
   account_color: string | null;
   account_icon: string | null;
-  hasBill?: true;
-  bill_candidate?: Record<string, unknown>;
-  extractedBill?: Record<string, unknown> | null;
   search_score?: number;
   search_score_details?: {
     score: number;
@@ -223,8 +220,6 @@ export interface SnoozedEmailEntry extends Omit<PinnedEmailEntry, "pinned_at"> {
   pinned?: boolean;
   account_unavailable?: boolean;
   triage_status?: string | null;
-  hasBill?: boolean;
-  bill_candidate?: Record<string, unknown> | null;
   claude?: { summary?: string; draftReply?: string; points?: string[]; bulletPoints?: string[]; why?: string } | null;
   aiSummary?: string | null;
   verification_code?: { code: string; kind: VerificationCodeKind; active_until: string; label: "Verification code" } | null;

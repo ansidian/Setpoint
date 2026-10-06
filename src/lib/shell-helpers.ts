@@ -20,15 +20,9 @@ export interface TimelineDeadline {
   [key: string]: unknown;
 }
 
-export interface TimelineBill {
-  next_date?: string | null;
-  [key: string]: unknown;
-}
-
 export type TimelineItem =
   | { kind: "event"; startMs: number; endMs: number | null | undefined; data: TimelineEvent; sortKey: number }
-  | { kind: "deadline"; dueAtMs: number; data: TimelineDeadline; sortKey: number }
-  | { kind: "bill"; dueAtMs: number; data: TimelineBill; sortKey: number };
+  | { kind: "deadline"; dueAtMs: number; data: TimelineDeadline; sortKey: number };
 
 interface LaneMetadata {
   key: string;
@@ -155,7 +149,7 @@ export function dueDateToMs(dateStr: string | null | undefined, dueTime?: unknow
   // Anchor the wall-clock instant in Pacific time via the DST-aware epochFromLa,
   // instead of a fixed +7h UTC offset (which was an hour early all winter/PST).
   // (P3-15 fixed the same fixed-offset bug with a local pacificOffsetHours; resolved
-  // onto the shared epochFromLa already used by buildTimeline below.)
+  // onto the shared epochFromLa.)
   const dm = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (!dm) return null;
   const year = Number(dm[1]!);
@@ -224,15 +218,13 @@ export function formatChipDateTime(
   return time ? `${date}, ${time}` : date;
 }
 
-// Build a unified chronological stream: events + deadlines + bills.
+// Build a unified chronological stream: events + deadlines.
 export function buildTimeline({
   events = [],
   deadlines = [],
-  bills = [],
 }: {
   events?: TimelineEvent[];
   deadlines?: TimelineDeadline[];
-  bills?: TimelineBill[];
 }): TimelineItem[] {
   const items: TimelineItem[] = [];
   for (const ev of events) {
@@ -243,14 +235,6 @@ export function buildTimeline({
     const ms = dueDateToMs(d.due_date, d.due_time);
     if (ms == null) continue;
     items.push({ kind: "deadline", dueAtMs: ms, data: d, sortKey: ms });
-  }
-  for (const b of bills) {
-    if (!b.next_date) continue;
-    const bm = String(b.next_date).match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (!bm) continue;
-    // ~3pm Pacific, DST-aware (the old fixed 22:00Z was 2pm PST half the year).
-    const ms = epochFromLa(Number(bm[1]!), Number(bm[2]!) - 1, Number(bm[3]!), 15, 0);
-    items.push({ kind: "bill", dueAtMs: ms, data: b, sortKey: ms });
   }
   items.sort((a, b) => a.sortKey - b.sortKey);
   return items;

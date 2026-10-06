@@ -12,7 +12,7 @@ import {
   loadEmailSearchRowsByUid,
 } from "./email-search-lexical-retrieval.ts";
 import { parseEmailSearchQuery } from "./email-search-query.ts";
-import { hasJsonPayload, rankEmailSearchRows } from "./email-search-ranking.ts";
+import { rankEmailSearchRows } from "./email-search-ranking.ts";
 import { recordEmailSearchAiUsage, estimateTokensFromText } from "./email-search-cost-stats.ts";
 import { EMAIL_SEARCH_EMBEDDING_MODEL } from "./email-search-embeddings.ts";
 import type { Client } from "@libsql/client";
@@ -48,7 +48,6 @@ interface EmailSearchCandidateBase extends Record<string, unknown> {
     urgency: unknown;
     deadline_at: unknown;
     escalation_badge: unknown;
-    bill_candidate: boolean;
     handled: boolean;
     provider_removed: boolean;
   };
@@ -208,7 +207,6 @@ function metadataFromRow(row: EmailSearchDbRow): EmailSearchCandidate["metadata"
     urgency: row.snapshot_urgency || row.triage_urgency || "normal",
     deadline_at: row.snapshot_deadline_at || row.triage_deadline_at || null,
     escalation_badge: row.snapshot_escalation_badge || row.triage_escalation_badge || null,
-    bill_candidate: hasJsonPayload(row.triage_bill_candidate_json),
     handled: Boolean(row.snapshot_handled_at || row.triage_handled_at),
     provider_removed: Boolean(row.snapshot_provider_removed_at),
   };

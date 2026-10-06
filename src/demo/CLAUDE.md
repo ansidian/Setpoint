@@ -10,31 +10,21 @@ Build-time fictional walkthrough (`VITE_EA_DEMO=1`). `src/api.ts` routes demo re
 - `dashboardAdapter.ts` — fictional dashboard envelope and source retry timestamps; updates only in-memory seed state.
 - `taskFields.ts` — fictional Todoist project references and mutation-to-read project/label normalization.
 - `apiHandler.ts` — shared request contracts, unhandled sentinel, URL path helpers, and not-found errors.
-- `referenceAdapter.ts` — read/reference responses for settings controls, Actual metadata lists, usage, dashboard finance, and the managed financial review projection/change feed.
+- `referenceAdapter.ts` — read/reference responses for settings controls, usage, Todoist setup and auth helpers.
 - `store.ts` — rolling fictional seed, shared in-memory state, mutation forks, and Pacific date projection.
 - `demoSafeLocalStorage.ts` — inert storage facade for demo call sites that must not persist data.
 - `dateRange.ts` — bounded date-range filtering shared by demo domain reads.
 - `capabilities.ts` — fictional redacted capability and instance-credential status; contains no real credentials.
 - `todoistSetupAdapter.ts` — demo-safe Todoist setup/status responses.
 
-### Mail and finance
-- `inboxData.ts` — fictional email accounts, snapshot lanes, and email bodies; the Market receipt has its own UID/body, separate from the approval/PDF fixture.
+### Mail and Finances
+- `inboxData.ts` — fictional email accounts, snapshot lanes, and email bodies.
 - `snapshotRows.ts` — snapshot row collection and lookup helpers.
 - `snapshotAdapter.ts` — in-memory snapshot history, mail actions, read state, and body/search responses; exact-item dismissal restore and preserved classification through handled/reopen.
 - `emailAttachments.ts` — local fictional attachment descriptors and content.
 - `alfredUsageData.ts` — fictional Alfred usage with provider-specific summaries; no assistant calls
 - `emailAiUsageData.ts` — fictional email-AI usage and legacy triage statistics.
-- `financialHistory.ts` — a two-email fictional bill journey and saved history metadata; related source bodies use the protected demo reader.
-- `financialActivity.ts` — shared fictional read-only imported history plus managed completed, processing and uncertain examples.
-- `financeProjection.ts` — exact-ID fictional Actual objects and settled in-memory ledger/bill projections shared by correction, Calendar and spending consumers; emits the demo-only financial-change event after owner settlement.
-- `financialCorrections.ts` — in-memory fictional inspection, exact previews, confirmation and effective result projection; no SDK or network.
-- `financialCompletion.ts` — fictional managed review plan with an unsaved mapping suggestion, owner-completion and candidate-dismissal mutations.
-- `financialConnections.ts` — fictional canonical provider setup and revision-bound saves; initial and saved settings/pay-link projections share production’s pure helpers
-- `financialProfiles.ts` — fictional unsaved review suggestions and ordinary in-memory Settings updates; retired profile/pay-link writes are rejected
-- `financialReceipt.ts` — one fictional Market receipt UID, sender, source row and body shared by Inbox, managed review and profile suggestion fixtures
-- `financeData.ts` — shared fictional transactions and calendar Bills range projection.
-- `dashboardFinance.ts` — spending comparisons and category totals derived from the shared seed plus import activity.
-- `transactionImports.ts` — fictional read-only import runs/items, dashboard import history, safe receipt bodies and per-email status.
+- `financeData.ts` — fictional Actual transactions behind the demo Journal and Payments.
 
 ### Other feeds
 - `weatherData.ts` — fictional current conditions and forecast.
@@ -50,4 +40,4 @@ Tests are not listed here; follow `AGENTS.md` behavior-ownership guidance.
 - Demo connection flags describe simulated state only. Keep real passwords, tokens, provider operations, and persistent settings out of this directory.
 - Canonical product behavior and provider writes remain in their production domains; this directory supplies only the walkthrough contract.
 
-- `financesWorkspace.ts` — Payments/Journal from preserved fictional utility/card statements and exact shared ledger relationships; utilities derive from canonical connections; revision-checked display organization edits stay in memory and retired mapping writes are rejected
+- `financesWorkspace.ts` — read-only Payments/Journal from fictional schedules and exact shared ledger relationships; revision-checked display organization edits stay in memory

@@ -7,7 +7,7 @@ import {
 import { fetchWithTimeout, type FetchFunction } from "./platform/fetch-with-timeout.ts";
 import type { InstanceCredentialMetadata } from "../shared/types/instance-credentials.ts";
 
-export type AiModelUseCase = "email_triage" | "bill_extraction" | "alfred";
+export type AiModelUseCase = "email_triage" | "triage_fast" | "alfred";
 
 type ProviderDefaults = Record<AiModelUseCase, string>;
 
@@ -41,7 +41,7 @@ const PROVIDERS: Record<AiProvider, ProviderDefinition> = {
     pricingUrl: "https://platform.claude.com/docs/en/about-claude/pricing",
     defaults: {
       email_triage: "claude-sonnet-4-6",
-      bill_extraction: "claude-haiku-4-5",
+      triage_fast: "claude-haiku-4-5",
       alfred: "claude-sonnet-4-6",
     },
   },
@@ -52,7 +52,7 @@ const PROVIDERS: Record<AiProvider, ProviderDefinition> = {
     pricingUrl: "https://developers.openai.com/api/docs/pricing",
     defaults: {
       email_triage: "gpt-5.5",
-      bill_extraction: "gpt-5.5",
+      triage_fast: "gpt-5.5",
       alfred: "gpt-5.6-sol",
     },
   },

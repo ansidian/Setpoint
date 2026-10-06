@@ -10,7 +10,6 @@ import type { ConfiguredEmailAccount, EmailAttachmentContent, EmailHttpError } f
 import { emailErrorMessage } from "./email-provider-types.ts";
 import { evaluateICloudSenderAuthentication } from "./sender-authentication.ts";
 import type { AuthenticationHeader } from "./sender-authentication.ts";
-import { FINANCIAL_EMAIL_SOURCE_LIMITS, FinancialEmailSourceError, parseFinancialEmailSource, type FinancialEmailSource } from "./financial-email-source.ts";
 
 const ICLOUD_HOST = "imap.mail.me.com";
 const ICLOUD_PORT = 993;
@@ -226,15 +225,8 @@ async function normalizeMessage(account: ConfiguredEmailAccount, msg: FetchMessa
   };
 }
 
-function extractAmounts(text: string): string {
-  const matches = text.match(/\$\d[\d,]*\.\d{2}/g);
-  if (!matches || matches.length === 0) return "";
-  const unique = [...new Set(matches)].slice(0, 10);
-  return ` [amounts: ${unique.join(", ")}]`;
-}
-
 // P2-1: decode the raw source ONCE, then derive both the full body_text (for FTS)
-// and the 600-char body_preview (+amounts) from the same clean text.
+// and the 600-char body_preview from the same clean text.
 // D1 fix: MIME-parse with mailparser (same as gmail.ts and fetchEmailBody below)
 // so multipart/quoted-printable/base64 messages index as decoded text, not raw MIME.
 async function extractBodyTextAndPreview(source: Buffer | null | undefined): Promise<{ bodyText: string; bodyPreview: string; headers: AuthenticationHeader[] }> {
@@ -260,7 +252,7 @@ async function extractBodyTextAndPreview(source: Buffer | null | undefined): Pro
   if (source.length >= ICLOUD_INDEX_SOURCE_BYTE_LIMIT) {
     clean = `${clean}\n\n${EMAIL_EVIDENCE_TRUNCATED}`;
   }
-  return { bodyText: clean, bodyPreview: clean.slice(0, 600) + extractAmounts(clean), headers };
+  return { bodyText: clean, bodyPreview: clean.slice(0, 600), headers };
 }
 
 export async function fetchEmailBody(email: string, password: string, uid: string): Promise<EmailBody> {
@@ -293,42 +285,6 @@ export async function fetchEmailBody(email: string, password: string, uid: strin
   } finally {
     lock.release();
   }
-}
-
-/** BODY.PEEK with a byte range never marks read; RFC822.SIZE proves the source is whole. */
-export async function fetchFinancialEmailSource(email: string, password: string, uid: string): Promise<FinancialEmailSource> {
-  const imapUid = uid.match(/^icloud-([1-9]\d*)$/)?.[1];
-  if (!imapUid) throw new FinancialEmailSourceError("financial_source_invalid", "The iCloud source identity is invalid.", 400);
-  const unavailable = (error: unknown): FinancialEmailSourceError => {
-    const timedOut = error instanceof Error && /timed out/i.test(error.message);
-    return new FinancialEmailSourceError(timedOut ? "financial_source_timeout" : "financial_source_unavailable", timedOut ? "iCloud source acquisition exceeded its time limit." : "iCloud source acquisition failed before returning a complete message.", 503);
-  };
-  const client = await getPooledClient(email, password).catch((error: unknown) => { throw unavailable(error); });
-  const lock = await withTimeout(client.getMailboxLock("INBOX"), FINANCIAL_EMAIL_SOURCE_LIMITS.fetchTimeoutMs, "iCloud financial source lock").catch((error: unknown) => {
-    pool.delete(email);
-    client.close();
-    throw unavailable(error);
-  });
-  let message: FetchMessageObject | false;
-  try {
-    message = await withTimeout(client.fetchOne(imapUid, {
-      source: { start: 0, maxLength: FINANCIAL_EMAIL_SOURCE_LIMITS.messageBytes + 1 },
-      size: true, internalDate: true,
-    }, { uid: true }), FINANCIAL_EMAIL_SOURCE_LIMITS.fetchTimeoutMs, "iCloud financial source fetch");
-  } catch (error) {
-    pool.delete(email);
-    client.close();
-    throw unavailable(error);
-  } finally {
-    lock.release();
-  }
-  if (!message || String(message.uid) !== imapUid || !message.source?.length) throw new FinancialEmailSourceError("financial_source_unavailable", "The original iCloud message is unavailable.", 404);
-  if (message.source.length > FINANCIAL_EMAIL_SOURCE_LIMITS.messageBytes || Number(message.size) > FINANCIAL_EMAIL_SOURCE_LIMITS.messageBytes) {
-    throw new FinancialEmailSourceError("financial_source_oversized", "The original iCloud message exceeds the financial evidence byte limit.", 413);
-  }
-  if (message.size !== message.source.length) throw new FinancialEmailSourceError("financial_source_incomplete", "iCloud did not return every byte of the original message.");
-  const date = message.internalDate ? new Date(message.internalDate) : null;
-  return parseFinancialEmailSource(message.source, { provider: "icloud", emailDate: date && Number.isFinite(date.getTime()) ? date.toISOString() : undefined });
 }
 
 export async function fetchEmailAttachment(

@@ -28,7 +28,6 @@ describe("CalendarModal event grid behavior", () => {
             },
           ]),
         }}
-        billsData={{}}
         deadlinesData={{}}
       />,
     ));
@@ -68,7 +67,6 @@ describe("CalendarModal event grid behavior", () => {
             },
           ]),
         }}
-        billsData={{}}
         deadlinesData={{}}
       />,
     ));
@@ -115,7 +113,6 @@ describe("CalendarModal event grid behavior", () => {
             writable: true,
           }]),
         }}
-        billsData={{}}
         deadlinesData={{}}
       />,
     ));
@@ -167,7 +164,6 @@ describe("CalendarModal event grid behavior", () => {
             },
           ]),
         }}
-        billsData={{}}
         deadlinesData={{}}
       />,
     ));
@@ -213,7 +209,6 @@ describe("CalendarModal event grid behavior", () => {
             },
           ]),
         }}
-        billsData={{}}
         deadlinesData={{}}
       />,
     ));

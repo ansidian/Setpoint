@@ -12,6 +12,8 @@ export interface ActualConnectionCandidate {
   serverURL: string;
   password?: string | null;
   syncId: string;
+  /** A non-empty value replaces the stored encryption password; null removes it; absent keeps it. */
+  encryptionPassword?: string | null;
 }
 
 type ActualConnectionTest = typeof testActualConnectionHttp;
@@ -21,15 +23,15 @@ export async function saveActualConnectionCandidate(
   candidate: ActualConnectionCandidate,
   {
     dbClient = db,
-    encryptValue = (value) => encrypt(
+    encryptValue = (value, field = "actual_budget_password_encrypted") => encrypt(
       value,
-      settingsCredentialContext(userId, "actual_budget_password_encrypted"),
+      settingsCredentialContext(userId, field),
     ),
     testConnection = testActualConnectionHttp,
     now = () => new Date(),
   }: {
     dbClient?: Client;
-    encryptValue?: (value: string) => string;
+    encryptValue?: (value: string, field?: "actual_budget_password_encrypted" | "actual_budget_encryption_password_encrypted") => string;
     testConnection?: ActualConnectionTest;
     now?: () => Date;
   } = {},
@@ -37,6 +39,7 @@ export async function saveActualConnectionCandidate(
   const serverURL = candidate.serverURL.trim().replace(/\/+$/, "");
   const syncId = candidate.syncId.trim();
   const password = candidate.password?.trim() || null;
+  const encryptionPassword = candidate.encryptionPassword === null ? null : candidate.encryptionPassword || undefined;
   if (!password) {
     const current = await dbClient.execute({
       sql: `SELECT actual_budget_url, actual_budget_password_encrypted
@@ -53,6 +56,7 @@ export async function saveActualConnectionCandidate(
     serverURL,
     syncId,
     ...(password ? { password } : {}),
+    ...(encryptionPassword !== undefined ? { encryptionPassword } : {}),
   });
 
   if (!verification.budgetFound) {
@@ -83,6 +87,12 @@ export async function saveActualConnectionCandidate(
         args: [serverURL, syncId, userId],
       });
     }
+    if (encryptionPassword !== undefined) {
+      await tx.execute({
+        sql: "UPDATE ea_settings SET actual_budget_encryption_password_encrypted = ? WHERE user_id = ?",
+        args: [encryptionPassword ? encryptValue(encryptionPassword, "actual_budget_encryption_password_encrypted") : null, userId],
+      });
+    }
     await tx.execute({
       sql: `INSERT INTO ea_actual_metadata_mirror
               (user_id, status, last_success_at, last_attempt_at, last_error, updated_at)
@@ -105,6 +115,7 @@ export async function saveActualConnectionCandidate(
     success: true as const,
     budgetCount: verification.budgetCount,
     budgetFound: true as const,
+    budgetEncrypted: verification.budgetEncrypted,
     verifiedAt,
   };
 }
@@ -117,7 +128,8 @@ export async function removeActualConnection(
     sql: `UPDATE ea_settings
           SET actual_budget_url = NULL,
               actual_budget_password_encrypted = NULL,
-              actual_budget_sync_id = NULL
+              actual_budget_sync_id = NULL,
+              actual_budget_encryption_password_encrypted = NULL
           WHERE user_id = ?`,
     args: [userId],
   });

@@ -9,24 +9,9 @@ import type {
 } from "./actual-worker-protocol.ts";
 
 const OPERATIONS = new Set([
-  "testConnection",
-  "getMetadata",
-  "clearMetadataCache",
   "hydrateCache",
   "syncMetadata",
   "shutdownActual",
-  "getAccounts",
-  "getRecentTransactions",
-  "getPayees",
-  "getCategories",
-  "getUpcomingBills",
-  "getCalendarBillsRange",
-  "markBillPaid",
-  "createQuickTxn",
-  "reconcileTransferSchedule",
-  "inspectCorrection",
-  "dispatchCorrection",
-  "reconcileFinancialOperation",
 ].filter(isActualWorkerOperation));
 
 function serializeError(error: unknown): ActualWorkerErrorPayload {
@@ -37,7 +22,6 @@ function serializeError(error: unknown): ActualWorkerErrorPayload {
     status: typeof candidate.status === "number" ? candidate.status : null,
     code: typeof candidate.code === "string" ? candidate.code : null,
     stack: process.env.NODE_ENV === "production" ? null : typeof candidate.stack === "string" ? candidate.stack : null,
-    ...(candidate.localWriteApplied === true ? { localWriteApplied: true } : {}),
   };
 }
 

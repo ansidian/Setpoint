@@ -106,6 +106,7 @@ export interface ActualConfig {
   serverURL: string;
   password?: string | null;
   syncId: string;
+  /** End-to-end encryption password for an encrypted budget file. */
+  encryptionPassword?: string | null;
   dataDir?: string;
-  localBudgetId?: string | null;
 }

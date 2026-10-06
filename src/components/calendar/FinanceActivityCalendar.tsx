@@ -50,7 +50,6 @@ export default function FinanceActivityCalendar({ month, today, days, selectedDa
   const latest = today.startsWith(month) ? today : financeMonthRange(month, through).end;
   const scheduledByDate = new Map(scheduledDays?.map(day => [day.date, day]));
   const paymentMode = scheduledDays !== undefined;
-  const statementCount = (date: string) => payments?.filter(payment => payment.status === 'statement' && payment.date === date).length || 0;
   const [expanded, setExpanded] = useState(false);
   const [weekDate, setWeekDate] = useState(selectedDate || latest);
   const [focusDate, setFocusDate] = useState(selectedDate || latest);
@@ -90,7 +89,7 @@ export default function FinanceActivityCalendar({ month, today, days, selectedDa
   };
   const description = (date: string, day?: FinanceActivityDay) => {
     if (date > through) return `${financeDate(date)}, future date`;
-    const scheduled = paymentMode ? `, ${scheduledByDate.get(date)?.count || 0} scheduled payments${statementCount(date) ? `, ${statementCount(date)} statement deadlines` : ''}` : '';
+    const scheduled = paymentMode ? `, ${scheduledByDate.get(date)?.count || 0} scheduled payments` : '';
     if (!day || unavailable || loading) return `${financeDate(date)}, recorded activity unavailable${scheduled}`;
     if (!day.complete) return `${financeDate(date)}, ${day.entries.length} visible records, totals unavailable${scheduled}`;
     return `${financeDate(date)}, ${financeMoney(day.incomeCents)} in, ${financeMoney(day.outflowCents)} out, ${day.transfers} transfers, ${day.entries.length} records${scheduled}`;
@@ -103,7 +102,7 @@ export default function FinanceActivityCalendar({ month, today, days, selectedDa
       <button aria-label="Previous activity week" disabled={weekIndex === 0} onClick={() => changeWeek(-1)}><ChevronLeft size={16}/></button>
       <button aria-label="Next activity week" disabled={!cells[(weekIndex + 1) * 7]?.startsWith(month) || cells[(weekIndex + 1) * 7]! > through} onClick={() => changeWeek(1)}><ChevronRight size={16}/></button>
     </div></div>
-    <div className="fac-legend">{paymentMode ? <><span className="fin-paid"><Check size={12} aria-hidden="true"/>Recorded</span><span className="fin-outflow"><Clock3 size={12}/>Scheduled / due</span><span className="fin-transfer"><ArrowLeftRight size={12}/>Transfer</span></> : <><span className="fin-income"><ArrowDownLeft size={12}/>In</span><span className="fin-outflow"><ArrowUpRight size={12}/>Out</span><span className="fin-transfer"><ArrowLeftRight size={12}/>Transfer</span></>}</div>
+    <div className="fac-legend">{paymentMode ? <><span className="fin-paid"><Check size={12} aria-hidden="true"/>Recorded</span><span className="fin-outflow"><Clock3 size={12}/>Scheduled</span><span className="fin-transfer"><ArrowLeftRight size={12}/>Transfer</span></> : <><span className="fin-income"><ArrowDownLeft size={12}/>In</span><span className="fin-outflow"><ArrowUpRight size={12}/>Out</span><span className="fin-transfer"><ArrowLeftRight size={12}/>Transfer</span></>}</div>
     <AnimatedHeight><div className="fac-grid" aria-label={monthLabel}>
       {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((label, index) => <span className="fac-weekday" aria-hidden="true" key={index}>{label}</span>)}
       {cells.map((date, index) => {
@@ -111,7 +110,7 @@ export default function FinanceActivityCalendar({ month, today, days, selectedDa
         const scheduled = scheduledByDate.get(date);
         const inMonth = date.startsWith(month), future = date > through;
         const known = !!day && !loading && !unavailable;
-        const upcomingCount = (scheduled?.count || 0) + statementCount(date);
+        const upcomingCount = scheduled?.count || 0;
         const hasFlow = upcomingCount > 0 || known && (day.incomeCents > 0 || day.outflowCents > 0 || day.transfers > 0);
         return <button key={date} ref={element => { if (element) buttons.current.set(date, element); else buttons.current.delete(date); }}
           className="fac-day" data-payment-date={date} data-week={Math.floor(index / 7) === weekIndex} data-outside={!inMonth} data-preview={date === previewDate}

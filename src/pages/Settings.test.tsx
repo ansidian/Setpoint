@@ -11,7 +11,6 @@ const mockApi = vi.hoisted(() => ({
   getSettings: vi.fn(),
   getTriageCacheStats: vi.fn(),
   getImportantSenders: vi.fn(),
-  listApiTokens: vi.fn(),
   listPasskeys: vi.fn(),
   updateSettings: vi.fn(),
 }));
@@ -74,7 +73,6 @@ beforeEach(() => {
   mockApi.getSettings.mockResolvedValue({});
   mockApi.getTriageCacheStats.mockResolvedValue({ openaiCalls: 0, windowDays: 7 });
   mockApi.getImportantSenders.mockResolvedValue([]);
-  mockApi.listApiTokens.mockResolvedValue([]);
   mockApi.listPasskeys.mockResolvedValue({
     passkeys: [],
     authMode: "password_or_passkey",

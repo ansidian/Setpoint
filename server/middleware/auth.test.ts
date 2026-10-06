@@ -3,7 +3,7 @@ import crypto from "crypto";
 import express from "express";
 import cookieParser from "cookie-parser";
 import request from "../test-utils/supertest.ts";
-import { createAuthTestDb, hashApiToken, hashSessionToken, seedOwner, seedSession } from "../test-utils/auth-db.ts";
+import { createAuthTestDb, hashSessionToken, seedOwner, seedSession } from "../test-utils/auth-db.ts";
 import type { Client, InStatement } from "@libsql/client";
 
 const testState = vi.hoisted<{ db: { current: Client | null } }>(() => ({
@@ -30,21 +30,9 @@ const {
   recordPasswordStepUpFailure,
   validateSession,
   deleteSession,
-  validateBearer,
   hasRecentPasswordAuth,
   markSessionPasswordAuthenticated,
 } = await import("./auth.ts");
-
-async function seedApiToken(
-  db: Client,
-  raw: string,
-  { scopes = ["actual:write"], expiresAt }: { scopes?: string[]; expiresAt: number | null },
-) {
-  await db.execute({
-    sql: "INSERT INTO ea_api_tokens (token_hash, label, scopes, created_at, expires_at) VALUES (?, ?, ?, ?, ?)",
-    args: [hashApiToken(raw), "test-token", JSON.stringify(scopes), Date.now(), expiresAt],
-  });
-}
 
 describe("auth middleware session storage", () => {
   beforeEach(async () => {
@@ -137,32 +125,6 @@ describe("auth middleware session storage", () => {
     });
     expect(ok).toBe(false);
     expect(result.rows.map((row) => row.token)).toEqual(["raw-session"]);
-  });
-
-  it("authenticates an unexpired api token and returns its scopes", async () => {
-    await seedApiToken(currentDb(), "eatk_live", {
-      scopes: ["actual:write", "actual:read"],
-      expiresAt: Date.now() + 60_000,
-    });
-
-    const ctx = await validateBearer("eatk_live");
-
-    expect(ctx).not.toBeNull();
-    expect(ctx!.scopes).toEqual(["actual:write", "actual:read"]);
-  });
-
-  it("rejects an api token whose expires_at has passed", async () => {
-    await seedApiToken(currentDb(), "eatk_expired", {
-      expiresAt: Date.now() - 1,
-    });
-
-    expect(await validateBearer("eatk_expired")).toBeNull();
-  });
-
-  it("rejects a legacy api token with NULL expires_at (fail closed)", async () => {
-    await seedApiToken(currentDb(), "eatk_legacy", { expiresAt: null });
-
-    expect(await validateBearer("eatk_legacy")).toBeNull();
   });
 
   it("rejects stored-hash replay at both cookie guards without changing the real session", async () => {

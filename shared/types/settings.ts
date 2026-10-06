@@ -1,5 +1,3 @@
-import type { FinancialProfile } from "./financial-profiles.ts";
-
 export type StoredEmailTriageMode = "auto" | "real" | "no_model" | "paused";
 export type EffectiveEmailTriageMode = Exclude<StoredEmailTriageMode, "auto">;
 
@@ -23,8 +21,7 @@ export type TriageSoundTriggerKey =
   | "fyi_finalized"
   | "triage_failed"
   | "event_upcoming"
-  | "task_completed"
-  | "actual_recorded";
+  | "task_completed";
 
 export interface TriageSoundSettings {
   laneScope: TriageSoundLaneScope;
@@ -79,12 +76,6 @@ export interface TriageCacheStatsResponse extends TriageCacheStatsWindow {
   };
 }
 
-export interface UtilityPayLink {
-  scheduleId: string;
-  label: string;
-  url: string;
-}
-
 export interface ImportantSender {
   address: string;
   name?: string;
@@ -128,8 +119,8 @@ export interface SettingsResponse {
   email_ai_model: string;
   alfred_provider: string;
   alfred_model: string;
-  bill_extract_provider: string;
-  bill_extract_model: string;
+  triage_fast_provider: string;
+  triage_fast_model: string;
   email_triage_mode: StoredEmailTriageMode;
   email_triage_effective_mode: EffectiveEmailTriageMode;
   email_triage_classify_read_arrivals: boolean;
@@ -144,9 +135,6 @@ export interface SettingsResponse {
   email_interests: string[];
   triage_sound_settings: TriageSoundSettings;
   triage_notification_sounds: TriageNotificationSound[];
-  utility_pay_links: UtilityPayLink[];
-  financial_profiles?: FinancialProfile[];
-  financial_profiles_revision?: number;
 }
 
 export interface TodoistOAuthTokenResponse {
@@ -177,15 +165,13 @@ export interface SettingsPatchRequest {
   email_interests_json?: string[] | string;
   todoist_api_token?: string;
   todoist_oauth_token_response?: TodoistOAuthTokenResponse | string;
-  bill_extract_provider?: string;
-  bill_extract_model?: string;
+  triage_fast_provider?: string;
+  triage_fast_model?: string;
   email_triage_mode?: StoredEmailTriageMode;
   email_triage_classify_read_arrivals?: boolean;
   triage_sound_settings?: TriageSoundSettings;
   discord_webhook_url?: string;
   discord_user_id?: string;
-  utility_pay_links?: UtilityPayLink[];
-  financial_profiles?: FinancialProfile[];
 }
 
 export interface SettingsMutationResponse {

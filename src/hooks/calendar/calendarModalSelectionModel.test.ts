@@ -89,35 +89,6 @@ describe("calendarModalSelectionModel", () => {
     expect(resolveFocusViewDate(parseFocusDate("2026-05-03"), aprilView)).toEqual({ month: 4, year: 2026 });
   });
 
-  it("keeps a pending focus date until a view change consumes it", () => {
-    const snapshot = buildCalendarModalSyncSnapshot({
-      open: true,
-      view: "events",
-      prevOpen: true,
-      prevView: "bills",
-      prevOpenRequestId: 1,
-      openRequestId: 1,
-      focusDate: null,
-      focusItemId: null,
-      viewDate: { month: 3, year: 2026 },
-      selectedDay: 20,
-      selectedDateKey: "2026-04-20",
-      selectedItemId: null,
-      pendingFocusDate: "2026-05-04",
-      pendingFocusItemId: "todo-1",
-    });
-
-    expect(snapshot).toMatchObject({
-      didViewChange: true,
-      nextViewDate: { month: 4, year: 2026 },
-      nextSelectedDay: 4,
-      nextSelectedDateKey: "2026-05-04",
-      nextSelectedItemId: "todo-1",
-      nextPendingFocusDate: null,
-      nextPendingFocusItemId: null,
-    });
-  });
-
   it("keeps the current selected date for plain Events create requests", () => {
     const snapshot = buildCalendarModalSyncSnapshot({
       open: true,

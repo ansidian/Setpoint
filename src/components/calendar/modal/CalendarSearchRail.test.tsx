@@ -44,13 +44,11 @@ describe("CalendarSearchRail", () => {
     vi.useRealTimers();
   });
 
-  it("selects all on explicit search focus but only moves caret on scope switches", () => {
+  it("selects all on explicit search focus", () => {
     const selectSpy = vi.spyOn(HTMLInputElement.prototype, "select");
-    const setSelectionRangeSpy = vi.spyOn(HTMLInputElement.prototype, "setSelectionRange");
-    const { rerender } = render(
+    render(
       <CalendarSearchRail
         search={makeSearch({
-          scope: "events",
           query: "final",
           focusRequestId: 1,
           focusSelectAll: true,
@@ -61,23 +59,6 @@ describe("CalendarSearchRail", () => {
 
     // test-architecture: allow-boundary-interaction -- Explicit search focus must invoke the native input selection command; happy-dom exposes no selection UI or layout state beyond this browser method.
     expect(selectSpy).toHaveBeenCalledTimes(1);
-
-    rerender(
-      <CalendarSearchRail
-        search={makeSearch({
-          scope: "bills",
-          query: "rent",
-          focusRequestId: 1,
-          focusSelectAll: true,
-        })}
-        layoutMode="three-rail"
-      />,
-    );
-
-    // test-architecture: allow-boundary-interaction -- A scope switch must not reissue the native select-all command; happy-dom cannot expose a forbidden browser selection command through rendered state.
-    expect(selectSpy).toHaveBeenCalledTimes(1);
-    // test-architecture: allow-boundary-interaction -- Scope switching moves the native caret to the end, an imperative browser selection-range contract not reflected in rendered DOM state.
-    expect(setSelectionRangeSpy).toHaveBeenCalledWith(4, 4);
   });
 
 });

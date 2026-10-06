@@ -2,10 +2,10 @@ import { ChevronDown, TriangleAlert } from "lucide-react";
 import type { AiUsageFailure, AiUsageFailureCode, AiUsageOrigin, AiUsagePurpose } from "../../../../shared/types/ai-usage";
 
 const PURPOSE: Record<AiUsagePurpose, string> = {
-  triage_cheap: "Cheap pass", triage_strong: "Strong pass", extraction: "Extraction", verification: "Verification", matching: "Matching",
+  triage_cheap: "Cheap pass", triage_strong: "Strong pass",
 };
 const ORIGIN: Record<AiUsageOrigin, string> = {
-  background_triage: "Background triage", reader_adoption: "Email reader", manual_extraction: "Manual extraction", transaction_import: "Transaction import", evaluation: "Evaluation",
+  background_triage: "Background triage", evaluation: "Evaluation",
 };
 const FAILURE: Record<AiUsageFailureCode, string> = {
   output_limit: "Output limit reached", content_filter: "Response filtered or refused", invalid_json: "Invalid JSON",

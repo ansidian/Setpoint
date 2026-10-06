@@ -47,7 +47,6 @@ export async function renderModal({
           upsertEvents: applyUpsert,
           removeEvent: applyRemove,
         }}
-        billsData={{}}
         deadlinesData={{}}
       />
     );

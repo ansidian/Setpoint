@@ -11,8 +11,6 @@ import {
   Mail,
   MailOpen,
   Pin,
-  ScanText,
-  Wallet,
   Trash2,
   X,
   Zap,
@@ -39,8 +37,6 @@ export type DesktopReaderActionBarProps = {
   snoozeAnchorRef: RefObject<HTMLButtonElement | null>;
   snoozeOpen: boolean;
   setSnoozeOpen: (open: boolean) => void;
-  /** Present when the email has no Actual entry yet and the owner may record it. */
-  recordActions?: { covered: boolean; busy: boolean; onRecord: (extract: boolean) => void } | null;
 };
 
 type ToolbarButtonProps = {
@@ -236,7 +232,6 @@ export default function DesktopReaderActionBar({
   snoozeAnchorRef,
   snoozeOpen,
   setSnoozeOpen,
-  recordActions,
 }: DesktopReaderActionBarProps) {
   const [moreOpen, setMoreOpen] = useState(false);
   const moreTriggerRef = useRef<HTMLButtonElement>(null);
@@ -252,7 +247,7 @@ export default function DesktopReaderActionBar({
   const primaryItem = triageItems.find((item) => item.key === "snapshot-handled" || item.key === "snapshot-reopen" || item.key === "unsnooze");
   const snoozeItem = triageItems.find((item) => item.key === "snooze");
   const secondaryItems = triageItems.filter((item) => item !== primaryItem && item !== snoozeItem);
-  const hasMore = moveDestinations.length > 0 || secondaryItems.length > 0 || showTrash || !!recordActions;
+  const hasMore = moveDestinations.length > 0 || secondaryItems.length > 0 || showTrash;
 
   return (
     <div className="desktop-reader-action-bar" data-testid="desktop-reader-action-bar">
@@ -272,7 +267,7 @@ export default function DesktopReaderActionBar({
           anchorRef={moreTriggerRef}
           panelRef={morePanelRef}
           ariaLabel="More email actions"
-          height={(secondaryItems.length + moveDestinations.length + Number(showTrash) + (recordActions ? 2 : 0)) * 36 + (recordActions ? 90 : 60)}
+          height={(secondaryItems.length + moveDestinations.length + Number(showTrash)) * 36 + 60}
           onClose={closeMenu}
         >
           {secondaryItems.map((item) => (
@@ -284,12 +279,6 @@ export default function DesktopReaderActionBar({
             {moveDestinations.map((destination) => (
               <MenuItem key={destination.lane} icon={moveIcon(destination.lane)} label={destination.label} keyHint={destination.keyHint} disabled={moveDisabled} onSelect={() => { closeMenu(); onAction("snapshot-move-lane", destination.lane); }} />
             ))}
-          </>}
-          {recordActions && <>
-            {(secondaryItems.length > 0 || moveDestinations.length > 0) && <div className="desktop-reader-action-menu-divider" role="separator" />}
-            <div className="desktop-reader-action-menu-heading">Actual</div>
-            <MenuItem icon={Wallet} label={recordActions.covered ? "Record anyway" : "Record in Actual"} keyHint={null} disabled={recordActions.busy} onSelect={() => { closeMenu(); recordActions.onRecord(false); }} />
-            <MenuItem icon={ScanText} label="Extract and record" keyHint={null} disabled={recordActions.busy} onSelect={() => { closeMenu(); recordActions.onRecord(true); }} />
           </>}
           {showTrash && <>
             <div className="desktop-reader-action-menu-divider" role="separator" />

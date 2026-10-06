@@ -3,6 +3,7 @@ import type { InstanceCredentialKey } from "./instance-credential-registry.ts";
 
 export type EncryptedSettingsField =
   | "actual_budget_password_encrypted"
+  | "actual_budget_encryption_password_encrypted"
   | "todoist_api_token_encrypted"
   | "todoist_oauth_refresh_token_encrypted"
   | "discord_webhook_url_encrypted";

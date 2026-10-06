@@ -203,7 +203,6 @@ export function buildCellAriaLabel({
 }: { viewLabel?: string; viewYear: number; viewMonth: number; day: number; dateKey?: string | null; itemCount: number; isSelected: boolean; isToday: boolean }): string {
   const noun = {
     events: "event",
-    bills: "bill",
     deadlines: "deadline",
   }[String(viewLabel || "item").toLowerCase()] || "item";
   const countLabel = itemCount === 0

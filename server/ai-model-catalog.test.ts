@@ -41,7 +41,7 @@ function response(data: unknown, status = 200): Response {
 }
 
 describe("AI model catalog", () => {
-  it.each(["email_triage", "bill_extraction", "alfred"] as const)("offers GPT-6 for %s without provider discovery", async (useCase) => {
+  it.each(["email_triage", "triage_fast", "alfred"] as const)("offers GPT-6 for %s without provider discovery", async (useCase) => {
     let fetched = false;
     const fetchImpl = async () => {
       fetched = true;
@@ -103,7 +103,7 @@ describe("AI model catalog", () => {
     });
 
     const first = await service.availability("email_triage");
-    const second = await service.availability("bill_extraction");
+    const second = await service.availability("triage_fast");
 
     expect(first[0]?.models).toEqual([
       { id: "claude-opus-4-6", label: "Claude Opus 4.6" },
@@ -196,14 +196,14 @@ describe("AI model catalog", () => {
     expect(resolveStoredAiModelConfig({
       provider: "anthropic",
       model: "claude-future-7",
-      useCase: "bill_extraction",
+      useCase: "triage_fast",
     })).toEqual({
       provider: "anthropic",
       model: "claude-future-7",
     });
   });
 
-  it.each(["email_triage", "bill_extraction", "alfred"] as const)("excludes incompatible Claude choices for %s while preserving stored settings", (useCase) => {
+  it.each(["email_triage", "triage_fast", "alfred"] as const)("excludes incompatible Claude choices for %s while preserving stored settings", (useCase) => {
     for (const model of ["claude-opus-5-5", "claude-fable-5-1", "claude-mythos-5-1"]) {
       expect(isSelectableAiModel("anthropic", model, useCase)).toBe(false);
       expect(resolveStoredAiModelConfig({ provider: "anthropic", model, useCase }))

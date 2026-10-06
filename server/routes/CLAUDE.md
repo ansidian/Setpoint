@@ -1,37 +1,32 @@
 # Server Routes Map
 
-The HTTP surface: Express routers that validate input, apply auth, and delegate to the `server/<domain>/` services (email, bills, calendar, snapshots, tasks, reminders, triage, actual, platform). `briefing/index.ts` mounts the briefing sub-routers behind shared auth middleware; root-level routers cover auth, accounts, integrations, and webhooks.
+The HTTP surface: Express routers that validate input, apply auth, and delegate to the `server/<domain>/` services (email, bills, calendar, snapshots, tasks, reminders, triage, actual, finances, platform). `briefing/index.ts` mounts the briefing sub-routers behind shared auth middleware; root-level routers cover auth, accounts, integrations, and webhooks.
 
 ## Files
 
 ### Auth + accounts
 - `auth.ts` — setup-token owner claim, password/passkey login, passkey registration/deletion, session check/logout, and the mount point for the security subrouter
-- `auth-security.ts` — password step-up, canonical/auth-mode/password/recovery mutations, and scoped API-token management
+- `auth-security.ts` — password step-up and canonical/auth-mode/password/recovery mutations
 - `auth-canonical-origin.ts` — canonical-domain status, impact preview, and password-step-up/generation-gated mutation
 - `accounts.ts` — Gmail OAuth callback and account binding; mounts settings/reminders routers
 
 ### Briefing
 - `briefing/index.ts` — mounts briefing sub-routers, applies auth middleware
-- `briefing/bills.ts` — resolves financial-email plans, marks Actual bills paid, creates quick transactions, and manages the Actual connection/cache
 - `briefing/email.ts` — email bodies, dismiss/snooze, inbox search
 - `briefing/email-index.ts` — email index health checks, backfill queuing
 - `briefing/snapshot.ts` — snapshot fetch/sync, kanban lane reorder
 - `briefing/tasks.ts` — Todoist projects and labels listing
-- `briefing/financial-connections.ts` — authenticated canonical provider configuration reads and atomic revision-guarded saves
-- `briefing/financial-corrections.ts` — authenticated synchronized editor inspection, preview, idempotent confirmation and saved correction status
-- `briefing/financial-activity.ts` — authenticated shared history and exact activity detail
-- `briefing/transaction-imports.ts` — saved receipt status and revision-checked owner completion/dismissal of managed financial events and owner record requests; actionable-change reads for browser notifications; no historical scan or source configuration endpoints
 - `briefing/dev.ts` — dev-only email re-indexing endpoint
+- `briefing/actual-connection.ts` — Actual connection test/save/remove (with the optional end-to-end encryption password) and local cache hydrate/status
 
 ### Domains + integrations
 - `alfred.ts` — Alfred model-free email-context prepare/discard, assistant run stream with response-disconnect cancellation and retryable attachment release, identity-only proposal Created acknowledgement, and conversation reset; wires read-only domain deps
 - `calendar.ts` — calendar CRUD validation/provider orchestration, deadline reads, event search, and reminder hydration; successful event-write effects delegate to the calendar domain
-- `calendar-bills-range.ts` — composes bill occurrences with read-only Actual transactions and independent degradation
 - `dashboard.ts` — dashboard state, current-data SSE stream, health checks, and read-only finance cards
 - `tldraw.ts` — authenticated Notes bootstrap, revisioned document saves, and private content-addressed media
 - `news.ts` — News tab: topics/sources CRUD, starter-catalog import, add-source preview, seen-marker, manual refresh
 - `reminders.ts` — Discord reminder testing and configuration
-- `settings.ts` — user settings, model selection, and active integration configs; legacy financial configuration writes return 410 and Bill Pay mappings remain archived
+- `settings.ts` — user settings, model selection (including the fast triage tier), and active integration configs
 - `gmail-push.ts` — Gmail Pub/Sub push intake, queues history syncs
 - `calendar-push.ts` — bodyless Google Calendar callback, admitted by persisted channel identity/token before browser CSRF middleware; acknowledges only durable work
 - `todoist-webhook.ts` — Todoist webhook deliveries with signature verification
@@ -53,4 +48,4 @@ The HTTP surface: Express routers that validate input, apply auth, and delegate 
 - `server/<domain>/` directories — service layers these routes delegate to (see their maps)
 - `dashboard.ts` SSE stream is the push channel the frontend caches listen to
 
-- `briefing/finances.ts` — authenticated Payments/Journal reads and revision-checked payment display organization; retired utility mapping routes return 410
+- `briefing/finances.ts` — authenticated read-only Payments/Journal reads and revision-checked payment display organization

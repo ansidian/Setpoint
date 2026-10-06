@@ -2,7 +2,7 @@ import type { AlfredUsageStats } from '../../../../shared/types/alfred';
 import type { EmailAiUsageStats } from '../../../../shared/types/ai-usage';
 import type { EmailSearchCostStats } from '../../../../shared/types/email';
 
-export type AnalyticsTabKey = 'alfred' | 'search' | 'triage' | 'financial';
+export type AnalyticsTabKey = 'alfred' | 'search' | 'triage';
 export type AnalyticsProvider = 'all' | 'openai' | 'anthropic';
 export type ProviderComparison = Record<'openai' | 'anthropic', {
   calls: number;
@@ -27,7 +27,7 @@ export function providerComparison(tab: AnalyticsTabKey, data: unknown): Provide
       const stats = (data as AlfredUsageStats).byProvider?.[provider];
       return stats ? { calls: stats.turns, cost: stats.estimatedCostUsd, unpricedCalls: stats.unpricedCalls } : null;
     }
-    const stats = (data as EmailAiUsageStats).byProvider?.[provider].production[tab === 'triage' ? 'triage' : 'financialEmail'];
+    const stats = (data as EmailAiUsageStats).byProvider?.[provider].production.triage;
     return stats ? { calls: stats.calls, cost: stats.estimatedCostUsd, unpricedCalls: stats.unpricedCalls } : null;
   });
   return entries[0] && entries[1] ? { openai: entries[0], anthropic: entries[1] } : null;

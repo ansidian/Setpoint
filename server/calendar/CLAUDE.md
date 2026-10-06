@@ -12,12 +12,12 @@ Google Calendar integration: range reads, event mutations (including recurring s
 - `calendar-event-write-effects.ts` — successful create/update/delete follow-through: search-mirror write-through or dirty marking plus best-effort reminder reconciliation
 - `calendar-event-normalize.ts` — RRULE parse/serialize, display formatting, recurring-edit shaping (covered by `calendar-recurrence-roundtrip.test.ts`)
 - `calendar-range-model.ts` — pure month-clamped ISO arithmetic plus calendar HTTP-range validation, parsed dates, span limits, and rolling-history overlap policy
-- `calendar-search-service.ts` — calendar search use case: input policy, event/deadline and bill-mirror fanout, ranking envelope, and non-blocking mirror repair/refresh
+- `calendar-search-service.ts` — calendar search use case: input policy, event/deadline fanout, ranking envelope, and non-blocking mirror repair
 - `calendar-search-mirror.ts` — public mirror surface: singleton sync scheduler, awaited provider-sync seam, local occurrence writes/reads, and health (thin orchestrator over the three modules below)
 - `calendarSearchMirrorStatements.ts` — pure SQL builders for the search-mirror occurrence/state tables (upsert, tombstone, success)
 - `calendarSearchMirrorHealthModel.ts` — pure per-source + aggregate mirror-health derivation
 - `calendarSearchMirrorSync.ts` — full/incremental/repair sync engine + the -12/+18 month search-window projection (re-exports shared `addMonthsIso`)
-- `calendar-search.ts` — ranks/normalizes event, deadline, and bill search candidates
+- `calendar-search.ts` — ranks/normalizes event and deadline search candidates
 
 Tests are not listed here; follow the behavior-ownership policy in `AGENTS.md`.
 

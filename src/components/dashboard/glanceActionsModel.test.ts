@@ -27,32 +27,6 @@ describe("selectGlanceActions — deadlines", () => {
   });
 });
 
-describe("selectGlanceActions — bills", () => {
-  const bill = (overrides: Record<string, unknown> = {}) => ({ id: "b1", scheduleId: "s1", ...overrides });
-  const ctx = {
-    actualBudgetUrl: "https://actual.example",
-    payLinksByScheduleId: { s1: "https://pay.example/s1" },
-  };
-
-  it("offers open-in-actual, pay, and open-in-calendar when both urls resolve", () => {
-    const actions = selectGlanceActions({ kind: "bill", item: bill(), ctx });
-    expect(keys(actions)).toEqual(["actual", "pay", "openInCalendar"]);
-  });
-
-  it("builds the actual schedule url as a link href", () => {
-    const actions = selectGlanceActions({ kind: "bill", item: bill(), ctx });
-    const actual = actions.find((a) => a.key === "actual");
-    expect(actual!.type).toBe("link");
-    expect(actual!.href).toBe("https://actual.example/schedules?highlight=s1");
-  });
-
-  it("drops actual without a budget url and pay without a pay link", () => {
-    expect(keys(selectGlanceActions({ kind: "bill", item: bill(), ctx: {} }))).toEqual(["openInCalendar"]);
-    expect(keys(selectGlanceActions({ kind: "bill", item: bill(), ctx: { actualBudgetUrl: "https://actual.example" } })))
-      .toEqual(["actual", "openInCalendar"]);
-  });
-});
-
 describe("selectGlanceActions — events", () => {
   const ev = (overrides: Record<string, unknown> = {}) => ({ id: "e1", ...overrides });
 

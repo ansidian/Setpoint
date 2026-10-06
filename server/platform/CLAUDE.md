@@ -17,7 +17,7 @@ Cross-domain infrastructure: config, account canonicalization, settings validati
 - `ai-usage.ts` — scoped email-AI run attribution and idempotent, best-effort production per-provider-call ledger; tagged evaluations bypass accounting writes
 - `ai-usage-diagnostics.ts` — allowlisted response measurements and normalized failure categories; never raw provider/error content
 - `ai-usage-tokens.ts` — OpenAI/Anthropic cache-token normalization and shared, source-checked standard-text pricing and net cache-savings estimates
-- `ai-usage-stats.ts` — owner/window/context/provider-isolated triage and financial-email ledger rollups
+- `ai-usage-stats.ts` — owner/window/context/provider-isolated triage ledger rollups; historical financial-email purposes are excluded
 - `provider-reauth.ts` — OAuth reconnect signaling: check for `invalid_grant` errors, flag/clear needs-reauth on accounts and Todoist
 - `canonical-url.ts` — canonical-origin normalization, legacy import, persistence, WebAuthn derivation, and provider callback URL projection with optional separate public webhook origin
 - `instance-credential-registry.ts` — code allowlist and provider-neutral metadata for deployment-wide credentials

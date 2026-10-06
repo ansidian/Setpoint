@@ -30,7 +30,6 @@ import { placesLimiter } from "../middleware/rate-limits.ts";
 import {
   hydrateCalendarEventsWithReminderState,
 } from "../reminders/reminder-hydration.ts";
-import { readCalendarBillsRange } from "./calendar-bills-range.ts";
 import type { StoredCalendarAccount } from "../calendar/calendar-google-client.ts";
 import { getElapsedMs, logTiming } from "../timing.ts";
 import type { CalendarBatchMutationResponse } from "../../shared/types/calendar.ts";
@@ -248,24 +247,6 @@ router.get("/deadlines/range", async (req, res) => {
   } catch (err) {
     console.error("[Calendar] deadlines range fetch failed:", err);
     res.status(500).json({ message: "Failed to fetch calendar deadlines range" });
-  }
-  return undefined;
-});
-
-router.get("/bills/range", async (req, res) => {
-  const range = validateCalendarRange(req, res, { enforceHistoryWindow: true });
-  if (!range) return undefined;
-
-  try {
-    const userId = calendarUserId();
-    res.json({
-      ...await readCalendarBillsRange(userId, range),
-      minDate: range.minDate,
-      fetchedAt: new Date().toISOString(),
-    });
-  } catch (err) {
-    console.error("[Calendar] bills range fetch failed:", err);
-    res.status(500).json({ message: "Failed to fetch calendar bills range" });
   }
   return undefined;
 });

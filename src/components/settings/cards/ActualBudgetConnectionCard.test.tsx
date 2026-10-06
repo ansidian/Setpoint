@@ -65,7 +65,7 @@ beforeEach(() => {
 });
 
 describe("ActualBudgetConnectionCard cache-status request-id guard", () => {
-  it("leaves a blank write-only password unchanged when saving other fields", async () => {
+  it("leaves blank write-only passwords unchanged when saving other fields", async () => {
     mockApi.getActualCacheStatus.mockResolvedValue({ hydrated: false });
     renderCard({
       actual_budget_url: "https://actual.example.com",
@@ -76,7 +76,7 @@ describe("ActualBudgetConnectionCard cache-status request-id guard", () => {
     fireEvent.change(await screen.findByDisplayValue("sync-1"), { target: { value: "sync-2" } });
     fireEvent.click(screen.getByRole("button", { name: "Save & verify" }));
 
-    // test-architecture: allow-boundary-interaction -- omission of a blank write-only password is an outbound secret-preservation contract not visible after success.
+    // test-architecture: allow-boundary-interaction -- omission of blank write-only passwords (login and encryption) is an outbound secret-preservation contract not visible after success.
     await waitFor(() => expect(mockApi.saveActualBudgetConnection).toHaveBeenCalledWith({
       serverURL: "https://actual.example.com",
       syncId: "sync-2",
@@ -118,11 +118,14 @@ describe("ActualBudgetConnectionCard cache-status request-id guard", () => {
     fireEvent.change(syncId, { target: { value: "sync-2" } });
     const password = screen.getByPlaceholderText("Actual Budget password") as HTMLInputElement;
     fireEvent.change(password, { target: { value: "actual-private-password" } });
+    const encryptionPassword = screen.getByLabelText("Encryption password") as HTMLInputElement;
+    fireEvent.change(encryptionPassword, { target: { value: "budget-key-phrase" } });
     fireEvent.click(screen.getByRole("button", { name: "Save & verify" }));
 
     expect(await screen.findByLabelText("Current password")).toBeTruthy();
     expect(syncId.value).toBe("sync-2");
     expect(password.value).toBe("actual-private-password");
+    expect(encryptionPassword.value).toBe("budget-key-phrase");
     fireEvent.change(screen.getByLabelText("Current password"), { target: { value: "owner-password" } });
     fireEvent.click(screen.getByRole("button", { name: "Confirm and retry" }));
 
@@ -131,8 +134,10 @@ describe("ActualBudgetConnectionCard cache-status request-id guard", () => {
       serverURL: "https://actual.example.com",
       syncId: "sync-2",
       password: "actual-private-password",
+      encryptionPassword: "budget-key-phrase",
     });
     await waitFor(() => expect(password.value).toBe(""));
+    expect(encryptionPassword.value).toBe("");
   });
 
   it("does not let a late hydrate resolution clobber a newer cache-status check", async () => {

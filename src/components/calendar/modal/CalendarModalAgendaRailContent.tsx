@@ -38,9 +38,6 @@ export interface CalendarModalAgendaRailContentProps {
   eventsRange?: unknown;
   deadlinesRange?: unknown;
   dataRevision?: number;
-  getMonthBills?: ((year: number, month: number) => unknown) | null;
-  billsRange?: unknown;
-  billsDataRevision?: number;
   hideMiniCalendar?: boolean;
   mobileAgenda?: boolean;
   onFilteredSelectedDeadlineHidden?: () => void;

@@ -23,14 +23,14 @@ const MAX_TOOL_ITERATIONS = 12;
 // Pinned to one default search page: a lower cap let every default search_email
 // call disarm the backstop by itself (C8: 12 retrieved > 8 cap).
 const MAX_NUDGE_ITEMS = DEFAULT_SEARCH_LIMIT;
-const SHOW_ITEMS_NUDGE = "<system-reminder>Your reply referenced retrieved items without calling show_items. If it named specific emails, events, deadlines, bills, or transactions, call show_items now with those ids, then add at most one short sentence without retyping details the rows show. If it did not name specific items, briefly restate your conclusion.</system-reminder>";
+const SHOW_ITEMS_NUDGE = "<system-reminder>Your reply referenced retrieved items without calling show_items. If it named specific emails, events, or deadlines, call show_items now with those ids, then add at most one short sentence without retyping details the rows show. If it did not name specific items, briefly restate your conclusion.</system-reminder>";
 
 // Second backstop (ADR 0006, alfred-prompt.ts group_items rule): a question that
 // asks for a SPLIT across 2+ categories should land as a group_items breakdown
 // card, not a prose enumeration. Smaller models (Haiku) skip the tool and narrate
 // every item instead — worst when a bucket is defined by absence (e.g. "ghosts" =
 // applications with no follow-up). When such a question is about to end in prose
-// with no card and no spending summary, remind once.
+// with no card, remind once.
 const GROUP_ITEMS_NUDGE = "<system-reminder>This question asks for a split across categories, but you are about to answer in prose without a breakdown card. Sort the relevant item ids into labeled buckets (choose the labels from the question) and call group_items now, then give a one-line takeaway with the headline numbers. A bucket may be defined by the absence of something (for example, items with no follow-up) — include the ids that qualify.</system-reminder>";
 
 // True when the question asks for a split into 2+ named categories (a "how many X
@@ -47,8 +47,8 @@ export function looksLikeGroupingQuestion(text: unknown): boolean {
 // The cite-by-reference backstop counts items the model can actually name this run.
 // Each row-bearing tool returns exactly one array of rows; gate on that length, not
 // a tool's `total` — `total` can be a full match count (search_email when paged,
-// where the page is small but total large) or a dollar sum (summarize_transactions).
-const CITABLE_ROW_KEYS = ["results", "events", "deadlines", "bills", "transactions"];
+// where the page is small but total large).
+const CITABLE_ROW_KEYS = ["results", "events", "deadlines"];
 function citableRowCount(result: AlfredToolResultBase): number {
   for (const key of CITABLE_ROW_KEYS) {
     if (Array.isArray(result?.[key])) return result[key].length;
@@ -90,7 +90,6 @@ async function runAlfredInner({
   let retrievedEmail = false;
   let showItemsCalled = false;
   let groupItemsCalled = false;
-  let summarizeCalled = false;
   let nudged = false;
   let nudgedGroup = false;
   let forceGroupItems = false;
@@ -147,7 +146,7 @@ async function runAlfredInner({
       // a prior show_items flat list must not disarm this, or a split answered as
       // "list + prose counts" slips through (the exact Haiku failure). No item cap:
       // the card earns its keep on large sets.
-      if (!nudgedGroup && groupIntent && !groupItemsCalled && !summarizeCalled && retrievedCount > 0) {
+      if (!nudgedGroup && groupIntent && !groupItemsCalled && retrievedCount > 0) {
         nudgedGroup = true;
         forceGroupItems = true;
         adapter.appendUserText(conversation, GROUP_ITEMS_NUDGE);
@@ -156,7 +155,7 @@ async function runAlfredInner({
       // Search breadth says nothing about how many emails the answer names.
       // Keep the conditional reminder after repeated searches/body reads, while
       // allowing a no-match/aggregate conclusion to finish without unrelated rows.
-      if (!nudged && !showItemsCalled && !groupItemsCalled && !summarizeCalled
+      if (!nudged && !showItemsCalled && !groupItemsCalled
         && (retrievedEmail || (retrievedCount > 0 && retrievedCount <= MAX_NUDGE_ITEMS))) {
         nudged = true;
         adapter.appendUserText(conversation, SHOW_ITEMS_NUDGE);
@@ -221,8 +220,6 @@ async function runAlfredInner({
         if (!result?.error && Number(result?.shown) > 0) showItemsCalled = true;
       } else if (toolName === "group_items") {
         groupItemsCalled = true;
-      } else if (toolName === "summarize_transactions") {
-        summarizeCalled = true;
       } else if (!result?.error) {
         retrievedCount += citableRowCount(result);
         if ((toolName === "search_email" && citableRowCount(result) > 0)

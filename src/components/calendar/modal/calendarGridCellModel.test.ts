@@ -64,11 +64,11 @@ describe("buildCalendarGridCellModel", () => {
   });
 
   it("uses view-specific item matching for selected grid chips", () => {
-    const bill = { id: "bill-1:2026-05-10", scheduleId: "bill-1", name: "Rent" };
+    const occurrence = { id: "series-1:2026-05-10", seriesId: "series-1", title: "Standup" };
 
     const model = buildCalendarGridCellModel({
       activeView: {
-        label: "Bills",
+        label: "Events",
         getDayState: (items) => ({
           items,
           activeItems: items,
@@ -78,7 +78,7 @@ describe("buildCalendarGridCellModel", () => {
           totalCount: items.length,
         }),
         getItemId: (item) => item.id,
-        matchesItemId: (item, itemId) => item.scheduleId === itemId || item.id === itemId,
+        matchesItemId: (item, itemId) => item.seriesId === itemId || item.id === itemId,
       },
       buildFallbackDayState: (items) => ({ items, totalCount: items.length }),
       cell: {
@@ -91,19 +91,19 @@ describe("buildCalendarGridCellModel", () => {
       eventDateCells: false,
       ghostPreview: null,
       itemsByDate: {
-        "2026-05-10": [bill],
+        "2026-05-10": [occurrence],
       },
       itemsByDay: {},
       selectedCellKey: "2026-05-10",
       selectedDay: 10,
-      selectedItemId: "bill-1",
+      selectedItemId: "series-1",
       shouldFilterCompletedDeadlines: false,
       spanLayout: {
         reservedLaneCountByDate: {},
         pinnedGhostCountByDate: {},
       },
       todayDate: 6,
-      view: "bills",
+      view: "events",
       viewData: { isLoading: false },
       viewMonth: 4,
       viewYear: 2026,

@@ -7,7 +7,6 @@ type SecurityTransitionInput = {
   userId: string;
   expectedGeneration: number;
   mutate: (tx: Transaction, nextGeneration: number) => Promise<void>;
-  revokeApiTokens?: boolean;
 };
 
 export function createOwnerSecurityTransitionService(database: SecurityTransitionDb = db) {
@@ -15,7 +14,6 @@ export function createOwnerSecurityTransitionService(database: SecurityTransitio
     userId,
     expectedGeneration,
     mutate,
-    revokeApiTokens = false,
   }: SecurityTransitionInput): Promise<number | null> {
     const tx = await database.transaction("write");
     try {
@@ -38,9 +36,6 @@ export function createOwnerSecurityTransitionService(database: SecurityTransitio
       await tx.execute({ sql: "DELETE FROM ea_sessions", args: [] });
       await tx.execute({ sql: "DELETE FROM ea_pending_auth WHERE user_id = ?", args: [userId] });
       await tx.execute({ sql: "DELETE FROM ea_webauthn_challenges WHERE user_id = ?", args: [userId] });
-      if (revokeApiTokens) {
-        await tx.execute({ sql: "DELETE FROM ea_api_tokens", args: [] });
-      }
       await tx.commit();
       return nextGeneration;
     } catch (error) {

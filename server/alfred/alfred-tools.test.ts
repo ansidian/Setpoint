@@ -42,18 +42,15 @@ beforeEach(() => {
 });
 
 describe("tool definitions", () => {
-  it("exposes the nine read tools plus the non-mutating calendar proposal tool", () => {
+  it("exposes the six read tools plus the non-mutating calendar proposal tool", () => {
     expect(ALFRED_TOOL_DEFINITIONS.map((tool) => tool.name).sort()).toEqual([
       "get_calendar_events",
       "get_deadlines",
       "get_email_body",
-      "get_upcoming_bills",
       "group_items",
       "propose_calendar_event",
       "search_email",
-      "search_transactions",
       "show_items",
-      "summarize_transactions",
     ]);
     for (const tool of ALFRED_TOOL_DEFINITIONS) {
       expect(tool.input_schema?.type).toBe("object");
@@ -194,7 +191,7 @@ describe("get_email_body", () => {
     expect(result.body).toContain("wrote:");
   });
 
-  it("preserves late financial evidence beyond the former prefix cap", async () => {
+  it("preserves late email evidence beyond the former prefix cap", async () => {
     const head = "H".repeat(3500);
     const getEmailBody = vi.fn().mockResolvedValue({
       html_body: `${head}<p>Remaining statement balance: $472.32</p>`,
@@ -323,39 +320,17 @@ describe("get_deadlines", () => {
   });
 });
 
-describe("get_upcoming_bills", () => {
-  it("maps bill mirror rows", async () => {
-    const readBillsMirrorRange = vi.fn().mockResolvedValue({
-      schedules: [{ id: "b-1", name: "Car insurance", payee: "Geico", amount: 182.13, next_date: "2026-06-21", paid: false, type: "bill" }],
-      syncHealth: { state: "current" },
-    });
-    const ctx = ctxWith({ readBillsMirrorRange });
-    const result = await executeAlfredTool("get_upcoming_bills", { start: "2026-06-12", end: "2026-07-12" }, ctx);
-
-    expect(result.bills![0]!).toEqual({
-      id: "b-1",
-      name: "Car insurance",
-      payee: "Geico",
-      amount: 182.13,
-      due_date: "2026-06-21",
-      paid: false,
-      type: "bill",
-    });
-    expect(ctx.conversation.items.get("bill:b-1"))!.toBeTruthy();
-  });
-});
-
 describe("show_items", () => {
   it("emits cached rows verbatim and reports unknown ids", async () => {
     const ctx = ctxWith({});
-    ctx.conversation.items.set("bill:b-1", { id: "b-1", name: "Car insurance", amount: 182.13 });
+    ctx.conversation.items.set("deadline:td-1", { id: "td-1", content: "Renew car insurance", due_date: "2026-06-21" });
 
-    const result = await executeAlfredTool("show_items", { kind: "bill", ids: ["b-1", "ghost"] }, ctx);
+    const result = await executeAlfredTool("show_items", { kind: "deadline", ids: ["td-1", "ghost"] }, ctx);
 
     expect(ctx.events).toEqual([{
       type: "rows",
-      kind: "bill",
-      items: [{ id: "b-1", name: "Car insurance", amount: 182.13 }],
+      kind: "deadline",
+      items: [{ id: "td-1", content: "Renew car insurance", due_date: "2026-06-21" }],
     }]);
     expect(result).toEqual({ shown: 1, unknown_ids: ["ghost"] });
   });
@@ -369,9 +344,9 @@ describe("show_items", () => {
 
   it("errors when no id resolves, so a wholly failed citation reads as is_error instead of shown:0 (C7)", async () => {
     const ctx = ctxWith({});
-    ctx.conversation.items.set("bill:b-1", { id: "b-1", name: "Car insurance" });
+    ctx.conversation.items.set("deadline:td-1", { id: "td-1", content: "Renew car insurance" });
 
-    const result = await executeAlfredTool("show_items", { kind: "bill", ids: ["ghost-1", "ghost-2"] }, ctx);
+    const result = await executeAlfredTool("show_items", { kind: "deadline", ids: ["ghost-1", "ghost-2"] }, ctx);
 
     expect(result.error).toBeTruthy();
     expect(result.unknown_ids).toEqual(["ghost-1", "ghost-2"]);
@@ -485,85 +460,5 @@ describe("unknown tool", () => {
   it("returns an error result", async () => {
     const result = await executeAlfredTool("write_email", {}, ctxWith({}));
     expect(result.error).toContain("Unknown tool");
-  });
-});
-
-describe("transaction tools", () => {
-  it("search_transactions caches rows and returns a list", async () => {
-    const deps = {
-      queryTransactions: vi.fn(async () => ({
-        total: 2,
-        truncated: false,
-        transactions: [
-          { id: "t1", date: "2026-05-05", amount: 42.1, payee: "Trader Joes", category: "Groceries", account: "Checking", notes: "" },
-          { id: "t2", date: "2026-05-18", amount: 39.9, payee: "Trader Joes", category: "Groceries", account: "Checking", notes: "" },
-        ],
-      })),
-    };
-    const ctx = ctxWith(deps);
-    const result = await executeAlfredTool("search_transactions", { start: "2026-05-01", end: "2026-05-31" }, ctx);
-    expect(result.total).toBe(2);
-    // test-architecture: allow-boundary-interaction -- Transaction search is the Actual/provider boundary; exact owner, date range, and bounded limit are not exposed by normalized rows.
-    expect(deps.queryTransactions).toHaveBeenCalledWith("user-1", expect.objectContaining({
-      start: "2026-05-01", end: "2026-05-31", limit: 25,
-    }));
-    // cached → show_items can resolve them
-    const shown = await executeAlfredTool("show_items", { kind: "transaction", ids: ["t1", "t2"] }, ctx);
-    expect(shown.shown).toBe(2);
-    expect(ctx.events).toEqual([expect.objectContaining({ type: "rows", kind: "transaction" })]);
-  });
-
-  it("summarize_transactions returns buckets and defaults group_by to category", async () => {
-    const deps = {
-      summarizeTransactions: vi.fn(async () => ({
-        total: 142, period: { start: "2026-04-01", end: "2026-05-31" }, group_by: "category",
-        buckets: [{ label: "Groceries", amount: 82, count: 2 }, { label: "Gas", amount: 60, count: 1 }],
-      })),
-    };
-    const result = await executeAlfredTool("summarize_transactions", { start: "2026-04-01", end: "2026-05-31" }, ctxWith(deps));
-    expect(result.buckets).toHaveLength(2);
-    // test-architecture: allow-boundary-interaction -- Transaction summarization is the Actual/provider boundary; the default grouping input is not inferable from provider-controlled buckets.
-    expect(deps.summarizeTransactions).toHaveBeenCalledWith("user-1", expect.objectContaining({ group_by: "category" }));
-  });
-
-  it("summarize_transactions emits a summary event with buckets", async () => {
-    const buckets = [{ label: "Groceries", amount: 82, count: 2 }, { label: "Gas", amount: 60, count: 1 }];
-    const period = { start: "2026-04-01", end: "2026-05-31" };
-    const deps = {
-      summarizeTransactions: vi.fn(async () => ({
-        total: 142, period, group_by: "category", buckets,
-      })),
-    };
-    const ctx = ctxWith(deps);
-    await executeAlfredTool("summarize_transactions", { start: "2026-04-01", end: "2026-05-31" }, ctx);
-    expect(ctx.events).toEqual([expect.objectContaining({
-      type: "summary",
-      total: 142,
-      period,
-      group_by: "category",
-      buckets,
-    })]);
-  });
-
-  it("summarize_transactions does NOT emit on error", async () => {
-    const deps = {
-      summarizeTransactions: vi.fn(async () => ({ error: "ynab unavailable" })),
-    };
-    const ctx = ctxWith(deps);
-    await executeAlfredTool("summarize_transactions", { start: "2026-04-01", end: "2026-05-31" }, ctx);
-    const summaryCalls = ctx.events.filter((event) => event.type === "summary");
-    expect(summaryCalls).toHaveLength(0);
-  });
-
-  it("summarize_transactions does NOT emit when buckets are empty", async () => {
-    const deps = {
-      summarizeTransactions: vi.fn(async () => ({
-        total: 0, period: { start: "2026-04-01", end: "2026-05-31" }, group_by: "category", buckets: [],
-      })),
-    };
-    const ctx = ctxWith(deps);
-    await executeAlfredTool("summarize_transactions", { start: "2026-04-01", end: "2026-05-31" }, ctx);
-    const summaryCalls = ctx.events.filter((event) => event.type === "summary");
-    expect(summaryCalls).toHaveLength(0);
   });
 });

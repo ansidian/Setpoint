@@ -1,6 +1,5 @@
 import { useMemo } from "react";
 import type { NormalizedCalendarEvent } from "../../../shared/types/calendar";
-import { computeCalendarBillsViewData } from "./calendarBillsViewDataModel";
 import {
   addMonthOffset,
   dedupeEvents,
@@ -55,8 +54,6 @@ interface CalendarControllerViewDataOptions {
   planningReadiness: CalendarEntryPlanningReadiness;
   deadlinesData: unknown;
   deadlineOverlay: unknown;
-  billsData?: Record<string, unknown>;
-  billsRangeData?: ControllerRangeData<Record<string, unknown>> | null;
 }
 
 export default function useCalendarControllerViewData({
@@ -71,8 +68,6 @@ export default function useCalendarControllerViewData({
   planningReadiness,
   deadlinesData,
   deadlineOverlay,
-  billsData,
-  billsRangeData,
 }: CalendarControllerViewDataOptions) {
   const eventsEnsureRange = eventsData?.ensureRange || null;
   const eventsGetEvents = eventsData?.getEvents || null;
@@ -102,35 +97,31 @@ export default function useCalendarControllerViewData({
   }, [view, eventOverlayVisible, eventsGetEvents, viewYear, viewMonth, eventsCacheStamp]);
 
   const viewData = useMemo(() => {
-    if (view === "events") {
-      const { eventsRangeLoading, agendaEntryReady } = computeCalendarEntryReadiness({
-        viewYear,
-        viewMonth,
-        eventsLoading,
-        eventsIsMonthLoading,
-        eventsEnsureRange: eventsEnsureRange as never,
-        deadlineOverlayVisible,
-        committedDeadlineOverlayData,
-        deadlinesEnsureRange: deadlinesRangeData?.ensureRange as never,
-        deadlinesSeedData: deadlinesRangeData?.data,
-        deadlinesDataRange: deadlinesRangeData?.dataRange ?? null,
-        planningReadiness,
-        deadlinesData,
-      });
-      return {
-        events: visibleCalendarEvents,
-        deadlineOverlay,
-        planningReadiness,
-        isLoading: eventsRangeLoading,
-        agendaEntryReady,
-        pendingUpdate: eventsStaleRefreshPending,
-        hasMonth: eventsHasMonth?.(viewYear, viewMonth) || false,
-        revision: eventsRevision,
-      };
-    }
-    return computeCalendarBillsViewData({ billsData, billsRangeData: billsRangeData as never });
+    const { eventsRangeLoading, agendaEntryReady } = computeCalendarEntryReadiness({
+      viewYear,
+      viewMonth,
+      eventsLoading,
+      eventsIsMonthLoading,
+      eventsEnsureRange: eventsEnsureRange as never,
+      deadlineOverlayVisible,
+      committedDeadlineOverlayData,
+      deadlinesEnsureRange: deadlinesRangeData?.ensureRange as never,
+      deadlinesSeedData: deadlinesRangeData?.data,
+      deadlinesDataRange: deadlinesRangeData?.dataRange ?? null,
+      planningReadiness,
+      deadlinesData,
+    });
+    return {
+      events: visibleCalendarEvents,
+      deadlineOverlay,
+      planningReadiness,
+      isLoading: eventsRangeLoading,
+      agendaEntryReady,
+      pendingUpdate: eventsStaleRefreshPending,
+      hasMonth: eventsHasMonth?.(viewYear, viewMonth) || false,
+      revision: eventsRevision,
+    };
   }, [
-    view,
     eventsEnsureRange,
     eventsHasMonth,
     eventsIsMonthLoading,
@@ -148,8 +139,6 @@ export default function useCalendarControllerViewData({
     deadlinesData,
     visibleCalendarEvents,
     deadlineOverlay,
-    billsData,
-    billsRangeData,
   ]);
 
   return { visibleCalendarEvents, visibleGetMonthEvents, viewData };

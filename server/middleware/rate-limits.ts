@@ -13,16 +13,6 @@ import rateLimit from "express-rate-limit";
 //     would otherwise leak counts across test cases);
 //   - a singleton built from that factory (used by the real route wiring).
 
-export function makeBillExtractLimiter() {
-  return rateLimit({
-    windowMs: 5 * 60 * 1000,
-    max: 20,
-    message: { message: "Too many bill-extract requests, try again later" },
-    standardHeaders: true,
-    legacyHeaders: false,
-  });
-}
-
 export function makeAlfredRunLimiter() {
   return rateLimit({
     windowMs: 10 * 60 * 1000,
@@ -83,7 +73,6 @@ export function makeActualConnectionLimiter() {
   });
 }
 
-export const billExtractLimiter = makeBillExtractLimiter();
 export const alfredRunLimiter = makeAlfredRunLimiter();
 export const alfredEmailContextLimiter = makeAlfredEmailContextLimiter();
 export const emailSearchLimiter = makeEmailSearchLimiter();

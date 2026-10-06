@@ -1,13 +1,11 @@
 import { normalizeStatus } from "../calendar/views/deadlines/deadlinesModel";
-import { getScheduleUrl, payUrlForBill } from "../finances/recurringPaymentModel";
 import { calendarActionUrl } from "../calendar/views/events/eventDetailModel";
 import { extractNonZoomEventUrl, extractZoomMeetingUrl } from "../../lib/calendar-links";
-import type { ActualBillOccurrence } from "../../../shared/types/actual";
 import type { NormalizedCalendarEvent } from "../../../shared/types/calendar";
 import type { TodoistTask } from "../../../shared/types/tasks";
 
-export type GlanceKind = "deadline" | "bill" | "event";
-export type GlanceActionKey = "complete" | "edit" | "todoist" | "actual" | "pay" | "zoom" | "eventUrl" | "gcal" | "openInCalendar";
+export type GlanceKind = "deadline" | "event";
+export type GlanceActionKey = "complete" | "edit" | "todoist" | "zoom" | "eventUrl" | "gcal" | "openInCalendar";
 export interface GlanceAction {
   key: GlanceActionKey;
   label: string;
@@ -16,21 +14,16 @@ export interface GlanceAction {
   href?: string;
 }
 
-export interface GlanceActionContext {
-  actualBudgetUrl?: string | null;
-  payLinksByScheduleId?: Record<string, string>;
-}
 type DashboardGlanceDeadline = Partial<TodoistTask> & { status?: string };
-type DashboardGlanceBill = Partial<ActualBillOccurrence>;
 type DashboardGlanceEvent = Partial<NormalizedCalendarEvent>;
 
 // Ordered action descriptors for the dashboard glance sheet's action row, by item
 // kind. Link actions carry an href; command actions ("complete"/"edit"/
 // "openInCalendar") are wired to handlers by the sheet. Event editing stays in
-// the sheet; deadline and bill deep-links remain explicit. Pure — no React, no handlers.
+// the sheet; deadline deep-links remain explicit. Pure — no React, no handlers.
 
-function openInCalendarAction(label = "Open in calendar"): GlanceAction {
-  return { key: "openInCalendar", label, type: "command", tone: "ghost" };
+function openInCalendarAction(): GlanceAction {
+  return { key: "openInCalendar", label: "Open in calendar", type: "command", tone: "ghost" };
 }
 
 function deadlineActions(task: DashboardGlanceDeadline): GlanceAction[] {
@@ -44,20 +37,6 @@ function deadlineActions(task: DashboardGlanceDeadline): GlanceAction[] {
     out.push({ key: "todoist", label: "Open in Todoist", type: "link", href: todoistUrl, tone: "ghost" });
   }
   out.push(openInCalendarAction());
-  return out;
-}
-
-function billActions(bill: DashboardGlanceBill, ctx: GlanceActionContext): GlanceAction[] {
-  const out: GlanceAction[] = [];
-  const scheduleUrl = getScheduleUrl(bill, ctx.actualBudgetUrl);
-  if (scheduleUrl) {
-    out.push({ key: "actual", label: "Open in Actual", type: "link", href: scheduleUrl, tone: "accent" });
-  }
-  const payUrl = payUrlForBill(bill, ctx.payLinksByScheduleId);
-  if (payUrl) {
-    out.push({ key: "pay", label: "Pay online", type: "link", href: payUrl, tone: "accent" });
-  }
-  out.push(openInCalendarAction("Open in Finances"));
   return out;
 }
 
@@ -80,14 +59,12 @@ function eventActions(ev: DashboardGlanceEvent): GlanceAction[] {
   return out;
 }
 
-export function selectGlanceActions({ kind, item, ctx = {} }: {
+export function selectGlanceActions({ kind, item }: {
   kind: GlanceKind;
-  item: DashboardGlanceDeadline | DashboardGlanceBill | DashboardGlanceEvent | null;
-  ctx?: GlanceActionContext;
+  item: DashboardGlanceDeadline | DashboardGlanceEvent | null;
 }): GlanceAction[] {
   if (!item) return [];
   if (kind === "deadline") return deadlineActions(item as DashboardGlanceDeadline);
-  if (kind === "bill") return billActions(item as DashboardGlanceBill, ctx);
   if (kind === "event") return eventActions(item as DashboardGlanceEvent);
   return [];
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { dueDateToMs, buildTimeline } from "./shell-helpers";
+import { dueDateToMs } from "./shell-helpers";
 
 const iso = (ms: number | null) => new Date(ms!).toISOString();
 
@@ -54,11 +54,3 @@ describe("dueDateToMs (Pacific DST-correct)", () => {
   });
 });
 
-describe("buildTimeline bill anchor (Pacific DST-correct)", () => {
-  it("anchors a bill to ~3pm Pacific during PST", () => {
-    // 3pm PST == 2026-01-15T23:00:00Z; the buggy fixed 22:00Z was 2pm PST (1h early).
-    const items = buildTimeline({ bills: [{ id: "b1", next_date: "2026-01-15", amount: 10 }] });
-    const bill = items.find((i) => i.kind === "bill");
-    expect(iso(bill!.dueAtMs)).toBe("2026-01-15T23:00:00.000Z");
-  });
-});

@@ -100,7 +100,7 @@ export default function EmailAiModelCard({
     <SettingsCard
       title="Inbox Triage AI"
       icon={<Bot size={14} />}
-      description="Model used for durable inbox triage. Bill extraction uses its own model."
+      description="Model used for durable inbox triage and escalations from the Fast Triage AI pass."
     >
       <div className="flex flex-col gap-3">
         {selection.providers.length ? (

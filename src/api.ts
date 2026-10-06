@@ -1,10 +1,7 @@
-export { getFinancialConnections, saveFinancialConnections, savePaymentOrganization, getFinances, getFinanceJournal } from './lib/financesApi';
-export { previewKeepFinancialResult, confirmKeepFinancialResult, recheckFinancialCorrection, inspectFinancialCorrection, previewFinancialCorrection, confirmFinancialCorrection, getFinancialCorrection } from './lib/financialCorrectionApi';
+export { savePaymentOrganization, getFinances, getFinanceJournal } from './lib/financesApi';
 import type { SnoozedEmailEntry } from "../shared/types/email";
-export { listFinancialActivity, getFinancialActivity } from "./lib/financialActivityApi";
 import { isDemoMode } from "./demo/config.ts";
 import { apiFetch } from "./lib/apiFetch";
-import type { DashboardFinanceResponse } from "../shared/types/dashboard-finance.ts";
 import type { EmailAiUsageStats } from "../shared/types/ai-usage.ts";
 import type {
   AuthenticationResponseJSON,
@@ -17,11 +14,9 @@ import type {
   AccountMutationResponse,
   AccountPatchRequest,
   AccountsResponse,
-  ApiTokenMetadata,
   PasskeyDeleteResponse,
   PasskeyListResponse,
   PasskeyRegistrationResponse,
-  CreateApiTokenResponse,
   GmailAuthUrlResponse,
   ICloudAccountResponse,
 } from "../shared/types/accounts.ts";
@@ -72,11 +67,7 @@ import type {
   ActualCacheStatusResponse,
   ActualConnectionOverrides,
   ActualConnectionResponse,
-  ActualMetadataResponse,
-  BillMutationResponse,
-  CalendarBillsRangeResponse,
 } from "../shared/types/bills.ts";
-import type { ActualAccount, ActualCategoryGroup, ActualPayee } from "../shared/types/actual.ts";
 import type {
   CalendarDeadlineRangeResponse,
   CompleteDeadlineOccurrenceResult,
@@ -116,7 +107,6 @@ import type { CapabilityStatusResponse } from "../shared/types/capabilities.ts";
 import type { InstanceCredentialMetadata, InstanceCredentialMetadataResponse } from "../shared/types/instance-credentials.ts";
 export { discardGoogleOAuthPending, discardInstanceCredentialPending } from "./lib/instanceCredentialPendingApi.ts";
 export * from "./lib/remoteContentTrustApi.ts";
-export * from "./lib/transactionImportApi.ts";
 export * from "./lib/alfredApi.ts";
 export * from "./lib/emailAttachmentApi.ts";
 
@@ -216,9 +206,6 @@ export const deletePasskeyCredential = (credentialId: ApiId): Promise<PasskeyDel
     redirectOnAuthFailure: false,
   })
 );
-export const listApiTokens = (): Promise<ApiTokenMetadata[]> => apiFetch("/api/auth/api-tokens");
-export const createApiToken = (label: string, scopes: string[]): Promise<CreateApiTokenResponse> => apiFetch("/api/auth/api-tokens", { method: "POST", body: JSON.stringify({ label, scopes }) });
-export const revokeApiToken = (id: ApiId): Promise<AccountMutationResponse> => apiFetch(`/api/auth/api-tokens/${encodeURIComponent(id)}`, { method: "DELETE" });
 // Current snapshot and operational dashboard data
 export const getActiveSnapshot = (): Promise<ActiveSnapshotView> => apiFetch("/api/briefing/snapshot/active");
 export const syncActiveSnapshot = (): Promise<ActiveSnapshotView> => apiFetch("/api/briefing/snapshot/sync", { method: "POST" });
@@ -271,8 +258,6 @@ export const getCurrentDashboard = (): Promise<CurrentDashboardResponse> => {
   return apiFetch("/api/dashboard/current");
 };
 export const getDashboardHealth = (): Promise<CurrentDashboardHealthResponse> => apiFetch("/api/dashboard/health");
-// The demo adapter explicitly serves a fictional, refresh-reset financial projection.
-export const getDashboardFinance = (options: SignalOptions = {}): Promise<DashboardFinanceResponse> => apiFetch("/api/dashboard/finance", options);
 // Demo serves the same bounded pending-run projection from its in-memory imports.
 export const requestCurrentDashboardRefresh = (source?: CurrentDashboardCacheKey): Promise<CurrentDashboardResponse> => apiFetch("/api/dashboard/current/refresh", {
   method: "POST",
@@ -411,8 +396,6 @@ export const completeDeadlineOccurrence = (id: ApiId, occurrenceDate: string): P
     `/api/calendar/deadlines/${encodeURIComponent(id)}/completed-occurrences/${encodeURIComponent(occurrenceDate)}`,
     { method: "POST" },
   );
-export const getCalendarBillsRange = (start: string, end: string): Promise<CalendarBillsRangeResponse> =>
-  apiFetch(`/api/calendar/bills/range?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`);
 export const getCalendarSearch = ({ scope, q, limit, signal }: CalendarSearchOptions = {}): Promise<CalendarSearchResponse> => {
   const params = new URLSearchParams();
   if (scope) params.set("scope", scope);
@@ -466,12 +449,6 @@ export const updateTodoistTask = (id: ApiId, data: DeadlineMutationRequest): Pro
 export const deleteTodoistTask = (id: ApiId): Promise<DeadlineDeleteResponse> => apiFetch(`/api/briefing/todoist/tasks/${encodeURIComponent(id)}`, { method: "DELETE" });
 
 // Actual Budget
-export { resolveFinancialEmailPlan, completeFinancialEvent, dismissFinancialEvent, requestFinancialEventReview } from "./lib/financialEmailApi";
-export const markBillPaid = (id: ApiId): Promise<BillMutationResponse> => apiFetch(`/api/briefing/actual/bills/${encodeURIComponent(id)}/mark-paid`, { method: "POST" });
-export const getActualAccounts = (): Promise<ActualAccount[]> => apiFetch("/api/briefing/actual/accounts");
-export const getActualPayees = (): Promise<ActualPayee[]> => apiFetch("/api/briefing/actual/payees");
-export const getActualCategories = (): Promise<ActualCategoryGroup[]> => apiFetch("/api/briefing/actual/categories");
-export const getActualMetadata = (): Promise<ActualMetadataResponse> => apiFetch("/api/briefing/actual/metadata");
 export const testActualBudget = (overrides: ActualConnectionOverrides | null): Promise<ActualConnectionResponse> => apiFetch("/api/briefing/actual/test", { method: "POST", body: JSON.stringify(overrides || {}) });
 export const saveActualBudgetConnection = (candidate: ActualConnectionOverrides): Promise<ActualConnectionResponse> => apiFetch("/api/briefing/actual/connection", {
   method: "POST",
@@ -533,7 +510,7 @@ export const deleteReminder = (id: ApiId): Promise<ReminderMutationResponse> => 
 export const geocodeLocation = (q: string): Promise<GeocodeResult[]> => apiFetch(`/api/ea/geocode?q=${encodeURIComponent(q)}`);
 export const skipSchedule = (index: number, skip = true): Promise<ScheduleSkipResponse> => apiFetch("/api/ea/schedules/skip", { method: "POST", body: JSON.stringify({ index, skip }) });
 export const getModels = (): Promise<ProviderModelAvailability[]> => apiFetch("/api/ea/models");
-export const getBillExtractModels = (): Promise<ProviderModelAvailability[]> => apiFetch("/api/ea/bill-extract-models");
+export const getTriageFastModels = (): Promise<ProviderModelAvailability[]> => apiFetch("/api/ea/triage-fast-models");
 export const getAlfredModels = (): Promise<ProviderModelAvailability[]> => apiFetch("/api/ea/alfred-models");
 
 export const searchEmails = (query: string, limit?: string | number, { signal }: SignalOptions = {}): Promise<EmailSearchClientResponse> => {

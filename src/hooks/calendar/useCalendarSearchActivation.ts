@@ -11,9 +11,7 @@ interface SearchEventEditor { isEditorOpen: boolean; isDirty: boolean; closeEdit
 
 export interface CalendarSearchActivationOptions {
   open: boolean;
-  view: string;
   eventsRevision?: number;
-  onViewChange?: (view: string) => void;
   viewYear: number;
   viewMonth: number;
   activeView: CalendarViewAdapter;
@@ -54,9 +52,7 @@ export interface CalendarSearchActivationOptions {
 // state, so the relocation is behavior-preserving.
 export default function useCalendarSearchActivation({
   open,
-  view,
   eventsRevision,
-  onViewChange,
   viewYear,
   viewMonth,
   activeView,
@@ -104,8 +100,6 @@ export default function useCalendarSearchActivation({
       return false;
     }
 
-    const targetView = target.view === "bills" ? "bills" : "events";
-    if (targetView !== view) onViewChange?.(targetView);
     closeEventEditor();
     setDeadlineEditor(null);
     setDeadlineDraftPreview(null);
@@ -119,10 +113,10 @@ export default function useCalendarSearchActivation({
     setSelectedDateKey(target.dateKey);
     setSelectedItemId(target.itemId);
     searchActivationSeqRef.current += 1;
-    const requestKey = `search:${searchActivationSeqRef.current}:${targetView}:${target.dateKey}:${target.itemId}`;
+    const requestKey = `search:${searchActivationSeqRef.current}:${target.view}:${target.dateKey}:${target.itemId}`;
     setPendingItemDetailFocus({
       openRequestId: searchActivationSeqRef.current,
-      view: targetView,
+      view: target.view,
       detailKind: target.detailKind || null,
       dateKey: target.dateKey,
       itemId: target.itemId,
@@ -139,7 +133,6 @@ export default function useCalendarSearchActivation({
     eventEditor.isDirty,
     eventEditor.isEditorOpen,
     floatingDetailRef,
-    onViewChange,
     setFloatingDetail,
     setDeadlineDraftPreview,
     setDeadlineEditor,
@@ -152,7 +145,6 @@ export default function useCalendarSearchActivation({
     setSelectedItemId,
     setViewDate,
     shakeFloatingEditor,
-    view,
   ]);
 
   const isCalendarSearchResultGridNavigable = useCallback((result: CalendarSearchResultLike) => (
@@ -205,7 +197,6 @@ export default function useCalendarSearchActivation({
 
   const calendarSearch = useCalendarModalSearch({
     modalOpen: open,
-    view,
     eventsRevision,
     onActivateResult: activateCalendarSearchResult,
   });
@@ -220,7 +211,6 @@ export default function useCalendarSearchActivation({
         sourceCellElement: fallbackContext.sourceCellElement || fallbackContext.anchorElement || null,
       };
     }
-    const targetView = target.view === "bills" ? "bills" : "events";
     const fallbackRowContext = fallbackContext.anchorElement
       ? {
           anchorKind: "search-result-row",
@@ -228,7 +218,7 @@ export default function useCalendarSearchActivation({
           sourceCellElement: fallbackContext.sourceCellElement || fallbackContext.anchorElement,
         }
       : null;
-    if (targetView !== view || !searchTargetVisibleInCurrentGrid(target.dateKey)) {
+    if (!searchTargetVisibleInCurrentGrid(target.dateKey)) {
       if (fallbackRowContext && (result?.type === "event" || result?.type === "deadline")) return fallbackRowContext;
       return { anchorKind: "grid-chip" };
     }
@@ -246,7 +236,6 @@ export default function useCalendarSearchActivation({
     computed,
     panelRef,
     searchTargetVisibleInCurrentGrid,
-    view,
   ]);
 
   useLayoutEffect(() => {
@@ -254,8 +243,6 @@ export default function useCalendarSearchActivation({
       const target = activationTargetFromCalendarSearchResult(result);
       const parsed = parseYmd(target?.dateKey);
       if (!target || !parsed) return false;
-      const targetView = target.view === "bills" ? "bills" : "events";
-      if (targetView !== view) return true;
       if (!target.detailKind && result?.type === "event" && !eventOverlayVisible) return false;
       if (target.detailKind === "deadline") return true;
       if (!searchTargetVisibleInCurrentGrid(target.dateKey)) return true;
@@ -270,7 +257,6 @@ export default function useCalendarSearchActivation({
     deadlineOverlayVisible,
     eventOverlayVisible,
     searchTargetVisibleInCurrentGrid,
-    view,
   ]);
 
   const calendarSearchShell = useMemo(() => ({

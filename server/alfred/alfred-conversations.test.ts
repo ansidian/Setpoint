@@ -45,14 +45,14 @@ describe("alfred conversation store", () => {
   it("caches and reads items by kind and id, reporting unknown ids", () => {
     const conversation = createAlfredConversation({ now: 0 });
     cacheAlfredItems(conversation, "email", [{ uid: "a", subject: "Hello" }], "uid");
-    cacheAlfredItems(conversation, "bill", [{ id: "b1", amount: 42 }]);
+    cacheAlfredItems(conversation, "deadline", [{ id: "b1", title: "Renew" }]);
 
     expect(readAlfredItems(conversation, "email", ["a"])).toEqual({
       found: [{ uid: "a", subject: "Hello" }],
       missing: [],
     });
-    expect(readAlfredItems(conversation, "bill", ["b1", "nope"])).toEqual({
-      found: [{ id: "b1", amount: 42 }],
+    expect(readAlfredItems(conversation, "deadline", ["b1", "nope"])).toEqual({
+      found: [{ id: "b1", title: "Renew" }],
       missing: ["nope"],
     });
     expect(readAlfredItems(conversation, "email", ["b1"]).found).toEqual([]);

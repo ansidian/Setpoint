@@ -11,10 +11,10 @@ afterEach(() => { vi.useRealTimers(); cleanupCurrentServiceTest(); });
 
 const savedAt = "2026-05-04T10:00:00.000Z";
 const now = new Date("2026-05-04T12:00:00.000Z");
-const sources: CurrentDashboardCacheKey[] = ["weather_current", "calendar_current", "deadlines_current", "bills_current"];
+const sources: CurrentDashboardCacheKey[] = ["weather_current", "calendar_current", "deadlines_current"];
 
 async function seedSavedData() {
-  const payloads = [{ temp: 61 }, [{ id: "saved-event" }], { upcoming: [], stats: null }, { bills: [], allSchedules: [], payeeMap: {}, actualConfigured: true }];
+  const payloads = [{ temp: 61 }, [{ id: "saved-event" }], { upcoming: [], stats: null }];
   for (const [index, key] of sources.entries()) {
     await seedCache(key, payloads[index], { fetchedAt: savedAt, expiresAt: savedAt });
   }
@@ -39,8 +39,6 @@ describe("source-specific dashboard refresh", () => {
     expect(testState.fetchCalendar).toHaveBeenCalledTimes(source === "calendar_current" ? 1 : 0);
     // test-architecture: allow-boundary-interaction -- Todoist task reads can trigger provider sync; only selecting Tasks authorizes that outbound work.
     expect(testState.fetchTodoistTasks).toHaveBeenCalledTimes(source === "deadlines_current" ? 1 : 0);
-    // test-architecture: allow-boundary-interaction -- Actual metadata refresh crosses the filesystem/provider boundary and must only run for the selected Bills source.
-    expect(testState.syncActualMetadata).toHaveBeenCalledTimes(source === "bills_current" ? 1 : 0);
   });
 
   it("does not bootstrap missing unrelated cache sources", async () => {

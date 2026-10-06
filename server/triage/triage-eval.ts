@@ -329,7 +329,6 @@ function mockDecisionForTier(example: TriageEvalExample, tier: TriageModelTier):
       action: "Review",
       deadline_at: null,
       confidence: 0,
-      bill_candidate: null,
   };
 }
 

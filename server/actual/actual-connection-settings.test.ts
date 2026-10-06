@@ -20,7 +20,8 @@ describe("saveActualConnectionCandidate", () => {
         user_id TEXT PRIMARY KEY,
         actual_budget_url TEXT,
         actual_budget_password_encrypted TEXT,
-        actual_budget_sync_id TEXT
+        actual_budget_sync_id TEXT,
+        actual_budget_encryption_password_encrypted TEXT
       );
       CREATE TABLE ea_actual_metadata_mirror (
         user_id TEXT PRIMARY KEY,
@@ -140,6 +141,24 @@ describe("saveActualConnectionCandidate", () => {
       last_success_at: "2026-07-19T18:00:00.000Z",
       last_error: null,
     });
+  });
+
+  it("stores a verified encryption password under its own credential, keeps it when blank, and removes it with the connection", async () => {
+    const save = (encryptionPassword?: string) => saveActualConnectionCandidate("owner-1", {
+      serverURL: "https://working.actual.test", syncId: "working-sync", ...(encryptionPassword ? { encryptionPassword } : {}),
+    }, {
+      dbClient: db,
+      encryptValue: (value, field) => `${field}:${value}`,
+      testConnection: vi.fn().mockResolvedValue({ success: true, budgetCount: 1, budgetFound: true, budgetEncrypted: true }),
+    });
+    const encryption = async () => (await db.execute("SELECT actual_budget_encryption_password_encrypted AS value FROM ea_settings")).rows[0]?.value;
+
+    await expect(save("budget-key")).resolves.toMatchObject({ budgetEncrypted: true });
+    expect(await encryption()).toBe("actual_budget_encryption_password_encrypted:budget-key");
+    await save();
+    expect(await encryption()).toBe("actual_budget_encryption_password_encrypted:budget-key");
+    await removeActualConnection("owner-1", { dbClient: db });
+    expect(await encryption()).toBeNull();
   });
 
   it("removes only the Actual connection credentials", async () => {

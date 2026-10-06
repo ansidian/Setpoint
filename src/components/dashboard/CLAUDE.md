@@ -9,17 +9,17 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 ### Shell + layout
 - `DashboardShell.tsx` — orchestrates state and tab switching; supplies shared mobile app actions to Inbox, Calendar, and Finances while hiding their redundant shell header; mobile Dashboard uses a compact date/title header with shared app actions; mounts dashboard, inbox, calendar, notes, and news through `DashboardTabPanel`; routes Alfred proposal review into the typed Calendar bridge without pre-closing the panel
 - `DashboardTabPanel.tsx` — dashboard-specific tab seam combining keep-alive/freeze behavior with the responsive `tabpanel` ID and accessible name contract
-- `DashboardBody.tsx` — renders NeedsYouBand / TodayTimeline with financial context / ContextColumn through `ThreeTierLayout`; resolves live deadlines/bills/events and wires their click-to-open handlers
+- `DashboardBody.tsx` — renders NeedsYouBand / TodayTimeline / ContextColumn through `ThreeTierLayout`; resolves live deadlines/events and wires their click-to-open handlers
 - `dashboard-interactions.css` — shared lift/press feedback for primary dashboard item triggers; Inbox Peek intentionally does not opt in
 - `DashboardShellOverlays.tsx` — mounts modal overlays: add task, analytics, customize, command palette, briefing history (no longer the calendar — it is a tab now)
 - `src/components/shared/WorkspaceLoading.tsx` — persistent app-level hero shared by startup, workspace lazy boundaries and initial reads; stage registration preserves the animation, inactive tabs release it, and Notes keeps its own fallback
 - `KeepAliveTab.tsx` — keep-alive tab wrapper (Activity + freeze-when-hidden) so tab switches don't unmount/remount and a data refresh skips the hidden tab
-- `DashboardCalendarModalMount.tsx` — lazy calendar mount (rendered inside the calendar `KeepAliveTab`) with deadline/bill data plus the optional one-shot event create request
+- `DashboardCalendarModalMount.tsx` — lazy calendar mount (rendered inside the calendar `KeepAliveTab`) with deadline data plus the optional one-shot event create request
 - `dashboardShellModel.ts` — calendar open-state logic, typed event-create request routing, request builders, hotkey resolution, and the pure glance-sheet tap toggle (`nextItemSheet`: re-tap closes, keyed per kind)
 - `useDashboardShellHotkeys.ts` — global shortcuts: command palette, Analytics, snapshots, and Alfred; single or batch Inbox selection reserves A for triage, and open panels suspend shell single-key commands
 - `useCalendarWorkspaceState.ts` — calendar workspace state slice: view/focus/overlay deep-link state, one-shot typed event-create request ownership/acknowledgement consumption, `openCalendar`/`changeCalendarView`, and the leave-clear + workspace-change-notify effects
 - `useDashboardItemSheet.ts` — dashboard glance-sheet selection/toggle state, tab-leave cleanup, direct item routing, and kind-aware "Open in calendar" handoff
-- `useMobileInboxNavigation.ts` — owns mobile email origin/history: Dashboard opens return directly home, list opens return to Inbox, overlays dismiss first, and dirty-reader exits re-arm history until the in-app discard choice resolves; Settings/financial foreground routes suspend background history pushes and dismissal
+- `useMobileInboxNavigation.ts` — owns mobile email origin/history: Dashboard opens return directly home, list opens return to Inbox, overlays dismiss first, and dirty-reader exits re-arm history until the in-app discard choice resolves; the Settings foreground route suspends background history pushes and dismissal
 - `useMobileDashboardScrollRestoration.ts` — captures the mobile dashboard's shared-scroll offset and restores it immediately plus on the next frame after returning to the tab
 - `useSnapshotNavigation.ts` — loads ordered snapshot history while Inbox is active, resolves adjacent frozen/current transitions, and cancels pending navigation when returning directly to Current
 - `snapshotNavigationModel.ts` — pure older/newer adjacency resolver over newest-first snapshot history
@@ -31,7 +31,7 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 
 ### Tier 1 — Needs-you band
 - `needsYou/NeedsYouBand.tsx` — the band: a needs-you count with expandable urgent rows on mobile and priority cards on desktop; desktop switches to a wheel-scroll horizontal rail above five cards
-- `needsYou/needsYouModel.ts` — classifies deadlines/emails into urgent cards (dashboard disables future backfill; Actual bills never enter Needs You), with snapshot identity deduplication
+- `needsYou/needsYouModel.ts` — classifies deadlines/emails into urgent cards (dashboard disables future backfill), with snapshot identity deduplication
 - `needsYou/NeedsYouCountBlock.tsx` — the leading count + breakdown block
 - `needsYou/StartHereStrip.tsx` / `needsYou/StartHereStrip.css` — compact ranked recommendation command that reuses the first urgent card and routes through its existing open behavior
 - `needsYou/PriorityCard.tsx` — a single priority card; desktop card bodies open details; email footers open the Inbox reader
@@ -54,42 +54,34 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 - `context/weatherCardModel.ts` — pure transforms shaping the live feed into the hover card's hour/day view-models (now-accent, rain chip, condition labels)
 - `context/ComingUpCard.tsx` — Ahead: future deadlines grouped by day, bounded preview with day/week disclosures
 - `context/MobileComingUp.css` — mobile upcoming-row layout, completion/open controls, and preview disclosure states
-- `context/comingUpModel.ts` — builds the coming-up rows from live deadlines/bills; mobile excludes today through includeToday
+- `context/comingUpModel.ts` — builds the coming-up rows from live deadlines; mobile excludes today through includeToday
 
 ### Rails (context-column building blocks)
 - `rails/InboxPeek.tsx` — full snapshot lane counts and three useful summaries excluding urgent-band emails; lane-colored labels, shared email-body preview modal with Jump to inbox, and filtered Inbox handoffs
 - `rails/railModel.ts` — `timeAgo` relative-time formatting for the inbox peek
 - `rails/railPrimitives.tsx` — shared `SectionHeader`/`EmptyRow` used by the inbox peek and Coming-up card
 
-### Financial context and schedule notices
-- `finance/DashboardFinance.tsx` — unified Finance review before Money Ahead / Spending Snapshot, with exact shared financial foreground handoffs
-- `finance/useDashboardFinance.ts` — spending and canonical all-source review/completed reads, shared refresh/invalidation, and independent last-success/error retention
-- `finance/MoneyAheadCard.tsx` — Money Ahead due-today/past-date indicators and always-visible rows, separate past-date subtotal, and bounded expandable future rows
-- `finance/moneyAheadModel.ts` — unpaid scheduled expense eligibility, occurrence deduplication, Pacific date groups (today, previous 30 days, next 7 days), and independent upcoming/past-date amount completeness/totals
-- `finance/SpendingSnapshotCard.tsx` — month-to-date comparison, matching prior dates, top categories and sync freshness
-- `finance/FinancialActivityCard.tsx` — one canonical review count and three direct records, with all-source completed activity in a quiet disclosure; source evidence lives inside the record
-- `finance/finance-cards.css` — financial grid, typography, controls and responsive/motion states
+### Schedule notices
 - `timeline/DashboardScheduleNotices.tsx` / `.css` — conditional stored departure estimate and overlap notices, reusing calendar reminders
 - `timeline/dashboardScheduleModel.ts` — exact occurrence reminder matching and remaining-today overlap policy
 - `rails/inboxPeekModel.ts` / `rails/InboxPeek.css` — snapshot deduplication, lane counts, bounded selection and compact presentation
 
 ### Data + details
-- `calendarBillsData.ts` — transforms live data into calendar-compatible bill shape
 - `dashboardCalendarModalModel.ts` — pure deadline projection for seeding the calendar workspace from current dashboard data
 - `inboxBadgeModel.ts` — unread signal count with read-state overrides
-- `DashboardItemDetailSheet.tsx` — unified glance sheet for a dashboard item tap (deadline/bill/event/email): shared detail cards (`DeadlineDetailCard`/`RecurringPaymentCard`/`EventSelectedCard`) + per-type action and workspace deep-link; opaque anchored panel on desktop, titled bottom sheet on mobile (via `AnchoredFloatingPanel`). The panel owns the single type heading; the inner card owns facts and actions. Replaces detail in place with CalendarEventEditorRail or the shared inline AddTaskPanel deadline workspace; E opens editing only from an open editable detail; Cancel/save restore detail, dirty projections guard outside dismissal and item retargeting, and deadline reminder failures retain the editor. Event writes use the shared calendar range; task writes use DashboardContext.
+- `DashboardItemDetailSheet.tsx` — unified glance sheet for a dashboard item tap (deadline/event/email): shared detail cards (`DeadlineDetailCard`/`EventSelectedCard`) + per-type action and workspace deep-link; opaque anchored panel on desktop, titled bottom sheet on mobile (via `AnchoredFloatingPanel`). The panel owns the single type heading; the inner card owns facts and actions. Replaces detail in place with CalendarEventEditorRail or the shared inline AddTaskPanel deadline workspace; E opens editing only from an open editable detail; Cancel/save restore detail, dirty projections guard outside dismissal and item retargeting, and deadline reminder failures retain the editor. Event writes use the shared calendar range; task writes use DashboardContext.
 - Desktop detail triggers use `data-dashboard-detail-trigger="true"` so the open panel survives pointerdown and moves to the next anchor; selecting another item resets its content state and cancels the old completion close timer.
 - `EmailDetailCard.tsx` / `EmailDetailCard.css` — snapshot-only sender, subject, summary and action preview with applied lane/status badges; Open email enters the reader without a Dashboard handled action
-- `glanceActionsModel.ts` — pure per-type action descriptors for the glance sheet (deadline: complete/edit/todoist; bill: actual/pay; event: zoom/url/gcal; all: open-in-calendar)
+- `glanceActionsModel.ts` — pure per-type action descriptors for the glance sheet (deadline: complete/edit/todoist/open-in-calendar; event: edit/zoom/url/gcal)
 - `MarkDoneAction.tsx` — quiet text-only "Mark done" control shared by the Needs-you band's upcoming cards and the Coming-up rows; reveals on parent hover or its own focus
 
 (Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)
 
 ## Local patterns
 
-- One fixed layout, branched on `isMobile` inside `ThreeTierLayout` (`layout/DashboardScenePrimitives.tsx`): desktop is a no-page-scroll column (band on top, scrolling Today/finance stack + 344px scrolling context column below); mobile stacks Needs You, Today, Ahead, weather, then finance, without Inbox Peek. There are no per-user layout modes.
-- Overdue/due-today deadlines live only in the Needs-you band (the single home for "open this now"); Ahead shows future deadlines. Money Ahead uses `allSchedules` to show unpaid bills grouped as Due today, Past due date (previous 30 days), and Next 7 days, excluding transfers and income. Today/past-date rows stay visible; only future rows collapse. Its headline total covers today through seven days ahead, with a separate past-date subtotal. Actual bill posting stays in Actual and reflects through the existing sync; past-date labels describe dates not recorded in Actual, not confirmed payment delinquency. The dashboard's Pacific day rollover reclassifies the groups. Today retains deadline context but future deadlines do not repeat in its later groups. `DashboardBody` passes the band `{ upcoming: deadlines }` because the band model reads the object form.
-- Desktop email card and Start here bodies open the shared anchored snapshot-only preview; their Open email actions enter Inbox. Inbox Peek rows open the shared email-body modal used by financial sources, reusing Alfred's preview content; Jump to inbox enters the selected reader. Mobile email taps go directly to the reader. Previews never mutate read/handled state; Mark handled belongs in the reader.
+- One fixed layout, branched on `isMobile` inside `ThreeTierLayout` (`layout/DashboardScenePrimitives.tsx`): desktop is a no-page-scroll column (band on top, scrolling Today stack + 344px scrolling context column below); mobile stacks Needs You, Today, Ahead, then weather, without Inbox Peek. There are no per-user layout modes.
+- Overdue/due-today deadlines live only in the Needs-you band (the single home for "open this now"); Ahead shows future deadlines. Today retains deadline context but future deadlines do not repeat in its later groups. `DashboardBody` passes the band `{ upcoming: deadlines }` because the band model reads the object form.
+- Desktop email card and Start here bodies open the shared anchored snapshot-only preview; their Open email actions enter Inbox. Inbox Peek rows open the shared email-body modal, reusing Alfred's preview content; Jump to inbox enters the selected reader. Mobile email taps go directly to the reader. Previews never mutate read/handled state; Mark handled belongs in the reader.
 - Motion uses scene tokens for staggered entry; respect reduced motion.
 
 ## Related

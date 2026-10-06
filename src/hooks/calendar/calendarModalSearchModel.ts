@@ -1,6 +1,6 @@
 import type { CalendarSearchResult, CalendarView } from "../../../shared/types/calendar";
 
-export type CalendarSearchScope = "events" | "bills";
+export type CalendarSearchScope = "events";
 export type CalendarSearchResultLike = Omit<Partial<CalendarSearchResult>, "activation"> & {
   hidden?: boolean;
   isHidden?: boolean;
@@ -36,10 +36,6 @@ export interface CalendarSearchActivationTarget {
   itemId: string;
 }
 
-export function searchScopeForCalendarView(view: unknown): CalendarSearchScope {
-  return view === "bills" ? "bills" : "events";
-}
-
 const MIN_QUERY_LENGTH = 2;
 const DASHBOARD_CALENDAR_TZ = "America/Los_Angeles";
 
@@ -56,8 +52,8 @@ export function normalizedCalendarSearchQuery(query: unknown = ""): string {
   return String(query || "").trim().toLocaleLowerCase();
 }
 
-export function calendarSearchPlaceholder(scope: CalendarSearchScope = "events"): string {
-  return scope === "bills" ? "Search bills" : "Search events and deadlines";
+export function calendarSearchPlaceholder(): string {
+  return "Search events and deadlines";
 }
 
 export function shouldShowCalendarSearchSkeleton({
@@ -92,7 +88,6 @@ function hasOnlyDeadlineResults(results: readonly CalendarSearchResultLike[] | n
 }
 
 export function calendarSearchStateLabel({
-  scope = "events",
   query = "",
   pending = false,
   results = [],
@@ -100,7 +95,6 @@ export function calendarSearchStateLabel({
   truncated = false,
   coverage = null,
 }: {
-  scope?: CalendarSearchScope;
   query?: unknown;
   pending?: boolean;
   results?: readonly CalendarSearchResultLike[] | null;
@@ -114,16 +108,14 @@ export function calendarSearchStateLabel({
   if (trimmed.length < MIN_QUERY_LENGTH) return "Type 2 characters";
   if (pending && visibleResults.length) return "Updating";
   if (pending) return "Searching";
-  if (scope === "events" && isGoogleCalendarCoverageLimited(coverage)) {
+  if (isGoogleCalendarCoverageLimited(coverage)) {
     return hasOnlyDeadlineResults(visibleResults) ? "Partial results: deadlines only" : "Calendar events indexing";
   }
-  if (scope === "events" && isGoogleCalendarCoverageAged(coverage)) {
+  if (isGoogleCalendarCoverageAged(coverage)) {
     return visibleResults.length ? "Showing available results" : "No matches in available results";
   }
-  if (!visibleResults.length) return scope === "bills" ? "No bills found" : "No events or deadlines found";
+  if (!visibleResults.length) return "No events or deadlines found";
   if (truncated) return "Limited results";
-  const mirror = sourceCoverage(coverage, "bills_mirror");
-  if (mirror) return "Bills mirror";
   return "";
 }
 
@@ -275,7 +267,7 @@ export function activationTargetFromCalendarSearchResult(
   if (!dateKey || !itemId) return null;
   const detailKind = activation.detailKind || (result?.type === "deadline" ? "deadline" : null);
   return {
-    view: activation.view || (result?.type === "bill" ? "bills" : "events"),
+    view: "events",
     ...(detailKind ? { detailKind } : {}),
     dateKey,
     itemId: String(itemId),

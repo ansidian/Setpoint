@@ -2,8 +2,11 @@ import { StrictMode, useState } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AlfredRunEvent } from "../../../shared/types/alfred";
+import type { DeadlineOccurrence } from "../../../shared/types/tasks";
 import AlfredPanel from "./AlfredPanel";
 import type { CalendarOpenRequest } from "../dashboard/dashboardShellModel";
+
+const RENT_DEADLINE = { id: "td-1", content: "Pay rent", due_date: "2026-06-14", status: "incomplete" } as unknown as DeadlineOccurrence;
 
 let runs: Response[] = [];
 let requests: Array<{ path: string; method: string; body: Record<string, unknown> | null }> = [];
@@ -86,25 +89,25 @@ describe("AlfredPanel", () => {
   it("submits the draft on Enter and renders the streamed answer", async () => {
     scriptedRun([
       { type: "run_start", conversation_id: "c1", provider: "anthropic", model: "claude-sonnet-4-6" },
-      { type: "tool_start", tool_id: "t1", name: "get_upcoming_bills" },
-      { type: "tool_result", tool_id: "t1", name: "get_upcoming_bills", ok: true, summary: "Bills · 1 upcoming" },
-      { type: "rows", kind: "bill", items: [{ id: "b1", scheduleId: "s1", name: "Rent", payee: "Oakwood", amount: 1850, next_date: "2026-06-14", paid: false, type: "bill", openActionDisabled: false }] },
-      { type: "text_delta", text: "One bill is due. The rest can wait." },
+      { type: "tool_start", tool_id: "t1", name: "get_deadlines" },
+      { type: "tool_result", tool_id: "t1", name: "get_deadlines", ok: true, summary: "Deadlines · 1 open" },
+      { type: "rows", kind: "deadline", items: [RENT_DEADLINE] },
+      { type: "text_delta", text: "One deadline is due. The rest can wait." },
       { type: "run_end", stop_reason: "end_turn" },
     ]);
     render(<AlfredPanel {...baseProps} />);
-    const input = screen.getByPlaceholderText("Ask across mail, calendar, and finances…");
-    fireEvent.change(input, { target: { value: "Any bills?" } });
+    const input = screen.getByPlaceholderText("Ask across mail, calendar, and deadlines…");
+    fireEvent.change(input, { target: { value: "Any deadlines?" } });
     fireEvent.keyDown(input, { key: "Enter" });
 
-    await waitFor(() => expect(screen.getByText("One bill is due. The rest can wait.")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("One deadline is due. The rest can wait.")).toBeTruthy());
     // The tool chip is now tucked behind a "steps" disclosure, collapsed by default.
-    expect(screen.queryByText("Bills · 1 upcoming")).toBeNull();
+    expect(screen.queryByText("Deadlines · 1 open")).toBeNull();
     const steps = screen.getByRole("button", { name: /1 step\b/ });
     fireEvent.click(steps);
-    expect(screen.getByText("Bills · 1 upcoming")).toBeTruthy();
-    expect(screen.getByText("Rent")).toBeTruthy();
-    expect(screen.getByText("Any bills?")).toBeTruthy();
+    expect(screen.getByText("Deadlines · 1 open")).toBeTruthy();
+    expect(screen.getByText("Pay rent")).toBeTruthy();
+    expect(screen.getByText("Any deadlines?")).toBeTruthy();
   });
 
   it("keeps Alfred open until Calendar accepts Review, performs zero writes on review, and uses normalized completion truth", async () => {
@@ -133,7 +136,7 @@ describe("AlfredPanel", () => {
       </>;
     }
     render(<Harness />);
-    const input = screen.getByPlaceholderText("Ask across mail, calendar, and finances…");
+    const input = screen.getByPlaceholderText("Ask across mail, calendar, and deadlines…");
     fireEvent.change(input, { target: { value: "Schedule a project review" } });
     fireEvent.keyDown(input, { key: "Enter" });
     await screen.findByRole("button", { name: "Review in Calendar" });
@@ -282,7 +285,7 @@ describe("AlfredPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Remove attached email: Email A" }));
 
     expect(screen.queryByTestId("alfred-pending-email-context")).toBeNull();
-    expect(screen.getByPlaceholderText<HTMLInputElement>("Ask across mail, calendar, and finances…").value).toBe("Keep this draft");
+    expect(screen.getByPlaceholderText<HTMLInputElement>("Ask across mail, calendar, and deadlines…").value).toBe("Keep this draft");
     expect(requests.filter((request) => request.path === "/api/alfred/run")).toHaveLength(0);
   });
 
@@ -316,7 +319,7 @@ describe("AlfredPanel", () => {
       { type: "run_end", stop_reason: "end_turn" },
     ]);
     const { rerender } = render(<AlfredPanel {...baseProps} />);
-    const input = screen.getByPlaceholderText("Ask across mail, calendar, and finances…");
+    const input = screen.getByPlaceholderText("Ask across mail, calendar, and deadlines…");
     fireEvent.change(input, { target: { value: "hi" } });
     fireEvent.keyDown(input, { key: "Enter" });
     await waitFor(() => expect(screen.getByText("Hello.")).toBeTruthy());
@@ -325,7 +328,7 @@ describe("AlfredPanel", () => {
     rerender(<AlfredPanel {...baseProps} newChatTick={1} />);
     await waitFor(() => expect(screen.queryByText("Hello.")).toBeNull());
     expect(screen.getByText("What would you like to connect?")).toBeTruthy();
-    expect(screen.getByPlaceholderText<HTMLInputElement>("Ask across mail, calendar, and finances…").value).toBe("");
+    expect(screen.getByPlaceholderText<HTMLInputElement>("Ask across mail, calendar, and deadlines…").value).toBe("");
   });
 
   it("Escape closes the preview first, then the panel", async () => {
@@ -339,7 +342,7 @@ describe("AlfredPanel", () => {
       return <><AlfredPanel {...baseProps} open={open} onClose={() => setOpen(false)} /><output>{open ? "panel open" : "panel closed"}</output></>;
     }
     render(<Harness />);
-    const input = screen.getByPlaceholderText("Ask across mail, calendar, and finances…");
+    const input = screen.getByPlaceholderText("Ask across mail, calendar, and deadlines…");
     fireEvent.change(input, { target: { value: "find it" } });
     fireEvent.keyDown(input, { key: "Enter" });
     await waitFor(() => expect(screen.getByText("Verify enrollment")).toBeTruthy());

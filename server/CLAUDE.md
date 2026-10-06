@@ -1,6 +1,6 @@
 # Server Root Map
 
-Composition root and cross-cutting server concerns that don't belong to a single domain. `server/<domain>/` subdirectories with their own `CLAUDE.md` (auth, email, bills, calendar, snapshots, tasks, reminders, triage, actual, platform, routes, alfred, news, middleware, transactions) carry their own maps — see those for domain logic. This map covers everything else directly under `server/`, including the smaller subdirectories below that don't yet warrant their own map.
+Composition root and cross-cutting server concerns that don't belong to a single domain. `server/<domain>/` subdirectories with their own `CLAUDE.md` (auth, email, bills, finances, calendar, snapshots, tasks, reminders, triage, actual, platform, routes, alfred, news, middleware) carry their own maps — see those for domain logic. This map covers everything else directly under `server/`, including the smaller subdirectories below that don't yet warrant their own map.
 
 ## Files
 
@@ -42,13 +42,10 @@ Composition root and cross-cutting server concerns that don't belong to a single
 - `scripts/backfill-email-date-utc.ts` — normalizes historical email dates to UTC
 - `scripts/email-search-embedding-backfill.ts`, `scripts/email-search-embedding-status.ts` — batch (re)compute and report embedding coverage for email search
 - `scripts/email-search-retrieval-eval.ts`, `scripts/seed-email-search-retrieval-eval.ts` — email search retrieval quality eval and its fixture seeding
-- `scripts/financial-email-observe-report.ts` — bounded read-only report of persisted financial-email automation gates by operation class
-- `scripts/financial-provider-replay.ts` — write-disabled pure company-registry replay of local JSON evidence; redacted provider/template/version/disposition report with no database or Actual connection
 - `scripts/hydrate-actual-cache.ts`, `scripts/prune-actual-cache.ts` — warm and prune the local Actual Budget cache
 - `scripts/acknowledge-email-history.ts` — exact-ID Gmail history failure acknowledgment CLI; read-only preview by default, explicit reason and matching fingerprint required to apply
-- `scripts/migrate-financial-connections.ts` — read-only unified financial configuration preview; explicit fingerprint-guarded apply changes configuration without Actual writes or parser activation
 - `scripts/reindex-emails.ts` — additive time-windowed email re-index
-- `scripts/reindex-email-evidence.ts` — dry-run-first refetch of one exact indexed email UID; apply refreshes body/FTS/embeddings and requeues existing managed financial documents through the index trigger; historical plans, triage and snapshots remain unchanged
+- `scripts/reindex-email-evidence.ts` — dry-run-first refetch of one exact indexed email UID; apply refreshes body/FTS/embeddings; triage and snapshots remain unchanged
 - `scripts/reindex-icloud-mime.ts` — targeted re-fetch/reindex of iCloud rows with undecoded raw MIME
 - `scripts/reset-passkeys.ts` — wipes passkey/session tables for local dev reset
 - `scripts/rotate-encryption-key.ts` — dry-run-first, offline transactional root-key rotation CLI
@@ -75,4 +72,3 @@ Composition root and cross-cutting server concerns that don't belong to a single
 - Domain background-worker modules such as `server/email/email-backfill-worker.ts` and `server/reminders/reminder-scheduler.ts` — the individual stop functions `index.ts` passes into `shutdown.ts`'s `stopFns`
 - `server/db/migrations/` — SQL files run by `db/migrate.ts`
 
-- `scripts/activate-financial-provider-parsers.ts` — guarded explicit provider parser epoch activation after configuration migration and verification; never backfills financial work

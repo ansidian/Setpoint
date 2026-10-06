@@ -128,17 +128,6 @@ export function itemFromCalendarSearchResult(result: CalendarSearchResultLike | 
       status: result.status || result.payload?.status || "open",
     };
   }
-  if (result.type === "bill") {
-    return {
-      ...(result.payload || {}),
-      id: result.itemId,
-      name: result.title,
-      title: result.title,
-      agendaDateKey: result.itemDate,
-      next_date: result.itemDate,
-      payee: result.subtitle || "",
-    };
-  }
   return {
     id: result.itemId || result.id,
     title: result.title,

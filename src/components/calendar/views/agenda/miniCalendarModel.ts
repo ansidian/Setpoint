@@ -42,7 +42,6 @@ function itemId(item: CalendarItemLike): string {
 
 function markerColor(item: CalendarItemLike): string {
   return item?.markerColor
-    || item?.agendaDotColor
     || item?.agendaSourceColor
     || item?.agendaSelectedColor
     || item?.sourceColor

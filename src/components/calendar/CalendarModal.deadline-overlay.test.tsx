@@ -31,7 +31,6 @@ describe("CalendarModal deadline overlay behavior", () => {
           ]),
           isMonthLoading: () => false,
         }}
-        billsData={{}}
         deadlinesData={{}}
         deadlinesRangeData={{
           loading: true,
@@ -60,7 +59,6 @@ describe("CalendarModal deadline overlay behavior", () => {
           editable: true,
           getEvents: () => [],
         }}
-        billsData={{}}
         deadlinesData={{
           upcoming: [
             { id: "todo-1", title: "Project due", due_date: "2026-04-20", source: "todoist", status: "open" },
@@ -112,7 +110,6 @@ describe("CalendarModal deadline overlay behavior", () => {
           ),
           isMonthLoading: () => false,
         }}
-        billsData={{}}
         deadlinesData={{
           upcoming: [
             { id: "todo-1", title: "Project due", due_date: "2026-08-31", source: "todoist", status: "open" },
@@ -160,7 +157,6 @@ describe("CalendarModal deadline overlay behavior", () => {
           editable: true,
           getEvents: () => [],
         }}
-        billsData={{}}
         deadlinesData={{
           upcoming: [
             { id: "todo-1", title: "Project due", due_date: "2026-04-20", source: "todoist", status: "complete" },
@@ -192,7 +188,6 @@ describe("CalendarModal deadline overlay behavior", () => {
           ensureRange: vi.fn().mockResolvedValue([]),
           getEvents: () => [],
         }}
-        billsData={{}}
         deadlinesData={{}}
         deadlinesRangeData={{
           loading: true,
@@ -237,7 +232,6 @@ describe("CalendarModal deadline overlay behavior", () => {
         onViewChange={() => {}}
         focusDate="2026-04-20"
         eventsData={eventsData}
-        billsData={{}}
         deadlinesData={seededDeadlines}
         deadlinesRangeData={{
           loading: true,
@@ -259,7 +253,6 @@ describe("CalendarModal deadline overlay behavior", () => {
         onViewChange={() => {}}
         focusDate="2026-04-20"
         eventsData={eventsData}
-        billsData={{}}
         deadlinesData={seededDeadlines}
         deadlinesRangeData={{
           loading: false,
@@ -304,7 +297,6 @@ describe("CalendarModal deadline overlay behavior", () => {
             ensureRange: vi.fn().mockResolvedValue([]),
             getEvents: () => [],
           }}
-          billsData={{}}
           deadlinesData={{ upcoming: [] }}
           deadlinesRangeData={{
             loading: true,
@@ -376,7 +368,6 @@ describe("CalendarModal deadline overlay behavior", () => {
           hasMonth: () => true,
           isMonthLoading: () => false,
         }}
-        billsData={{}}
         deadlinesData={juneDeadlines}
         deadlinesRangeData={{
           loading: false,

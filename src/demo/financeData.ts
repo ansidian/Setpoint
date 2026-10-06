@@ -1,6 +1,24 @@
-import type { TransactionRecord } from '../../shared/types/transactions';
-import { demoDateRange } from "./dateRange.ts";
-import type { DemoSeed } from "./store.ts";
+/** Fictional Actual transaction rows; the demo Journal projects them like the local budget reader. */
+export interface TransactionRecord {
+  id: string;
+  scheduleId?: string | null;
+  transferId?: string | null;
+  parentId?: string | null;
+  isParent?: boolean;
+  isChild?: boolean;
+  cleared?: boolean;
+  reconciled?: boolean;
+  date: string;
+  amount: number;
+  direction: "expense" | "income";
+  payee: string;
+  payeeId?: string | null;
+  category: string;
+  account: string;
+  accountId?: string | null;
+  transferAccountId?: string | null;
+  notes: string;
+}
 
 export function buildDemoTransactions(todayKey: string, yesterdayKey: string): TransactionRecord[] {
   const priorMonth = new Date(`${todayKey.slice(0, 7)}-01T12:00:00Z`);
@@ -18,17 +36,4 @@ export function buildDemoTransactions(todayKey: string, yesterdayKey: string): T
     { id: "demo-txn-prior-market", date: priorDate, amount: 88, direction: "expense", payee: "Corner Market", category: "Groceries", account: "Demo Checking", notes: "Fictional prior-month groceries" },
     { id: "demo-txn-prior-dining", date: priorDate, amount: 22.25, direction: "expense", payee: "Signal Coffee", category: "Dining", account: "Demo Card", notes: "Fictional prior-month dining" },
   ];
-}
-
-export function buildDemoCalendarBillsRange(seed: DemoSeed, url: URL) {
-  const start = url.searchParams.get("start") ?? "";
-  const end = url.searchParams.get("end") ?? "";
-  return {
-    schedules: demoDateRange(seed.bills, start, end, (item) => item.next_date),
-    transactions: demoDateRange(seed.transactions.filter(row => !row.transferAccountId && !row.isParent), start, end, (item) => item.date),
-    transactionsTruncated: false,
-    payeeMap: structuredClone(seed.currentDashboard.payeeMap),
-    actualBudgetUrl: seed.currentDashboard.actualBudgetUrl,
-    syncHealth: structuredClone(seed.currentDashboard.billsSyncHealth),
-  };
 }

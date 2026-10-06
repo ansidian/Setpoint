@@ -24,7 +24,6 @@ export interface SelectableCalendarEvent {
   sourceColorId?: string | null;
   agendaItemKind?: string;
   kind?: string;
-  billId?: string | number | null;
   ghostKind?: string | null;
   _calendarGhost?: boolean;
   resultKind?: string;
@@ -95,8 +94,6 @@ function hasFiniteMs(value: unknown) {
 
 function isExcludedSelectionSource(event: SelectableCalendarEvent | null | undefined) {
   return event?.agendaItemKind === "deadline"
-    || event?.kind === "bill"
-    || event?.billId != null
     || event?.ghostKind != null
     || event?._calendarGhost === true
     || event?.resultKind === "calendar-search-result"

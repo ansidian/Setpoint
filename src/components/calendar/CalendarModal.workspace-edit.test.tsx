@@ -34,7 +34,6 @@ describe("CalendarModal floating event edit workspace behavior", () => {
             },
           ]),
         }}
-        billsData={{}}
         deadlinesData={{}}
       />,
     ));
@@ -67,7 +66,6 @@ describe("CalendarModal floating event edit workspace behavior", () => {
           editable: true,
           getEvents: () => [],
         }}
-        billsData={{}}
         deadlinesData={{}}
       />,
     ));
@@ -128,7 +126,6 @@ describe("CalendarModal floating event edit workspace behavior", () => {
             },
           ]),
         }}
-        billsData={{}}
         deadlinesData={{}}
       />,
     ));

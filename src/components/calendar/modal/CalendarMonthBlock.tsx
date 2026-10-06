@@ -20,14 +20,13 @@ export interface CalendarMonthBlockProps extends Omit<
   viewMonth: number;
   cached: (MountedMonthData & { key: string; view: string }) | null;
   activeMonthData: MountedMonthData;
-  shareItemsByDate?: boolean;
   previewByIndex: Map<number, CalendarMonthPreviewEntry<CalendarSpanEvent & { id: string | number }>>;
   isMonthCached?: ((year: number, month: number) => boolean) | null;
 }
 
 // One mounted month inside the scroll container: derives its active/cached/
-// skeleton state, resolves its data (active map, cached map, shared bills map,
-// or a lightweight preview), and renders the headerless CalendarGrid. Extracted
+// skeleton state, resolves its data (active map, cached map, or a lightweight
+// preview), and renders the headerless CalendarGrid. Extracted
 // from CalendarScrollContainer's render loop so the container is a thin map over
 // the mounted window.
 export default function CalendarMonthBlock({
@@ -45,7 +44,6 @@ export default function CalendarMonthBlock({
   activeView,
   cached,
   activeMonthData,
-  shareItemsByDate,
   previewByIndex,
   isMonthCached,
   showGridSkeleton = false,
@@ -82,7 +80,6 @@ export default function CalendarMonthBlock({
     cached,
     monthCached,
     showGridSkeleton,
-    shareItemsByDate,
   });
   const preview = previewByIndex.get(index);
   const previewEvents = preview?.events ?? null;
@@ -92,7 +89,6 @@ export default function CalendarMonthBlock({
     isCached,
     cached,
     active: activeMonthData,
-    shareItemsByDate,
     empty: emptyObj,
   }) as Pick<CalendarGridProps, "viewData" | "itemsByDay" | "itemsByDate" | "cellMetaByDate">;
 

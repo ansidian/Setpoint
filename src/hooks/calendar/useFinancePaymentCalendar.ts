@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getFinanceJournal } from '../../api';
 import type { FinanceWorkspace, JournalRange } from '../../../shared/types/finances';
-import { financePayments } from './financePaymentsModel';
+import { financePaymentDays } from './financePaymentsModel';
 import { financeMonthRange } from './financeActivityModel';
 
 export default function useFinancePaymentCalendar(data: FinanceWorkspace | null, revision: number, active: boolean, initialMonth?: string) {
@@ -27,11 +27,11 @@ export default function useFinancePaymentCalendar(data: FinanceWorkspace | null,
     return () => { live = false; };
   }, [start, end, revision, active]);
   const visibleRange = range?.start === start && range.end === end ? range : null;
-  const model = useMemo(() => data ? financePayments(data, visibleRange, month) : null, [data, visibleRange, month]);
+  const days = useMemo(() => data ? financePaymentDays(data, visibleRange, month) : [], [data, visibleRange, month]);
   const changeMonth = (value: string) => { setMonth(value); setSelectedDate(null); setPreviewDate(null); };
   const lookahead = today ? new Date(`${today}T00:00:00Z`) : null;
   if (lookahead) lookahead.setUTCMonth(lookahead.getUTCMonth() + 3);
-  return { ...model, month, selectedDate, previewDate, setSelectedDate, setPreviewDate, changeMonth,
+  return { days, month, selectedDate, previewDate, setSelectedDate, setPreviewDate, changeMonth,
     loading: start <= end && (loading || !visibleRange && !error), error: start <= end ? error : '',
     truncated: !!visibleRange?.truncated,
     // The workspace's saved schedule projection looks ahead three months; do not imply unlimited forecast coverage.

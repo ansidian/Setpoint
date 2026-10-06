@@ -131,14 +131,10 @@ export default function useCalendarModalViewModel({
   // narrow inputs — instead of the whole viewData object whose identity bumps on
   // every planning-status transition (loading/readiness/stale-refresh) — keeps
   // the O(events x days) day-expansion from re-running on pure status churn.
-  // Bills' compute reads a different data shape (schedules/payeeMap), so it
-  // stays keyed on viewData.
-  const isEventsView = view === "events";
-  const eventsComputeData = useMemo(
+  const computeData = useMemo(
     () => ({ events: visibleCalendarEvents, deadlineOverlay }),
     [visibleCalendarEvents, deadlineOverlay],
   );
-  const computeData = isEventsView ? eventsComputeData : viewData;
   const computed = useMemo(
     () => activeView.compute({ data: computeData, viewYear, viewMonth, weatherData }),
     [activeView, computeData, viewYear, viewMonth, weatherData],

@@ -18,7 +18,6 @@ describe("CalendarModal deadlines rail behavior", () => {
           editable: true,
           getEvents: () => [],
         }}
-        billsData={{}}
         deadlinesData={{
           upcoming: [
             { id: "todo-1", title: "Project due", due_date: "2026-04-20", status: "open" },
@@ -44,7 +43,6 @@ describe("CalendarModal deadlines rail behavior", () => {
         view="events"
         onViewChange={() => {}}
         eventsData={{ getEvents: () => [] }}
-        billsData={{}}
         deadlinesData={{
           upcoming: [
             { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "open" },
@@ -63,7 +61,6 @@ describe("CalendarModal deadlines rail behavior", () => {
         focusDate="2026-04-20"
         focusItemId="deadline:deadline-1:2026-04-20"
         eventsData={{ getEvents: () => [] }}
-        billsData={{}}
         deadlinesData={{
           upcoming: [
             { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "open" },
@@ -103,7 +100,6 @@ describe("CalendarModal deadlines rail behavior", () => {
         focusItemId="deadline:todo-rec:2026-04-21"
         focusOpenDetail
         eventsData={{ getEvents: () => [] }}
-        billsData={{}}
         deadlinesData={{
           upcoming: [
             { id: "todo-rec", title: "Completed occurrence", due_date: "2026-04-21", status: "complete", is_recurring: true },
@@ -131,7 +127,6 @@ describe("CalendarModal deadlines rail behavior", () => {
         focusDate="2026-04-20"
         focusItemId="deadline:deadline-1:2026-04-20"
         eventsData={{ getEvents: () => [] }}
-        billsData={{}}
         deadlinesData={{
           upcoming: [
             { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "complete" },
@@ -167,7 +162,6 @@ describe("CalendarModal deadlines rail behavior", () => {
         focusItemId="deadline:todo-1:2026-04-20"
         focusOpenDetail
         eventsData={{ getEvents: () => [] }}
-        billsData={{}}
         deadlinesData={{}}
         deadlinesRangeData={{
           loading: true,
@@ -207,7 +201,6 @@ describe("CalendarModal deadlines rail behavior", () => {
         focusDate="2026-04-20"
         focusItemId="deadline:deadline-1:2026-04-20"
         eventsData={{ getEvents: () => [] }}
-        billsData={{}}
         deadlinesData={{
           upcoming: [
             { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "open" },

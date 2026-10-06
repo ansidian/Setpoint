@@ -78,8 +78,6 @@ describe("dashboard refresh model", () => {
       refreshVisibleEvents: null,
       markCalendarEventsStale: false,
       markDeadlineRangeStale: false,
-      markBillRangeStale: false,
-      markBillsRefreshRequested: false,
       refreshCalendarDomains: null,
     });
 
@@ -89,9 +87,7 @@ describe("dashboard refresh model", () => {
       refreshVisibleEvents: null,
       markCalendarEventsStale: true,
       markDeadlineRangeStale: true,
-      markBillRangeStale: true,
-      markBillsRefreshRequested: true,
-      refreshCalendarDomains: { force: true, includeBills: true },
+      refreshCalendarDomains: { force: true },
     });
   });
 
@@ -107,7 +103,6 @@ describe("dashboard refresh model", () => {
       refreshVisibleEvents: { start: "2026-05-01", end: "2026-05-31" },
       markCalendarEventsStale: false,
       markDeadlineRangeStale: true,
-      markBillRangeStale: true,
     });
   });
 
@@ -120,23 +115,11 @@ describe("dashboard refresh model", () => {
 
   it("maps dashboard-current events to domain freshness work", () => {
     expect(resolveDashboardCurrentEventPlan({
-      source: "bills",
-      state: "current",
-    })).toEqual({
-      markBillsRefreshRequested: true,
-      markBillRangeStale: true,
-      markDeadlineRangeStale: false,
-      refreshCalendarDomains: null,
-    });
-
-    expect(resolveDashboardCurrentEventPlan({
       source: "todoist",
       state: "current",
     })).toEqual({
-      markBillsRefreshRequested: false,
-      markBillRangeStale: false,
       markDeadlineRangeStale: true,
-      refreshCalendarDomains: { force: true, includeBills: false },
+      refreshCalendarDomains: { force: true },
     });
   });
 
@@ -147,7 +130,6 @@ describe("dashboard refresh model", () => {
     })).toMatchObject({
       markCalendarEventsStale: true,
       refreshVisibleEvents: { start: "2026-04-01", end: "2026-04-30" },
-      markBillRangeStale: false,
       markDeadlineRangeStale: false,
     });
     expect(resolveDashboardCurrentEventPlan(event, { open: false })).toMatchObject({

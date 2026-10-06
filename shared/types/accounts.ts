@@ -48,22 +48,6 @@ export interface AccountMutationResponse {
   success: true;
 }
 
-export interface ApiTokenMetadata {
-  id: string | number;
-  label: string;
-  scopes: string[];
-  created_at: number;
-  last_used_at: number | null;
-  expires_at: number;
-}
-
-export interface CreateApiTokenResponse {
-  token: string;
-  label: string;
-  scopes: string[];
-  expires_at: number;
-}
-
 export interface PasskeyMetadata {
   id: number;
   credentialId: string;

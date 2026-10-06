@@ -1,6 +1,8 @@
 export type AiUsageRunContext = "production" | "evaluation";
-export type AiUsagePurpose = "triage_cheap" | "triage_strong" | "extraction" | "verification" | "matching";
-export type AiUsageOrigin = "background_triage" | "reader_adoption" | "manual_extraction" | "transaction_import" | "evaluation";
+// Historical ledger rows may still carry retired financial-email purposes and
+// origins; stats queries select only these current values.
+export type AiUsagePurpose = "triage_cheap" | "triage_strong";
+export type AiUsageOrigin = "background_triage" | "evaluation";
 
 export interface AiUsageTotals {
   calls: number;
@@ -58,6 +60,5 @@ export interface EmailAiUsageStats {
   byProvider: Record<"openai" | "anthropic", EmailAiUsageStats["contexts"]>;
   contexts: Record<AiUsageRunContext, {
     triage: AiUsageCategory;
-    financialEmail: AiUsageCategory;
   }>;
 }

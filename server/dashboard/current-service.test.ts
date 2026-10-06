@@ -1,4 +1,3 @@
-import { subscribeCurrentDashboardEvents } from "./current-events.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   setupCurrentServiceTest, cleanupCurrentServiceTest,
@@ -49,17 +48,6 @@ describe("applyDeadlineCurrentStatus", () => {
 });
 
 describe("GET /api/dashboard/current", () => {
-  it("publishes a completed Actual refresh when schedule rows are unchanged", async () => {
-    const first = await syncResponse(new Date('2026-05-04T12:00:00.000Z'));
-    const received: string[] = [];
-    const unsubscribe = subscribeCurrentDashboardEvents('u1', event => { if (event.source === 'bills') received.push(event.reason); });
-    try {
-      const second = await syncResponse(new Date('2026-05-04T12:01:00.000Z'));
-      expect(second.body.bills).toEqual(first.body.bills);
-      expect(received).toEqual(['changed']);
-    } finally { unsubscribe(); }
-  });
-
   it.each([
     ["current", getCurrentDashboard],
     ["manual refresh", requestCurrentDashboardRefresh],
@@ -78,39 +66,11 @@ describe("GET /api/dashboard/current", () => {
     ]));
   });
 
-  it.each([getCurrentDashboard, getDashboardSystemHealth])("reads authoritative Bills failure instead of an older healthy cached payload", async (read) => {
-    await seedCache("weather_current", { temp: 64 });
-    await seedCache("calendar_current", []);
-    await seedCache("deadlines_current", EMPTY_DEADLINES_FOR_TEST);
-    await seedCache("bills_current", { bills: [], allSchedules: [], payeeMap: {}, actualConfigured: true, billsSyncHealth: { state: "current", configured: true, lastSuccessAt: "2026-09-06T10:00:00.000Z" } });
-    await testState.db.current.execute({
-      sql: "INSERT INTO ea_bills_mirror_state (user_id, status, actual_configured, last_success_at, last_attempt_at, last_error) VALUES ('u1', 'degraded', 1, '2026-09-05T10:00:00.000Z', ?, 'sensitive upstream failure')",
-      args: [new Date().toISOString()],
-    });
-    const response = await read("u1", { dbClient: testState.db.current });
-    expect(response.systemStatus.sources.find((source) => source.key === "bills")).toMatchObject({ state: "degraded", severity: "warning", lastSuccessAt: "2026-09-05T10:00:00.000Z" });
-    expect(JSON.stringify(response.systemStatus)).not.toContain("sensitive upstream failure");
-  });
-
-  it("does not report Bills current when its authoritative health read fails", async () => {
-    await seedCache("bills_current", { bills: [], allSchedules: [], payeeMap: {}, actualConfigured: true, billsSyncHealth: { state: "current", configured: true } });
-    await testState.db.current.execute("DROP TABLE ea_bills_mirror_state");
-    const response = await getDashboardSystemHealth("u1", { dbClient: testState.db.current });
-    expect(response.systemStatus.sources.find((source) => source.key === "bills")).toMatchObject({ state: "unavailable", severity: "error" });
-  });
-
   it("starts a background current refresh and returns cached rows without waiting for providers", async () => {
     const expiredAt = new Date(Date.now() - 60_000).toISOString();
     await seedCache("weather_current", { temp: 64, location: "El Monte, CA" }, { expiresAt: expiredAt });
     await seedCache("calendar_current", [{ id: "cached-event" }], { expiresAt: expiredAt });
     await seedCache("deadlines_current", EMPTY_DEADLINES_FOR_TEST, { expiresAt: expiredAt });
-    await seedCache("bills_current", {
-      bills: [{ id: "cached-bill" }],
-      allSchedules: [],
-      payeeMap: {},
-      actualConfigured: true,
-      actualBudgetUrl: "https://actual.example.test",
-    }, { expiresAt: expiredAt });
     const pending = new Promise(() => {});
     testState.fetchWeather.mockReturnValueOnce(pending);
     testState.fetchCalendar.mockReturnValueOnce(pending);
@@ -122,7 +82,6 @@ describe("GET /api/dashboard/current", () => {
     expect(res.body).toMatchObject({
       weather: { temp: 64, location: "El Monte, CA" },
       calendar: [{ id: "cached-event" }],
-      bills: [{ id: "cached-bill" }],
       activeSnapshot: { snapshot: { id: 42 } },
       providerHealth: {
         currentData: {
@@ -131,20 +90,14 @@ describe("GET /api/dashboard/current", () => {
             expect.objectContaining({ key: "weather_current", state: "refreshing" }),
             expect.objectContaining({ key: "calendar_current", state: "refreshing" }),
             expect.objectContaining({ key: "deadlines_current", state: "refreshing" }),
-            expect.objectContaining({ key: "bills_current", state: "refreshing" }),
           ]),
         },
         activeSnapshot: { state: "syncing", reason: "background" },
-      },
-      // This fixture has saved Bills data but no successful upstream mirror check.
-      systemStatus: {
-        state: "unavailable",
       },
       refresh: {
         mode: "manual",
         scheduled: expect.arrayContaining([
           expect.objectContaining({ key: "weather_current", reason: "ttl_due" }),
-          expect.objectContaining({ key: "bills_current", reason: "ttl_due" }),
           expect.objectContaining({ key: "active_snapshot", reason: "manual_retry" }),
         ]),
       },
@@ -220,13 +173,6 @@ describe("POST /api/dashboard/current/sync", () => {
     await seedCache("weather_current", { temp: 60, location: "Old" });
     await seedCache("calendar_current", [{ id: "old-event" }]);
     await seedCache("deadlines_current", EMPTY_DEADLINES_FOR_TEST);
-    await seedCache("bills_current", {
-      bills: [],
-      allSchedules: [],
-      payeeMap: {},
-      actualConfigured: true,
-      actualBudgetUrl: "https://actual.example.test",
-    });
 
     const res = await syncResponse();
 
@@ -234,23 +180,11 @@ describe("POST /api/dashboard/current/sync", () => {
     expect(res.body).toMatchObject({
       weather: { temp: 80, summary: "Synced", location: "El Monte, CA" },
       calendar: [{ id: "synced-event" }],
-      bills: [expect.objectContaining({ scheduleId: "synced-bill", name: "Synced Bill" })],
       activeSnapshot: { snapshot: { id: 99 } },
       providerHealth: {
         currentData: { state: "current" },
       },
     });
-    const mirrorState = await testState.db.current.execute({
-      sql: `SELECT status, actual_configured, actual_budget_url, last_success_at, last_error
-            FROM ea_bills_mirror_state WHERE user_id = 'u1'`,
-    });
-    expect(mirrorState.rows[0]).toMatchObject({
-      status: "current",
-      actual_configured: 1,
-      actual_budget_url: "https://actual.example.test",
-      last_error: null,
-    });
-    expect(mirrorState.rows[0]?.last_success_at).toBe("2026-05-04T12:00:00.000Z");
   });
 });
 

@@ -60,8 +60,6 @@ interface EmailFixture {
   read?: boolean;
   urgency?: string;
   urgentFlag?: boolean;
-  hasBill?: boolean;
-  extractedBill?: unknown;
   claude?: unknown;
   noise?: boolean;
 }
@@ -140,8 +138,6 @@ interface SnapshotItem {
   read: boolean;
   urgency: string | undefined;
   urgentFlag: boolean | undefined;
-  hasBill: boolean | undefined;
-  extractedBill: unknown;
   claude: unknown;
 }
 
@@ -283,8 +279,6 @@ function buildActiveSnapshotFixture({
     read: !!email.read,
     urgency: email.urgency,
     urgentFlag: email.urgentFlag,
-    hasBill: email.hasBill,
-    extractedBill: email.extractedBill,
     claude: email.claude,
   });
   const lanes: Record<"needs_attention" | "fyi" | "noise", SnapshotItem[]> = {
@@ -467,13 +461,6 @@ function buildInboxFixtureAccounts() {
           claude: {
             summary: "Requires a fast approval decision.",
             draftReply: "Approved. Please proceed.",
-          },
-          hasBill: true,
-          extractedBill: {
-            payee: "Vendor",
-            amount: 125,
-            due_date: "2026-04-20",
-            type: "expense",
           },
         },
       ],
@@ -795,22 +782,6 @@ export async function installDashboardInboxFixtures(page: Page) {
     json(route, { ok: true }),
   );
 
-  await page.route("**/api/briefing/actual/metadata", async (route) =>
-    json(route, {
-      accounts: [
-        { id: "acct-checking", name: "Checking" },
-        { id: "acct-credit", name: "Credit Card" },
-      ],
-      payees: [{ id: "payee-vendor", name: "Vendor" }],
-      categories: [
-        {
-          group_name: "Bills",
-          categories: [{ id: "cat-bills", name: "Bills" }],
-        },
-      ],
-    }),
-  );
-
   await page.route("**/api/briefing/email/*", async (route) => {
     if (route.request().method() !== "GET") {
       return route.fallback();
@@ -847,7 +818,6 @@ export async function installDashboardInboxFixtures(page: Page) {
           body_snippet: "Need your approval on the revised budget today.",
           email_date: "2026-04-19T15:30:00.000Z",
           read: false,
-          hasBill: true,
         }]
       : [];
     return json(route, { query, results: matches, total: matches.length, has_more: false });

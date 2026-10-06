@@ -4,7 +4,7 @@ import cookieParser from "cookie-parser";
 import express from "express";
 import request from "../test-utils/supertest.ts";
 import { createMigratedDb } from "../triage/triage-worker.test-utils.ts";
-import { hashApiToken, seedOwner, seedSession } from "../test-utils/auth-db.ts";
+import { seedOwner, seedSession } from "../test-utils/auth-db.ts";
 
 const testState: { db: Client | null } = { db: null };
 
@@ -49,21 +49,6 @@ function cookie() {
   return ["ea_session=cookie-session"];
 }
 
-async function seedBearer(scopes: string[] = ["actual:write"]) {
-  await currentDb().execute({
-    sql: `INSERT INTO ea_api_tokens
-            (token_hash, label, scopes, created_at, expires_at)
-          VALUES (?, ?, ?, ?, ?)`,
-    args: [
-      hashApiToken("scoped-token"),
-      "Shortcut",
-      JSON.stringify(scopes),
-      Date.now(),
-      Date.now() + 60_000,
-    ],
-  });
-}
-
 beforeEach(async () => {
   testState.db = await createMigratedDb();
   await seedOwner(currentDb(), { passwordHash: "test-password-hash" });
@@ -81,14 +66,13 @@ afterEach(async () => {
 
 describe("auth boundaries", () => {
   it("rejects bearer auth on cookie-only operational routes", async () => {
-    await seedBearer();
     const routes = [
       ["get", "/api/briefing/email-index/health"],
       ["get", "/api/briefing/email/gmail-work-message/attachments/2"],
       ["get", "/api/dashboard/current"],
       ["get", "/api/ea/settings"],
       ["get", "/api/tldraw/bootstrap"],
-      ["get", "/api/briefing/actual/metadata"],
+      ["get", "/api/briefing/actual/cache/status"],
     ] as const;
 
     for (const [method, path] of routes) {

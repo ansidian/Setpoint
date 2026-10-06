@@ -1,6 +1,5 @@
 {
   "entrypoints": [
-    "server/scripts/migrate-financial-connections.ts",
     "src/main.tsx",
     "server/index.ts",
     "server/actual/actual-worker-child.ts",
@@ -9,8 +8,6 @@
     "server/scripts/email-search-embedding-backfill.ts",
     "server/scripts/email-search-embedding-status.ts",
     "server/scripts/email-search-retrieval-eval.ts",
-    "server/scripts/financial-email-observe-report.ts",
-    "server/scripts/financial-provider-replay.ts",
     "server/scripts/hydrate-actual-cache.ts",
     "server/scripts/prune-actual-cache.ts",
     "server/scripts/reindex-emails.ts",
@@ -33,12 +30,10 @@
     "playwright.config.ts",
     "vite.config.ts",
     "vitest.config.ts",
-    "server/scripts/activate-financial-provider-parsers.ts",
     "server/scripts/local-db.ts",
     "server/scripts/cutover-catchup.ts"
   ],
   "exemptions": {
-    "server/financial-events/financial-event-service.test-utils.ts": "Fictional receipt and sender-authentication fixtures for the real worker replay suite; keeps scenario coverage below the test size limit",
     "server/dashboard/current-service.test-utils.ts": "Shared ephemeral dashboard database and external-provider fixtures used by current-service and source-refresh behavior suites",
     "scripts/vitest-guardrails.ts": "Vitest setup module loaded by the setupFiles convention and directly tested by scripts/lib/vitest-guardrails.test.mts",
     "server/email/mailparser.d.ts": "Owned compiler declaration shim for the untyped mailparser provider boundary",
@@ -54,7 +49,6 @@
     "src/components/calendar/CalendarModal.test-setup.ts": "Shared calendar source and Todoist mock setup used across calendar integration suites",
     "src/components/calendar/CalendarModal.test-utils.tsx": "Shared calendar DashboardProvider, interaction, and animation-frame helpers with multiple active consumers",
     "src/components/inbox/test-utils/inboxFixtures.ts": "Shared inbox email and snapshot factories with multiple active model and component consumers",
-    "src/components/inbox/test-utils/mobileInboxActions.test-utils.ts": "Shared mobile action-sheet and search drivers used by both rendered Inbox behavior suites",
-    "server/transaction-imports/transaction-import.test-utils.ts": "Shared saved-state reader and explicit legacy fixtures used by store, worker, and cutover behavior suites"
+    "src/components/inbox/test-utils/mobileInboxActions.test-utils.ts": "Shared mobile action-sheet and search drivers used by both rendered Inbox behavior suites"
   }
 }

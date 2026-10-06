@@ -1,4 +1,3 @@
-import { readCanonicalConnections, connectionPayLinks } from '../financial-connections/storage.ts';
 import { Router } from "express";
 import type { RequestHandler } from "express";
 import type { Value } from "@libsql/client";
@@ -9,12 +8,12 @@ import { geocodeLocation } from "../platform/weather.ts";
 import { initScheduler } from "../scheduler.ts";
 import { requestEmailTriageDrainAt } from "../scheduler-email-triage-drain.ts";
 import {
-  billExtractAvailability,
-  isAllowedBillExtractModel,
-  DEFAULT_BILL_EXTRACT_PROVIDER,
-  DEFAULT_BILL_EXTRACT_MODEL,
-  resolveBillExtractModelConfig,
-} from "../bills/bill-extractors/catalog.ts";
+  triageFastModelAvailability,
+  isAllowedTriageFastModel,
+  DEFAULT_TRIAGE_FAST_PROVIDER,
+  DEFAULT_TRIAGE_FAST_MODEL,
+  resolveTriageFastModelConfig,
+} from "../triage/triage-fast-model.ts";
 import {
   emailAiModelAvailability,
   isAllowedEmailAiModel,
@@ -42,7 +41,6 @@ import { storeTodoistOAuthTokenResponse } from "../tasks/todoist-token.ts";
 import { clearTodoistNeedsReauth } from "../platform/provider-reauth.ts";
 import { requireRecentPasswordAuth } from "../middleware/auth.ts";
 import { scheduleTimeToLeaveRefreshForUser } from "../reminders/reminder-service.ts";
-import { readFinancialProfiles } from "../bills/financial-profiles.ts";
 import {
   validateDiscordWebhookUrl,
   validateEmailInterests,
@@ -98,8 +96,8 @@ const SETTINGS_PUBLIC_FIELDS = [
   "email_ai_model",
   "alfred_provider",
   "alfred_model",
-  "bill_extract_provider",
-  "bill_extract_model",
+  "triage_fast_provider",
+  "triage_fast_model",
   "email_triage_mode",
   "email_triage_classify_read_arrivals",
   "discord_user_id",
@@ -146,7 +144,6 @@ router.get<Record<string, never>, SettingsResponse | ErrorResponse>("/settings",
       schedules_json,
       email_interests_json,
       triage_sound_settings_json,
-      utility_pay_links_json,
     } = row;
     const safe: Record<string, unknown> = Object.fromEntries(
       SETTINGS_PUBLIC_FIELDS.map((key) => [key, row[key]]),
@@ -184,24 +181,18 @@ router.get<Record<string, never>, SettingsResponse | ErrorResponse>("/settings",
     });
     safe.alfred_provider = alfredModel.provider;
     safe.alfred_model = alfredModel.model;
-    const billExtractModel = resolveBillExtractModelConfig({
-      provider: safe.bill_extract_provider,
-      model: safe.bill_extract_model,
+    const triageFastModel = resolveTriageFastModelConfig({
+      provider: safe.triage_fast_provider,
+      model: safe.triage_fast_model,
     });
-    safe.bill_extract_provider = billExtractModel.provider;
-    safe.bill_extract_model = billExtractModel.model;
+    safe.triage_fast_provider = triageFastModel.provider;
+    safe.triage_fast_model = triageFastModel.model;
     const triageMode = await getEmailTriageModeForUser(userId);
     safe.email_triage_mode = normalizeStoredEmailTriageMode(safe.email_triage_mode);
     safe.email_triage_effective_mode = triageMode.effective_email_triage_mode;
     safe.email_triage_classify_read_arrivals = !!safe.email_triage_classify_read_arrivals;
     safe.triage_sound_settings = parseTriageSoundSettingsJson(triage_sound_settings_json);
     safe.triage_notification_sounds = TRIAGE_NOTIFICATION_SOUNDS;
-    const financialProfiles = await readFinancialProfiles(userId);
-    const canonicalConnections = await readCanonicalConnections(userId);
-    safe.utility_pay_links = canonicalConnections ? connectionPayLinks(canonicalConnections.connections)
-      : utility_pay_links_json ? JSON.parse(String(utility_pay_links_json)) : [];
-    safe.financial_profiles = financialProfiles.profiles;
-    safe.financial_profiles_revision = financialProfiles.revision;
 
     res.json(safe as unknown as SettingsResponse);
   } catch (err) {
@@ -240,7 +231,7 @@ router.get("/email-search/usage", async (_req, res) => {
 
 router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, SettingsPatchRequest>("/settings", requireRecentAuthForSecretSettings, async (req, res) => {
   const userId = process.env.EA_USER_ID!;
-  const { schedules_json, home_location_label, home_location_address, home_location_place_id, home_location_lat, home_location_lng, weather_lat, weather_lng, weather_location, actual_budget_url, actual_budget_password, actual_budget_sync_id, email_ai_provider, email_ai_model, alfred_provider, alfred_model, email_interests_json, todoist_api_token, todoist_oauth_token_response, bill_extract_provider, bill_extract_model, email_triage_mode, email_triage_classify_read_arrivals, triage_sound_settings, discord_webhook_url, discord_user_id, utility_pay_links, financial_profiles } = req.body;
+  const { schedules_json, home_location_label, home_location_address, home_location_place_id, home_location_lat, home_location_lng, weather_lat, weather_lng, weather_location, actual_budget_url, actual_budget_password, actual_budget_sync_id, email_ai_provider, email_ai_model, alfred_provider, alfred_model, email_interests_json, todoist_api_token, todoist_oauth_token_response, triage_fast_provider, triage_fast_model, email_triage_mode, email_triage_classify_read_arrivals, triage_sound_settings, discord_webhook_url, discord_user_id } = req.body;
 
   try {
     if (actual_budget_url !== undefined || actual_budget_password !== undefined || actual_budget_sync_id !== undefined) {
@@ -248,9 +239,6 @@ router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, Sett
     }
     if (todoist_api_token !== undefined) {
       return res.status(400).json({ message: "Use the Todoist Save & verify connection endpoint" });
-    }
-    if (utility_pay_links !== undefined || financial_profiles !== undefined) {
-      return res.status(410).json({ message: 'Use Financial providers to update financial configuration.' });
     }
     await db.execute({ sql: "INSERT OR IGNORE INTO ea_settings (user_id) VALUES (?)", args: [userId] });
     const updates: string[] = [];
@@ -390,14 +378,14 @@ router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, Sett
       updates.push("discord_user_id = ?");
       args.push(trimmedUserId || null);
     }
-    if (bill_extract_provider !== undefined || bill_extract_model !== undefined) {
-      const provider = bill_extract_provider ?? DEFAULT_BILL_EXTRACT_PROVIDER;
-      const model = bill_extract_model ?? DEFAULT_BILL_EXTRACT_MODEL;
-      if (!isAllowedBillExtractModel(provider, model)) {
-        return res.status(400).json({ message: "Invalid bill_extract_provider/model combination" });
+    if (triage_fast_provider !== undefined || triage_fast_model !== undefined) {
+      const provider = triage_fast_provider ?? DEFAULT_TRIAGE_FAST_PROVIDER;
+      const model = triage_fast_model ?? DEFAULT_TRIAGE_FAST_MODEL;
+      if (!isAllowedTriageFastModel(provider, model)) {
+        return res.status(400).json({ message: "Invalid triage_fast_provider/model combination" });
       }
-      if (bill_extract_provider !== undefined) { updates.push("bill_extract_provider = ?"); args.push(provider); }
-      if (bill_extract_model !== undefined) { updates.push("bill_extract_model = ?"); args.push(model); }
+      if (triage_fast_provider !== undefined) { updates.push("triage_fast_provider = ?"); args.push(provider); }
+      if (triage_fast_model !== undefined) { updates.push("triage_fast_model = ?"); args.push(model); }
     }
 
     if (updates.length > 0) {
@@ -497,13 +485,13 @@ router.get<Record<string, never>, ProviderModelAvailability[] | ErrorResponse>("
   }
 });
 
-router.get<Record<string, never>, ProviderModelAvailability[] | ErrorResponse>("/bill-extract-models", async (_req, res) => {
+router.get<Record<string, never>, ProviderModelAvailability[] | ErrorResponse>("/triage-fast-models", async (_req, res) => {
   try {
-    res.json(await billExtractAvailability());
+    res.json(await triageFastModelAvailability());
   } catch (err) {
     // P3-54: fixed user-facing string; raw error message stays in the log only.
-    console.error("Error fetching bill-extract catalog:", errorMessage(err));
-    res.status(500).json({ message: "Failed to fetch bill-extract models" });
+    console.error("Error fetching fast triage model catalog:", errorMessage(err));
+    res.status(500).json({ message: "Failed to fetch fast triage models" });
   }
 });
 

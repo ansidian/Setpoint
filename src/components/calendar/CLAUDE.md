@@ -6,7 +6,7 @@ Calendar UI root: `CalendarModal.tsx` is the entry point (named for history; the
 
 - `modal/` — grid, cells, chips/overflow, span lanes, floating detail, three-rail shell (see `modal/CLAUDE.md`)
 - `events/` — event editor rail, title parsing, recurrence/reminder/location pickers, batch drafts (see `events/CLAUDE.md`)
-- `views/` — per-domain cell/agenda/detail/footer layers for events, bills, deadlines (see `views/CLAUDE.md`)
+- `views/` — per-domain cell/agenda/detail/footer layers for events and deadlines (see `views/CLAUDE.md`)
 
 ## Files
 
@@ -14,8 +14,8 @@ Calendar UI root: `CalendarModal.tsx` is the entry point (named for history; the
 - `CalendarModal.tsx` — entry point delegating to the calendar controller hook
 - `CalendarMobileAgenda.tsx` — mobile-only (≤639px) agenda-only calendar root: compact icon/title/view header + persistent Today/month navigation + full-width agenda (MiniCalendar suppressed) + tap-to-open detail BottomSheet; rendered by `useCalendarModalController` instead of `CalendarModalShell`
 - `CalendarOverviewRail.tsx` — month navigator with stats and loading frame
-- `FinanceActivityCalendar.tsx` and `finance-activity-calendar.css` — shared Journal/Utilities month calendar, recorded flow and scheduled payment signals, keyboard day navigation, and expandable mobile week strip
-- `FinancePaymentDayList.tsx` — named recorded/scheduled payments in the Utilities calendar day summary opening payment details in Utilities
+- `FinanceActivityCalendar.tsx` and `finance-activity-calendar.css` — shared Journal/Payments month calendar, recorded flow and scheduled payment signals, keyboard day navigation, and expandable mobile week strip
+- `FinancePaymentDayList.tsx` — named recorded/scheduled payments in the Payments calendar day summary, opening that payment's row details
 - `CalendarRailPrimitives.tsx` — reusable rail components and utilities
 - `CalendarRailStates.tsx` — rail state transitions: loading, expanded, collapsed
 - `CalendarSelectedDayEmptyRail.tsx` — empty state with nearby activity and primary action
@@ -31,7 +31,7 @@ Calendar UI root: `CalendarModal.tsx` is the entry point (named for history; the
 - `calendarDateUtils.ts` — Pacific-timezone date parsing, formatting, manipulation
 - `calendarLayout.ts` — responsive layout metrics from viewport breakpoints — a **desktop** viewport-width ladder driven by `window.innerWidth` (`useViewportWidth`), independent of the app's mobile gate. The 639px `useIsMobile` gate unmounts the calendar below 639px, so the `sm` fallback tier (a 7-column month grid, 100px cells, no rails/detail) is only ever reached on a desktop window 640–1239px wide — never the phone gate.
 - `calendarOverviewModel.ts` — month summary stats for the overview rail
-- `calendarEmptyStateMeta.ts` — per-view (events/bills) labels and icons
+- `calendarEmptyStateMeta.ts` — Events view labels and icon
 - `calendarRailStyles.ts` — shared rail container and hero-card styles
 - `detailRailMotion.ts` — easing curves and transition durations for rails
 - `googleSpecialDateModel.ts` — identifies Google special dates and their colors

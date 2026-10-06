@@ -314,8 +314,7 @@ export default function useCalendarModalHotkeys({
       switch (event.key) {
         case "Escape":
           // Top-level Escape is a no-op now (inner cascade above already handled any
-          // open inner panel); leaving the calendar is via the 1/2/4/5 tab keys
-          // (3 re-pressed in calendar toggles the events/bills view instead).
+          // open inner panel); leaving the calendar is via the shell tab keys.
           break;
         case "ArrowLeft":
         case "p":

@@ -1,10 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { BILLS_MIRROR_MAINTENANCE_TTL_MS } from "../bills/bills-service.ts";
 import { CURRENT_DATA_PROVIDERS } from "./current-providers/index.ts";
 import {
-  applyProviderMaintenanceRefresh,
   applyProviderManualRefresh,
-  applyProviderPassiveSuppression,
   planCurrentDataRefresh,
 } from "./currentRefreshPlanModel.ts";
 import type {
@@ -20,7 +17,6 @@ const usablePayloads: Record<CurrentDashboardCacheKey, unknown> = {
   weather_current: { temp: 71 },
   calendar_current: [],
   deadlines_current: { upcoming: [], stats: null },
-  bills_current: { bills: [], allSchedules: [], payeeMap: {} },
 };
 
 function cacheRow(
@@ -168,110 +164,20 @@ describe("planCurrentDataRefresh", () => {
 });
 
 describe("provider refresh-plan modifiers", () => {
-  it("refreshes a newer bills mirror without another provider sync and stops once published", () => {
-    const rows = freshRows();
-    const lastSuccessAt = now.toISOString();
-    const context = { billsMirror: { syncHealth: { state: "current", configured: true, lastSuccessAt } } };
-    const plan = planCurrentDataRefresh(rows, { mode: "passive", now, context });
-    const forceKeys = new Set<CurrentDashboardCacheKey>();
-    applyProviderMaintenanceRefresh(plan, rows, { forceKeys, now, context });
-    expect(plan.scheduled).toContainEqual({ key: "bills_current", reason: "bills_mirror_changed" });
-    expect(forceKeys).toEqual(new Set());
-
-    rows.bills_current!.payload_json = JSON.stringify({
-      bills: [], allSchedules: [], payeeMap: {}, billsSyncHealth: context.billsMirror.syncHealth,
-    });
-    expect(planCurrentDataRefresh(rows, { mode: "passive", now, context }).scheduled)
-      .not.toContainEqual(expect.objectContaining({ key: "bills_current" }));
-  });
-
-  it("suppresses a planned passive Bills refresh during provider failure backoff", () => {
-    const rows = freshRows();
-    rows.bills_current = cacheRow("bills_current", {
-      status: "degraded",
-      refresh_failure_count: 3,
-      last_refresh_failed_at: new Date(now.getTime() - 20 * 60_000).toISOString(),
-    });
-    const plan = planCurrentDataRefresh(rows, { mode: "passive", now });
-
-    applyProviderPassiveSuppression(plan, rows, {
-      now,
-      context: {
-        billsMirror: {
-          syncHealth: {
-            state: "degraded",
-            lastAttemptAt: new Date(now.getTime() - 30_000).toISOString(),
-          },
-        },
-      },
-    });
-
-    expect(plan.scheduled).not.toContainEqual(expect.objectContaining({ key: "bills_current" }));
-    expect(plan.skipped).toContainEqual({ key: "bills_current", reason: "provider_backoff" });
-  });
-
-  it("uses the real Bills provider policy at the five-minute maintenance boundary", () => {
-    const rows = freshRows();
-    const planFor = (lastSuccessAt: Date) => {
-      const plan = planCurrentDataRefresh(rows, { mode: "passive", now });
-      const forceKeys = new Set<CurrentDashboardCacheKey>();
-
-      applyProviderMaintenanceRefresh(plan, rows, {
-        forceKeys,
-        now,
-        context: {
-          billsMirror: {
-            syncHealth: {
-              state: "current",
-              configured: true,
-              lastSuccessAt: lastSuccessAt.toISOString(),
-            },
-          },
-        },
-      });
-      return { plan, forceKeys };
-    };
-
-    const justBefore = planFor(new Date(now.getTime() - BILLS_MIRROR_MAINTENANCE_TTL_MS + 1));
-    expect(justBefore.plan.scheduled).not.toContainEqual(expect.objectContaining({ key: "bills_current" }));
-    expect(justBefore.plan.skipped).toContainEqual({ key: "bills_current", reason: "fresh" });
-    expect(justBefore.forceKeys).toEqual(new Set());
-
-    const due = planFor(new Date(now.getTime() - BILLS_MIRROR_MAINTENANCE_TTL_MS));
-    expect(due.plan.scheduled).toContainEqual({
-      key: "bills_current",
-      reason: "bills_mirror_maintenance_due",
-    });
-    expect(due.plan.skipped).not.toContainEqual(expect.objectContaining({ key: "bills_current" }));
-    expect(due.forceKeys).toEqual(new Set(["bills_current"]));
-  });
-
-  it("forces manual Todoist and Bills reconciliation while leaving stable providers skipped", () => {
+  it("forces manual Todoist reconciliation while leaving stable providers skipped", () => {
     const rows = freshRows();
     const plan = planCurrentDataRefresh(rows, { mode: "manual", now });
     const forceKeys = new Set<CurrentDashboardCacheKey>();
 
-    applyProviderManualRefresh(plan, rows, {
-      forceKeys,
-      now,
-      context: {
-        billsMirror: {
-          syncHealth: {
-            state: "needs_sync",
-            pendingRefreshAt: new Date(now.getTime() + 60_000).toISOString(),
-          },
-        },
-      },
-    });
+    applyProviderManualRefresh(plan, rows, { forceKeys, now, context: {} });
 
     expect(plan.scheduled).toEqual(expect.arrayContaining([
       { key: "deadlines_current", reason: "manual_todoist_sync" },
-      { key: "bills_current", reason: "pending_bills_mirror" },
     ]));
     expect(plan.skipped).toEqual(expect.arrayContaining([
       { key: "weather_current", reason: "fresh" },
       { key: "calendar_current", reason: "fresh" },
     ]));
-    expect(forceKeys).toEqual(new Set(["deadlines_current", "bills_current"]));
+    expect(forceKeys).toEqual(new Set(["deadlines_current"]));
   });
 });

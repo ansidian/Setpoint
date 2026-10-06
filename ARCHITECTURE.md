@@ -1,6 +1,6 @@
 # Architecture
 
-Personal executive assistant dashboard that consolidates emails, calendars, weather, Todoist-backed deadlines/tasks, and finances into a current operational workspace. Single-user app built with React 19 + Express.js, backed by persistent SQLite through libSQL and provider-backed email triage. The owner’s live instance is self-hosted in Docker on a Debian home server.
+Personal executive assistant dashboard that consolidates emails, calendars, weather, Todoist-backed deadlines/tasks, and a read-only view of Actual Budget finances into a current operational workspace. Single-user app built with React 19 + Express.js, backed by persistent SQLite through libSQL and provider-backed email triage. The owner’s live instance is self-hosted in Docker on a Debian home server.
 
 ## System Overview
 
@@ -50,13 +50,13 @@ graph TB
 | UI | shadcn/ui, Radix, Framer Motion | Component primitives, animations |
 | Backend | Express 4 | HTTP API server |
 | Database | SQLite through libSQL | Persistent local application DB file (`EA_SQLITE_PATH` in production) |
-| AI | Anthropic Messages API, OpenAI Responses API | Email triage and bill signals |
+| AI | Anthropic Messages API, OpenAI Responses API | Email triage and Alfred |
 | Search | SQLite FTS5 | Full-text email search |
 | Email | Gmail API, ImapFlow (iCloud) | Multi-account email fetching |
 | Calendar | Google Calendar API | Event sync (reuses Gmail OAuth) |
 | Weather | Pirate Weather | Forecast data |
 | Tasks | Todoist API | Deadline items + personal tasks |
-| Finance | @actual-app/api behind provider worker + EA mirrors | Budget tracking, bill management |
+| Finance | @actual-app/api in a persistent read-only worker + EA mirrors | Read-only Payments and Journal view of Actual |
 | Auth | bcrypt, WebAuthn passkeys, cookie sessions | Password-or-passkey default, optional strict mode, offline recovery |
 | Encryption | AES-256-GCM | Credentials encrypted at rest |
 | Scheduling | node-cron | Snapshot boundary checks and background workers |
@@ -73,7 +73,6 @@ src/
 ├── auth/
 ├── components/
 │   ├── alfred/
-│   ├── bills/
 │   ├── briefing/
 │   ├── calendar/
 │   │   ├── events/
@@ -82,14 +81,12 @@ src/
 │   │   └── views/
 │   ├── dashboard/
 │   │   ├── context/
-│   │   ├── finance/
 │   │   ├── layout/
 │   │   ├── needsYou/
 │   │   ├── rails/
 │   │   └── timeline/
 │   ├── email/
 │   ├── finances/
-│   ├── financial/
 │   ├── inbox/
 │   │   ├── mobile/
 │   │   ├── reader/
@@ -122,7 +119,6 @@ server/
 ├── alfred/
 ├── auth/
 ├── bills/
-│   └── bill-extractors/
 ├── calendar/
 ├── dashboard/
 │   └── current-providers/
@@ -133,12 +129,6 @@ server/
 │   │   └── evals/
 │   └── test-utils/
 ├── finances/
-├── financial-activity/
-├── financial-connections/
-├── financial-corrections/
-├── financial-events/
-├── financial-parsers/
-│   └── fixtures/
 ├── middleware/
 ├── news/
 ├── platform/
@@ -150,10 +140,7 @@ server/
 ├── tasks/
 ├── test-utils/
 ├── tldraw/
-├── transaction-imports/
-├── transactions/
 └── triage/
-    └── fixtures/
 ```
 <!-- END:tree -->
 
@@ -163,18 +150,19 @@ server/
 
 ```
 / ──────── Dashboard (auth required)
+/finances ─ Finances shell tab over retained Dashboard (auth required)
 /login ─── Login
 /settings ─ centered Settings modal over retained Dashboard (auth required)
 ```
 
-`App.tsx` applies the owner-claim/authentication route policy before mounting runtime views. `/`, `/settings`, and `/finance` share `WorkspaceRoute`, so Dashboard remains mounted across Settings and financial navigation. Financial activity and exact records use `/finance`; old Settings record URLs preserve their target. Financial history backfill is retired. Settings retains its query/hash targets inside a centered modal with a fixed heading and scrolling section content. Closing an in-app visit returns to its originating history entry and focus; a fresh Settings entry closes to Dashboard.
+`App.tsx` applies the owner-claim/authentication route policy before mounting runtime views. `/`, `/finances`, and `/settings` share `WorkspaceRoute`, so Dashboard remains mounted across Finances and Settings navigation. `/finances` is the read-only Payments/Journal view of Actual. Settings retains its query/hash targets inside a centered modal with a fixed heading and scrolling section content. Closing an in-app visit returns to its originating history entry and focus; a fresh Settings entry closes to Dashboard.
 
 ### Component Hierarchy
 
 <!-- TODO: rewrite during refactor. The prior diagram referenced `EmailSection`, `LiveEmailSection`, `EmailRow`, `EmailBody` which no longer exist under `src/components/email/`. Refresh once the calendar-controller decomposition (EAD-298 through EAD-302) settles. -->
 
 
-The calendar modal has two top-level workspaces: Events and Bills. Deadlines are not a standalone workspace; Todoist-backed deadline items render as an Events overlay with Events-owned detail, floating-detail, create, edit, and completion flows.
+The calendar modal has one top-level workspace: Events. Deadlines are not a standalone workspace; Todoist-backed deadline items render as an Events overlay with Events-owned detail, floating-detail, create, edit, and completion flows.
 
 ### State Management
 
@@ -205,7 +193,7 @@ graph LR
 
 **`useCurrentDashboard`** — Normal dashboard boot/runtime hook. Fetches `/api/dashboard/current`, listens to `/api/dashboard/current/events`, and exposes stable `briefingData`, `liveData`, and `activeSnapshot` adapters for the existing dashboard component tree. Event refetch scope is typed: `email_triage` reads only `/api/briefing/snapshot/active`, while every other or unknown source keeps the full-current path. Concurrent bursts coalesce to the strongest pending scope (`current` dominates), and a failed snapshot-only read falls back once to the full envelope.
 
-**`DashboardContext`** — Shared across all dashboard sections. Derives `emailAccounts`, `billEmails`, `totalBills`, `totalNoiseCount` via `useMemo`. Provides action handlers that update both API and local state.
+**`DashboardContext`** — Shared across all dashboard sections. Provides task action handlers (complete, add, update, delete, move) that update both API and local state.
 
 ### Hooks
 
@@ -215,7 +203,6 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | Export | File |
 |--------|------|
 | `useAlfredChat` | `src/components/alfred/useAlfredChat.ts` |
-| `useRecordInActual` | `src/components/bills/useRecordInActual.ts` |
 | `useCalendarEditorHistory` | `src/components/calendar/events/useCalendarEditorHistory.ts` |
 | `useCalendarEditorPickers` | `src/components/calendar/events/useCalendarEditorPickers.ts` |
 | `useCalendarEventCreateCoordination` | `src/components/calendar/events/useCalendarEventCreateCoordination.ts` |
@@ -235,7 +222,6 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useFloatingDetailPlacement` | `src/components/calendar/modal/useFloatingDetailPlacement.ts` |
 | `useCalendarGhostPreview` | `src/components/calendar/useCalendarGhostPreview.ts` |
 | `useDeadlineQuickActions` | `src/components/calendar/views/deadlines/useDeadlineQuickActions.ts` |
-| `useDashboardFinance` | `src/components/dashboard/finance/useDashboardFinance.ts` |
 | `useAlfredPanelState` | `src/components/dashboard/useAlfredPanelState.ts` |
 | `useCalendarWorkspaceState` | `src/components/dashboard/useCalendarWorkspaceState.ts` |
 | `useDashboardItemSheet` | `src/components/dashboard/useDashboardItemSheet.ts` |
@@ -245,12 +231,7 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useMobileInboxNavigation` | `src/components/dashboard/useMobileInboxNavigation.ts` |
 | `useSnapshotNavigation` | `src/components/dashboard/useSnapshotNavigation.ts` |
 | `useWorkspaceTabRoute` | `src/components/dashboard/useWorkspaceTabRoute.ts` |
-| `useActualRecordingSound` | `src/components/financial/useActualRecordingSound.ts` |
-| `useFinancialAttentionCount` | `src/components/financial/useFinancialAttentionCount.ts` |
-| `useFinancialNavigationGuard` | `src/components/financial/useFinancialNavigationGuard.ts` |
-| `useBillPayResolver` | `src/components/inbox/reader/useBillPayResolver.ts` |
 | `useEmailBody` | `src/components/inbox/reader/useEmailBody.ts` |
-| `useTransactionImportStatus` | `src/components/inbox/reader/useTransactionImportStatus.ts` |
 | `useInboxActionDispatch` | `src/components/inbox/useInboxActionDispatch.ts` |
 | `useInboxBatchActions` | `src/components/inbox/useInboxBatchActions.ts` |
 | `useInboxBatchSelection` | `src/components/inbox/useInboxBatchSelection.ts` |
@@ -311,7 +292,6 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useBrowserBackDismiss` | `src/hooks/useBrowserBackDismiss.ts` |
 | `useCurrentDashboard` | `src/hooks/useCurrentDashboard.ts` |
 | `useDismissablePortal` | `src/hooks/useDismissablePortal.ts` |
-| `useFinancialReviewNotifications` | `src/hooks/useFinancialReviewNotifications.ts` |
 | `useIsMobile` | `src/hooks/useIsMobile.ts` |
 | `useKeyboardFocusIndicators` | `src/hooks/useKeyboardFocusIndicators.ts` |
 | `useMediaQuery` | `src/hooks/useMediaQuery.ts` |
@@ -320,7 +300,6 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useNotifications` | `src/hooks/useNotifications.ts` |
 | `useRemoteContentTrust` | `src/hooks/useRemoteContentTrust.ts` |
 | `useTriageNotificationSounds` | `src/hooks/useTriageNotificationSounds.ts` |
-| `useUtilityPayLinks` | `src/hooks/useUtilityPayLinks.ts` |
 | `useWarmImport` | `src/hooks/useWarmImport.ts` |
 <!-- END:hooks -->
 
@@ -338,7 +317,7 @@ Calendar also exposes an internal, behavior-neutral event create-seed bridge. `s
 GET /api/dashboard/current
   → current-service reads durable current rows + active snapshot view
   → useCurrentDashboard adapts the envelope into briefingData/liveData/activeSnapshot
-  → DashboardContext derives computed values and action handlers
+  → DashboardContext provides task action handlers
   → Section components render via useDashboard()
 ```
 
@@ -363,7 +342,7 @@ graph LR
     TP --> Sec[security headers]
     Sec --> JSON[express.json]
     JSON --> Cookie[cookieParser]
-    Cookie --> CSRF{"CSRF Check\n(x-requested-with header OR\nBearer token OR login path)"}
+    Cookie --> CSRF{"CSRF Check\n(x-requested-with header OR\nlogin path)"}
     CSRF -->|non-GET| Validate
     CSRF -->|GET/HEAD/OPTIONS| Route
     Validate --> Route
@@ -383,8 +362,8 @@ graph LR
 
 | Group | Mount | Endpoints | Key Responsibilities |
 |-------|-------|-----------|---------------------|
-| Auth | `/api/auth` | 23 | First-run owner claim, canonical-domain management, password/passkey login, recovery and step-up, passkey management, session check/logout, scoped API tokens |
-| Briefing | `/api/briefing` | domain routers | Email ops (read/trash/snooze/dismiss), snapshots, FTS email search, task ops, Actual Budget |
+| Auth | `/api/auth` | 20 | First-run owner claim, canonical-domain management, password/passkey login, recovery and step-up, passkey management, session check/logout |
+| Briefing | `/api/briefing` | domain routers | Email ops (read/trash/snooze/dismiss), snapshots, FTS email search, task ops, read-only Finances, Actual connection |
 | Dashboard | `/api/dashboard` | 5 | Current dashboard envelope, current refresh/sync, health, SSE change events |
 | Accounts | `/api/ea` | 15 | Account CRUD, Gmail OAuth, settings, schedules, geocode, important senders |
 | Calendar | `/api/calendar` | 1 | Read-only calendar slice exposed separately from briefing |
@@ -436,7 +415,7 @@ The browser auth model has six distinct states:
 2. **Authenticated Session** - `ea_session` cookie. The browser receives a raw 32-byte hex session token, but `ea_sessions` stores only `sha256:<digest>`, its authentication method, password-proof timestamp, and owner security generation. Every validation joins the session to the current owner generation, so a credential transition or operator reset invalidates every older session immediately, including across processes and even if a deletion races. Used by the SPA and required by normal dashboard routes; the app does not prompt for passkey on every request.
 3. **Pending Passkey Authentication** - `ea_pending_auth` cookie plus a row in `ea_pending_auth`. Created after a correct password in explicit strict mode, or when default-mode passwordless passkey login begins. It can request and verify WebAuthn options but cannot access dashboard routes.
 4. **Registered Passkey** - row in `ea_passkey_credentials` containing credential ID, public key, sign count, label, transports, backup state, and device type. Public key material never leaves the server in management responses.
-5. **Recent Password Authentication** - the authenticated session's `password_authenticated_at` is within ten minutes. Required for password, passkey, recovery-code, auth-mode, canonical-domain, and powerful API-token changes. Passkey-only and recovery-created sessions do not satisfy this boundary until the owner confirms the current password; failed confirmations are throttled in the session row before more bcrypt work is accepted.
+5. **Recent Password Authentication** - the authenticated session's `password_authenticated_at` is within ten minutes. Required for password, passkey, recovery-code, auth-mode, and canonical-domain changes. Passkey-only and recovery-created sessions do not satisfy this boundary until the owner confirms the current password; failed confirmations are throttled in the session row before more bcrypt work is accepted.
 6. **Recovery or Operator Reset** - one offline recovery code can replace credentials in-app; the local `npm run auth:reset-passkeys -- --confirm` path remains the last-resort operator reset.
 
 The browser keeps a separate, shorter Security Settings unlock. Sensitive controls start locked whenever the System section mounts and lock on `pagehide`; the server's recent-auth timestamp can authorize requests during that visit but never auto-opens a later section visit or restored page.
@@ -452,13 +431,9 @@ Every sensitive credential or security mutation is a compare-and-swap
 transaction against `ea_owner.security_generation`. The transaction increments
 the generation, performs the mutation, and clears sessions, pending auth, and
 WebAuthn challenges before commit; the initiating browser receives a replacement
-session only after the commit. Offline recovery additionally revokes all scoped
-API tokens.
+session only after the commit.
 
-Two credential paths exist, but they no longer feed a single shared "any auth works" guard:
-
-1. **Cookie session** - normal dashboard access after password, passwordless passkey, strict password-plus-passkey, or successful recovery.
-2. **Scoped API token** - `Authorization: Bearer <token>` validated against `ea_api_tokens` (token hash, scopes, expiry). Used only by explicitly opted-in external integration endpoints (currently `POST /api/briefing/actual/quick-txn`). New tokens expire by default after 90 days unless overridden by env. Bearer requests are exempt from the `x-requested-with` CSRF check because they carry their own unforgeable secret.
+Dashboard access uses one credential path: the **cookie session** issued after password, passwordless passkey, strict password-plus-passkey, or successful recovery. The former scoped API tokens (and `ea_api_tokens`) were removed with the Actual quick-transaction endpoint they authorized.
 
 Production WebAuthn configuration prefers the persisted canonical HTTPS origin, deriving RP name `Setpoint`, RP ID from its hostname, and the exact expected origin. Compatible legacy `EA_WEBAUTHN_*` and `GOOGLE_REDIRECT_URI` values import only when they resolve to one origin; otherwise the explicit values remain compatibility fallbacks. Development defaults remain `Setpoint`, `localhost`, and `http://localhost:5173`.
 
@@ -474,7 +449,7 @@ Generating or importing a token invalidates the previous Setpoint credential imm
 
 ## Current Dashboard Pipeline
 
-Email data flows through the durable email index, triage rows, snapshot windows/items, snooze state, dismissed-email state, and current-data cache. Weather, calendar, Todoist deadlines/tasks, bills, and Actual are fetched through domain services and assembled into the `/api/dashboard/current` envelope. Desktop Notes loads a fresh tldraw document independently from `/api/tldraw/bootstrap` only after the tab is opened, reconciles it with a device-local IndexedDB recovery envelope, and clears that envelope only after the matching server revision is confirmed.
+Email data flows through the durable email index, triage rows, snapshot windows/items, snooze state, dismissed-email state, and current-data cache. Weather, calendar, and Todoist deadlines/tasks are fetched through domain services and assembled into the `/api/dashboard/current` envelope. Desktop Notes loads a fresh tldraw document independently from `/api/tldraw/bootstrap` only after the tab is opened, reconciles it with a device-local IndexedDB recovery envelope, and clears that envelope only after the matching server revision is confirmed.
 
 ```mermaid
 flowchart TD
@@ -492,9 +467,9 @@ flowchart TD
 
 ### Durable Email AI
 
-Incoming email classification is handled by `server/triage/triage-worker.ts` against durable `ea_email_triage` rows and `ea_triage_jobs`. Deterministic preflight in `triage-preflight.ts` can finalize trusted-sender and obvious-noise cases or route ambiguous and high-risk mail to the appropriate model tier. Security notifications that are not obvious verification-code noise route immediately to the cheap model. Provider-backed calls use the selected email AI provider/model from `email-ai-models.ts`; bill extraction uses `bill-extract.ts` and the bill extraction provider/model settings.
+Incoming email classification is handled by `server/triage/triage-worker.ts` against durable `ea_email_triage` rows and `ea_triage_jobs`. Deterministic preflight in `triage-preflight.ts` can finalize trusted-sender and obvious-noise cases or route ambiguous and high-risk mail to the appropriate model tier. Security notifications that are not obvious verification-code noise route immediately to the cheap model. The cheap tier uses the Fast Triage AI selection (`ea_settings.triage_fast_provider`/`triage_fast_model`, `triage-fast-model.ts`, `/api/ea/triage-fast-models`); the strong tier uses the email AI provider/model from `email-ai-models.ts`. Triage never extracts financial data.
 
-Email interests from settings influence classification. Scheduled payments from Actual Budget are cross-referenced during bill extraction to suppress duplicate bill detections.
+Email interests from settings influence classification.
 
 Model selection is user-configurable through `/api/ea/models`, defaults to Anthropic `claude-sonnet-4-6`, and can use OpenAI `gpt-5.5`. Anthropic uses temperature `0` for format adherence; OpenAI triage uses structured Responses API output with cache-key hints where supported.
 
@@ -533,11 +508,10 @@ The fifth shell tab: RSS/Atom headlines only, no AI classification or summarizat
 | Calendar | `server/calendar/calendar.ts` | Google Calendar API | Reuses Gmail OAuth | Empty array, continue |
 | Weather | `server/platform/weather.ts` | Pirate Weather | API key | Cached data or placeholder |
 | Todoist | `server/tasks/todoist.ts` | Todoist REST v1 | Bearer token (encrypted) | Empty array, continue |
-| Actual Budget | `server/actual/actual.ts` + `server/bills/bills-service.ts` mirrors | @actual-app/api SDK in persistent worker | Server URL + password (encrypted) | Mirrored data, degraded sync health |
+| Actual Budget (read-only) | `server/actual/actual.ts` + `server/bills/bills-service.ts` mirrors | @actual-app/api SDK in persistent worker | Server URL + password, optional end-to-end encryption password (encrypted) | Mirrored data, degraded sync health |
 | Email triage AI | `server/triage/triage-worker.ts` | Anthropic Messages API or OpenAI Responses API | Provider API key | Durable job remains retryable or falls back by mode |
-| Bill extraction AI | `server/bills/bill-extract.ts` | Anthropic Messages API or OpenAI Responses API | Provider API key | Bill extraction returns no bill signal |
 | Alfred AI | `server/alfred/` | Anthropic Messages API or OpenAI Responses API | Conversation-bound provider API key | Current run emits an error; conversation transcript rolls back to its prior valid boundary |
-All data source failures are caught individually — one source going down never blocks the current dashboard. Email triage and bill extraction failures are isolated to durable jobs or the specific bill-signal request.
+All data source failures are caught individually — one source going down never blocks the current dashboard. Email triage failures are isolated to durable jobs.
 
 ## Database Schema
 
@@ -567,6 +541,7 @@ erDiagram
         text actual_budget_url
         text actual_budget_password_encrypted
         text actual_budget_sync_id
+        text actual_budget_encryption_password_encrypted
         text email_ai_provider
         text email_ai_model
         text email_interests_json
@@ -614,16 +589,6 @@ erDiagram
         int until_ts "Unix ms; snooze-waker resurfaces when passed"
         text email_snapshot
         text snoozed_at
-    }
-
-    ea_api_tokens {
-        int id PK
-        text token_hash UK "hash-only; raw token shown once on create"
-        text label
-        text scopes "CSV or JSON of permitted scopes"
-        int created_at
-        int last_used_at
-        int expires_at
     }
 
     ea_email_index {
@@ -715,7 +680,6 @@ erDiagram
 | `ea_ai_usage_events` | `057_email_ai_usage.sql`, `072_ai_usage_diagnostics.sql` |
 | `ea_ai_usage_legacy_triage` | `057_email_ai_usage.sql` |
 | `ea_alfred_usage` | `016_alfred_usage.sql`, `019_alfred_usage_cache_creation.sql` |
-| `ea_api_tokens` | `001_ea_tables.sql` |
 | `ea_bill_occurrence_mirror` | `001_ea_tables.sql`, `002_bills_mirror.sql` |
 | `ea_bill_schedule_mirror` | `001_ea_tables.sql`, `002_bills_mirror.sql` |
 | `ea_bills_mirror_state` | `001_ea_tables.sql`, `002_bills_mirror.sql` |
@@ -738,29 +702,7 @@ erDiagram
 | `ea_email_search_embedding_state` | `006_email_search_embedding_state.sql` |
 | `ea_email_search_embeddings` | `005_email_search_embeddings.sql` |
 | `ea_email_sync_health` | `078_email_sync_health.sql` |
-| `ea_email_triage` | `001_ea_tables.sql`, `015_triage_last_decision_reason.sql`, `052_financial_email_plans.sql` |
-| `ea_finance_utilities` | `065_finance_utilities.sql` |
-| `ea_financial_activity_aliases` | `063_financial_activity.sql` |
-| `ea_financial_activity_occurrences` | `063_financial_activity.sql` |
-| `ea_financial_actual_bindings` | `063_financial_activity.sql` |
-| `ea_financial_connection_state` | `080_financial_connections.sql` |
-| `ea_financial_connections` | `080_financial_connections.sql` |
-| `ea_financial_correction_guards` | `064_financial_corrections.sql` |
-| `ea_financial_correction_keep_previews` | `066_financial_correction_keep.sql` |
-| `ea_financial_correction_observations` | `064_financial_corrections.sql` |
-| `ea_financial_correction_previews` | `064_financial_corrections.sql` |
-| `ea_financial_correction_steps` | `064_financial_corrections.sql` |
-| `ea_financial_corrections` | `064_financial_corrections.sql` |
-| `ea_financial_document_ai_attempts` | `067_financial_event_ai_requests.sql` |
-| `ea_financial_documents` | `062_financial_events.sql`, `068_financial_candidate_dismissal.sql`, `070_financial_document_sources.sql`, `081_provider_financial_assessments.sql`, `083_financial_owner_requests.sql` |
-| `ea_financial_event_ai_requests` | `067_financial_event_ai_requests.sql` |
-| `ea_financial_event_references` | `062_financial_events.sql` |
-| `ea_financial_events` | `062_financial_events.sql`, `068_financial_candidate_dismissal.sql`, `071_financial_event_readiness.sql` |
-| `ea_financial_identity_backfill` | `063_financial_activity.sql` |
-| `ea_financial_identity_conflicts` | `063_financial_activity.sql` |
-| `ea_financial_intake_state` | `062_financial_events.sql` |
-| `ea_financial_original_receipts` | `063_financial_activity.sql` |
-| `ea_financial_workflow_state` | `062_financial_events.sql`, `081_provider_financial_assessments.sql` |
+| `ea_email_triage` | `001_ea_tables.sql`, `015_triage_last_decision_reason.sql`, `052_financial_email_plans.sql`, `085_remove_financial_flows.sql` |
 | `ea_gmail_pubsub_config` | `035_gmail_pubsub_config.sql` |
 | `ea_gmail_watch_state` | `001_ea_tables.sql` |
 | `ea_instance_credentials` | `033_instance_credentials.sql`, `040_pending_credential_lifecycle.sql` |
@@ -777,7 +719,7 @@ erDiagram
 | `ea_pinned_emails` | `022_pinned_emails.sql`, `023_pinned_emails_rebuild.sql` |
 | `ea_reminders` | `010_discord_reminders.sql`, `046_time_to_leave_foundation.sql` |
 | `ea_sessions` | `001_ea_tables.sql`, `031_auth_recovery.sql`, `038_auth_security_generation.sql`, `039_password_step_up_window.sql` |
-| `ea_settings` | `001_ea_tables.sql`, `003_triage_sound_settings.sql`, `008_bill_pay_mappings.sql`, `010_discord_reminders.sql`, `020_utility_pay_links.sql`, `026_news.sql`, `028_provider_needs_reauth.sql`, `036_todoist_oauth_setup.sql`, `043_email_triage_classify_read_arrivals.sql`, `044_alfred_model_settings.sql`, `046_time_to_leave_foundation.sql`, `069_financial_profiles.sql`, `073_remove_email_lookback.sql` |
+| `ea_settings` | `001_ea_tables.sql`, `003_triage_sound_settings.sql`, `008_bill_pay_mappings.sql`, `010_discord_reminders.sql`, `020_utility_pay_links.sql`, `026_news.sql`, `028_provider_needs_reauth.sql`, `036_todoist_oauth_setup.sql`, `043_email_triage_classify_read_arrivals.sql`, `044_alfred_model_settings.sql`, `046_time_to_leave_foundation.sql`, `069_financial_profiles.sql`, `073_remove_email_lookback.sql`, `085_remove_financial_flows.sql` |
 | `ea_snoozed_emails` | `001_ea_tables.sql` |
 | `ea_tldraw_documents` | `050_tldraw_workspace.sql` |
 | `ea_todoist_items` | `001_ea_tables.sql` |
@@ -786,9 +728,6 @@ erDiagram
 | `ea_todoist_projects` | `001_ea_tables.sql` |
 | `ea_todoist_sync_state` | `001_ea_tables.sql` |
 | `ea_todoist_webhook_deliveries` | `001_ea_tables.sql` |
-| `ea_transaction_import_items_before_transfer_automation` | `041_email_transaction_imports.sql`, `042_transaction_import_item_subject.sql`, `053_transaction_import_financial_plans.sql`, `055_generic_financial_email_imports.sql`, `056_generic_financial_email_automation.sql`, `058_generic_financial_email_income_automation.sql`, `059_generic_financial_email_transfer_automation.sql`, `063_financial_activity.sql` |
-| `ea_transaction_import_mappings` | `041_email_transaction_imports.sql` |
-| `ea_transaction_import_runs` | `041_email_transaction_imports.sql` |
 | `ea_triage_feedback` | `001_ea_tables.sql` |
 | `ea_triage_jobs` | `001_ea_tables.sql`, `079_email_history_acknowledgment.sql` |
 | `ea_triage_rules` | `001_ea_tables.sql` |
@@ -816,12 +755,12 @@ Settings provides an explicit recent-password-protected discard action. Discard 
 
 ### Graceful Degradation
 
-Current-data fetches degrade independently. A Gmail outage can leave the snapshot stale or empty while calendar, weather, deadlines, bills, and provider health still render from live fetches or cache. Email triage and bill extraction failures are isolated to their durable job/request paths and do not block dashboard boot.
+Current-data fetches degrade independently. A Gmail outage can leave the snapshot stale or empty while calendar, weather, deadlines, and provider health still render from live fetches or cache. Email triage failures are isolated to their durable job paths and do not block dashboard boot.
 
 ### Connection Pooling
 
 - **iCloud IMAP**: Persistent connections per email address with 10-minute idle TTL. Reused across fetches, auto-reconnect on loss.
-- **Actual Budget**: Persistent provider worker owns the singleton SDK session. All writes and syncs are serialized through the worker; healthy sessions remain loaded with a 1024 MiB production old-space ceiling. Cache invalidation and connection teardown are explicit. EA reads normally use local SQLite or mirrored metadata/bill rows. The bills worker synchronizes every five minutes, retries failures after one minute, and publishes verified writes immediately with a durable fallback. App shutdown drains the SDK after its producers.
+- **Actual Budget**: Persistent provider worker owns the singleton SDK session; Setpoint never writes to Actual. Syncs are serialized through the worker; healthy sessions remain loaded with a 1024 MiB production old-space ceiling. Cache invalidation and connection teardown are explicit. EA reads use the local budget copy or mirrored metadata/schedule rows. The bills mirror worker synchronizes every five minutes and retries failures after one minute. App shutdown drains the SDK after its producers.
 - **Gmail**: Token refresh on-demand before each API call (5-minute expiry buffer).
 
 ### Floating Panel Pattern
@@ -862,9 +801,6 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 |--------|------|------|
 | GET | `/` | `server/routes/auth-canonical-origin.ts` |
 | PATCH | `/` | `server/routes/auth-canonical-origin.ts` |
-| GET | `/api-tokens` | `server/routes/auth-security.ts` |
-| POST | `/api-tokens` | `server/routes/auth-security.ts` |
-| DELETE | `/api-tokens/:id` | `server/routes/auth-security.ts` |
 | DELETE | `/api/alfred/conversations/:id` | `server/routes/alfred.ts` |
 | POST | `/api/alfred/conversations/:id/proposals/:proposalId/created` | `server/routes/alfred.ts` |
 | POST | `/api/alfred/email-context` | `server/routes/alfred.ts` |
@@ -883,17 +819,11 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | POST | `/api/auth/passkeys/registration/verify` | `server/routes/auth.ts` |
 | POST | `/api/auth/setup/claim` | `server/routes/auth.ts` |
 | GET | `/api/auth/setup/status` | `server/routes/auth.ts` |
-| GET | `/api/briefing/actual/accounts` | `server/routes/briefing/bills.ts` |
-| POST | `/api/briefing/actual/bills/:id/mark-paid` | `server/routes/briefing/bills.ts` |
-| POST | `/api/briefing/actual/cache/hydrate` | `server/routes/briefing/bills.ts` |
-| GET | `/api/briefing/actual/cache/status` | `server/routes/briefing/bills.ts` |
-| GET | `/api/briefing/actual/categories` | `server/routes/briefing/bills.ts` |
-| DELETE | `/api/briefing/actual/connection` | `server/routes/briefing/bills.ts` |
-| POST | `/api/briefing/actual/connection` | `server/routes/briefing/bills.ts` |
-| GET | `/api/briefing/actual/metadata` | `server/routes/briefing/bills.ts` |
-| GET | `/api/briefing/actual/payees` | `server/routes/briefing/bills.ts` |
-| POST | `/api/briefing/actual/test` | `server/routes/briefing/bills.ts` |
-| POST | `/api/briefing/bills/resolve` | `server/routes/briefing/bills.ts` |
+| POST | `/api/briefing/actual/cache/hydrate` | `server/routes/briefing/actual-connection.ts` |
+| GET | `/api/briefing/actual/cache/status` | `server/routes/briefing/actual-connection.ts` |
+| DELETE | `/api/briefing/actual/connection` | `server/routes/briefing/actual-connection.ts` |
+| POST | `/api/briefing/actual/connection` | `server/routes/briefing/actual-connection.ts` |
+| POST | `/api/briefing/actual/test` | `server/routes/briefing/actual-connection.ts` |
 | POST | `/api/briefing/dev-reindex-emails` | `server/routes/briefing/dev.ts` |
 | POST | `/api/briefing/dismiss/:emailId` | `server/routes/briefing/email.ts` |
 | POST | `/api/briefing/email-index/backfill` | `server/routes/briefing/email-index.ts` |
@@ -917,21 +847,6 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | GET | `/api/briefing/finances` | `server/routes/briefing/finances.ts` |
 | GET | `/api/briefing/finances/journal` | `server/routes/briefing/finances.ts` |
 | PUT | `/api/briefing/finances/payment-groups` | `server/routes/briefing/finances.ts` |
-| GET | `/api/briefing/financial-activity` | `server/routes/briefing/financial-activity.ts` |
-| GET | `/api/briefing/financial-activity/:owner/:id` | `server/routes/briefing/financial-activity.ts` |
-| GET | `/api/briefing/financial-connections` | `server/routes/briefing/financial-connections.ts` |
-| PUT | `/api/briefing/financial-connections` | `server/routes/briefing/financial-connections.ts` |
-| GET | `/api/briefing/financial-corrections/:id` | `server/routes/briefing/financial-corrections.ts` |
-| POST | `/api/briefing/financial-corrections/confirm` | `server/routes/briefing/financial-corrections.ts` |
-| POST | `/api/briefing/financial-corrections/inspect` | `server/routes/briefing/financial-corrections.ts` |
-| POST | `/api/briefing/financial-corrections/keep-confirm` | `server/routes/briefing/financial-corrections.ts` |
-| POST | `/api/briefing/financial-corrections/keep-preview` | `server/routes/briefing/financial-corrections.ts` |
-| POST | `/api/briefing/financial-corrections/preview` | `server/routes/briefing/financial-corrections.ts` |
-| POST | `/api/briefing/financial-corrections/recheck` | `server/routes/briefing/financial-corrections.ts` |
-| POST | `/api/briefing/financial-events/complete` | `server/routes/briefing/transaction-imports.ts` |
-| POST | `/api/briefing/financial-events/dismiss` | `server/routes/briefing/transaction-imports.ts` |
-| POST | `/api/briefing/financial-events/request` | `server/routes/briefing/transaction-imports.ts` |
-| GET | `/api/briefing/financial-events/review-changes` | `server/routes/briefing/transaction-imports.ts` |
 | GET | `/api/briefing/snapshot/:id` | `server/routes/briefing/snapshot.ts` |
 | GET | `/api/briefing/snapshot/active` | `server/routes/briefing/snapshot.ts` |
 | GET | `/api/briefing/snapshot/history` | `server/routes/briefing/snapshot.ts` |
@@ -943,8 +858,6 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | POST | `/api/briefing/snapshot/sync` | `server/routes/briefing/snapshot.ts` |
 | GET | `/api/briefing/todoist/labels` | `server/routes/briefing/tasks.ts` |
 | GET | `/api/briefing/todoist/projects` | `server/routes/briefing/tasks.ts` |
-| GET | `/api/briefing/transaction-imports/email-status` | `server/routes/briefing/transaction-imports.ts` |
-| GET | `/api/calendar/bills/range` | `server/routes/calendar.ts` |
 | GET | `/api/calendar/calendars` | `server/routes/calendar.ts` |
 | GET | `/api/calendar/deadlines` | `server/routes/calendar.ts` |
 | POST | `/api/calendar/deadlines` | `server/routes/calendar.ts` |
@@ -967,7 +880,6 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | GET | `/api/dashboard/current/events` | `server/routes/dashboard.ts` |
 | POST | `/api/dashboard/current/refresh` | `server/routes/dashboard.ts` |
 | POST | `/api/dashboard/current/sync` | `server/routes/dashboard.ts` |
-| GET | `/api/dashboard/finance` | `server/routes/dashboard.ts` |
 | GET | `/api/dashboard/health` | `server/routes/dashboard.ts` |
 | GET | `/api/ea/accounts/todoist/auth` | `server/routes/todoist-oauth.ts` |
 | GET | `/api/ea/accounts/todoist/callback` | `server/routes/todoist-oauth.ts` |
@@ -1053,7 +965,7 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 
 ### Briefing Namespace
 
-The `/api/briefing` namespace contains operational subroutes for inbox, snapshot, task, bill, and dev-reindex actions.
+The `/api/briefing` namespace contains operational subroutes for inbox, snapshot, task, read-only Finances, Actual connection, and dev-reindex actions.
 
 ### Current Dashboard
 
@@ -1065,9 +977,9 @@ The `/api/briefing` namespace contains operational subroutes for inbox, snapshot
 | GET | `/api/dashboard/health` | Authenticated system/provider health shape |
 | GET | `/api/dashboard/current/events` | SSE notifications when current dashboard data changes |
 
-The current dashboard envelope is the production runtime contract. It includes weather, calendar, deadlines, bills, `providerHealth`/`systemStatus`, and the active snapshot inbox view. Non-email boot-critical data is stored in the durable current-data cache keyed by `user_id` and cache key; email rows come from active snapshot/domain tables.
+The current dashboard envelope is the production runtime contract. It includes weather, calendar, deadlines, `providerHealth`/`systemStatus`, and the active snapshot inbox view. Non-email boot-critical data is stored in the durable current-data cache keyed by `user_id` and cache key; email rows come from active snapshot/domain tables.
 
-System status uses the same connection and domain evidence for current reads, manual refresh, force sync, and the dedicated health endpoint. Weather, Calendar, Tasks, and Bills each expose last-success time, update-due state, impact copy, and targeted Connections links. Tasks/Bills freshness is bounded by both the delivered cache and authoritative mirror; reconnect requirements override ordinary update status, and unused integrations stay neutral. The client adds initial-check, failed-read, offline, and interrupted-stream evidence without discarding saved data, and only a successful full health read clears a failed health check. Targeted retries use the existing refresh endpoint with one validated source key, await that source alone, and return a complete read-only envelope without triggering unrelated refreshes. The status row shows progress and an evidence-based result; retry eligibility is not presented as a guaranteed automatic schedule.
+System status uses the same connection and domain evidence for current reads, manual refresh, force sync, and the dedicated health endpoint. Weather, Calendar, Tasks, and Email each expose last-success time, update-due state, impact copy, and targeted Connections links. Tasks freshness is bounded by both the delivered cache and authoritative mirror; reconnect requirements override ordinary update status, and unused integrations stay neutral. The client adds initial-check, failed-read, offline, and interrupted-stream evidence without discarding saved data, and only a successful full health read clears a failed health check. Targeted retries use the existing refresh endpoint with one validated source key, await that source alone, and return a complete read-only envelope without triggering unrelated refreshes. The status row shows progress and an evidence-based result; retry eligibility is not presented as a guaranteed automatic schedule.
 
 ### Email Search
 
@@ -1119,7 +1031,7 @@ Health responses intentionally avoid email bodies. Use `indexed_count`, `oldest_
 | POST | `/api/briefing/email/:uid/snooze` | Snooze email until `until_ts` |
 | DELETE | `/api/briefing/email/:uid/snooze` | Cancel snooze and resurface |
 
-Exact paths drift; the source of truth is `server/routes/briefing/*.ts` (per-domain sub-routers: `email.ts`, `email-index.ts`, `snapshot.ts`, `tasks.ts`, `bills.ts`, and `dev.ts`, all composed by `index.ts`). Route handlers stay thin; business logic and DB access live in the per-domain `server/<domain>/` service modules and current worker modules.
+Exact paths drift; the source of truth is `server/routes/briefing/*.ts` (per-domain sub-routers: `email.ts`, `email-index.ts`, `snapshot.ts`, `tasks.ts`, `finances.ts`, `actual-connection.ts`, and `dev.ts`, all composed by `index.ts`). Route handlers stay thin; business logic and DB access live in the per-domain `server/<domain>/` service modules and current worker modules.
 
 ### Tasks
 
@@ -1127,18 +1039,22 @@ Exact paths drift; the source of truth is `server/routes/briefing/*.ts` (per-dom
 |--------|------|---------|
 | POST | `/api/briefing/complete-task/:taskId` | Complete Todoist-backed deadline/task |
 
-### Actual Budget
+### Finances and Actual Budget
+
+Setpoint reads Actual and never writes to it; transaction import and bill updates belong to a separate service.
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| POST | `/api/briefing/actual/send` | Send bill as transaction |
-| GET | `/api/briefing/actual/metadata` | Mirrored accounts + categories + payees |
-| GET | `/api/briefing/actual/accounts` | Account list |
-| GET | `/api/briefing/actual/payees` | Payee list |
-| GET | `/api/briefing/actual/categories` | Category tree |
-| POST | `/api/briefing/actual/test` | Test connection |
+| GET | `/api/briefing/finances` | Read-only Payments composition: schedule mirror, metadata projection, Journal, saved display groups |
+| GET | `/api/briefing/finances/journal` | Journal month range from the local Actual copy |
+| PUT | `/api/briefing/finances/payment-groups` | Save the Payments display layout (Setpoint only; never writes Actual) |
+| POST | `/api/briefing/actual/test` | Test a connection candidate, including the encryption password |
+| POST | `/api/briefing/actual/connection` | Verify and save the Actual connection |
+| DELETE | `/api/briefing/actual/connection` | Remove the Actual connection |
+| POST | `/api/briefing/actual/cache/hydrate` | Download/sync the local budget copy and refresh the mirrors |
+| GET | `/api/briefing/actual/cache/status` | Local budget copy status |
 
-Remote cache hydration streams the archive through a 128 MiB download cap, then uses the bounded Node reader in `actual-budget-archive.ts` to validate its central and local headers, entry count, stored/deflate methods, actual expanded sizes, and CRCs before returning only `db.sqlite` and `metadata.json`. It accepts only a path-safe local budget identifier. The in-process SDK loads that validated on-disk budget and does not receive a remote ZIP directly.
+The SDK worker loads the budget with `@actual-app/api` `downloadBudget(syncId, { password })`, which supports end-to-end encrypted budgets. The optional encryption password is verified at Save/Check against the budget's key test (PBKDF2-SHA512 + AES-256-GCM, as Actual does), stored encrypted in `ea_settings.actual_budget_encryption_password_encrypted` (part of the root-key rotation inventory), and never sent to the Actual server. A stale local copy that can no longer decrypt is replaced once with a fresh download.
 
 ### Accounts & Settings
 
@@ -1162,6 +1078,7 @@ Remote cache hydration streams the archive through a 128 MiB download cap, then 
 | POST | `/api/gmail/push` | Pub/Sub webhook; requires `GMAIL_PUBSUB_PUSH_TOKEN`, decodes Gmail `emailAddress`/`historyId`, and queues `gmail_history_sync` |
 | POST | `/api/ea/schedules/skip` | Skip scheduled snapshot boundary |
 | GET | `/api/ea/models` | Available email AI providers and models |
+| GET | `/api/ea/triage-fast-models` | Available Fast Triage AI providers and models |
 | GET | `/api/ea/alfred-models` | Available Alfred AI providers and models |
 | GET | `/api/ea/geocode` | Location string to lat/lng |
 | GET | `/api/ea/important-senders` | Get important senders |
@@ -1172,12 +1089,6 @@ Remote cache hydration streams the archive through a 128 MiB download cap, then 
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/api/calendar` | Read-only calendar slice (today/tomorrow/next-week) exposed outside the briefing envelope |
-
-### API Tokens (Bearer auth)
-
-Token management endpoints live under `/api/auth`. Bearer tokens authenticate by `Authorization: Bearer <token>` and bypass the `x-requested-with` CSRF check, but they are not general dashboard auth. They are accepted only on explicitly opted-in automation endpoints, currently `POST /api/briefing/actual/quick-txn`. Raw tokens are shown once on creation; only `token_hash` is persisted, and new tokens receive a default 90-day expiry.
-
-Passkeys and API tokens are separate auth surfaces. A registered passkey can unlock the browser directly in password-or-passkey mode or complete login after the password in strict mode; a scoped API token can only call specifically opted-in automation endpoints and cannot satisfy the dashboard route guard.
 
 ## Deployment
 

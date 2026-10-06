@@ -30,7 +30,6 @@ interface DeadlineActionOptions {
 interface WorkspaceActionOptions {
   view: string;
   onViewChange?: (view: string) => void;
-  billsAvailable: boolean;
   floatingDetailRef: MutableRefObject<CalendarFloatingDetail | null>;
   setFloatingDetail: Dispatch<SetStateAction<CalendarFloatingDetail | null>>;
   shakeFloatingEditor: () => void;

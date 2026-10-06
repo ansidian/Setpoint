@@ -6,13 +6,12 @@ import {
   type CalendarSearchScope,
   calendarSearchStartIndex,
   normalizedCalendarSearchQuery,
-  searchScopeForCalendarView,
 } from "./calendarModalSearchModel";
 
 const DEFAULT_LIMIT = 50;
 const DEFAULT_DEBOUNCE_MS = 250;
 const MIN_QUERY_LENGTH = 2;
-const SEARCH_SCOPES: CalendarSearchScope[] = ["events", "bills"];
+const SEARCH_SCOPES: CalendarSearchScope[] = ["events"];
 
 export interface CalendarSearchCoverage {
   sources?: Array<{ key: string; [key: string]: unknown }>;
@@ -59,7 +58,6 @@ export interface CalendarSearchActivationContext {
 
 export interface CalendarModalSearchOptions {
   modalOpen?: boolean;
-  view?: string;
   eventsRevision?: number;
   searchApi?: CalendarSearchApi;
   onActivateResult?: (result: CalendarSearchResultLike, context?: CalendarSearchActivationContext) => unknown;
@@ -95,7 +93,6 @@ function resultStableId(result?: CalendarSearchResultLike) {
 
 export default function useCalendarModalSearch({
   modalOpen,
-  view,
   eventsRevision = 0,
   searchApi = defaultCalendarSearchApi,
   onActivateResult,
@@ -106,12 +103,12 @@ export default function useCalendarModalSearch({
   const [snapshots, setSnapshots] = useState(initialSearchSnapshots);
   const [focusRequestId, setFocusRequestId] = useState(0);
   const [focusSelectAll, setFocusSelectAll] = useState(false);
-  const requestSeqRef = useRef<Record<CalendarSearchScope, number>>({ events: 0, bills: 0 });
-  const abortControllersRef = useRef<Record<CalendarSearchScope, AbortController | null>>({ events: null, bills: null });
+  const requestSeqRef = useRef<Record<CalendarSearchScope, number>>({ events: 0 });
+  const abortControllersRef = useRef<Record<CalendarSearchScope, AbortController | null>>({ events: null });
   const snapshotsRef = useRef(snapshots);
 
-  const scope = searchScopeForCalendarView(view);
-  const sourceRevision = scope === "events" ? eventsRevision : 0;
+  const scope: CalendarSearchScope = "events";
+  const sourceRevision = eventsRevision;
   const activeSnapshot = snapshots[scope] || emptySearchSnapshot();
   const {
     query,
@@ -275,7 +272,7 @@ export default function useCalendarModalSearch({
       const nextSnapshots = initialSearchSnapshots();
       setOpen(false);
       setSnapshots(nextSnapshots);
-      requestSeqRef.current = { events: 0, bills: 0 };
+      requestSeqRef.current = { events: 0 };
       snapshotsRef.current = nextSnapshots;
       setFocusRequestId(0);
       setFocusSelectAll(false);

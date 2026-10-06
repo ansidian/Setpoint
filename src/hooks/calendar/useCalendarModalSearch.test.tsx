@@ -29,7 +29,7 @@ async function flushPromises() {
   await Promise.resolve();
 }
 
-function searchArgs(scope: "events" | "bills", q: string) {
+function searchArgs(scope: "events", q: string) {
   return { scope, q, limit: 50, signal: expect.any(AbortSignal) };
 }
 
@@ -44,7 +44,6 @@ describe("useCalendarModalSearch", () => {
     apiMocks.getCalendarSearch.mockResolvedValue({ results: [] });
     const { result } = renderHook(() => useCalendarModalSearch({
       modalOpen: true,
-      view: "events",
       debounceMs: 0,
     }));
 
@@ -71,7 +70,6 @@ describe("useCalendarModalSearch", () => {
 
     const { result } = renderHook(() => useCalendarModalSearch({
       modalOpen: true,
-      view: "events",
       searchApi,
       debounceMs: 0,
     }));
@@ -134,44 +132,31 @@ describe("useCalendarModalSearch", () => {
     });
   });
 
-  it("aborts superseded requests in the active search scope", async () => {
+  it("aborts superseded search requests", async () => {
     const searchApi = vi.fn<CalendarSearchApi>(() => new Promise(() => {}));
-    const { result, rerender } = renderHook(
-      ({ view }) => useCalendarModalSearch({
-        modalOpen: true,
-        view,
-        searchApi,
-        debounceMs: 0,
-      }),
-      { initialProps: { view: "events" } },
-    );
+    const { result } = renderHook(() => useCalendarModalSearch({
+      modalOpen: true,
+      searchApi,
+      debounceMs: 0,
+    }));
 
     act(() => {
       result.current.openSearch();
       result.current.setQuery("first event");
     });
-    // test-architecture: allow-boundary-interaction -- Calendar search HTTP is outbound; the first active-scope request must exist before its abort signal can be inspected.
+    // test-architecture: allow-boundary-interaction -- Calendar search HTTP is outbound; the first request must exist before its abort signal can be inspected.
     await waitFor(() => expect(searchApi).toHaveBeenCalledTimes(1));
     // test-architecture: allow-boundary-interaction -- Calendar search crosses the browser HTTP boundary; cancellation is observable only through the active request's AbortSignal.
-    const firstEventSignal = searchApi.mock.calls[0]![0].signal!;
+    const firstSignal = searchApi.mock.calls[0]![0].signal!;
 
-    rerender({ view: "bills" });
-    act(() => result.current.setQuery("rent"));
-    // test-architecture: allow-boundary-interaction -- Calendar search HTTP is outbound; switching scopes must start the bills request before inspecting cross-scope cancellation.
+    act(() => result.current.setQuery("final event"));
+    // test-architecture: allow-boundary-interaction -- Calendar search HTTP is outbound; the replacement request must start before inspecting both signals.
     await waitFor(() => expect(searchApi).toHaveBeenCalledTimes(2));
     // test-architecture: allow-boundary-interaction -- Calendar search crosses the browser HTTP boundary; cancellation is observable only through the active request's AbortSignal.
-    const billSignal = searchApi.mock.calls[1]![0].signal!;
+    const secondSignal = searchApi.mock.calls[1]![0].signal!;
 
-    rerender({ view: "events" });
-    act(() => result.current.setQuery("final event"));
-    // test-architecture: allow-boundary-interaction -- Calendar search HTTP is outbound; restoring events must start one replacement request before inspecting all three signals.
-    await waitFor(() => expect(searchApi).toHaveBeenCalledTimes(3));
-    // test-architecture: allow-boundary-interaction -- Calendar search crosses the browser HTTP boundary; cancellation is observable only through the active request's AbortSignal.
-    const secondEventSignal = searchApi.mock.calls[2]![0].signal!;
-
-    expect(firstEventSignal.aborted).toBe(true);
-    expect(billSignal.aborted).toBe(true);
-    expect(secondEventSignal.aborted).toBe(false);
+    expect(firstSignal.aborted).toBe(true);
+    expect(secondSignal.aborted).toBe(false);
   });
 
   it("rechecks an unchanged query after calendar invalidation and rejects the superseded result", async () => {
@@ -183,7 +168,7 @@ describe("useCalendarModalSearch", () => {
       .mockReturnValueOnce(oldRead.promise)
       .mockReturnValueOnce(freshRead.promise);
     const { result, rerender } = renderHook(({ revision }) => useCalendarModalSearch({
-      modalOpen: true, view: "events", eventsRevision: revision, searchApi, debounceMs: 0,
+      modalOpen: true, eventsRevision: revision, searchApi, debounceMs: 0,
     }), { initialProps: { revision: 0 } });
     act(() => { result.current.openSearch(); result.current.setQuery("event"); });
     await waitFor(() => expect(result.current.results).toEqual(saved));
@@ -203,7 +188,6 @@ describe("useCalendarModalSearch", () => {
     const searchApi = vi.fn<CalendarSearchApi>(() => new Promise(() => {}));
     const { result } = renderHook(() => useCalendarModalSearch({
       modalOpen: true,
-      view: "events",
       searchApi,
       debounceMs: 0,
     }));
@@ -228,7 +212,6 @@ describe("useCalendarModalSearch", () => {
     );
     const { result } = renderHook(() => useCalendarModalSearch({
       modalOpen: true,
-      view: "events",
       searchApi,
       debounceMs: 0,
     }));
@@ -246,7 +229,6 @@ describe("useCalendarModalSearch", () => {
     let activatedResult: { id: string; itemId: string } | null = null;
     const { result } = renderHook(() => useCalendarModalSearch({
       modalOpen: true,
-      view: "events",
       searchApi: vi.fn(),
       onActivateResult: (item) => { activatedResult = item as typeof activatedResult; },
     }));
@@ -288,7 +270,6 @@ describe("useCalendarModalSearch", () => {
     const searchApi = vi.fn().mockReturnValueOnce(response.promise);
     const { result } = renderHook(() => useCalendarModalSearch({
       modalOpen: true,
-      view: "events",
       searchApi,
       debounceMs: 0,
     }));
@@ -318,7 +299,6 @@ describe("useCalendarModalSearch", () => {
   it("treats Cmd/Ctrl+F open requests as select-all focus requests", () => {
     const { result } = renderHook(() => useCalendarModalSearch({
       modalOpen: true,
-      view: "events",
       searchApi: vi.fn(),
     }));
 
@@ -336,137 +316,6 @@ describe("useCalendarModalSearch", () => {
     expect(result.current.focusSelectAll).toBe(false);
   });
 
-  it("keeps scope-local query snapshots and refetches a restored scope without blanking cached results", async () => {
-    const eventsFirst = deferred();
-    const billsFirst = deferred();
-    const eventsRefresh = deferred();
-    const searchApi = vi.fn()
-      .mockReturnValueOnce(eventsFirst.promise)
-      .mockReturnValueOnce(billsFirst.promise)
-      .mockReturnValueOnce(eventsRefresh.promise);
-
-    const { result, rerender } = renderHook(
-      ({ view }) => useCalendarModalSearch({
-        modalOpen: true,
-        view,
-        searchApi,
-        debounceMs: 0,
-      }),
-      { initialProps: { view: "events" } },
-    );
-
-    act(() => {
-      result.current.openSearch();
-      result.current.setQuery("final");
-    });
-
-    await waitFor(() => expect(result.current.pending).toBe(true));
-    await act(async () => {
-      eventsFirst.resolve({
-        results: [{ id: "event:final", itemId: "event-final", title: "Final" }],
-        coverage: { sources: [{ key: "google_calendar" }] },
-      });
-      await eventsFirst.promise;
-      await flushPromises();
-    });
-    expect(result.current.scope).toBe("events");
-    expect(result.current.query).toBe("final");
-    expect(result.current.results.map((item) => item.itemId)).toEqual(["event-final"]);
-
-    rerender({ view: "bills" });
-    await waitFor(() => {
-      expect(result.current.scope).toBe("bills");
-      expect(result.current.query).toBe("");
-      expect(result.current.results).toEqual([]);
-    });
-
-    act(() => {
-      result.current.setQuery("rent");
-    });
-    // test-architecture: allow-boundary-interaction -- Calendar search HTTP is outbound; the bills scope must send its own restored query snapshot and cancellation signal.
-    await waitFor(() => expect(searchApi).toHaveBeenLastCalledWith(searchArgs("bills", "rent")));
-    await act(async () => {
-      billsFirst.resolve({
-        results: [{ id: "bill:rent", itemId: "bill-rent", title: "Rent" }],
-        coverage: { sources: [{ key: "bills_mirror" }] },
-      });
-      await billsFirst.promise;
-      await flushPromises();
-    });
-
-    rerender({ view: "events" });
-
-    await waitFor(() => {
-      expect(result.current.scope).toBe("events");
-      expect(result.current.query).toBe("final");
-      expect(result.current.results.map((item) => item.itemId)).toEqual(["event-final"]);
-      expect(result.current.pending).toBe(true);
-    });
-    // test-architecture: allow-boundary-interaction -- Calendar search HTTP is outbound; restoring events must refetch the cached query without blanking its prior results.
-    expect(searchApi).toHaveBeenLastCalledWith(searchArgs("events", "final"));
-
-    await act(async () => {
-      eventsRefresh.resolve({
-        results: [{ id: "event:final-2", itemId: "event-final-2", title: "Final review" }],
-        coverage: { sources: [{ key: "deadlines" }] },
-      });
-      await eventsRefresh.promise;
-      await flushPromises();
-    });
-
-    expect(result.current.results.map((item) => item.itemId)).toEqual(["event-final-2"]);
-  });
-
-  it("preserves highlight and scroll per scope while clearing active-scope snapshots explicitly", async () => {
-    const searchApi = vi.fn().mockResolvedValue({ results: [] });
-    const { result, rerender } = renderHook(
-      ({ view }) => useCalendarModalSearch({
-        modalOpen: true,
-        view,
-        searchApi,
-        debounceMs: 0,
-      }),
-      { initialProps: { view: "events" } },
-    );
-
-    act(() => {
-      result.current.openSearch();
-      result.current.setQuery("final");
-      result.current.setImmediateResults([
-        { id: "event:1", itemId: "event-1" },
-        { id: "event:2", itemId: "event-2" },
-      ]);
-      result.current.setHighlightedIndex(1);
-      result.current.setScrollTop(144);
-    });
-
-    rerender({ view: "bills" });
-    act(() => {
-      result.current.setQuery("rent");
-      result.current.setImmediateResults([{ id: "bill:1", itemId: "bill-1" }]);
-      result.current.setScrollTop(24);
-    });
-
-    rerender({ view: "events" });
-    expect(result.current.query).toBe("final");
-    expect(result.current.highlightedIndex).toBe(1);
-    expect(result.current.scrollTop).toBe(144);
-
-    act(() => {
-      result.current.clearQuery();
-    });
-
-    expect(result.current.query).toBe("");
-    expect(result.current.results).toEqual([]);
-    expect(result.current.highlightedIndex).toBe(-1);
-    expect(result.current.scrollTop).toBe(0);
-
-    rerender({ view: "bills" });
-    expect(result.current.query).toBe("rent");
-    expect(result.current.results.map((item) => item.itemId)).toEqual(["bill-1"]);
-    expect(result.current.scrollTop).toBe(24);
-  });
-
   it("preserves highlighted result by id and keeps prior results when a refetch fails", async () => {
     const first = deferred();
     const refresh = deferred();
@@ -477,13 +326,13 @@ describe("useCalendarModalSearch", () => {
       .mockReturnValueOnce(failed.promise);
 
     const { result, rerender } = renderHook(
-      ({ view }) => useCalendarModalSearch({
+      ({ revision }) => useCalendarModalSearch({
         modalOpen: true,
-        view,
+        eventsRevision: revision,
         searchApi,
         debounceMs: 0,
       }),
-      { initialProps: { view: "events" } },
+      { initialProps: { revision: 0 } },
     );
 
     act(() => {
@@ -504,8 +353,7 @@ describe("useCalendarModalSearch", () => {
     });
 
     act(() => result.current.setHighlightedIndex(1));
-    rerender({ view: "bills" });
-    rerender({ view: "events" });
+    rerender({ revision: 1 });
     await waitFor(() => expect(result.current.pending).toBe(true));
 
     await act(async () => {
@@ -521,8 +369,7 @@ describe("useCalendarModalSearch", () => {
 
     expect(result.current.highlightedIndex).toBe(1);
 
-    rerender({ view: "bills" });
-    rerender({ view: "events" });
+    rerender({ revision: 2 });
     await waitFor(() => expect(result.current.pending).toBe(true));
 
     await act(async () => {

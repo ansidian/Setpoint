@@ -185,7 +185,7 @@ function AlfredComposer({
             value={draft}
             rows={2}
             aria-label="Message to Alfred"
-            placeholder={pendingEmail ? "Ask about this email…" : "Ask across mail, calendar, and finances…"}
+            placeholder={pendingEmail ? "Ask about this email…" : "Ask across mail, calendar, and deadlines…"}
             onChange={(e) => {
               setDraft(e.target.value);
               if (reviewCue) setReviewCue(null);

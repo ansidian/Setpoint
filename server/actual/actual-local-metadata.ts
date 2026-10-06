@@ -14,13 +14,6 @@ import {
   pruneLocalActualBackups,
 } from "./actualMetadataCacheStore.ts";
 import type { BudgetMetadata } from "./actualMetadataCacheStore.ts";
-import {
-  loginActual,
-  fetchActualJson,
-  fetchActualBuffer,
-} from "./actualMetadataSync.ts";
-import { readActualBudgetArchive, validateActualBudgetId } from "./actual-budget-archive.ts";
-import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import db from "../db/connection.ts";
 import { decrypt } from "../platform/encryption.ts";
@@ -30,13 +23,11 @@ import type { ActualConfig, ActualMetadata } from "../../shared/types/actual.ts"
 interface LocalBudget {
   budgetDir: string;
   metadata: BudgetMetadata & { id?: string; groupId: string; cloudFileId: string };
-  backupPrune?: { removed: number; kept: number };
 }
 
 export interface LocalActualOptions {
   dbClient?: { execute(statement: InStatement): Promise<{ rows: Array<Record<string, unknown>> }> };
   dataDir?: string;
-  forceDownload?: boolean;
   localOnly?: boolean;
 }
 
@@ -51,8 +42,8 @@ export interface CacheDescription {
 
 // Facade re-exports: pure date helpers (actualMetadataModel.ts) and filesystem
 // cache ops (actualMetadataCacheStore.ts) now live in their own modules but stay
-// importable from here for the existing consumers (actual-transactions-read.ts,
-// actual-core.ts, prune-actual-cache.ts).
+// importable from here for the existing consumers
+// (actual-core.ts, actual-journal-read.ts, prune-actual-cache.ts).
 export { ymdFromActualDate, actualDateInt };
 export {
   actualDataDir,
@@ -68,7 +59,9 @@ function trimServerUrl(value: unknown): string {
 
 export async function getActualConfig(userId: string, { dbClient = db }: LocalActualOptions = {}): Promise<ActualConfig> {
   const result = await dbClient.execute({
-    sql: "SELECT actual_budget_url, actual_budget_password_encrypted, actual_budget_sync_id FROM ea_settings WHERE user_id = ?",
+    sql: `SELECT actual_budget_url, actual_budget_password_encrypted, actual_budget_sync_id,
+                 actual_budget_encryption_password_encrypted
+          FROM ea_settings WHERE user_id = ?`,
     args: [userId],
   });
   const settings = result.rows?.[0];
@@ -84,6 +77,12 @@ export async function getActualConfig(userId: string, { dbClient = db }: LocalAc
         )
       : null,
     syncId: String(settings.actual_budget_sync_id),
+    encryptionPassword: settings.actual_budget_encryption_password_encrypted
+      ? decrypt(
+          String(settings.actual_budget_encryption_password_encrypted),
+          settingsCredentialContext(userId, "actual_budget_encryption_password_encrypted"),
+        )
+      : null,
   };
 }
 
@@ -128,77 +127,12 @@ export async function describeLocalActualCache(userId: string, options: LocalAct
   };
 }
 
-async function downloadBudgetZip(config: ActualConfig, { dataDir = actualDataDir() }: LocalActualOptions = {}): Promise<LocalBudget> {
-  const token = await loginActual(config);
-
-  const files = await fetchActualJson<{ data?: Array<{ groupId?: string; fileId?: string }> }>(`${config.serverURL}/sync/list-user-files`, { token });
-  const file = (Array.isArray(files?.data) ? files.data : []).find((candidate) => candidate?.groupId === config.syncId);
-  if (!file?.fileId) {
-    throw Object.assign(new Error(`Actual Budget "${config.syncId}" was not found on the sync server`), { status: 404 });
-  }
-  const fileId = file.fileId;
-
-  const fileInfo = await fetchActualJson<{ status?: string; data?: { encryptMeta?: boolean } }>(`${config.serverURL}/sync/get-user-file-info`, { token, fileId });
-  const info = fileInfo?.data;
-  if (fileInfo?.status !== "ok" || !info) {
-    throw Object.assign(new Error("Actual Budget file info was unavailable"), { status: 502 });
-  }
-  if (info.encryptMeta) {
-    throw Object.assign(new Error("Encrypted Actual Budget files are not supported by budget bootstrap"), { status: 400 });
-  }
-
-  const buffer = await fetchActualBuffer(`${config.serverURL}/sync/download-user-file`, {
-    token,
-    fileId,
-  });
-  const archive = readActualBudgetArchive(buffer);
-  const parsedMetadata = JSON.parse(archive.metadata.toString("utf8")) as BudgetMetadata;
-  const budgetId = validateActualBudgetId(parsedMetadata.id);
-  const metadata: LocalBudget["metadata"] = {
-    ...parsedMetadata,
-    id: budgetId,
-    cloudFileId: fileId,
-    groupId: file.groupId || config.syncId,
-    lastUploaded: new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" }),
-    encryptKeyId: null,
-  };
-  const budgetDir = path.join(dataDir, budgetId);
-  await mkdir(budgetDir, { recursive: true });
-  await writeFile(path.join(budgetDir, "db.sqlite"), archive.database);
-  await writeFile(path.join(budgetDir, "metadata.json"), JSON.stringify(metadata));
-  let backupPrune = { removed: 0, kept: 0 };
-  backupPrune = await pruneActualBudgetBackups(budgetDir).catch((err: unknown) => {
-    console.warn("[EA] Actual local backup pruning failed:", err instanceof Error ? err.message : err);
-    return backupPrune;
-  });
-  return { budgetDir, metadata, backupPrune };
-}
-
 async function requireLocalBudget(config: ActualConfig, options: LocalActualOptions): Promise<LocalBudget> {
   const found = await findLocalBudgetDir(config.syncId, options);
   if (!found) {
     throw Object.assign(new Error("Actual Budget local metadata is unavailable"), { status: 503 });
   }
   return { ...found, metadata: found.metadata as LocalBudget["metadata"] };
-}
-
-// Worker bootstrap only: the SDK owns synchronization after loading this archive.
-// Reuse an existing copy unless the caller explicitly requests recovery.
-export async function hydrateLocalActualCache(userId: string, options: LocalActualOptions = {}) {
-  const config = await getActualConfig(userId, options);
-  const local = options.forceDownload ? null : await findLocalBudgetDir(config.syncId, options);
-  const hydrated: LocalBudget = local
-    ? { ...local, metadata: local.metadata as LocalBudget["metadata"] }
-    : await downloadBudgetZip(config, options);
-  const summary = await describeLocalActualBudget(hydrated.budgetDir, {
-    metadata: hydrated.metadata,
-  });
-  return {
-    success: true,
-    hydrated: true,
-    ...summary,
-    backupPrune: hydrated.backupPrune || { removed: 0, kept: summary.backupCount },
-  };
 }
 
 // Direct read access to the on-disk budget copy without booting the SDK — the

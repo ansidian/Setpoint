@@ -13,11 +13,9 @@ function baseResponse() {
     weather: { temp: 72 },
     calendar: [{ id: "event-1", title: "Focus" }],
     deadlines: { upcoming: [{ id: "deadline-1" }], stats: { total: 1 } },
-    bills: [{ id: "bill-1" }],
     providerHealth: {
       currentData: { state: "current" },
       todoist: { state: "current", lastSuccessAt: "2026-05-07T11:55:00.000Z", ageMs: 300_000 },
-      bills: { state: "current" },
     },
     systemStatus: { state: "current", generatedAt: "2026-05-07T12:00:00.000Z" },
     refresh: { mode: "passive", scheduled: [], skipped: [] },
@@ -68,13 +66,6 @@ describe("current dashboard source definitions", () => {
       upcoming: [],
       stats: null,
     });
-    expect(fallbackPayloadForKey("bills_current")).toEqual({
-      bills: [],
-      allSchedules: [],
-      payeeMap: {},
-      actualConfigured: false,
-      actualBudgetUrl: null,
-    });
 
     expect(hasUsablePayload("calendar_current", { payload_json: JSON.stringify([]) })).toBe(true);
     expect(hasUsablePayload("calendar_current", { payload_json: JSON.stringify({}) })).toBe(false);
@@ -87,26 +78,6 @@ describe("current dashboard source definitions", () => {
     expect(hasUsablePayload("deadlines_current", {
       payload_json: JSON.stringify({ sections: [] }),
     })).toBe(false);
-    expect(hasUsablePayload("bills_current", {
-      payload_json: JSON.stringify({
-        bills: [],
-        allSchedules: [],
-        payeeMap: {},
-      }),
-    })).toBe(true);
-  });
-
-  it("rejects legacy or malformed cached bills before they reach the dashboard", () => {
-    const rowFor = (allSchedules: unknown[]) => ({
-      payload_json: JSON.stringify({ bills: [], allSchedules, payeeMap: {} }),
-    });
-
-    expect(hasUsablePayload("bills_current", rowFor([
-      { id: "legacy", next_date: "2026-05-10", conditions: [{ field: "amount", value: -5000 }] },
-    ]))).toBe(false);
-    expect(hasUsablePayload("bills_current", rowFor([
-      { id: "malformed", next_date: "2026-05-10", amount: "not-a-number" },
-    ]))).toBe(false);
   });
 
   it("summarizes current data health through source payload rules", () => {
@@ -139,7 +110,6 @@ describe("current dashboard source definitions", () => {
         { key: "weather_current", state: "current", severity: "none" },
         { key: "calendar_current", state: "refreshing", severity: "info" },
         { key: "deadlines_current", state: "unavailable", severity: "error" },
-        { key: "bills_current", state: "unavailable", severity: "error" },
       ],
     });
   });

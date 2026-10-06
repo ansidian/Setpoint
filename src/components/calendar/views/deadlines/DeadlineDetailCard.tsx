@@ -3,7 +3,7 @@ import { Bell, CalendarDays, Flag } from "lucide-react";
 import { motion as Motion } from "motion/react";
 import type { Transition } from "motion/react";
 import type { ReactNode } from "react";
-import { daysUntil } from "../../../../lib/bill-utils";
+import { daysUntil } from "../../../../lib/dashboard-helpers";
 import { urgencyForDays } from "../../../../lib/shell-helpers";
 import { RailDueBadge, RailFactRow, RailHeroCard, RailMetaChip, RailReminderIndicator } from "../../DetailRailPrimitives.tsx";
 import { useDetailRailMotion } from "../../detailRailMotion.ts";

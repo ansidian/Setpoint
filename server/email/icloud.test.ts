@@ -285,7 +285,7 @@ describe("iCloud fetchEmailsInRange", () => {
           from: "Sender",
           from_email: "sender@example.com",
           subject: "iCloud range message",
-          body_preview: "Full iCloud body $45.67 [amounts: $45.67]",
+          body_preview: "Full iCloud body $45.67",
           body_text: "Full iCloud body $45.67",
           date: "2026-05-01T15:00:00.000Z",
           read: true,
@@ -341,7 +341,6 @@ describe("iCloud fetchEmailsInRange MIME parsing (D1)", () => {
     expect(email.body_text).toContain("Minimum payment due $29.00");
     expect(email.body_text).not.toContain("XYZBOUNDARY");
     expect(email.body_text).not.toContain("Content-Transfer-Encoding");
-    expect(email.body_preview.endsWith(" [amounts: $29.00]")).toBe(true);
   });
 });
 

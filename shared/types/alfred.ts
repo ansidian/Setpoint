@@ -1,7 +1,5 @@
-import type { ActualBillOccurrence } from "./actual.ts";
 import type { NormalizedCalendarEvent } from "./calendar.ts";
 import type { DeadlineOccurrence } from "./tasks.ts";
-import type { TransactionRecord, TransactionSummaryBucket, TransactionGroupBy } from "./transactions.ts";
 
 export type AlfredProvider = "anthropic" | "openai";
 export type AlfredModelId = string;
@@ -11,14 +9,11 @@ export type AlfredToolName =
   | "get_email_body"
   | "get_calendar_events"
   | "get_deadlines"
-  | "get_upcoming_bills"
-  | "search_transactions"
-  | "summarize_transactions"
   | "propose_calendar_event"
   | "show_items"
   | "group_items";
 
-export type AlfredItemKind = "email" | "event" | "deadline" | "bill" | "transaction";
+export type AlfredItemKind = "email" | "event" | "deadline";
 
 export interface AlfredEmailSender {
   name?: string | null;
@@ -64,7 +59,6 @@ export interface AlfredEmailItem extends Record<string, unknown> {
     category?: string | null;
     urgency?: string | null;
     deadline_at?: string | null;
-    bill_candidate?: unknown;
     handled?: boolean;
   } | null;
 }
@@ -73,8 +67,6 @@ export interface AlfredItemMap {
   email: AlfredEmailItem;
   event: NormalizedCalendarEvent;
   deadline: DeadlineOccurrence;
-  bill: ActualBillOccurrence;
-  transaction: TransactionRecord;
 }
 
 export type AlfredItem = AlfredItemMap[AlfredItemKind] & Record<string, unknown>;
@@ -147,14 +139,6 @@ export type AlfredRowsEvent = {
   }
 }[AlfredItemKind];
 
-export interface AlfredSummaryEvent {
-  type: "summary";
-  total: number;
-  period: { start: string; end: string };
-  group_by: TransactionGroupBy;
-  buckets: TransactionSummaryBucket[];
-}
-
 export interface AlfredBreakdownBucket<K extends AlfredItemKind = AlfredItemKind> {
   label: string;
   count: number;
@@ -189,7 +173,6 @@ export type AlfredRunEvent =
   | AlfredToolStartEvent
   | AlfredToolResultEvent
   | AlfredRowsEvent
-  | AlfredSummaryEvent
   | AlfredBreakdownEvent
   | AlfredCalendarProposalEvent
   | AlfredRunEndEvent
@@ -214,15 +197,6 @@ export interface AlfredCalendarProposalCreatedResponse {
 }
 
 export type AlfredDateRangeInput = { start?: unknown; end?: unknown; query?: unknown };
-export type AlfredTransactionInput = AlfredDateRangeInput & {
-  payee?: unknown;
-  category?: unknown;
-  account?: unknown;
-  notes?: unknown;
-  direction?: unknown;
-  min_amount?: unknown;
-  max_amount?: unknown;
-};
 
 export interface AlfredToolInputMap {
   search_email: {
@@ -237,9 +211,6 @@ export interface AlfredToolInputMap {
   get_email_body: { uid?: unknown };
   get_calendar_events: AlfredDateRangeInput;
   get_deadlines: AlfredDateRangeInput;
-  get_upcoming_bills: AlfredDateRangeInput;
-  search_transactions: AlfredTransactionInput & { limit?: unknown };
-  summarize_transactions: AlfredTransactionInput & { group_by?: unknown };
   propose_calendar_event: {
     owner_instruction?: unknown;
     duplicate_confirmation?: unknown;
@@ -266,9 +237,6 @@ export interface AlfredToolResultMap {
   get_email_body: AlfredToolResultBase & { uid?: string; body?: string; subject?: string; from?: string };
   get_calendar_events: AlfredToolResultBase & { total?: number; events?: Record<string, unknown>[] };
   get_deadlines: AlfredToolResultBase & { total?: number; open?: number; deadlines?: Record<string, unknown>[] };
-  get_upcoming_bills: AlfredToolResultBase & { total?: number; bills?: Record<string, unknown>[] };
-  search_transactions: AlfredToolResultBase & { total?: number; transactions?: Record<string, unknown>[] };
-  summarize_transactions: AlfredToolResultBase & { total?: number; direction?: string; buckets?: TransactionSummaryBucket[] };
   propose_calendar_event: AlfredToolResultBase & { staged?: true; duplicate_confirmation_required?: true };
   show_items: AlfredToolResultBase & { shown?: number };
   group_items: AlfredToolResultBase & { shown?: number };

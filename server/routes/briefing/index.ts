@@ -1,31 +1,22 @@
-import financialConnections from './financial-connections.ts';
 import finances from './finances.ts';
-import financialCorrections from './financial-corrections.ts';
 import { Router } from "express";
 import { requireCookieSession } from "../../middleware/auth.ts";
 import dev from "./dev.ts";
-import bills, { quickTxnRouter } from "./bills.ts";
+import actualConnection from "./actual-connection.ts";
 import email from "./email.ts";
 import emailIndex from "./email-index.ts";
 import tasks from "./tasks.ts";
 import snapshot from "./snapshot.ts";
-import transactionImports from "./transaction-imports.ts";
-import financialActivity from "./financial-activity.ts";
 
 const router = Router();
-router.use(quickTxnRouter);
 router.use(requireCookieSession);
 
 router.use(dev);
 router.use(email);
 router.use(emailIndex);
 router.use(tasks);
-router.use(bills);
+router.use(actualConnection);
 router.use(snapshot);
-router.use(transactionImports);
-router.use(financialActivity);
 router.use(finances);
-router.use(financialConnections);
-router.use(financialCorrections);
 
 export default router;

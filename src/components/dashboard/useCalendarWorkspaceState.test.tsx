@@ -26,7 +26,6 @@ function options(tab: DashboardTab) {
     setCalendarMounted: vi.fn(),
     liveData: {} as CurrentDashboardLiveData,
     loadCalendarDeadlines: vi.fn(),
-    loadCalendarBills: vi.fn(),
   };
 }
 

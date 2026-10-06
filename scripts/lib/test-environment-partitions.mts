@@ -45,15 +45,12 @@ const happyDomTypescriptTests = [
   "src/hooks/useCurrentDashboard.events.test.ts",
   "src/hooks/useCurrentDashboard.eventRefresh.test.ts",
   "src/lib/scrollLock.test.ts",
-  "src/lib/financialReviewNotifications.test.ts",
   "src/lib/triageSoundGate.test.ts",
 ]
 
 const slowIntegrationTests = [
   "scripts/check-typescript-migration.test.mts",
   "server/actual/actual-local-metadata.test.ts",
-  "server/actual/actual-transactions-read.test.ts",
-  "server/actual/actualFinancialOperations.sdk.test.ts",
   "server/actual/actualMetadataCacheStore.test.ts",
   "server/db/migrate.test.ts",
   "server/google-oauth-credentials.test.ts",

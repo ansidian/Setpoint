@@ -11,7 +11,7 @@ export interface EmailPreviewMessage {
   bodySnippet?: string | null;
 }
 
-/** Shared read-only preview body for Alfred and financial source records. */
+/** Shared read-only preview body for Alfred, the dashboard inbox peek, and Finances. */
 export default function EmailPreviewContent({ email, dateLabel, dateTitle, onClose }: {
   email: EmailPreviewMessage; dateLabel: string; dateTitle?: string; onClose: () => void;
 }) {

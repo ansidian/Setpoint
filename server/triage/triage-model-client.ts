@@ -1,13 +1,7 @@
-import { identifyFinancialProvider } from '../financial-parsers/index.ts';
 import db from "../db/connection.ts";
 import { requireCompleteEmailEvidence } from "../email/email-evidence.ts";
 import { resolveEmailAiModelConfig, inferEmailAiProviderFromModel } from "../email/email-ai-models.ts";
-import {
-  DEFAULT_BILL_EXTRACT_MODEL,
-  resolveBillExtractModelConfig,
-} from "../bills/bill-extractors/catalog.ts";
-import { createBillCandidateVerificationService, validateFinancialSemanticIdentity } from "../bills/bill-candidate-verification-service.ts";
-import { BILL_SEMANTIC_EXTRACTION_INSTRUCTIONS, BILL_SEMANTIC_IDENTITY_PROPERTIES, BILL_SEMANTIC_IDENTITY_REQUIRED } from "../bills/bill-semantic-prompt.ts";
+import { DEFAULT_TRIAGE_FAST_MODEL, resolveTriageFastModelConfig } from "./triage-fast-model.ts";
 import { fetchWithTimeout } from "../platform/fetch-with-timeout.ts";
 import { trackedAiProviderCall, withAiUsageContext } from "../platform/ai-usage.ts";
 import { resolveAiApiKey, type AiProvider } from "../ai-credentials.ts";
@@ -24,16 +18,10 @@ import type {
   TriageModelTier,
   TriageModelUsage,
 } from "./triage-types.ts";
-import {
-  BILL_AMOUNT_KINDS,
-  BILL_EVENT_KINDS,
-  type BillCandidate,
-  type BillExtractionProvider,
-} from "../../shared/types/bills.ts";
 
-const DEFAULT_CHEAP_MODEL = DEFAULT_BILL_EXTRACT_MODEL;
+const DEFAULT_CHEAP_MODEL = DEFAULT_TRIAGE_FAST_MODEL;
 const DEFAULT_STRONG_MODEL = "claude-sonnet-4-6";
-const TRIAGE_PROMPT_CACHE_VERSION = "v11";
+const TRIAGE_PROMPT_CACHE_VERSION = "v12";
 // LLM completions legitimately run long; this deadline is a wedge-breaker
 // (guards against a hung connection), not a latency budget.
 const TRIAGE_MODEL_TIMEOUT_MS = 120_000;
@@ -70,60 +58,6 @@ const TRIAGE_TOOL = {
       action: { type: "string" },
       deadline_at: { type: ["string", "null"] },
       confidence: { type: "number" },
-      bill_candidate: {
-        type: ["object", "null"],
-        properties: {
-          ...BILL_SEMANTIC_IDENTITY_PROPERTIES,
-          payee_hint: { type: ["string", "null"] },
-          amount: { type: ["number", "null"] },
-          amount_kind: { type: ["string", "null"], enum: [...BILL_AMOUNT_KINDS, null] },
-          amount_candidates: {
-            type: "array",
-            maxItems: 8,
-            items: {
-              type: "object",
-              properties: {
-                kind: { type: "string", enum: BILL_AMOUNT_KINDS },
-                value: { type: "number" },
-                evidence: { type: ["string", "null"] },
-                confidence: { type: ["number", "null"] },
-              },
-              required: ["kind", "value", "evidence", "confidence"],
-            },
-          },
-          event_kind: { type: ["string", "null"], enum: [...BILL_EVENT_KINDS, null] },
-          event_confidence: { type: ["number", "null"] },
-          event_evidence: { type: ["string", "null"] },
-          account_last4: { type: ["string", "null"], pattern: "^[0-9]{4}$" },
-          account_last4_evidence: { type: ["string", "null"] },
-          account_last4_confidence: { type: ["number", "null"], minimum: 0, maximum: 1 },
-          target_policy_key: { type: ["string", "null"] },
-          target_confidence: { type: ["number", "null"], minimum: 0, maximum: 1 },
-          target_evidence: { type: ["string", "null"] },
-          due_date: { type: ["string", "null"] },
-          currency: { type: ["string", "null"] },
-          requires_confirmation: { type: "boolean" },
-        },
-        required: [
-          ...BILL_SEMANTIC_IDENTITY_REQUIRED,
-          "payee_hint",
-          "amount",
-          "amount_kind",
-          "amount_candidates",
-          "event_kind",
-          "event_confidence",
-          "event_evidence",
-          "account_last4",
-          "account_last4_evidence",
-          "account_last4_confidence",
-          "target_policy_key",
-          "target_confidence",
-          "target_evidence",
-          "due_date",
-          "currency",
-          "requires_confirmation",
-        ],
-      },
     },
     required: [
       "lane",
@@ -134,7 +68,6 @@ const TRIAGE_TOOL = {
       "action",
       "deadline_at",
       "confidence",
-      "bill_candidate",
     ],
   },
 };
@@ -155,25 +88,7 @@ Rules:
 - Marketing, recommendations, coupons, surveys, and generic newsletters are noise unless the sender/content matches a configured user interest or another real risk is present.
 - Payment due ambiguity, low balance, failed payment, card expiration, service interruption, legal/school deadlines, and suspicious security events must stay needs_attention or escalate.
 - If a specific deadline or due date exists, set deadline_at as an ISO timestamp or null if uncertain.
-- Decide whether the email describes an actual financial event for the recipient before extracting a bill_candidate. Admit real purchases/charges, issued bills or invoices, credit-card repayment obligations, scheduled/completed/cancelled/failed payments, received income, refunds, and earned rewards. Category=finance, a dollar amount, or financial vocabulary alone never establishes a candidate.
-- Return bill_candidate=null for advertisements, prices or quotes without a purchase, coupons, potential savings or reward offers, financial news/advice, credit-score monitoring, balance-only alerts, payment-method updates, and shipping/return/drop-off notices that establish no new financial event. A request to update an expired card or top up a low balance can require attention without being a transaction or bill.
-- Keep a real financial event as a candidate when its amount, operation date, payee, or Actual targets are missing; missing details do not make a real event nonfinancial. Conversely, do not invent an event or return an empty candidate just because the email discusses money.
-- A refund request received or under review is not an issued refund. Return bill_candidate=null for pending refund/return requests, even when they repeat the original purchase and requested refund amount. Keep refunds explicitly approved for payment, issued, on their way, or credited; do not claim settlement before it happens.
-- Timesheet approval or acceptance for payroll processing alone is administrative, not an income payment. Return bill_candidate=null until the email confirms an actual payment instruction, disbursement, or received income. Likewise, an estimated subscription price contingent on adding payment details is not a bill or scheduled payment unless an existing amount owed or unconditional charge is established. These notices can still need attention. Do not use event_kind=other to turn administrative updates into candidates.
-- Return bill_candidate=null for statement-availability notices unless the email explicitly identifies a credit-card/loan repayment statement, an issued bill, or a specific transaction. A bank name and generic statement wording alone do not establish an obligation. Keep explicitly identified credit-card statements even without an amount or due date.
-- A document-availability notice that explicitly lists a bill or invoice among the available documents is a bill_issued candidate. For example, an insurance document bundle listing a Renewal Bill establishes an issued bill, even alongside policy declarations, ID cards, or privacy notices. Return type=bill and event_kind=bill_issued with verbatim bill-title evidence; leave unavailable amount/date null. Do not discard it as generic policy-document availability or require opening the linked bill first.
-- Finance/payment bill candidates must require confirmation; never imply an Actual Budget write.
-${BILL_SEMANTIC_EXTRACTION_INSTRUCTIONS}
 - Be compact. Summary and action should each be short enough for a dense dashboard row.`;
-
-const { bill_candidate: _financialSchema, ...routingProperties } = TRIAGE_TOOL.input_schema.properties;
-const ROUTING_TOOL = { ...TRIAGE_TOOL, input_schema: { ...TRIAGE_TOOL.input_schema,
-  properties:routingProperties,required:TRIAGE_TOOL.input_schema.required.filter(key=>key!=="bill_candidate") } };
-const ROUTING_PROMPT = TRIAGE_SYSTEM_PROMPT.slice(0,TRIAGE_SYSTEM_PROMPT.indexOf("- Decide whether"))
-  + "- Classify Inbox attention only. Financial document parsing is handled separately. Do not extract financial candidate fields.\n- Keep summary and action compact.";
-function providerOwnsFinancialParsing(email:Partial<TriageEmail>):boolean {
-  return identifyFinancialProvider(String(email.from_address || ""),{subject:String(email.subject || ""),body:String(email.body_text || email.body_snippet || "")}) !== null;
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -257,8 +172,6 @@ const OPENAI_MAX_OUTPUT_TOKENS = 1600;
 const ANTHROPIC_MAX_OUTPUT_TOKENS = 1400;
 
 function buildOpenAITriageRequestBody({ model, email, reason, cacheKey, includeCacheFields = true }: { model: string; email: Partial<TriageEmail>; reason: string; cacheKey: string; includeCacheFields?: boolean }): Record<string, unknown> {
-  const routingOnly=providerOwnsFinancialParsing(email);
-  const tool=routingOnly ? ROUTING_TOOL : TRIAGE_TOOL;
   return {
     model,
     store: false,
@@ -268,7 +181,7 @@ function buildOpenAITriageRequestBody({ model, email, reason, cacheKey, includeC
           prompt_cache_retention: "24h",
         }
       : {}),
-    instructions: routingOnly ? ROUTING_PROMPT : TRIAGE_SYSTEM_PROMPT,
+    instructions: TRIAGE_SYSTEM_PROMPT,
     input: compactEmailForPrompt(email, reason),
     max_output_tokens: OPENAI_MAX_OUTPUT_TOKENS,
     reasoning: { effort: "low" },
@@ -276,7 +189,7 @@ function buildOpenAITriageRequestBody({ model, email, reason, cacheKey, includeC
       type: "function",
       name: TRIAGE_TOOL.name,
       description: TRIAGE_TOOL.description,
-      parameters: tool.input_schema,
+      parameters: TRIAGE_TOOL.input_schema,
       strict: false,
     }],
     tool_choice: { type: "function", name: TRIAGE_TOOL.name },
@@ -294,48 +207,12 @@ function modelChoiceFromEnv(tier: TriageModelTier, fallback: TriageModelChoice):
   };
 }
 
-function normalizeBillExtractChoice(row: Record<string, unknown> = {}): TriageModelChoice {
-  return resolveBillExtractModelConfig({
-    provider: row.bill_extract_provider,
-    model: row.bill_extract_model,
-  });
-}
-
-async function verifyTriageBillAmounts({
-  decision,
-  email,
-  providerId,
-  model,
-  service,
-}: {
-  decision: Record<string, unknown>;
-  email: Partial<TriageEmail>;
-  providerId: string;
-  model: string;
-  service: ReturnType<typeof createBillCandidateVerificationService>;
-}): Promise<Record<string, unknown>> {
-  if (!isRecord(decision.bill_candidate)) return decision;
-  const candidate = await service.verifyEmailCandidate({
-    email: {
-      subject: email.subject,
-      from: email.from_address,
-      body: email.body_text,
-      body_snippet: email.body_snippet,
-    },
-    candidate: validateFinancialSemanticIdentity(decision.bill_candidate as BillCandidate, compactEmailForPrompt(email, "")),
-    providerId,
-    model,
-    requireAdmission: true,
-  });
-  return { ...decision, bill_candidate: candidate.event_verification?.assessment?.outcome === "nonfinancial" ? null : candidate };
-}
-
 export async function loadTriageModelConfig(userId: string, dbClient: TriageDb = db as unknown as TriageDb): Promise<TriageModelConfig> {
   let row: Record<string, unknown> = {};
   try {
     const result = await dbClient.execute({
       sql: `SELECT email_ai_provider, email_ai_model,
-                   bill_extract_provider, bill_extract_model
+                   triage_fast_provider, triage_fast_model
             FROM ea_settings WHERE user_id = ?`,
       args: [userId],
     });
@@ -344,7 +221,10 @@ export async function loadTriageModelConfig(userId: string, dbClient: TriageDb =
     row = {};
   }
 
-  const cheap = normalizeBillExtractChoice(row);
+  const cheap = resolveTriageFastModelConfig({
+    provider: row.triage_fast_provider,
+    model: row.triage_fast_model,
+  });
   const strong = resolveEmailAiModelConfig({
     provider: row.email_ai_provider,
     model: row.email_ai_model,
@@ -359,7 +239,6 @@ export async function loadTriageModelConfig(userId: string, dbClient: TriageDb =
 export function createTriageModelClient({
   fetchImpl = fetch,
   credentialResolver = resolveAiApiKey,
-  billExtractionProviders,
   config = {
     cheap: { provider: "anthropic", model: DEFAULT_CHEAP_MODEL },
     strong: { provider: "anthropic", model: DEFAULT_STRONG_MODEL },
@@ -368,29 +247,8 @@ export function createTriageModelClient({
   fetchImpl?: unknown;
   config?: TriageModelConfig;
   credentialResolver?: (provider: AiProvider) => Promise<string | null>;
-  billExtractionProviders?: Partial<Record<"openai" | "anthropic", BillExtractionProvider>>;
 } = {}): TriageModelClient {
   const fetchFn = fetchImpl as TriageFetch;
-  const billCandidateVerification = createBillCandidateVerificationService({
-    credentialResolver,
-    providers: billExtractionProviders,
-  });
-  const verifyDecision = (
-    decision: Record<string, unknown>,
-    email: Partial<TriageEmail>,
-    tier: TriageModelTier,
-  ) => {
-    if (providerOwnsFinancialParsing(email)) return Promise.resolve({...decision,bill_candidate:null});
-    const choice = config[tier];
-    const providerId = choice.provider === "openai" ? "openai" : "anthropic";
-    return verifyTriageBillAmounts({
-      decision,
-      email,
-      providerId,
-      model: choice.model,
-      service: billCandidateVerification,
-    });
-  };
   return {
     async classify({ tier, email, reason }): Promise<TriageModelResult> {
       return withAiUsageContext({
@@ -465,7 +323,7 @@ export function createTriageModelClient({
             cacheKey,
           });
           return {
-            decision: await verifyDecision(decision, email, tier),
+            decision,
             usage,
             provider: "openai",
             model: responseModel,
@@ -505,10 +363,10 @@ export function createTriageModelClient({
               // below that it is a harmless no-op (cache_read stays 0).
               system: [{
                 type: "text",
-                text: providerOwnsFinancialParsing(email) ? ROUTING_PROMPT : TRIAGE_SYSTEM_PROMPT,
+                text: TRIAGE_SYSTEM_PROMPT,
                 cache_control: { type: "ephemeral" },
               }],
-              tools: [{ ...(providerOwnsFinancialParsing(email) ? ROUTING_TOOL : TRIAGE_TOOL), cache_control: { type: "ephemeral" } }],
+              tools: [{ ...TRIAGE_TOOL, cache_control: { type: "ephemeral" } }],
               tool_choice: { type: "tool", name: "submit_email_triage" },
               messages: [{
                 role: "user",
@@ -534,7 +392,7 @@ export function createTriageModelClient({
           usage,
         });
         return {
-          decision: await verifyDecision(decision, email, tier),
+          decision,
           usage,
           provider: "anthropic",
           model: responseModel,

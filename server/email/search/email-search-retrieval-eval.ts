@@ -218,14 +218,13 @@ export async function createSyntheticEvalRetriever(fixture: unknown, { userId = 
       const result = await db.execute({
         sql: `INSERT INTO ea_email_triage
                 (user_id, account_id, email_id, lane, category, urgency,
-                 deadline_at, escalation_badge, bill_candidate_json, handled_at,
+                 deadline_at, escalation_badge, handled_at,
                  provider_state, updated_at, triage_status)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')), 'complete')`,
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')), 'complete')`,
         args: [
           userId, row.account_id, row.uid, triageRow.lane ?? null, triageRow.category ?? null, triageRow.urgency ?? null,
           triageRow.deadline_at ?? null,
           triageRow.escalation_badge ?? null,
-          triageRow.bill_candidate_json ?? null,
           triageRow.handled_at ?? null,
           triageRow.provider_state ?? "available",
           triageRow.updated_at ?? null,

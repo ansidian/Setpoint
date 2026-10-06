@@ -83,12 +83,6 @@ describe("calendarEventSelectionModel", () => {
     })).toBe(false);
     expect(isCalendarEventSelectionEligible({
       ...base,
-      id: "bill-1",
-      kind: "bill",
-      billId: "internet",
-    })).toBe(false);
-    expect(isCalendarEventSelectionEligible({
-      ...base,
       id: "ghost-1",
       ghostKind: "event",
       startDate: "2026-05-18",

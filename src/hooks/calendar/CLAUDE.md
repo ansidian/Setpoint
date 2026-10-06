@@ -5,7 +5,7 @@ Calendar domain and view state: range fetching/caching, modal interaction (selec
 ## Files
 
 ### Models (pure)
-- `financePaymentsModel.ts` — exact utility/recurring membership, statement/occurrence deduplication, and recorded versus scheduled date projection
+- `financePaymentsModel.ts` — calendar payment entry types and daily recorded totals limited to exact Actual schedule/transaction identities
 - `financeActivityModel.ts` — Journal month ranges, six-week cells, and exact split/transfer-aware daily summaries shared by the finance calendar and rows
 - `calendarRangeModel.ts` — month key arithmetic, range expansion, fetch grouping
 - `calendarScrollModel.ts` — month index/target-clamp math, navigable radius, settle window, week-row alignment, scroll direction, prefetch range
@@ -20,19 +20,18 @@ Calendar domain and view state: range fetching/caching, modal interaction (selec
 - `calendarModalSelectionModel.ts` — focus date parsing, grid visibility, view sync snapshots
 - `calendarControllerHelpers.ts` — pure controller helpers (month math, event dedupe, range/overlay matching, item-location/focus resolution, search-result mapping) extracted from `useCalendarModalController.tsx`
 - `calendarEntryReadinessModel.ts` — entry-readiness projection (events-range loading + agenda-entry-ready gate over committed/seeded/current deadline overlay data) extracted from the `viewData` memo in `useCalendarModalController.tsx`
-- `calendarBillsViewDataModel.ts` — pure bills view-data precedence/status projection: visible range data, broad schedules, pay links, loading/pending/error metadata
-- `calendarDomainRangeDataModel.ts` — pure deadline/bill month slicing, range projection/deduplication, stats recalculation, and represented-month discovery for `useCalendarDomainRange`
+- `calendarDomainRangeDataModel.ts` — pure deadline month slicing, range projection/deduplication, stats recalculation, and represented-month discovery for `useCalendarDomainRange`
 
 ### Controller + view model
 - `calendarShellLoaders.tsx` — shared lazy boundaries for the desktop shell and mobile agenda; tests await visible UI through the same Suspense path as production, allowing five seconds for the initial module load while retaining normal waits for later interactions
 - `useCalendarModalController.tsx` — main orchestrator wiring sub-hooks and editors
-- `useCalendarControllerViewData.ts` — memoized events-window and per-domain view-data projection behind the controller's data seam
+- `useCalendarControllerViewData.ts` — memoized events-window and Events view-data projection behind the controller's data seam
 - `useCalendarAgendaScroll.ts` — agenda rail ref, imperative scroll command lifecycle, and entry-target release state
 - `useCalendarAgendaInteractions.ts` — active/passive agenda selection, mini-calendar activation, detail anchoring, and stable passive-sync forwarding
 - `useCalendarOpenRequestRouting.ts` — initial create requests, bounded first-mount editor-readiness retry, one-shot typed seed acknowledgement, and selection-sync snapshot effects for floating/stacked editor routing
 - `useCalendarControllerActions.ts` — event/deadline quick-action composition plus guarded workspace view routing
 - `useCalendarControllerHotkeys.ts` — typed adapter from controller state/bundles into the calendar hotkey hook
-- `useCalendarControllerLifecycle.ts` — source prefetch, completed-detail cleanup, bill relocation, domain range fetch, editor reconciliation, and mobile jump-to-today effects
+- `useCalendarControllerLifecycle.ts` — source prefetch, completed-detail cleanup, editor reconciliation, and mobile jump-to-today effects
 - `useCalendarControllerShell.tsx` — final shell-prop adapter and mobile/desktop lazy-shell rendering boundary
 - `useCalendarEditorScrollRouting.ts` — editor-aware scroll-sync checks plus floating editor route composition; existing saved-event detail routing remains the first completion consumer
 - `useCalendarModalViewModel.ts` — visible month data and shell prop building
@@ -40,11 +39,11 @@ Calendar domain and view state: range fetching/caching, modal interaction (selec
 - `useCalendarMonthNavigation.ts` — grouped month commands and grid scroll coordination: clamp targets, editor-aware cleanup, direction/idle tracking, label crossing, and fetch settle
 
 ### Calendar behavior
-- `useFinancePaymentCalendar.ts` — Utilities month reads, selected/preview day state, and bounded schedule lookahead
+- `useFinancePaymentCalendar.ts` — Payments month reads, selected/preview day state, and bounded schedule lookahead
 - `useCalendarEventSelectionSet.ts` — event multi-select + clipboard submachine (selection set, copy/paste, seeded-toggle rules) hosting the event quick-actions bundle so its batch-delete callback prunes the selection; extracted from `useCalendarModalController.tsx`
 - `useCalendarSearchActivation.ts` — calendar-search activation cluster (search UI hook + result/date-header activation, grid-navigability, anchor resolution) extracted from `useCalendarModalController.tsx`; must be called after the view model (reads `computed`)
 - `useCalendarModalSearch.ts` — search UI state, debounced API calls, highlighting, and event-revision revalidation with superseded-response guards
-- `useCalendarModalHotkeys.ts` — arrow nav, month pagination, Escape for the inner cascade (overflow/detail/editor), and the 3 key re-pressed in calendar toggles events/bills (1/2/4/5 bubble to the shell tab switcher); the calendar is a shell tab now, so Escape no longer closes a surface. Suspension ladder for `data-suspend-calendar-hotkeys`: `"true"` (target-based, mid-handler), `"all"` (target-based, pre-branch — Alfred), `"blocking"` (presence-based, pre-branch — Analytics/History/CommandPalette overlays, independent of where focus sits)
+- `useCalendarModalHotkeys.ts` — arrow nav, month pagination, Escape for the inner cascade (overflow/detail/editor) (number keys bubble to the shell tab switcher); the calendar is a shell tab now, so Escape no longer closes a surface. Suspension ladder for `data-suspend-calendar-hotkeys`: `"true"` (target-based, mid-handler), `"all"` (target-based, pre-branch — Alfred), `"blocking"` (presence-based, pre-branch — Analytics/History/CommandPalette overlays, independent of where focus sits)
 
 ### Floating detail + editor routing
 - `useCalendarFloatingDetail.ts` — floating detail anchoring, session memory, placement
@@ -53,7 +52,7 @@ Calendar domain and view state: range fetching/caching, modal interaction (selec
 
 ### Domain state + lifecycle
 - `useCalendarRange.ts` — per-month event caching/fetching, prefetch radius, and generation-safe push invalidation that retains saved data
-- `useCalendarDomainRange.ts` — deadline/bill range cache, fetch, seed, stale, and prefetch orchestration over the domain-range data model
+- `useCalendarDomainRange.ts` — deadline range cache, fetch, seed, stale, and prefetch orchestration over the domain-range data model
 - `useAgendaFetch.ts` — agenda month fetching: initial mount fetch, scroll-driven prefetch
 - `useCalendarScrollSync.ts` — grid↔agenda scroll orchestration: settle-driven sync, navigation commands, and immediate calendar-month boundaries for the mobile agenda
 - `useCalendarScrollViewport.ts` — the infinite multi-month scroll state machine (user-vs-programmatic refs, settle lifecycle via `calendarSettleModel`, mount centering, rAF scroll handler, prop-driven nav/crossfade) extracted from `CalendarScrollContainer`; returns `{containerRef, refYear, refMonth, wFirst, wLast, getHeight}`

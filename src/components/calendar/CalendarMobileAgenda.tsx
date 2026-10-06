@@ -21,7 +21,7 @@ export default function CalendarMobileAgenda(input: Record<string, unknown>) {
     layout, monthName, monthYear, canGoPrev, computed,
     selectedItems, selectedDayState, effectiveSelectedItemId, ghostPreview, floatingDetailLabel,
   } = viewModel;
-  const { activeView, viewData, weatherData, getMonthEvents, eventsRange, deadlinesRange, dataRevision, getMonthBills, billsRange, billsDataRevision } = data;
+  const { activeView, viewData, weatherData, getMonthEvents, eventsRange, deadlinesRange, dataRevision } = data;
   const { selectedDay, selectedDateKey, setSelectedItemId } = selection;
   const { eventEditor, deadlineEditor, setDeadlineEditor, onDeadlineDraftPreviewChange } = editors;
   const { eventQuickActions } = quickActions;
@@ -99,9 +99,6 @@ export default function CalendarMobileAgenda(input: Record<string, unknown>) {
           eventsRange={eventsRange}
           deadlinesRange={deadlinesRange}
           dataRevision={dataRevision}
-          getMonthBills={getMonthBills}
-          billsRange={billsRange}
-          billsDataRevision={billsDataRevision}
         />
       </div>
 

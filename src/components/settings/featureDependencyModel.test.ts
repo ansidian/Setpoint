@@ -56,7 +56,6 @@ describe("feature dependency projection", () => {
         connection("icloud-mail", "not_connected"),
         connection("openai", "not_connected"),
         connection("anthropic", "not_connected"),
-        connection("actual-budget", "not_connected"),
       ],
       expected: {
         automation: {
@@ -64,11 +63,6 @@ describe("feature dependency projection", () => {
           ai: "not_connected",
           showEmailControls: false,
           showAiControls: false,
-        },
-        finance: {
-          actual: "not_connected",
-          showSettings: false,
-          allowLiveMetadata: false,
         },
       },
     },
@@ -79,7 +73,6 @@ describe("feature dependency projection", () => {
         connection("icloud-mail", "not_connected"),
         connection("openai", "connected"),
         connection("anthropic", "not_connected"),
-        connection("actual-budget", "connected"),
       ],
       expected: {
         automation: {
@@ -87,11 +80,6 @@ describe("feature dependency projection", () => {
           ai: "connected",
           showEmailControls: true,
           showAiControls: true,
-        },
-        finance: {
-          actual: "connected",
-          showSettings: true,
-          allowLiveMetadata: true,
         },
       },
     },
@@ -102,7 +90,6 @@ describe("feature dependency projection", () => {
         connection("icloud-mail", "not_connected"),
         connection("openai", "needs_attention"),
         connection("anthropic", "not_connected"),
-        connection("actual-budget", "needs_attention"),
       ],
       expected: {
         automation: {
@@ -110,11 +97,6 @@ describe("feature dependency projection", () => {
           ai: "needs_attention",
           showEmailControls: false,
           showAiControls: false,
-        },
-        finance: {
-          actual: "needs_attention",
-          showSettings: true,
-          allowLiveMetadata: false,
         },
       },
     },
@@ -128,7 +110,6 @@ describe("feature dependency projection", () => {
       connection("icloud-mail", "connected"),
       connection("openai", "needs_attention"),
       connection("anthropic", "connected"),
-      connection("actual-budget", "not_connected"),
     ]);
 
     expect(result.automation.email).toBe("connected");
@@ -249,7 +230,7 @@ describe("provider/model control projection", () => {
 
   it.each([
     ["alfred", { alfred_provider: "openai", alfred_model: "gpt-default" }],
-    ["bill_extract", { bill_extract_provider: "openai", bill_extract_model: "gpt-default" }],
+    ["triage_fast", { triage_fast_provider: "openai", triage_fast_model: "gpt-default" }],
     ["email_ai", { email_ai_provider: "openai", email_ai_model: "gpt-default" }],
   ] as const)("persists the %s provider/model pair atomically", (surface, expected) => {
     expect(projectAiSettingsSelectionPatch(surface, "openai", "gpt-default")).toEqual(expected);

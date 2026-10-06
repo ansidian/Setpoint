@@ -7,7 +7,6 @@ import type { ConfiguredEmailAccount, EmailAttachmentContent } from "./email-pro
 import { getAccessToken } from "./gmail-credentials.ts";
 import { evaluateGmailSenderAuthentication } from "./sender-authentication.ts";
 import { fetchWithTimeout } from "../platform/fetch-with-timeout.ts";
-import { FINANCIAL_EMAIL_SOURCE_LIMITS, FinancialEmailSourceError, parseFinancialEmailSource, readFinancialSourceResponse, type FinancialEmailSource } from "./financial-email-source.ts";
 export { getAccessToken, handleCallback } from "./gmail-credentials.ts";
 export { getAuthUrl } from "./gmail-oauth-url.ts";
 
@@ -58,14 +57,6 @@ interface GmailRangeOptions {
 }
 
 
-// Extract dollar amounts from text for bill detection
-function extractAmounts(text: string): string {
-  const matches = text.match(/\$\d[\d,]*\.\d{2}/g);
-  if (!matches || matches.length === 0) return "";
-  const unique = [...new Set(matches)].slice(0, 10);
-  return ` [amounts: ${unique.join(", ")}]`;
-}
-
 // Decode body text from Gmail API full-format message parts
 function extractBodyEvidence(payload: GmailMessagePart | null | undefined): { text: string; html: boolean } {
   const empty = { text: "", html: false };
@@ -102,7 +93,6 @@ function normalizeMessage(account: ConfiguredEmailAccount, msg: GmailMessage): N
   // Triage also reads the preview. Gmail's snippet can come from the unused
   // plain alternative, so derive it from the selected body whenever available.
   const snippet = bodyText ? bodyText.slice(0, 600) : msg.snippet || "";
-  const amounts = extractAmounts(bodyText);
   const from = getHeaderValue(headers, "From");
   const receivedAt = new Date(Number(msg.internalDate));
   const date = msg.internalDate && Number.isFinite(receivedAt.getTime())
@@ -118,7 +108,7 @@ function normalizeMessage(account: ConfiguredEmailAccount, msg: GmailMessage): N
     account_icon: account.icon || "Mail",
     from,
     subject: getHeaderValue(headers, "Subject"),
-    body_preview: snippet + amounts,
+    body_preview: snippet,
     body_text: bodyText,
     date,
     read: !msg.labelIds?.includes("UNREAD"),
@@ -260,38 +250,6 @@ export async function fetchMessages(token: string, messageIds: string[], { stric
 }
 
 // --- Full email body (for detail view) ---
-
-/** One unmodified raw message supplies the body, PDF bytes, identity, and authentication. */
-export async function fetchFinancialEmailSource(account: ConfiguredEmailAccount, uid: string): Promise<FinancialEmailSource> {
-  const messageId = extractMessageId(account, uid);
-  if (!/^[a-zA-Z0-9_-]+$/.test(messageId)) throw new FinancialEmailSourceError("financial_source_invalid", "The Gmail source identity is invalid.", 400);
-  const token = await getAccessToken(account);
-  let value: unknown;
-  try {
-    const response = await fetch(`https://www.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(messageId)}?format=raw`, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(FINANCIAL_EMAIL_SOURCE_LIMITS.fetchTimeoutMs),
-    });
-    if (!response.ok) throw new FinancialEmailSourceError("financial_source_unavailable", `Gmail source acquisition failed: HTTP ${response.status}.`, response.status);
-    value = await readFinancialSourceResponse(response);
-  } catch (error) {
-    if (error instanceof FinancialEmailSourceError) throw error;
-    const timedOut = error instanceof Error && ["TimeoutError", "AbortError"].includes(error.name);
-    throw new FinancialEmailSourceError(timedOut ? "financial_source_timeout" : "financial_source_unavailable", timedOut ? "Gmail source acquisition exceeded its time limit." : "Gmail source acquisition failed before returning a complete message.", 503);
-  }
-  const message = value as GmailMessage | null;
-  if (!message || message.id !== messageId || typeof message.raw !== "string" || !/^[A-Za-z0-9_-]+={0,2}$/.test(message.raw)) {
-    throw new FinancialEmailSourceError("financial_source_unavailable", "Gmail did not return the complete requested source.", 502);
-  }
-  if (message.raw.replace(/=+$/, "").length > Math.ceil(FINANCIAL_EMAIL_SOURCE_LIMITS.messageBytes * 4 / 3)) {
-    throw new FinancialEmailSourceError("financial_source_oversized", "The original Gmail message exceeds the financial evidence byte limit.", 413);
-  }
-  const date = new Date(Number(message.internalDate));
-  return parseFinancialEmailSource(Buffer.from(message.raw, "base64url"), {
-    provider: "gmail", threadId: message.threadId,
-    emailDate: message.internalDate && Number.isFinite(date.getTime()) ? date.toISOString() : undefined,
-  });
-}
 
 export async function fetchEmailBody(account: ConfiguredEmailAccount, uid: string): Promise<EmailBody> {
   const messageId = extractMessageId(account, uid);

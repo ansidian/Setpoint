@@ -171,15 +171,12 @@ export async function loadSnapshotItems(dbClient: SnapshotReadDb, snapshotId: nu
                  idx.from_address AS index_from_address,
                  idx.verification_code,
                  idx.verification_code_kind,
-                 idx.verification_code_active_until,
-                 t.bill_candidate_json
+                 idx.verification_code_active_until
           FROM ea_briefing_snapshot_items i
           LEFT JOIN ea_email_index idx
             ON idx.user_id = i.user_id
            AND idx.account_id = i.account_id
            AND idx.uid = i.email_id
-          LEFT JOIN ea_email_triage t
-            ON t.id = i.triage_id
           WHERE i.snapshot_id = ?
             AND i.dismissed_from_today_at IS NULL
             AND i.provider_removed_at IS NULL
@@ -215,16 +212,13 @@ export async function loadActiveCatchUpItems(
                  idx.verification_code_kind,
                  idx.verification_code_active_until,
                  'catch_up' AS source,
-                 1 AS catch_up,
-                 t.bill_candidate_json
+                 1 AS catch_up
           FROM ea_briefing_snapshot_items i
           JOIN ea_email_index idx
             ON idx.user_id = i.user_id
            AND idx.account_id = i.account_id
            AND idx.uid = i.email_id
            AND idx.read = 0
-          LEFT JOIN ea_email_triage t
-            ON t.id = i.triage_id
           WHERE i.snapshot_id = ?
             AND i.user_id = ?
             AND i.lane_at_snapshot = 'fyi'
@@ -298,8 +292,7 @@ export async function loadActiveSnapshotItemsForEmail(
 ) {
   const result = await dbClient.execute({
     sql: `SELECT i.*,
-                 t.provider_state,
-                 t.bill_candidate_json
+                 t.provider_state
           FROM ea_briefing_snapshot_items i
           JOIN ea_briefing_snapshots s
             ON s.id = i.snapshot_id

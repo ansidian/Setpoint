@@ -1,3 +1,4 @@
+import { createDecipheriv, pbkdf2Sync } from "node:crypto";
 import { decrypt } from "../platform/encryption.ts";
 import { settingsCredentialContext } from "../platform/credential-encryption-context.ts";
 import db from "../db/connection.ts";
@@ -8,6 +9,16 @@ interface ActualConnectionOverrides {
   serverURL?: string;
   syncId?: string;
   password?: string | null;
+  encryptionPassword?: string | null;
+}
+interface ActualUserFile {
+  groupId?: string;
+  fileId?: string;
+  encryptKeyId?: string | null;
+}
+interface ActualEncryptionKeyTest {
+  value: string;
+  meta: { algorithm?: string; iv: string; authTag: string };
 }
 interface ActualErrorBody {
   status?: string;
@@ -65,7 +76,9 @@ async function getActualConfig(
   { dbClient = db, decryptValue = decrypt }: ActualConnectionHttpDependencies = {},
 ): Promise<ActualConfig> {
   const result = await dbClient.execute({
-    sql: "SELECT actual_budget_url, actual_budget_password_encrypted, actual_budget_sync_id FROM ea_settings WHERE user_id = ?",
+    sql: `SELECT actual_budget_url, actual_budget_password_encrypted, actual_budget_sync_id,
+                 actual_budget_encryption_password_encrypted
+          FROM ea_settings WHERE user_id = ?`,
     args: [userId],
   });
   const settings = result.rows?.[0];
@@ -81,6 +94,12 @@ async function getActualConfig(
         )
       : null,
     syncId: String(settings.actual_budget_sync_id),
+    encryptionPassword: settings.actual_budget_encryption_password_encrypted
+      ? decryptValue(
+          String(settings.actual_budget_encryption_password_encrypted),
+          settingsCredentialContext(userId, "actual_budget_encryption_password_encrypted"),
+        )
+      : null,
   };
 }
 
@@ -131,11 +150,58 @@ async function fetchJson<T = unknown>(
   return body as T;
 }
 
+// Mirrors Actual's key test: derive the budget key from the password and the
+// server-held salt, then decrypt the server's test payload. Nothing is stored.
+export function actualEncryptionKeyMatches(password: string, salt: string, test: ActualEncryptionKeyTest): boolean {
+  try {
+    const key = pbkdf2Sync(password, salt, 10_000, 32, "sha512");
+    const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(test.meta.iv, "base64"));
+    decipher.setAuthTag(Buffer.from(test.meta.authTag, "base64"));
+    decipher.update(Buffer.from(test.value, "base64"));
+    decipher.final();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function verifyEncryptionPassword(
+  serverURL: string,
+  token: string,
+  fileId: string,
+  encryptionPassword: string | null,
+  fetchFn: typeof fetch,
+): Promise<void> {
+  if (!encryptionPassword) {
+    throw Object.assign(new Error("This Actual budget is end-to-end encrypted. Enter its encryption password."), {
+      status: 400, code: "ACTUAL_ENCRYPTION_PASSWORD_REQUIRED",
+    });
+  }
+  const key = await fetchJson<{ data?: { salt?: string; test?: string } }>(joinUrl(serverURL, "/sync/user-get-key"), {
+    method: "POST",
+    body: JSON.stringify({ token, fileId }),
+  }, fetchFn);
+  let test: ActualEncryptionKeyTest | null = null;
+  try {
+    test = key?.data?.test ? JSON.parse(key.data.test) as ActualEncryptionKeyTest : null;
+  } catch {
+    test = null;
+  }
+  if (!key?.data?.salt || !test?.value || !test.meta?.iv || !test.meta?.authTag) {
+    throw Object.assign(new Error("Actual Budget did not return a usable encryption key test"), { status: 502 });
+  }
+  if (!actualEncryptionKeyMatches(encryptionPassword, key.data.salt, test)) {
+    throw Object.assign(new Error("The Actual Budget encryption password is incorrect"), {
+      status: 400, code: "ACTUAL_ENCRYPTION_PASSWORD_INCORRECT",
+    });
+  }
+}
+
 export async function testActualConnectionHttp(
   userId: string,
   overrides: ActualConnectionOverrides | null = null,
   dependencies: ActualConnectionHttpDependencies = {},
-): Promise<{ success: true; budgetCount: number; budgetFound: boolean }> {
+): Promise<{ success: true; budgetCount: number; budgetFound: boolean; budgetEncrypted: boolean }> {
   const fetchFn = dependencies.fetchFn ?? fetch;
   const stored = overrides?.serverURL && overrides?.syncId
     ? await getActualConfig(userId, dependencies).catch(() => null)
@@ -167,13 +233,22 @@ export async function testActualConnectionHttp(
     throw Object.assign(new Error("Actual Budget login did not return a session token"), { status: 502 });
   }
 
-  const files = await fetchJson<{ data?: Array<{ groupId?: string }> }>(joinUrl(serverURL, "/sync/list-user-files"), {
+  const files = await fetchJson<{ data?: ActualUserFile[] }>(joinUrl(serverURL, "/sync/list-user-files"), {
     headers: { "X-ACTUAL-TOKEN": token },
   }, fetchFn);
   const budgets = Array.isArray(files?.data) ? files.data : [];
+  const budget = budgets.find((candidate) => candidate?.groupId === syncId);
+  const budgetEncrypted = !!budget?.encryptKeyId;
+  if (budget?.fileId && budgetEncrypted) {
+    const encryptionPassword = overrides?.encryptionPassword === undefined
+      ? stored?.encryptionPassword || null
+      : overrides.encryptionPassword || null;
+    await verifyEncryptionPassword(serverURL, token, budget.fileId, encryptionPassword, fetchFn);
+  }
   return {
     success: true,
     budgetCount: budgets.length,
-    budgetFound: budgets.some((budget) => budget?.groupId === syncId),
+    budgetFound: !!budget,
+    budgetEncrypted,
   };
 }

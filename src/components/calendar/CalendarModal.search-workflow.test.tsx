@@ -26,11 +26,9 @@ function setMatchMedia(matches: boolean) {
 function renderSearchCalendar({
   focusDate = "2026-09-10",
   eventsData = { getEvents: () => [] },
-  billsRangeData,
 }: {
   focusDate?: string;
   eventsData?: Record<string, unknown>;
-  billsRangeData?: Record<string, unknown>;
 } = {}) {
   return render(wrapWithDashboard(
     <CalendarModal
@@ -40,8 +38,6 @@ function renderSearchCalendar({
       onViewChange={() => {}}
       focusDate={focusDate}
       eventsData={eventsData}
-      billsData={{}}
-      billsRangeData={billsRangeData}
       deadlinesData={{}}
     />,
   ));
@@ -57,8 +53,6 @@ function ControlledViewSearchCalendar() {
       onViewChange={setView}
       focusDate="2026-09-10"
       eventsData={{ getEvents: () => [] }}
-      billsData={{}}
-      billsRangeData={{ ensureRange: async () => {} }}
       deadlinesData={{}}
     />
   );
@@ -207,7 +201,6 @@ describe("CalendarModal search workflow", () => {
 
     await waitFor(() => {
       expect(screen.getByRole("textbox", { name: "Calendar search" })).toBeTruthy();
-      expect(screen.queryByRole("tab", { name: "Bills" })).toBeNull();
     });
   });
 

@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import {
-  billsTotalDue,
   deadlineDone,
   emailDotState,
   eventPassed,
@@ -173,56 +172,8 @@ describe("deadlineDone", () => {
   });
 });
 
-describe("groupAlfredRows — bill", () => {
-  const NOW = new Date("2026-06-14T18:00:00.000Z");
-
-  it("splits Due vs Paid and sorts each by due date ascending", () => {
-    const items = [
-      { id: "p1", next_date: "2026-06-05", paid: true, amount: 12.99 },
-      { id: "d2", next_date: "2026-06-18", paid: false, amount: 70 },
-      { id: "d1", next_date: "2026-06-14", paid: false, amount: 1850 },
-    ];
-    const groups = groupAlfredRows("bill", items, NOW);
-    expect(groups.map((g) => g.section!.label)).toEqual(["Due", "Paid"]);
-    expect(groups[0]!.items.map((i) => i.id)).toEqual(["d1", "d2"]);
-    expect(groups[1]!.items.map((i) => i.id)).toEqual(["p1"]);
-  });
-});
-
-describe("groupAlfredRows transaction", () => {
-  it("orders newest-first and sections by month when spanning months", () => {
-    const items = [
-      { id: "a", date: "2026-05-05", amount: 1 },
-      { id: "b", date: "2026-04-20", amount: 2 },
-      { id: "c", date: "2026-05-18", amount: 3 },
-    ];
-    const groups = groupAlfredRows("transaction", items, new Date("2026-06-01T12:00:00-07:00"));
-    expect(groups.map((g) => g.section!.label)).toEqual(["May 2026", "April 2026"]);
-    expect(groups[0]!.items.map((i) => i.id)).toEqual(["c", "a"]); // newest first within month
-  });
-
-  it("drops the section header for a single month", () => {
-    const items = [
-      { id: "a", date: "2026-05-05", amount: 1 },
-      { id: "b", date: "2026-05-18", amount: 2 },
-    ];
-    const groups = groupAlfredRows("transaction", items, new Date("2026-06-01T12:00:00-07:00"));
-    expect(groups).toHaveLength(1);
-    expect(groups[0]!.section).toBeNull();
-    expect(groups[0]!.items.map((i) => i.id)).toEqual(["b", "a"]);
-  });
-});
-
 describe("row-level helpers", () => {
   const NOW = new Date("2026-06-14T18:00:00.000Z");
-
-  it("billsTotalDue sums only unpaid amounts", () => {
-    expect(billsTotalDue([
-      { paid: false, amount: 1850 },
-      { paid: true, amount: 12.99 },
-      { paid: false, amount: 70 },
-    ])).toBe(1920);
-  });
 
   it("isOverdueYmd is true only for a date strictly before today", () => {
     expect(isOverdueYmd("2026-06-10", "2026-06-14")).toBe(true);

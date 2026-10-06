@@ -8,7 +8,7 @@ import {
 describe("dashboard event refresh model", () => {
   it("uses the active snapshot only for email triage events", () => {
     expect(refreshScopeForDashboardEvent({ source: "email_triage" })).toBe("active_snapshot");
-    for (const source of ["todoist", "deadlines", "bills", "reminders", "calendar", "unknown", undefined]) {
+    for (const source of ["todoist", "deadlines", "reminders", "calendar", "unknown", undefined]) {
       expect(refreshScopeForDashboardEvent({ source })).toBe("current");
     }
     expect(refreshScopeForDashboardEvent(null)).toBe("current");

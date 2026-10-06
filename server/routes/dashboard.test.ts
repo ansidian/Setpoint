@@ -59,14 +59,6 @@ describe("dashboard routes", () => {
     await saveCacheRow("u1", "weather_current", { temp: 71, summary: "Clear" }, { now });
     await saveCacheRow("u1", "calendar_current", [], { now });
     await saveCacheRow("u1", "deadlines_current", { upcoming: [], stats: { total: 0 } }, { now });
-    await saveCacheRow("u1", "bills_current", {
-      bills: [],
-      allSchedules: [],
-      payeeMap: {},
-      actualConfigured: false,
-      actualBudgetUrl: null,
-      billsSyncHealth: { state: "unconfigured", configured: false },
-    }, { now });
     clearCurrentDashboardEventSubscribers();
   });
 
@@ -102,8 +94,6 @@ describe("dashboard routes", () => {
       weather: { temp: 71, summary: "Clear" },
       calendar: [],
       deadlines: { upcoming: [], stats: { total: 0 } },
-      bills: [],
-      actualConfigured: false,
       refresh: {
         mode: "passive",
         scheduled: [],
@@ -126,7 +116,6 @@ describe("dashboard routes", () => {
     expect(res.body).toMatchObject({
       providerHealth: {
         currentData: { state: "current" },
-        bills: { state: "unconfigured", configured: false },
       },
       systemStatus: { state: "current" },
     });

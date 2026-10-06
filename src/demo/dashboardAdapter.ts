@@ -3,7 +3,7 @@ import type { DemoSeed } from "./store.ts";
 import type { CurrentDashboardCacheKey } from "../../shared/types/dashboard.ts";
 
 const RETRY_KEYS: Record<string, CurrentDashboardCacheKey> = {
-  weather: "weather_current", calendar: "calendar_current", todoist: "deadlines_current", bills: "bills_current",
+  weather: "weather_current", calendar: "calendar_current", todoist: "deadlines_current",
 };
 
 export function demoDashboardResponse(seed: DemoSeed, sourceToRefresh: unknown, method: string) {

@@ -3,7 +3,6 @@ import { renderHook, act } from "@testing-library/react";
 import type { CurrentDashboardResponse } from "../../shared/types/dashboard";
 
 import useCurrentDashboard from "./useCurrentDashboard";
-import { ensureMetadataLoaded, invalidateActualMetadata, type ActualMetadata } from "../lib/actualMetadata";
 
 const getActiveSnapshotMock = vi.fn();
 const getCurrentDashboardMock = vi.fn();
@@ -11,18 +10,9 @@ const requestCurrentDashboardRefreshMock = vi.fn();
 const syncCurrentDashboardMock = vi.fn();
 const getActiveSnapshot = getActiveSnapshotMock;
 const getCurrentDashboard = getCurrentDashboardMock;
-let actualMetadataResponse = {
-  accounts: [],
-  payees: [{ id: "payee-old", name: "Old Payee" }],
-  categories: [],
-};
-
 function installDashboardApiBoundary(): void {
   vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
     const path = String(input);
-    if (path === "/api/briefing/actual/metadata") {
-      return { ok: true, status: 200, json: () => Promise.resolve(actualMetadataResponse) } as Response;
-    }
     const handler = path === "/api/briefing/snapshot/active"
       ? getActiveSnapshotMock
       : path === "/api/dashboard/current"
@@ -101,11 +91,6 @@ const currentPayload = {
     upcoming: [{ id: "deadline-1" }],
     stats: { total: 1 },
   },
-  bills: [{ id: "bill-1", payee: "Power" }],
-  allSchedules: [{ id: "schedule-1" }],
-  payeeMap: { payee_1: "Power" },
-  actualConfigured: true,
-  actualBudgetUrl: "https://actual.example.test",
   activeSnapshot: {
     snapshot: { id: 42 },
     lanes: { needs_attention: [], fyi: [], noise: [] },
@@ -138,15 +123,8 @@ const currentPayload = {
   fetchedAt: "2026-05-04T12:00:00.000Z",
 } as unknown as CurrentDashboardResponse;
 
-function loadActualMetadata() {
-  return new Promise<ActualMetadata>((resolve) => {
-    ensureMetadataLoaded(resolve);
-  });
-}
-
 describe("useCurrentDashboard", () => {
   beforeEach(() => {
-    invalidateActualMetadata();
     installDashboardApiBoundary();
     setDocumentHidden(false);
     FakeEventSource.instances = [];
@@ -164,15 +142,9 @@ describe("useCurrentDashboard", () => {
       activeSnapshot: { ...currentPayload.activeSnapshot, snapshot: { id: 100 } },
       fetchedAt: "2026-05-04T12:06:00.000Z",
     });
-    actualMetadataResponse = {
-      accounts: [],
-      payees: [{ id: "payee-old", name: "Old Payee" }],
-      categories: [],
-    };
   });
 
   afterEach(() => {
-    invalidateActualMetadata();
     vi.clearAllMocks();
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
@@ -260,31 +232,6 @@ describe("useCurrentDashboard", () => {
     expect(result.current.systemStatus?.state).toBe("needs_sync");
     expect(result.current.systemStatus?.sources[0]?.message).toBe("Conditions and forecast may be out of date.");
     expect(result.current.liveData.systemStatus?.sources[0]?.lastSuccessAt).toBe("2026-09-06T12:00:00Z");
-    unmount();
-  });
-
-  it("invalidates the shared Actual metadata cache when bills change over SSE", async () => {
-    vi.stubGlobal("EventSource", FakeEventSource);
-    expect((await loadActualMetadata()).payees).toEqual([{ id: "payee-old", name: "Old Payee" }]);
-
-    const { unmount } = renderHook(() => useCurrentDashboard());
-    await act(async () => {});
-    actualMetadataResponse = {
-      accounts: [],
-      payees: [{ id: "payee-fresh", name: "Fresh Payee" }],
-      categories: [],
-    };
-
-    await act(async () => {
-      FakeEventSource.instances[0]!.emit("dashboard-current-changed", {
-        source: "bills",
-        reason: "mirror_refreshed",
-        state: "current",
-      });
-      await Promise.resolve();
-    });
-
-    expect((await loadActualMetadata()).payees).toEqual([{ id: "payee-fresh", name: "Fresh Payee" }]);
     unmount();
   });
 

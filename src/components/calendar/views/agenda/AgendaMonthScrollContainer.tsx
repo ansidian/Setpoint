@@ -5,7 +5,6 @@ const DEFAULT_ITEM_SCROLL_TOP_OFFSET = 44;
 const ITEM_ACTION_SELECTOR = [
   "[data-testid='calendar-agenda-event-row']",
   "[data-testid='calendar-agenda-event-chip']",
-  "[data-testid='calendar-agenda-bill-row']",
   "[data-testid='calendar-agenda-deadline-row']",
 ].join(", ");
 

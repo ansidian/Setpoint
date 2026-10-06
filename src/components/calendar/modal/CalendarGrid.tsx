@@ -47,7 +47,6 @@ export interface CalendarGridLayout {
 
 export interface CalendarGridActiveViewContract extends CalendarGridActiveView {
   label?: string;
-  monthAgnosticItemsByDate?: boolean;
   compute?: (options: {
     data: { events: CalendarSpanEvent[]; deadlineOverlay: unknown };
     viewYear: number;

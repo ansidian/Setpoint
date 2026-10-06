@@ -10,10 +10,8 @@ Default: dry run; reports body lengths and whether indexed content would change.
 --apply: updates the indexed body/preview, full-text search, and stale search embeddings.
 Requires EA_USER_ID and the usual database/provider environment configuration.
 
-Applying changed evidence requeues existing managed financial documents/events
-through the index trigger. Their worker may reassess and resume automatic processing.
-Historical financial plans, Inbox triage, and snapshots are not refreshed;
-those existing decisions require separate explicit re-triage.
+Inbox triage and snapshots are not refreshed; those existing decisions require
+separate explicit re-triage.
 Email bodies are never printed.`;
 }
 
@@ -123,10 +121,7 @@ async function main(): Promise<void> {
       indexedBodyChars: bodyText.length,
       changed,
       applied: options.apply && changed,
-      managedFinancialEvents: options.apply && bodyChanged
-        ? "existing managed documents/events requeued by the index trigger; automatic processing may resume"
-        : "unchanged; applying changed evidence requeues existing managed documents/events",
-      historicalPlansTriageAndSnapshots: "unchanged; separate explicit re-triage required",
+      triageAndSnapshots: "unchanged; separate explicit re-triage required",
     }, null, 2));
   } finally {
     db.close();

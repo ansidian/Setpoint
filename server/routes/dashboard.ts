@@ -7,7 +7,6 @@ import {
 } from "../dashboard/current-events.ts";
 import {
   getCurrentDashboard,
-  getDashboardFinance,
   getDashboardSystemHealth,
   requestCurrentDashboardRefresh,
   syncCurrentDashboard,
@@ -17,15 +16,6 @@ import { timeRoute } from "../timing.ts";
 const router = Router();
 
 router.use(requireCookieSession);
-
-router.get("/finance", timeRoute("/api/dashboard/finance"), async (_req, res) => {
-  try {
-    res.json(await getDashboardFinance(process.env.EA_USER_ID!));
-  } catch (err) {
-    console.error("[Dashboard] finance fetch failed:", err);
-    res.status(500).json({ message: "Failed to fetch dashboard finance data" });
-  }
-});
 
 router.get("/current/events", (_req, res) => {
   const userId = process.env.EA_USER_ID;

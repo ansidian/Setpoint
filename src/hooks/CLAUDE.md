@@ -13,7 +13,7 @@ Cross-cutting frontend hooks: dashboard data fetching/streaming, snapshot sync, 
 - `useCurrentDashboard.ts` — dashboard state: fetching, polling, SSE streaming, briefing selection
 - `currentDashboardModel.ts` — briefing/live data transforms, active-refresh detection
 - `currentDashboardHealthModel.ts` — provider successful-check deadlines (including active refreshes) plus browser connectivity/read-failure health projection; saved data never implies a successful health check
-- `dashboardEventStream.ts` — single dashboard change subscription; production SSE reconnect/auth behavior and build-time demo-only in-memory financial signals
+- `dashboardEventStream.ts` — single dashboard change subscription; production SSE reconnect/auth behavior; demo mode has no live event source
 - `dashboardEventRefreshModel.ts` — pure SSE source-to-refresh-scope routing and strongest-scope merge rules
 - `useActiveSnapshot.ts` — active snapshot fetch and sync with processing-time polling
 - `useAutoRefresh.ts` — 5-minute interval and tab-focus refresh gates
@@ -29,11 +29,9 @@ Cross-cutting frontend hooks: dashboard data fetching/streaming, snapshot sync, 
 - `useDismissablePortal.ts` — outside-pointerdown (sparing one `ref` or many `refs`, plus an optional `ignoreSelector` escape hatch) + capture-phase Escape dismissal for body-portal menus/popovers/anchored panels, with optional Tab containment and on-open autofocus. Consumed by `CalendarQuickActionLayer`, `DeadlineQuickActionLayer`, and `shared/pickers/AnchoredFloatingPanel`
 
 ### Preferences + notifications
-- `useNotifications.ts` — browser notifications for events, bills, important senders
-- `useFinancialReviewNotifications.ts` — authenticated app-wide polling and event triggers for actionable financial browser alerts
+- `useNotifications.ts` — browser notifications for events and important senders
 - `useRemoteContentTrust.ts` — shared cached registry for exact-sender + receiving-account remote-image trust
 - `useTriageNotificationSounds.ts` — schedules and gates triage notification sounds
-- `useUtilityPayLinks.ts` — builds `{scheduleId: url}` pay-link map from settings; refreshes on `ea-settings-changed`
 - `settings/useSettingsPage.ts` — settings UI orchestration: tabs, debounced auto-save, sync status
 
 (Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)

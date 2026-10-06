@@ -11,7 +11,6 @@ const DASHBOARD_CALENDAR_TZ = "America/Los_Angeles";
 const SOURCE_COLORS = {
   google_calendar: "#4285f4",
   deadline: TODOIST_DEADLINE_COLOR,
-  bills: "#22c55e",
 };
 
 function normalizeText(value: unknown) {
@@ -109,13 +108,6 @@ function candidateDedupeKey(result: CalendarSearchResult | null) {
     return [
       "deadline",
       result.payload?.id || result.activation?.deadlineId || result.itemId || "",
-      result.itemDate || "",
-    ].join("|");
-  }
-  if (result.type === "bill") {
-    return [
-      "bill",
-      result.payload?.scheduleId || result.activation?.scheduleId || result.itemId || "",
       result.itemDate || "",
     ].join("|");
   }
@@ -341,60 +333,6 @@ export function normalizeDeadlineSearchCandidate(task: DeadlineSearchInput): Cal
 
 export function deadlineSearchCandidates(payload: Pick<DeadlinePayload, "upcoming"> | { upcoming?: DeadlineSearchInput[] } = {}) {
   return (payload.upcoming || []).map((task) => normalizeDeadlineSearchCandidate(task));
-}
-
-interface BillSearchInput {
-  id: string;
-  name?: string;
-  payee?: string;
-  next_date?: string | null;
-  occurrenceDate?: string | null;
-  date?: string | null;
-  amount?: number;
-  paid?: boolean;
-  type?: string;
-  scheduleId?: string | null;
-}
-
-export function normalizeBillSearchCandidate(bill: BillSearchInput): CalendarSearchCandidate {
-  const title = bill.name || bill.payee || "Unknown bill";
-  const itemDate = bill.next_date || bill.occurrenceDate || bill.date || null;
-  const amount = Number(bill.amount || 0);
-  const subtitle = [
-    bill.payee && bill.payee !== title ? bill.payee : null,
-    Number.isFinite(amount) && amount > 0 ? `$${amount.toFixed(2)}` : null,
-    bill.paid ? "Paid" : "Upcoming",
-  ].filter(Boolean).join(" · ");
-
-  return {
-    id: `bill:${bill.id}`,
-    type: "bill",
-    itemId: bill.id,
-    itemDate,
-    title,
-    subtitle,
-    meta: "Bills mirror",
-    sourceLabel: "Bills",
-    sourceColor: SOURCE_COLORS.bills,
-    coverageKey: "bills_mirror",
-    activation: {
-      view: "bills",
-      detailView: "bills",
-      dateKey: itemDate,
-      itemId: bill.id,
-      scheduleId: bill.scheduleId || null,
-    },
-    payload: {
-      id: bill.id,
-      scheduleId: bill.scheduleId || null,
-      nextDate: itemDate,
-      paid: !!bill.paid,
-    },
-    matchFields: {
-      primary: [title],
-      secondary: [bill.payee, bill.type, subtitle, "Bills"],
-    },
-  };
 }
 
 export function normalizeLimit(

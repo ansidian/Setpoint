@@ -5,7 +5,6 @@ import type {
   EmailSearchResult,
 } from "../../shared/types/email.ts";
 import db from "../db/connection.ts";
-import { normalizeBillCandidate } from "../snapshots/snapshot-service.ts";
 import { EMAIL_SEARCH_BM25_RANK_SQL, parseEmailSearchQuery, sanitizeFtsQuery } from "./search/email-search-query.ts";
 import { rankEmailSearchRows } from "./search/email-search-ranking.ts";
 import type { EmailSearchRankingRow, RankedEmailSearchRow } from "./search/email-search-ranking.ts";
@@ -25,7 +24,6 @@ interface EmailSearchRow extends EmailSearchRankingRow {
   read: number | boolean | null;
   subject_highlight: string | null;
   body_highlight: string | null;
-  triage_bill_candidate_json?: string | null;
 }
 
 interface SearchEmailsOptions {
@@ -43,18 +41,6 @@ function buildEmailWebUrl(uid: string, accountId: string, accountEmail: string):
   const messageId = uid.slice(prefix.length);
   if (!messageId) return null;
   return `https://mail.google.com/mail/?authuser=${encodeURIComponent(accountEmail)}#all/${messageId}`;
-}
-
-function parseJsonPayload(value: unknown): Record<string, unknown> | null {
-  if (!value) return null;
-  try {
-    const parsed: unknown = JSON.parse(String(value));
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? parsed as Record<string, unknown>
-      : null;
-  } catch {
-    return null;
-  }
 }
 
 export async function searchEmails(userId: string, { q, limit, offset, debug = false, dbClient = db }: SearchEmailsOptions): Promise<EmailSearchResponse> {
@@ -92,7 +78,6 @@ export async function searchEmails(userId: string, { q, limit, offset, debug = f
                 triage.urgency AS triage_urgency,
                 triage.deadline_at AS triage_deadline_at,
                 triage.escalation_badge AS triage_escalation_badge,
-                triage.bill_candidate_json AS triage_bill_candidate_json,
                 triage.handled_at AS triage_handled_at,
                 triage.provider_state AS triage_provider_state,
                 triage.updated_at AS triage_updated_at,
@@ -186,7 +171,6 @@ export async function searchEmails(userId: string, { q, limit, offset, debug = f
   const byAccount: Record<string, EmailSearchAccount> = {};
   const results: EmailSearchResult[] = [];
   const buildResult = (row: RankedEmailSearchRow<EmailSearchRow>): EmailSearchResult => {
-    const billCandidate = parseJsonPayload(row.triage_bill_candidate_json);
     const email: EmailSearchResult = {
       uid: row.uid,
       from_name: row.from_name,
@@ -204,11 +188,6 @@ export async function searchEmails(userId: string, { q, limit, offset, debug = f
       account_color: row.account_color,
       account_icon: row.account_icon,
     };
-    if (billCandidate) {
-      email.hasBill = true;
-      email.bill_candidate = billCandidate;
-      email.extractedBill = normalizeBillCandidate(billCandidate);
-    }
     if (debug) {
       email.search_score = row.search_score;
       email.search_score_details = row.search_score_details;

@@ -14,7 +14,7 @@ The briefing snapshot lifecycle: building snapshots, item lanes, snooze, and arr
 - `snapshot-state-machine.ts` — canonical snapshot state enum and transition rules
 - `snapshot-snooze-lifecycle.ts` — snooze end conditions and due-fire decisions
 - `snapshot-item-mutations.ts` — per-item mutations: read, archived, triaged
-- `snapshot-triage-attachment.ts` — attaches triage context (subject, bill candidate) to items
+- `snapshot-triage-attachment.ts` — arrival-grace queueing/attachment, triage-job completion, and pending-triage restoration on undo
 - `snapshot-test-fixtures.ts` — snapshot test data generators
 - `snooze-waker.ts` — wakes due snoozes, reattaches arrival-grace emails
 - `arrival-grace.ts` — arrival grace window before new email is triaged

@@ -17,7 +17,8 @@ describe("root key health", () => {
         actual_budget_password_encrypted TEXT,
         todoist_api_token_encrypted TEXT,
         todoist_oauth_refresh_token_encrypted TEXT,
-        discord_webhook_url_encrypted TEXT
+        discord_webhook_url_encrypted TEXT,
+        actual_budget_encryption_password_encrypted TEXT
       );
       CREATE TABLE ea_instance_credentials (
         credential_key TEXT PRIMARY KEY,

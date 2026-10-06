@@ -1,11 +1,6 @@
-import { handleDemoFinancialConnections } from "./financialConnections";
 import { demoAlfredUsageStats } from "./alfredUsageData";
-import { DEMO_RECEIPT_UID } from "./financialReceipt";
 import { demoTaskFields } from "./taskFields";
 import { handleDemoFinances } from './financesWorkspace';
-import { completeDemoFinancialEvent, dismissDemoFinancialEvent, demoCompletionPlan, requestDemoFinancialEventReview } from "./financialCompletion";
-import type { FinancialEventCompletionRequest } from "../../shared/types/financial-operations";
-import { updateDemoSettings } from "./financialProfiles";
 import { createDemoApiError } from "./config.ts";
 import {
   NO_DEMO_API_RESPONSE,
@@ -15,14 +10,11 @@ import {
   type DemoRequestBody,
 } from "./apiHandler.ts";
 import { demoDateRange } from "./dateRange.ts";
-import { buildDemoCalendarBillsRange } from "./financeData.ts";
 import { handleDemoNewsRequest } from "./newsAdapter.ts";
 import { getDemoReferenceResponse, NO_DEMO_REFERENCE_RESPONSE } from "./referenceAdapter.ts";
-import { handleDemoFinancialActivity } from "./financialActivity.ts";
 import { handleDemoSnapshotRequest } from "./snapshotAdapter.ts";
 import { forkDemoSeedForMutation, getDemoSeed, pacificYMD, readDemoSeed, type DemoSeed } from "./store.ts";
 import { getDemoCapabilityStatus, getDemoInstanceCredentialMetadata } from "./capabilities.ts";
-import { handleDemoTransactionImportRequest, NO_DEMO_TRANSACTION_IMPORT_RESPONSE } from "./transactionImports.ts";
 import type { Reminder } from "../../shared/types/reminders.ts";
 import { demoDashboardResponse } from "./dashboardAdapter.ts";
 type DemoTask = DemoSeed["deadlines"]["upcoming"][number];
@@ -186,26 +178,26 @@ function filterDeadlines(deadlines: DemoSeed["deadlines"], start: string, end: s
   };
 }
 
-function calendarCoverage(scope: string, start: string, end: string) {
+function calendarCoverage(start: string, end: string) {
   return {
     sources: [
       {
-        key: scope === "bills" ? "bills" : "google_calendar",
-        label: scope === "bills" ? "Demo Bills" : "Demo Calendar",
+        key: "google_calendar",
+        label: "Demo Calendar",
         searched: true,
         start,
         end,
         strategy: "demo_seed",
         syncHealth: { state: "current", message: "Generated locally for demo mode." },
       },
-      ...(scope === "events" ? [{
+      {
         key: "deadlines",
         label: "Deadline overlays",
         searched: true,
         start,
         end,
         strategy: "demo_seed",
-      }] : []),
+      },
     ],
   };
 }
@@ -261,27 +253,13 @@ function searchCalendar({ scope, q, limit }: { scope: string; q: string; limit: 
       payload: clone(item),
     }));
 
-  const billResults = seed.bills
-    .filter((bill) => !query || bill.payee.toLowerCase().includes(query) || bill.name.toLowerCase().includes(query))
-    .map((bill) => ({
-      id: `bill:${bill.id}`,
-      type: "bill",
-      itemId: bill.id,
-      itemDate: bill.next_date,
-      title: bill.payee,
-      sourceLabel: "Bills",
-      matchReason: "title",
-      rankBucket: 1,
-      payload: clone(bill),
-    }));
-
-  const all = scope === "bills" ? billResults : [...eventResults, ...deadlineResults];
+  const all = [...eventResults, ...deadlineResults];
   const results = all.slice(0, cappedLimit);
   return {
     query: q || "",
     scope,
     results,
-    coverage: calendarCoverage(scope, start, end),
+    coverage: calendarCoverage(start, end),
     // Truncation must reflect whether results were actually dropped, so compare
     // the pre-slice count against the cap. Comparing the post-slice length with
     // `>=` falsely flagged truncation when results landed exactly on the limit.
@@ -297,16 +275,8 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
   const targetedRefresh = pathname === "/api/dashboard/current/refresh" && method === "POST" && body.source != null;
   const readOnlyPost = !targetedRefresh && (pathname === "/api/dashboard/current/refresh" || pathname === "/api/dashboard/current/sync");
   const seed = method === "GET" || readOnlyPost ? getDemoSeed() : forkDemoSeedForMutation();
-  if (pathname === "/api/briefing/financial-connections") return handleDemoFinancialConnections(method, seed, body);
-  if (pathname.startsWith("/api/briefing/financial-corrections/") || pathname === "/api/briefing/financial-activity" || pathname.startsWith("/api/briefing/financial-activity/")) return handleDemoFinancialActivity(url, method, body);
-  if (pathname === "/api/briefing/bills/resolve" && method === "POST" && body.emailId === DEMO_RECEIPT_UID) return demoCompletionPlan();
-  if (pathname === "/api/briefing/financial-events/dismiss" && method === "POST") return dismissDemoFinancialEvent(body as unknown as FinancialEventCompletionRequest);
-  if (pathname === "/api/briefing/financial-events/complete" && method === "POST") return completeDemoFinancialEvent(body as unknown as FinancialEventCompletionRequest);
-  if (pathname === "/api/briefing/financial-events/request" && method === "POST") return requestDemoFinancialEventReview(body as unknown as FinancialEventCompletionRequest);
-  const referenceResponse = getDemoReferenceResponse({ pathname, method, seed });
+  const referenceResponse = getDemoReferenceResponse({ pathname, method });
   if (referenceResponse !== NO_DEMO_REFERENCE_RESPONSE) return referenceResponse;
-  const transactionImportResponse = handleDemoTransactionImportRequest({ pathname, method, url });
-  if (transactionImportResponse !== NO_DEMO_TRANSACTION_IMPORT_RESPONSE) return transactionImportResponse;
   const request: DemoApiRequest = { path, url, pathname, method, seed, body };
   if (pathname === "/api/briefing/email/remote-content-trust" && method === "GET") {
     return clone(demoRemoteContentTrustEntries);
@@ -373,14 +343,6 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
     return { ok: true };
   }
 
-  if (pathname.match(/^\/api\/briefing\/actual\/bills\/[^/]+\/mark-paid$/) && method === "POST") {
-    const billId = decodeURIComponent(pathSegment(pathname, 2));
-    for (const bill of seed.bills) {
-      if (String(bill.id) === String(billId) || String(bill.scheduleId) === String(billId)) bill.paid = true;
-    }
-    return { ok: true };
-  }
-
   if (pathname === "/api/calendar/events" && method === "POST") {
     const created = makeCalendarEvent(body, String(body.clientEventId || `demo-event-${Date.now()}`));
     seed.calendarEvents.push(created);
@@ -432,7 +394,8 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
   }
 
   if (pathname === "/api/ea/settings" && method === "PUT") {
-    return updateDemoSettings(seed.settings, body);
+    Object.assign(seed.settings, structuredClone(body));
+    return { success: true };
   }
 
   if (pathname === "/api/ea/important-senders" && method === "PUT") {
@@ -523,14 +486,10 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
   if (pathname === "/api/calendar/deadlines/range") {
     return filterDeadlines(seed.deadlines, url.searchParams.get("start") ?? "", url.searchParams.get("end") ?? "");
   }
-  if (pathname === "/api/calendar/bills/range") {
-    return buildDemoCalendarBillsRange(seed, url);
-  }
   if (pathname === "/api/ea/accounts") return clone(seed.accounts);
   if (pathname === "/api/ea/settings") return clone({ email_triage_classify_read_arrivals: false, ...seed.settings });
   if (pathname === "/api/capabilities") return getDemoCapabilityStatus();
   if (pathname === "/api/instance-credentials") return getDemoInstanceCredentialMetadata();
-  if (pathname === "/api/briefing/actual/metadata") return clone(seed.actualMetadata);
   if (pathname === "/api/briefing/actual/cache/status") {
     return {
       success: true,
@@ -542,11 +501,11 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
       demo: true,
     };
   }
-  if (pathname === "/api/ea/models" || pathname === "/api/ea/bill-extract-models" || pathname === "/api/ea/alfred-models") {
+  if (pathname === "/api/ea/models" || pathname === "/api/ea/triage-fast-models" || pathname === "/api/ea/alfred-models") {
     const demoModel = pathname === "/api/ea/models"
       ? { id: "demo-triage-model", label: "Demo triage model" }
-      : pathname === "/api/ea/bill-extract-models"
-        ? { id: "demo-bill-extract-model", label: "Demo bill model" }
+      : pathname === "/api/ea/triage-fast-models"
+        ? { id: "demo-triage-fast-model", label: "Demo fast triage model" }
         : { id: "demo-alfred-model", label: "Demo Alfred model" };
     return [{
       provider: "demo",

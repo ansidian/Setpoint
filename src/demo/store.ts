@@ -2,9 +2,7 @@ import { buildDemoNews } from "./newsData.ts";
 import { buildDemoTransactions } from "./financeData.ts";
 import { buildDemoWeather } from "./weatherData.ts";
 import { buildDemoInboxSeed } from "./inboxData.ts";
-import { demoFinancialConnections, demoFinancialSettings } from "./financialConnections";
 import type { Reminder } from "../../shared/types/reminders.ts";
-import type { ActualPayee } from "../../shared/types/actual.ts";
 const WORK_COLOR = "#89b4fa";
 const PERSONAL_COLOR = "#cba6f7";
 const CAREER_COLOR = "#f5c2e7";
@@ -292,7 +290,6 @@ function makeDemoSeed(now = new Date()) {
     occurrence.paymentTransactionIds = transactions.filter(row => row.scheduleId === occurrence.scheduleId && row.date === occurrence.next_date).map(row => row.id);
     occurrence.paid = occurrence.paymentTransactionIds.length > 0;
   }
-  const payeeMap = Object.fromEntries(bills.map((entry) => [entry.scheduleId, entry.payee]));
 
   const providerHealth = {
     currentData: {
@@ -304,7 +301,6 @@ function makeDemoSeed(now = new Date()) {
     activeSnapshot: { state: "current", reason: "demo_seed" },
   };
 
-  const financialConnections = demoFinancialConnections();
   const settings = {
     demo: true,
     email_triage_mode: "auto",
@@ -317,7 +313,6 @@ function makeDemoSeed(now = new Date()) {
     actual_budget_sync_id: "demo-budget",
     actual_configured: true,
     actual_budget_configured: true,
-    ...demoFinancialSettings(financialConnections),
     home_location_label: null,
     home_location_address: null,
     home_location_place_id: null,
@@ -333,12 +328,6 @@ function makeDemoSeed(now = new Date()) {
       weather: buildDemoWeather(today),
       calendar: calendarEvents,
       deadlines,
-      bills,
-      allSchedules: bills,
-      payeeMap,
-      actualConfigured: true,
-      actualBudgetUrl: "https://actual.example.invalid/demo",
-      billsSyncHealth: { state: "current", message: "Demo bills are generated locally." },
       activeSnapshot: inboxSeed.activeSnapshot,
       providerHealth,
       systemStatus: {
@@ -348,7 +337,6 @@ function makeDemoSeed(now = new Date()) {
           { key: "weather", label: "Weather", state: "current", lastSuccessAt: fetchedAt, message: "Fictional demo weather." },
           { key: "calendar", label: "Calendar", state: "current", lastSuccessAt: fetchedAt, message: "Fictional demo events." },
           { key: "todoist", label: "Tasks", state: "current", lastSuccessAt: fetchedAt, message: "Fictional demo tasks." },
-          { key: "bills", label: "Bills", state: "current", lastSuccessAt: fetchedAt, message: "Fictional demo bills." },
           ...inboxSeed.accounts.accounts.map((account) => ({
             key: `email:${account.id}`, label: `${account.type === "icloud" ? "iCloud Mail" : "Gmail"} (${account.email})`,
             state: "current", lastSuccessAt: fetchedAt, message: "Fictional demo inbox check.",
@@ -363,36 +351,13 @@ function makeDemoSeed(now = new Date()) {
     transactions,
     activeSnapshot: inboxSeed.activeSnapshot,
     settings,
-    financialConnections,
     reminders: [] as Reminder[],
     accounts: inboxSeed.accounts,
-    actualMetadata: {
-      accounts: [
-        { id: "demo-checking", name: "Demo Checking", offbudget: false, closed: false },
-        { id: "demo-savings", name: "Emergency Fund", offbudget: false, closed: false },
-        { id: "demo-credit", name: "Everyday Card", offbudget: false, closed: false },
-      ],
-      payees: [...bills.map<ActualPayee>((entry) => ({ id: entry.scheduleId, name: entry.payee, transfer_acct: entry.type === "transfer" ? "demo-credit" : null })),
-        { id: "demo-market", name: "Fictional Market", transfer_acct: null }],
-      payeeMap,
-      schedules: bills.map(entry => ({
-        id: entry.scheduleId,
-        name: entry.name,
-        type: entry.type,
-        next_date: entry.next_date,
-        completed: false,
-        transferAccountId: entry.type === "transfer" ? "demo-credit" : null,
-        conditions: [
-          { field: "payee", op: "is", value: entry.scheduleId },
-          { field: "account", op: "is", value: entry.type === "transfer" ? "demo-savings" : "demo-checking" },
-        ],
-      })),
-      categories: [
-        { group_name: "Demo Housing", categories: [{ id: "demo-rent-category", name: "Rent" }] },
-        { group_name: "Demo Bills", categories: [{ id: "demo-utilities", name: "Utilities" }, { id: "demo-cloud-services", name: "Cloud Services" }] },
-        { group_name: "Demo Debt", categories: [{ id: "demo-loans", name: "Loan Payments" }, { id: "demo-credit-card", name: "Credit Card" }] },
-      ],
-    },
+    actualSchedules: bills.map(entry => ({
+      id: entry.scheduleId,
+      name: entry.name,
+      completed: false,
+    })),
     news: buildDemoNews(),
     importantSenders: inboxSeed.importantSenders,
     emailBodies: inboxSeed.emailBodies,

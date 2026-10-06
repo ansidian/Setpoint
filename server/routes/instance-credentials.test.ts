@@ -32,7 +32,7 @@ function createApp(
   const metadata = {
     key: "ai.openai_api_key",
     handling: "secret" as const,
-    capabilities: ["email_triage", "bill_extraction", "semantic_email_search"],
+    capabilities: ["email_triage", "semantic_email_search"],
     source: "stored" as const,
     activeConfigured: true,
     pendingConfigured: true,
@@ -360,7 +360,7 @@ describe("instance credential routes", () => {
         metadata: {
           key: "ai.openai_api_key",
           handling: "secret" as const,
-          capabilities: ["email_triage", "bill_extraction", "semantic_email_search"],
+          capabilities: ["email_triage", "semantic_email_search"],
           source: "stored" as const,
           activeConfigured: true,
           pendingConfigured: true,

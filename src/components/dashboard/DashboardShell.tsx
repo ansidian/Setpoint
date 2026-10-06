@@ -1,7 +1,5 @@
 import useWorkspaceTabRoute from './useWorkspaceTabRoute';
-import type { FinanceDestination } from '../finances/financesNavigation';
 import { financesHref } from '../finances/financesNavigation';
-import { financialHref } from '../financial/financialNavigation';
 import WorkspaceLoading from '../shared/WorkspaceLoading';
 import MobileShellActions from "../shell/MobileShellActions";
 import { useState, useEffect, useLayoutEffect, useMemo, lazy, Suspense, useCallback, startTransition } from "react";
@@ -17,7 +15,6 @@ import DashboardShellOverlays from "./DashboardShellOverlays";
 import DashboardCalendarModalMount, { importCalendar } from "./DashboardCalendarModalMount";
 import DashboardTabPanel from "./DashboardTabPanel";
 import useWarmImport from "../../hooks/useWarmImport";
-import { useUtilityPayLinks } from "../../hooks/useUtilityPayLinks";
 import { buildDashboardEventsData } from "./dashboardShellModel";
 import useDashboardShellHotkeys from "./useDashboardShellHotkeys";
 import useCalendarWorkspaceState from "./useCalendarWorkspaceState";
@@ -33,20 +30,17 @@ import type { CurrentDashboardHookResult } from "../../hooks/useCurrentDashboard
 import type useCalendarRange from "../../hooks/calendar/useCalendarRange";
 import type { DashboardDeadline, DashboardDeadlineRoot } from "../../context/dashboardTaskProjection";
 import type { ActiveSnapshotView, SnapshotView } from "../../../shared/types/snapshots";
-import type { DashboardCalendarBillsData } from "./calendarBillsData";
 import type { DashboardCalendarModalMountProps } from "./DashboardCalendarModalMount";
 import type { CalendarOpenRequest, DashboardTab } from "./dashboardShellModel";
 import type { DashboardCalendarWorkspaceState } from "./useCalendarWorkspaceState";
 import type { DashboardActiveSnapshotController } from "./useLiveReadOverrides";
 import type { CurrentDashboardLiveData } from "../../hooks/currentDashboardModel";
-import type { ActualBillOccurrence } from "../../../shared/types/actual";
 import type { SystemStatusRetryProps } from "../shell/systemStatusPresentation";
 import type { InboxViewProps } from "../inbox/InboxView";
 export { DashboardBody };
 export type DashboardShellLiveData = Omit<Partial<CurrentDashboardHookResult["liveData"]>,
-  "liveBills" | "liveEmails" | "snoozedEntries" | "resurfacedEntries"
+  "liveEmails" | "snoozedEntries" | "resurfacedEntries"
 > & {
-  liveBills?: Array<Partial<ActualBillOccurrence>>;
   liveEmails?: Array<Record<string, unknown>>;
   snoozedEntries?: Array<Record<string, unknown>>;
   resurfacedEntries?: Array<Record<string, unknown>>;
@@ -89,11 +83,8 @@ export interface DashboardShellProps extends SystemStatusRetryProps {
   calendarDeadlinesLoading?: boolean;
   calendarDeadlinesError?: boolean;
   loadCalendarDeadlines?: (options?: { force?: boolean }) => void;
-  calendarBillsData?: Partial<DashboardCalendarBillsData> | null;
-  calendarBillRange?: DashboardCalendarModalMountProps["calendarBillRange"];
   calendarDeadlineRange?: DashboardCalendarModalMountProps["calendarDeadlineRange"];
   domainRefreshing?: boolean;
-  loadCalendarBills?: (options?: { force?: boolean; refreshLive?: boolean }) => void;
   onCalendarWorkspaceChange?: (workspace: DashboardCalendarWorkspaceState) => void;
 }
 
@@ -102,8 +93,8 @@ export function DashboardShell({
   activeSnapshot = { snapshot: null, loading: false, error: null, refresh: async () => null, sync: async () => null },
   onQuickRefresh, onRetrySource, sourceRetry,
   historyOpen, setHistoryOpen, historyTriggerRef, calendarDeadlines, calendarDeadlinesLoading = false,
-  calendarDeadlinesError = false, loadCalendarDeadlines = () => {}, calendarBillsData, calendarBillRange,
-  calendarDeadlineRange, domainRefreshing = false, loadCalendarBills = () => {}, onCalendarWorkspaceChange,
+  calendarDeadlinesError = false, loadCalendarDeadlines = () => {},
+  calendarDeadlineRange, domainRefreshing = false, onCalendarWorkspaceChange,
 }: DashboardShellProps) {
   const bd = bdInput as CurrentDashboardHookResult["briefingData"];
   const liveData = liveDataInput as CurrentDashboardLiveData;
@@ -111,7 +102,7 @@ export function DashboardShell({
   const isMobile = useIsMobile();
   const demoMode = isDemoMode();
   const financesRoute = useWorkspaceTabRoute(isMobile,demoMode);
-  const { tab,setTab,location,navigate,settingsOpen,financialOpen } = financesRoute;
+  const { tab,setTab,location,navigate,settingsOpen } = financesRoute;
   const {
     handleAddTask,
     handleCompleteTask,
@@ -138,7 +129,7 @@ export function DashboardShell({
   const {
     readerOpen: mobileReaderOpen, prepareEmailOpen, dismissReader,
     returnHome, readerBackLabel, registerReaderBeforeClose,
-  } = useMobileInboxNavigation({ isMobile, tab, setTab, foregroundOpen: settingsOpen || financialOpen });
+  } = useMobileInboxNavigation({ isMobile, tab, setTab, foregroundOpen: settingsOpen });
   // Declared before setShellTab so the calendar mount-on-first-visit setter is in
   // scope; the calendar tab stays mounted (Activity-frozen) once first visited.
   const [calendarMounted, setCalendarMounted] = useState(false);
@@ -151,7 +142,7 @@ export function DashboardShell({
   const setShellTab = useCallback((nextTab: DashboardTab) => {
     if (nextTab !== "dashboard" && nextTab !== "inbox" && nextTab !== "calendar" && nextTab !== "notes" && nextTab !== "news" && nextTab !== "finances") return;
     if (nextTab === "notes" && (isMobile || demoMode)) return;
-    if (settingsOpen || financialOpen) return;
+    if (settingsOpen) return;
     if (nextTab === 'finances') { navigate(financesHref()); return; }
     if (location.pathname === '/finances') navigate('/', { state: { shellTab: nextTab } });
     if (nextTab !== tab) window.dispatchEvent(new CustomEvent("ea-dashboard-tab-change", { detail: { tab: nextTab } }));
@@ -168,7 +159,7 @@ export function DashboardShell({
       return;
     }
     startTransition(() => setTab(nextTab));
-  }, [demoMode, isMobile, returnHome, tab, settingsOpen, financialOpen, location.pathname, navigate, setTab]);
+  }, [demoMode, isMobile, returnHome, tab, settingsOpen, location.pathname, navigate, setTab]);
 
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [historicalSnapshotView, setHistoricalSnapshotView] = useState<SnapshotView | null>(null);
@@ -213,7 +204,6 @@ export function DashboardShell({
     setCalendarMounted,
     liveData,
     loadCalendarDeadlines,
-    loadCalendarBills,
     onCalendarWorkspaceChange,
   });
 
@@ -247,7 +237,7 @@ export function DashboardShell({
   const handleHeaderToggleHistory = useCallback(() => setHistoryOpen((v) => !v), [setHistoryOpen]);
 
   // Foreground overlays suspend shell navigation while retaining the active tab.
-  const anyBlockingOverlayOpen = analyticsOpen || historyOpen || settingsOpen || financialOpen;
+  const anyBlockingOverlayOpen = analyticsOpen || historyOpen || settingsOpen;
 
   useDashboardShellHotkeys({
     activeTab: tab,
@@ -314,15 +304,9 @@ export function DashboardShell({
     setEditorDirty: setItemEditorDirty,
     openDeadline: openDashboardDeadline,
     openEmail: previewDashboardEmail,
-    openBill: openDashboardBill,
     openEvent: openDashboardEvent,
     openInCalendar: openItemSheetInCalendar,
   } = useDashboardItemSheet({ tab, isMobile, openCalendar });
-  const handleInboxOpenRecordedBill = useCallback((target: FinanceDestination) => {
-    closeAlfred();
-    navigate(financesHref(target));
-  }, [navigate, closeAlfred]);
-  const billPayLinksByScheduleId = useUtilityPayLinks();
 
   const {
     scrollRef: dashboardScrollRef,
@@ -333,8 +317,6 @@ export function DashboardShell({
   const handlePaletteAction = useCallback((item: { kind: string; payload?: string }) => {
     if (item.kind === "tab" && item.payload) setShellTab(item.payload as DashboardTab);
     else if (item.kind === "finance-journal") navigate(financesHref({ view: 'journal' }));
-    else if (item.kind === "financial-activity") navigate(financialHref({ view: 'all' }));
-    else if (item.kind === "calendar-view" && item.payload === "bills") navigate(financesHref());
     else if (item.kind === "calendar-view" && item.payload === "events") openCalendar("events");
     else if (item.kind === "analytics") {
       closePalette();
@@ -391,8 +373,6 @@ export function DashboardShell({
     handleCalendarEventsRangeChange,
     liveData,
     briefing,
-    calendarBillsData,
-    calendarBillRange,
     calendarDeadlines,
     calendarDeadlinesLoading,
     calendarDeadlineRange,
@@ -466,7 +446,6 @@ export function DashboardShell({
             onPreviewEmail={previewDashboardEmail}
             onOpenInbox={openInboxLane}
             onOpenDeadline={openDashboardDeadline}
-            onOpenBillsCalendar={openDashboardBill}
             onOpenEventsCalendar={openDashboardEvent}
           />
         </DashboardTabPanel>
@@ -516,7 +495,7 @@ export function DashboardShell({
           ) : null}
         </DashboardTabPanel>
         {/* Finance details portal outside Activity; unmount this surface when leaving. */}
-        {tab === "finances" && !settingsOpen && !financialOpen && <DashboardTabPanel tab="finances" active isMobile={isMobile}>
+        {tab === "finances" && !settingsOpen && <DashboardTabPanel tab="finances" active isMobile={isMobile}>
           {financesRoute.mounted && <Suspense fallback={<WorkspaceLoading surface="finances" />}><FinancesWorkspace search={financesRoute.search} active scrollTopRequestId={financesScrollTopRequestId} mobileShellActions={isMobile ? <MobileShellActions onRetrySource={onRetrySource} sourceRetry={sourceRetry} refreshing={bd.refreshing} onQuickRefresh={onQuickRefresh} systemStatus={liveData.systemStatus} onOpenHistory={handleHeaderToggleHistory} onOpenAnalytics={openAnalytics} /> : undefined}/></Suspense>}
         </DashboardTabPanel>}
         <DashboardTabPanel tab="notes" active={tab === "notes"} isMobile={isMobile}>
@@ -556,7 +535,6 @@ export function DashboardShell({
         calendarRange={calendarRange} onEditorDirtyChange={setItemEditorDirty}
         onOpenEmail={openEmailInInbox}
         onOpenItemInCalendar={openItemSheetInCalendar}
-        billCtx={{ actualBudgetUrl: calendarBillsData?.actualBudgetUrl, payLinksByScheduleId: billPayLinksByScheduleId }}
         accent={accent}
         addTaskOpen={addTaskOpen}
         setAddTaskOpen={setAddTaskOpen}
@@ -585,7 +563,6 @@ export function DashboardShell({
             handoff={alfredHandoff}
             emailHandoff={alfredEmailHandoff}
             newChatTick={alfredNewChatTick}
-            onOpenFinances={handleInboxOpenRecordedBill}
             onOpenCalendarItem={handleAlfredOpenCalendarItem}
             onReviewCalendarProposal={handleAlfredReviewCalendarProposal}
           />

@@ -1,6 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router";
-import { buildEmailFinancialProfileSeed } from "../../../lib/financialProfileSeed";
 import { motion as Motion, useReducedMotion } from "motion/react";
 import AddTaskPanel from "../../todoist/AddTaskPanel";
 import { useOptionalDashboard } from "../../../context/DashboardContext";
@@ -10,7 +8,6 @@ import DesktopReader from "./DesktopReader";
 import MobileReader from "./MobileReader";
 import { ReaderEmptyState } from "./ReaderShared";
 import useEmailBody from "./useEmailBody";
-import useBillPayResolver from "./useBillPayResolver";
 import type { Dispatch, SetStateAction } from "react";
 import type { InboxAccount, InboxEmailLike } from "../inboxTypes";
 import type { InboxActionDispatcher } from "../useInboxActionDispatch";
@@ -54,7 +51,6 @@ export default function Reader({
   onWorkspaceDirtyChange?: (dirty: boolean) => void;
   onRequestDiscard?: InboxDiscardRequest;
 }) {
-  const navigate = useNavigate();
   const reduceMotion = useReducedMotion() ?? false;
   const snoozeBtnRef = useRef<HTMLButtonElement>(null);
   const [snoozeOpen, setSnoozeOpen] = useState(false);
@@ -69,7 +65,6 @@ export default function Reader({
   const dashboard = useOptionalDashboard();
   const seed = useMemo(() => email ? buildRemindMeTaskSeed(email) : null, [email]);
   const bodyState = useEmailBody(email);
-  const billResolution = useBillPayResolver({ email, bodyState });
   const localDiscardPrompt = useInboxDiscardPrompt(`${email?.account_id || email?.accountId || ""}:${email?.uid || email?.email_id || email?.id || ""}`);
   const requestDiscard = onRequestDiscard || localDiscardPrompt.requestDiscard;
 
@@ -106,15 +101,6 @@ export default function Reader({
       return;
     }
     afterDiscard(taskDirty, closeTask);
-  };
-  const createProfile = () => {
-    afterDiscard(taskDirty || draftDirty, () => {
-      closeTask();
-      setDrafting(false);
-      setDraftDirty(false);
-      const financialProfileSeed = buildEmailFinancialProfileSeed(email, { body: bodyState.body, resolution: billResolution });
-      void navigate("/settings?tab=finance", { state: { financialProfileSeed } });
-    });
   };
   const guardedSetDrafting: Dispatch<SetStateAction<boolean>> = (update) => {
     const next = typeof update === "function" ? update(drafting) : update;
@@ -160,12 +146,10 @@ export default function Reader({
     onAskAlfred,
     showTriage,
     showDraft: false,
-    onCreateProfile: createProfile,
     snoozeBtnRef,
     snoozeOpen,
     setSnoozeOpen,
     bodyState,
-    billResolution,
     drafting,
     setDrafting: guardedSetDrafting,
     setDraftDirty,

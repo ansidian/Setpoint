@@ -422,22 +422,18 @@ export default function CalendarSearchRail({
 
 function useAutoFocusInput(search: CalendarSearchRailController) {
   const ref = useRef<HTMLInputElement | null>(null);
-  const previousScopeRef = useRef(search.scope);
   const previousFocusRequestIdRef = useRef(0);
 
   useEffect(() => {
     if (!search.open || !search.focusRequestId) return;
-    const scopeChanged = previousScopeRef.current && previousScopeRef.current !== search.scope;
-    const focusRequested = previousFocusRequestIdRef.current !== search.focusRequestId;
-    previousScopeRef.current = search.scope;
+    if (previousFocusRequestIdRef.current === search.focusRequestId) return;
     previousFocusRequestIdRef.current = search.focusRequestId;
-    if (!scopeChanged && !focusRequested) return;
     ref.current?.focus();
-    if (!scopeChanged && search.focusSelectAll !== false) ref.current?.select?.();
+    if (search.focusSelectAll !== false) ref.current?.select?.();
     else {
       const valueLength = ref.current?.value?.length || 0;
       ref.current?.setSelectionRange?.(valueLength, valueLength);
     }
-  }, [search.focusRequestId, search.focusSelectAll, search.open, search.scope]);
+  }, [search.focusRequestId, search.focusSelectAll, search.open]);
   return ref;
 }

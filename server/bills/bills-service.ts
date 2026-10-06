@@ -1,9 +1,5 @@
-export { extractBillCandidate } from './bill-extraction-service.ts';
 import {
-  markBillPaid as actualMarkBillPaid,
   testConnection as actualTestConnection,
-  createQuickTxn as actualCreateQuickTxn,
-  invalidateActualMetadataCache,
   hydrateActualCache as hydrateActualWorkerCache,
   removeActualConnection as removeStoredActualConnection,
   saveActualConnectionCandidate,
@@ -13,37 +9,11 @@ import db from "../db/connection.ts";
 import {
   describeLocalActualCache,
 } from "../actual/actual-local-metadata.ts";
-import {
-  getMetadata,
-  loadActualMetadataForProjection,
-  refreshActualMetadataProjection,
-} from "../actual/actual-metadata-projection.ts";
-import {
-  loadActualBudgetUrl,
-  refreshBillsMirror,
-  scheduleBillsMirrorRefresh,
-} from "./bills-mirror-sync.ts";
+import { loadActualBudgetUrl, refreshBillsMirror } from "./bills-mirror-sync.ts";
 import type { BillsMirrorDb } from "./bills-mirror-sync.ts";
 import type { LocalActualOptions } from "../actual/actual-local-metadata.ts";
-import type { ActualQuickTransactionInput } from "../actual/actual.ts";
 import { capabilityStatusService } from "../capability-status-service.ts";
 
-type ReconciliationError = Error & {
-  localWriteApplied?: boolean;
-  code?: string;
-};
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-export { resolveFinancialEmailSeed } from "./financial-email-adoption-service.ts";
-export { planFinancialEmail } from "./financial-email-planner.ts";
-export {
-  getMetadata,
-  readActualMetadataProjection,
-  refreshActualMetadataProjection,
-} from "../actual/actual-metadata-projection.ts";
-export { shouldScheduleImmediateBillsRefresh } from "./bills-mirror-refresh-policy.ts";
 export {
   BILLS_MIRROR_MAINTENANCE_TTL_MS,
   armPendingBillsMirrorRefreshes,
@@ -61,137 +31,20 @@ export {
   stopBillsMirrorRefreshWorker,
 } from "./bills-mirror-sync.ts";
 
-// Actual metadata (accounts, payees, categories, schedules) is cached at four
-// levels:
-//
-//   (a) src/lib/actualMetadata.ts singleton — frontend; cleared by the bills
-//       SSE event (invalidateActualMetadata in that module), refetched on next use
-//   (b) in-process TTL caches — actual.ts facade + actual-core.ts (5 min);
-//       cleared by invalidateActualMetadataCache()
-//   (c) ea_actual_metadata_mirror — DB projection served by GET /actual/metadata;
-//       rewritten by refreshActualMetadataProjection()
-//   (d) SDK-owned local budget copy on disk — re-synced from the Actual
-//       server when the projection loads with preferFreshLocal
-//
-//   Actual server ──sync──▶ (d) ──project──▶ (c) ──/actual/metadata──▶ (a)
-//                  (b) caches SDK/local reads used by writes and fallbacks
-//
-// This is the single authoritative invalidation: it clears (b), re-syncs (d),
-// and rewrites (c). Layer (a) clears itself when the bills SSE event arrives.
-export async function invalidateActualMetadata(userId: string, {
-  dbClient = db,
-  now = new Date(),
-}: { dbClient?: BillsMirrorDb; now?: Date } = {}) {
-  await invalidateActualMetadataCache();
-  const metadata = await loadActualMetadataForProjection(userId, { preferFreshLocal: true })
-    .catch((err: unknown) => {
-      console.warn("[EA] Fresh Actual metadata load failed during invalidation; using cached sources:", errorMessage(err));
-      return null;
-    });
-  return refreshActualMetadataProjection(userId, { dbClient, now, metadata });
-}
-
-function invalidateActualMetadataInBackground(userId: string): void {
-  invalidateActualMetadata(userId).catch((err: unknown) => {
-    console.error("[EA] Actual metadata invalidation failed:", errorMessage(err));
-  });
-}
-
-export async function invalidateActualAfterTransactionImport(userId: string): Promise<void> {
-  // Persist reconciliation before a fallible cache refresh: settled originals
-  // have no correction journal to retry a failed projection publication.
-  await scheduleBillsMirrorRefresh(userId, { delayMs: 60_000 });
-  await invalidateActualMetadataCache();
-  const actualBudgetUrl = await loadActualBudgetUrl(userId);
-  // The admitted write has already synchronized and read back its result.
-  // Publish that local budget immediately to both Setpoint projections.
-  await refreshBillsMirror(userId, { actualBudgetUrl, refreshLocalActual: false, afterVerifiedWrite: true });
-}
-
-async function scheduleBillsMirrorRefreshInBackground(userId: string, delayMs: number) {
-  return scheduleBillsMirrorRefresh(userId, { delayMs }).catch((err: unknown) => {
-    console.error("[EA] Bills mirror delayed refresh scheduling failed:", errorMessage(err));
-    return null;
-  });
-}
-
-// A completed SDK write whose subsequent sync failed remains durable locally.
-// Keep its partial-success response and reconciliation so retrying the UI action
-// cannot duplicate it. A worker timeout/exit has an unknown write outcome: retain
-// the failure, but schedule reconciliation to discover any committed changes.
-async function withLocalWriteReconciliation<T>(userId: string, run: () => Promise<T>, { delayMs }: { delayMs: number }): Promise<T | { syncPending: true; localWriteApplied: true; message: string; code: string }> {
-  try {
-    return await run();
-  } catch (error: unknown) {
-    const err = error as ReconciliationError;
-    if (err.localWriteApplied !== true) {
-      if (err.code === "ACTUAL_WORKER_TIMEOUT" || err.code === "ACTUAL_WORKER_EXITED") {
-        await scheduleBillsMirrorRefreshInBackground(userId, delayMs);
-      }
-      throw error;
-    }
-    invalidateActualMetadataInBackground(userId);
-    await scheduleBillsMirrorRefreshInBackground(userId, delayMs);
-    return {
-      syncPending: true,
-      localWriteApplied: true,
-      message: err.message,
-      code: err.code || "ACTUAL_SYNC_FAILED",
-    };
-  }
-}
-
-export async function markBillPaid(userId: string, billId: string) {
-  return withLocalWriteReconciliation(userId, async () => {
-    const result = await actualMarkBillPaid(billId, userId);
-    await invalidateActualAfterTransactionImport(userId).catch((err: unknown) => {
-      console.error("[EA] Actual write succeeded but projection publication failed:", errorMessage(err));
-    });
-    return result;
-  }, { delayMs: 60_000 });
-}
-
-export async function listAccounts(userId: string) {
-  const { accounts } = await getMetadata(userId);
-  return accounts;
-}
-
-export async function listCategories(userId: string) {
-  const { categories } = await getMetadata(userId);
-  return categories;
-}
-
-export async function listPayees(userId: string) {
-  const { payees } = await getMetadata(userId);
-  return payees;
-}
-
 export async function testConnection(userId: string, overrides: Parameters<typeof actualTestConnection>[1] = null) {
   return actualTestConnection(userId, overrides);
 }
 
 export async function saveActualConnection(userId: string, candidate: ActualConnectionCandidate) {
   const result = await saveActualConnectionCandidate(userId, candidate);
-  await invalidateActualMetadataCache();
   capabilityStatusService.invalidate();
   return result;
 }
 
 export async function removeActualConnection(userId: string) {
   const result = await removeStoredActualConnection(userId);
-  await invalidateActualMetadataCache();
   capabilityStatusService.invalidate();
   return result;
-}
-
-export async function createQuickTxn(userId: string, payload: ActualQuickTransactionInput) {
-  return withLocalWriteReconciliation(userId, async () => {
-    const result = await actualCreateQuickTxn(userId, payload);
-    await invalidateActualAfterTransactionImport(userId).catch((err: unknown) => {
-      console.error("[EA] Actual write succeeded but projection publication failed:", errorMessage(err));
-    });
-    return result;
-  }, { delayMs: 60_000 });
 }
 
 export async function hydrateActualCache(userId: string, {

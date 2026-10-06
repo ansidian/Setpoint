@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { SiActualbudget } from "@icons-pack/react-simple-icons";
 import { getActualCacheStatus, hydrateActualBudgetCache, removeActualBudgetConnection, saveActualBudgetConnection, testActualBudget } from "@/api";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,7 @@ type CacheSummaryResult = (ActualCacheStatusResponse | ActualCacheHydrationRespo
   dbSizeBytes?: number;
   backupCount?: number;
 };
+const EMPTY_FORM = { serverUrl: "", password: "", syncId: "", encryptionPassword: "" };
 const errorMessage = (error: unknown, fallback: string) => error instanceof Error ? error.message : fallback;
 const BUTTON_MOTION = "motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:active:translate-y-0";
 
@@ -78,7 +79,9 @@ export default function ActualBudgetConnectionCard({
   settings,
   onRefreshConnections = async () => {},
 }: Pick<SettingsCardStateProps, "settings"> & SettingsConnectionRefreshProps) {
-  const [actualForm, setActualForm] = useState({ serverUrl: "", password: "", syncId: "" });
+  const [actualForm, setActualForm] = useState(EMPTY_FORM);
+  const [budgetEncrypted, setBudgetEncrypted] = useState(false);
+  const encryptionPasswordId = useId();
   const [actualConfigured, setActualConfigured] = useState(false);
   const [actualDirty, setActualDirty] = useState(false);
   const [actualSavingSecret, setActualSavingSecret] = useState(false);
@@ -96,6 +99,7 @@ export default function ActualBudgetConnectionCard({
   function markActualDirty() {
     cacheStatusRequestRef.current += 1;
     setActualDirty(true);
+    setBudgetEncrypted(false);
     setHydrateStatus(null);
     setHydrateMsg(null);
     setHydrateResult(null);
@@ -109,6 +113,7 @@ export default function ActualBudgetConnectionCard({
       serverUrl: settings.actual_budget_url || "",
       password: "",
       syncId: settings.actual_budget_sync_id || "",
+      encryptionPassword: "",
     });
     setActualConfigured(!!(settings.actual_budget_url || settings.actual_budget_configured));
   }, [settings?.actual_budget_url, settings?.actual_budget_sync_id, settings?.actual_budget_configured]);
@@ -153,18 +158,20 @@ export default function ActualBudgetConnectionCard({
       serverURL: actualForm.serverUrl,
       syncId: actualForm.syncId,
       ...(actualForm.password ? { password: actualForm.password } : {}),
+      ...(actualForm.encryptionPassword ? { encryptionPassword: actualForm.encryptionPassword } : {}),
     };
     await stepUp.run(async () => {
       setActualSavingSecret(true);
       setTestStatus("testing");
       setTestMsg(null);
       try {
-        await saveActualBudgetConnection(candidate);
+        const result = await saveActualBudgetConnection(candidate);
         sessionStorage.setItem("ea_settings_changed", "1");
         window.dispatchEvent(new CustomEvent("ea-settings-changed"));
         setActualConfigured(true);
         setActualDirty(false);
-        setActualForm((current) => ({ ...current, password: "" }));
+        setActualForm((current) => ({ ...current, password: "", encryptionPassword: "" }));
+        setBudgetEncrypted(result.budgetEncrypted === true);
         setTestStatus("ok");
         setHydrateStatus(null);
         setHydrateResult(null);
@@ -189,7 +196,8 @@ export default function ActualBudgetConnectionCard({
         window.dispatchEvent(new CustomEvent("ea-settings-changed"));
         setActualConfigured(false);
         setActualDirty(false);
-        setActualForm({ serverUrl: "", password: "", syncId: "" });
+        setActualForm(EMPTY_FORM);
+        setBudgetEncrypted(false);
         setConfirmingRemoval(false);
         setTestStatus(null);
         setHydrateStatus(null);
@@ -212,6 +220,7 @@ export default function ActualBudgetConnectionCard({
           serverURL: actualForm.serverUrl,
           password: actualForm.password || undefined,
           syncId: actualForm.syncId,
+          ...(actualForm.encryptionPassword ? { encryptionPassword: actualForm.encryptionPassword } : {}),
         }
       : null;
     await stepUp.run(async () => {
@@ -220,6 +229,7 @@ export default function ActualBudgetConnectionCard({
       try {
         const result = await testActualBudget(overrides);
         setTestStatus(result.success ? "ok" : "fail");
+        setBudgetEncrypted(result.success && result.budgetEncrypted === true);
         if (!result.success && result.message) setTestMsg(result.message);
       } catch (error) {
         if (isPasswordStepUpRequired(error)) throw error;
@@ -255,7 +265,7 @@ export default function ActualBudgetConnectionCard({
       ready={hydrateStatus !== "checking"}
       title="Actual Budget"
       icon={<SiActualbudget size={14} title="" aria-hidden="true" />}
-      description="Connect the Actual server used for finance sync and transaction actions."
+      description="Connect the Actual server the read-only Finances page reads."
     >
       <div className="flex flex-col gap-4">
         <div>
@@ -301,6 +311,25 @@ export default function ActualBudgetConnectionCard({
             }}
           />
         </div>
+        <div>
+          <SectionLabel htmlFor={encryptionPasswordId}>Encryption password</SectionLabel>
+          <Input
+            id={encryptionPasswordId}
+            type="password"
+            autoComplete="new-password"
+            placeholder={
+              actualConfigured
+                ? "Leave blank to keep the saved setting"
+                : "Only for end-to-end encrypted budgets"
+            }
+            value={actualForm.encryptionPassword}
+            disabled={credentialActionLocked}
+            onChange={(event) => {
+              setActualForm((current) => ({ ...current, encryptionPassword: event.target.value }));
+              markActualDirty();
+            }}
+          />
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button
             onClick={handleSaveActualSecret}
@@ -335,6 +364,7 @@ export default function ActualBudgetConnectionCard({
           ) : actualConfigured && !actualDirty ? (
             <StatusPill tone="success">Configured</StatusPill>
           ) : null}
+          {budgetEncrypted ? <StatusPill tone="neutral">End-to-end encrypted</StatusPill> : null}
           {hydrateStatus && hydrateStatus !== "hydrating" ? (
             <StatusPill tone={hydrateStatusTone(hydrateStatus)}>
               {hydrateStatusLabel(hydrateStatus, hydrateMsg)}
@@ -355,7 +385,7 @@ export default function ActualBudgetConnectionCard({
             {confirmingRemoval ? (
               <div className="flex flex-col gap-3">
                 <FieldHint>
-                  Finance sync and transaction actions will stop. Bill-pay mappings and utility links stay saved.
+                  The Finances page will stop reading this budget until you connect it again.
                 </FieldHint>
                 <div className="flex flex-wrap gap-2">
                   <Button

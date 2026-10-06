@@ -54,10 +54,6 @@ test("filters the mobile inbox and opens reader action workspaces", async ({ pag
   await expect(reader).toBeVisible();
 
   await reader.getByRole("button", { name: "More email actions", exact: true }).click();
-  await page.getByRole("button", { name: "Actual record", exact: true }).click();
-  await expect(page.getByTestId("inbox-mobile-bill-panel")).toBeVisible();
-
-  await reader.getByRole("button", { name: "More email actions", exact: true }).click();
   await page.getByRole("button", { name: /Show draft reply/i }).click();
   await expect(page.getByTestId("inbox-mobile-draft-panel")).toBeVisible();
 });

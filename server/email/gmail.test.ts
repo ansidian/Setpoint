@@ -311,7 +311,7 @@ describe("fetchEmailsInRange", () => {
           account_email: "work@example.com",
           from: "Sender <sender@example.com>",
           subject: "Range message",
-          body_preview: "Full body $12.34 [amounts: $12.34]",
+          body_preview: "Full body $12.34",
           body_text: "Full body $12.34",
           date: "Fri, 01 May 2026 10:00:00 -0700",
           read: false,

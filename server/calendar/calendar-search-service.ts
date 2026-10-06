@@ -1,6 +1,5 @@
 import {
   deadlineSearchCandidates,
-  normalizeBillSearchCandidate,
   normalizeEventSearchCandidate,
   normalizeLimit,
   rankCalendarSearchCandidates,
@@ -30,7 +29,6 @@ interface CoverageSource {
   strategy?: string;
   syncHealth?: unknown;
   errors?: Array<{ source?: string; message: string }>;
-  actualBudgetUrl?: string | null;
 }
 
 interface SearchHealth {
@@ -41,36 +39,21 @@ interface SearchHealth {
 }
 
 type EventSearchInput = Parameters<typeof normalizeEventSearchCandidate>[0];
-type BillSearchInput = Parameters<typeof normalizeBillSearchCandidate>[0];
-
-interface BillsMirrorResult {
-  schedules?: BillSearchInput[];
-  syncHealth?: SearchHealth | null;
-  actualBudgetUrl?: string | null;
-}
-
 interface CalendarSearchDependencies {
-  billMirrorRefreshRange: (options: { now: Date }) => DateRange;
   getCalendarSearchMirrorHealth: (userId: string) => Promise<SearchHealth>;
-  isBillsMirrorMaintenanceDue: (health: SearchHealth | null | undefined) => boolean;
   listCalendarSearchMirrorOccurrences: (
     userId: string,
     options: DateRange & { query: string; limit: number; centerDate: string },
   ) => Promise<EventSearchInput[]>;
-  logger?: Pick<Console, "error">;
   now?: () => Date;
-  readBillsMirrorRange: (userId: string, range: DateRange) => Promise<BillsMirrorResult>;
   readCalendarDeadlineRange: (
     userId: string,
     range: DateRange,
   ) => Promise<{ payload: DeadlinePayload; errors?: Array<{ source?: string; message: string }> }>;
-  requestBillsCurrentMaintenanceRefresh: (userId: string, options: { now: Date }) => Promise<unknown>;
   requestCalendarSearchMirrorSync: (
     userId: string,
     options: { reason: string; forceFull: boolean },
   ) => unknown;
-  scheduleBillsMirrorRefresh: (userId: string) => Promise<unknown>;
-  shouldScheduleImmediateBillsRefresh: (health: SearchHealth) => boolean;
 }
 
 const SEARCH_MIN_QUERY_LENGTH = 2;
@@ -170,18 +153,11 @@ function calendarSearchMirrorSearched(syncHealth: SearchHealth, events: EventSea
 }
 
 export function createCalendarSearchService({
-  billMirrorRefreshRange,
   getCalendarSearchMirrorHealth,
-  isBillsMirrorMaintenanceDue,
   listCalendarSearchMirrorOccurrences,
-  logger = console,
   now = () => new Date(),
-  readBillsMirrorRange,
   readCalendarDeadlineRange,
-  requestBillsCurrentMaintenanceRefresh,
   requestCalendarSearchMirrorSync,
-  scheduleBillsMirrorRefresh,
-  shouldScheduleImmediateBillsRefresh,
 }: CalendarSearchDependencies) {
   return async function searchCalendar(
     userId: string,
@@ -190,10 +166,10 @@ export function createCalendarSearchService({
     const query = String(queryParams.q || "").trim();
     const scope = String(queryParams.scope || "events").trim();
     const limit = normalizeLimit(queryParams.limit);
-    if (scope !== "events" && scope !== "bills") {
+    if (scope !== "events") {
       throw calendarSearchInputError(
         "calendar_search_scope_invalid",
-        "scope must be events or bills",
+        "scope must be events",
       );
     }
     if (limit === null) {
@@ -212,72 +188,26 @@ export function createCalendarSearchService({
     }
 
     const currentTime = now();
-    if (scope === "events") {
-      const range = calendarSearchMirrorWindow({ now: currentTime });
-      const candidateLimit = Math.max(limit, SEARCH_MIRROR_CANDIDATE_LIMIT);
-      const [events, syncHealth, deadlineResult] = await Promise.all([
-        listCalendarSearchMirrorOccurrences(userId, {
-          start: range.start,
-          end: range.end,
-          query,
-          limit: candidateLimit,
-          centerDate: pacificDate(currentTime),
-        }),
-        getCalendarSearchMirrorHealth(userId),
-        readCalendarDeadlineRange(userId, range),
-      ]);
-
-      if (shouldRequestCalendarSearchMirrorRepair(syncHealth)) {
-        const hasSuccessfulSource = (syncHealth?.sources || [])
-          .some((source) => source.lastSuccessAt);
-        requestCalendarSearchMirrorSync(userId, {
-          reason: `calendar-search-${syncHealth.state}`,
-          forceFull: !hasSuccessfulSource,
-        });
-      }
-
-      return calendarSearchResponse({
+    const range = calendarSearchMirrorWindow({ now: currentTime });
+    const candidateLimit = Math.max(limit, SEARCH_MIRROR_CANDIDATE_LIMIT);
+    const [events, syncHealth, deadlineResult] = await Promise.all([
+      listCalendarSearchMirrorOccurrences(userId, {
+        start: range.start,
+        end: range.end,
         query,
-        scope,
-        limit,
-        candidates: [
-          ...events.map((event) => normalizeEventSearchCandidate(event)),
-          ...deadlineSearchCandidates(deadlineResult.payload),
-        ],
-        coverageSources: [
-          {
-            key: "google_calendar",
-            label: "Google Calendar",
-            searched: calendarSearchMirrorSearched(syncHealth, events),
-            start: range.start,
-            end: range.end,
-            strategy: "local_mirror",
-            syncHealth,
-          },
-          {
-            key: "deadlines",
-            label: "Deadline overlays",
-            searched: true,
-            start: range.start,
-            end: range.end,
-            errors: deadlineResult.errors || [],
-          },
-        ],
-        now: currentTime,
-      });
-    }
+        limit: candidateLimit,
+        centerDate: pacificDate(currentTime),
+      }),
+      getCalendarSearchMirrorHealth(userId),
+      readCalendarDeadlineRange(userId, range),
+    ]);
 
-    const range = billMirrorRefreshRange({ now: currentTime });
-    const data = await readBillsMirrorRange(userId, range);
-    if (data.syncHealth?.state === "needs_sync") {
-      if (shouldScheduleImmediateBillsRefresh(data.syncHealth)) {
-        scheduleBillsMirrorRefresh(userId).catch((err: unknown) => {
-          logger.error("[Calendar] bills mirror refresh scheduling failed:", err instanceof Error ? err.message : String(err));
-        });
-      }
-    } else if (isBillsMirrorMaintenanceDue(data.syncHealth)) {
-      requestBillsCurrentMaintenanceRefresh(userId, { now: currentTime }).catch((err: unknown) => {
-        logger.error("[Calendar] bills mirror maintenance refresh scheduling failed:", err instanceof Error ? err.message : String(err));
+    if (shouldRequestCalendarSearchMirrorRepair(syncHealth)) {
+      const hasSuccessfulSource = (syncHealth?.sources || [])
+        .some((source) => source.lastSuccessAt);
+      requestCalendarSearchMirrorSync(userId, {
+        reason: `calendar-search-${syncHealth.state}`,
+        forceFull: !hasSuccessfulSource,
       });
     }
 
@@ -285,17 +215,27 @@ export function createCalendarSearchService({
       query,
       scope,
       limit,
-      candidates: (data.schedules || []).map(normalizeBillSearchCandidate),
+      candidates: [
+        ...events.map((event) => normalizeEventSearchCandidate(event)),
+        ...deadlineSearchCandidates(deadlineResult.payload),
+      ],
       coverageSources: [
         {
-          key: "bills_mirror",
-          label: "Bills mirror",
+          key: "google_calendar",
+          label: "Google Calendar",
+          searched: calendarSearchMirrorSearched(syncHealth, events),
+          start: range.start,
+          end: range.end,
+          strategy: "local_mirror",
+          syncHealth,
+        },
+        {
+          key: "deadlines",
+          label: "Deadline overlays",
           searched: true,
           start: range.start,
           end: range.end,
-          syncHealth: data.syncHealth || null,
-          actualBudgetUrl: data.actualBudgetUrl || null,
-          strategy: "local_mirror",
+          errors: deadlineResult.errors || [],
         },
       ],
       now: currentTime,
@@ -307,23 +247,15 @@ let productionSearchCalendar: ReturnType<typeof createCalendarSearchService> | n
 
 async function loadProductionSearchCalendar() {
   if (productionSearchCalendar) return productionSearchCalendar;
-  const [bills, current, deadlines, mirror] = await Promise.all([
-    import("../bills/bills-service.ts"),
-    import("../dashboard/current-service.ts"),
+  const [deadlines, mirror] = await Promise.all([
     import("../tasks/deadlines-read.ts"),
     import("./calendar-search-mirror.ts"),
   ]);
   productionSearchCalendar = createCalendarSearchService({
-    billMirrorRefreshRange: bills.billMirrorRefreshRange,
     getCalendarSearchMirrorHealth: mirror.getCalendarSearchMirrorHealth,
-    isBillsMirrorMaintenanceDue: bills.isBillsMirrorMaintenanceDue,
     listCalendarSearchMirrorOccurrences: mirror.listCalendarSearchMirrorOccurrences,
-    readBillsMirrorRange: bills.readBillsMirrorRange,
     readCalendarDeadlineRange: deadlines.readCalendarDeadlineRange,
-    requestBillsCurrentMaintenanceRefresh: current.requestBillsCurrentMaintenanceRefresh,
     requestCalendarSearchMirrorSync: mirror.requestCalendarSearchMirrorSync,
-    scheduleBillsMirrorRefresh: bills.scheduleBillsMirrorRefresh,
-    shouldScheduleImmediateBillsRefresh: bills.shouldScheduleImmediateBillsRefresh,
   });
   return productionSearchCalendar;
 }

@@ -114,9 +114,6 @@ export interface CalendarModalShellProps {
     eventsRange?: unknown;
     deadlinesRange?: unknown;
     dataRevision?: number;
-    getMonthBills?: ((...args: unknown[]) => unknown) | null;
-    billsRange?: unknown;
-    billsDataRevision?: number;
   };
   selection: {
     selectedDay?: number | null;
@@ -227,9 +224,6 @@ export default function CalendarModalShell({
     eventsRange = null,
     deadlinesRange = null,
     dataRevision = 0,
-    getMonthBills,
-    billsRange = null,
-    billsDataRevision = 0,
   } = data;
   const { selectedDay, selectedDateKey, setSelectedDay, setSelectedDateKey, setSelectedItemId } = selection;
   const { eventEditor, deadlineEditor, setDeadlineEditor, closeEventEditor, onDeadlineDraftPreviewChange } = editors;
@@ -273,7 +267,7 @@ export default function CalendarModalShell({
     ? { ...eventEditor, isEditorOpen: false, mode: "detail" }
     : eventEditor;
   const railDeadlineEditor = floatingEditorOpen && floatingDeadlineDetail ? null : deadlineEditor;
-  const useAgendaRail = !layout.stacked && (view === "events" || view === "bills");
+  const useAgendaRail = !layout.stacked && view === "events";
   const searchOpen = !!search?.open;
   const searchLayoutMode = getCalendarSearchLayoutMode(layout, searchOpen);
   const showSearchRail = searchOpen;
@@ -368,9 +362,6 @@ export default function CalendarModalShell({
       eventsRange={eventsRange}
       deadlinesRange={deadlinesRange}
       dataRevision={dataRevision}
-      getMonthBills={getMonthBills}
-      billsRange={billsRange}
-      billsDataRevision={billsDataRevision}
       onFilteredSelectedDeadlineHidden={handleFilteredSelectedDeadlineHidden}
     />
   ) : buildContextContent({

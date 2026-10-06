@@ -19,12 +19,12 @@ export default function PaymentStatusList({ rows, organization, today, selectedI
   const columns = [{ column: 'name', label: 'Name' }, { column: 'date', label: 'Date' }, { column: 'amountCents', label: 'Amount' }] as const;
   return <div className="fin-status-list fin-configured-groups">
     {organization.groups.map(group => {
-      const grouped = group.itemIds.flatMap(id => rows.filter(row => id === (row.utilityId ? `utility:${row.utilityId}` : `schedule:${row.scheduleId}`)));
+      const grouped = group.itemIds.flatMap(id => rows.filter(row => id === `schedule:${row.scheduleId}`));
       const items = sort ? sortPaymentRows(grouped, sort, today) : grouped;
       if (!items.length) return null;
       const collapsed = closed.has(group.id);
       return <section key={group.id} className="fin-status-group" aria-label={group.name}>
-        <div className="fin-ledger-heading"><h2><button className="fin-group-disclosure" aria-expanded={!collapsed} onClick={() => setClosed(current => { const next = new Set(current); if (next.has(group.id)) next.delete(group.id); else next.add(group.id); return next; })}><ChevronDown size={14} aria-hidden="true"/>{group.name}<span>{new Set(items.map(row => row.utilityId || row.scheduleId)).size}</span></button></h2>
+        <div className="fin-ledger-heading"><h2><button className="fin-group-disclosure" aria-expanded={!collapsed} onClick={() => setClosed(current => { const next = new Set(current); if (next.has(group.id)) next.delete(group.id); else next.add(group.id); return next; })}><ChevronDown size={14} aria-hidden="true"/>{group.name}<span>{new Set(items.map(row => row.scheduleId)).size}</span></button></h2>
           {!collapsed && <div className="fin-status-columns">{columns.map(({ column, label }) => <button key={column} onClick={() => changeSort(column)} aria-label={`Sort by ${label}, ${sort?.column === column ? sort.direction === 'asc' ? 'ascending' : 'descending' : 'saved order'}`}><span>{label}</span>{sort?.column === column && (sort.direction === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>)}</button>)}<span/></div>}
         </div>
         {!collapsed && items.map(row => {

@@ -12,7 +12,6 @@ import type {
   AlfredToolName,
 } from "../../../shared/types/alfred";
 import type { NormalizedCalendarEvent } from "../../../shared/types/calendar";
-import type { TransactionGroupBy, TransactionSummaryBucket } from "../../../shared/types/transactions";
 import { calendarEventDiffersFromProposal } from "./alfredCalendarProposalModel";
 
 export type AlfredToolState = "running" | "done" | "error";
@@ -30,7 +29,6 @@ export type AlfredPanelMessage =
   | { id: string; type: "say"; text: string; done: boolean; preamble?: boolean }
   | { id: string; type: "tools"; done: boolean; tools: AlfredToolEntry[] }
   | { id: string; type: "rows"; kind: AlfredItemKind; items: AlfredItem[] }
-  | { id: string; type: "summary"; total: number; period: { start: string; end: string }; group_by: TransactionGroupBy; buckets: TransactionSummaryBucket[] }
   | { id: string; type: "breakdown"; kind: AlfredItemKind; title: string; caption: string; total: number; buckets: AlfredBreakdownBucket[] }
   | {
       id: string;
@@ -44,7 +42,6 @@ export type AlfredPanelMessage =
 
 export type AlfredSuggestionIcon =
   | "sun"
-  | "bills"
   | "inbox"
   | "deadlines"
   | "calendar"
@@ -80,10 +77,7 @@ const TOOL_RUNNING_LABELS: Partial<Record<AlfredToolName, string>> = {
   get_email_body: "Reading message…",
   get_calendar_events: "Checking calendar…",
   get_deadlines: "Checking deadlines…",
-  get_upcoming_bills: "Checking bills…",
   show_items: "Gathering rows…",
-  search_transactions: "Searching transactions…",
-  summarize_transactions: "Tallying transactions…",
   propose_calendar_event: "Preparing event proposal…",
 };
 
@@ -91,10 +85,10 @@ export function alfredToolRunningLabel(name: string): string {
   return TOOL_RUNNING_LABELS[name as AlfredToolName] || "Working…";
 }
 
-// Coverage-correct suggestions (CONTEXT.md: mail, calendar, deadlines, bills).
+// Coverage-correct suggestions (CONTEXT.md: mail, calendar, deadlines).
 export const ALFRED_SUGGESTIONS: AlfredSuggestion[] = [
-  { icon: "search", label: "Find recent insurance payments and the related renewal email" },
-  { icon: "bills", label: "Compare my spending this month with the same period last month" },
+  { icon: "search", label: "Find my latest insurance renewal email and its deadline" },
+  { icon: "deadlines", label: "Which deadlines are due this week, and is there related mail?" },
   { icon: "calendar", label: "What is coming up on my calendar, and are there related emails I should read?" },
 ];
 
@@ -103,7 +97,6 @@ export const ALFRED_EMAIL_SUGGESTIONS: AlfredSuggestion[] = [
   { icon: "summary", label: "Summarize this email" },
   { icon: "search", label: "Find related messages in my inbox" },
   { icon: "calendar", label: "Check this email against my calendar" },
-  { icon: "bills", label: "Find transactions that might relate to this email" },
 ];
 
 function closeOpenSay(messages: AlfredPanelMessage[]): AlfredPanelMessage[] {
@@ -211,16 +204,6 @@ export function applyAlfredEvent(messages: AlfredPanelMessage[], event: AlfredRu
         id: nextId(), type: "rows", kind: event.kind, items: event.items as AlfredItem[],
       }];
     }
-    case "summary": {
-      return [...closeOpenSay(messages), {
-        id: nextId(),
-        type: "summary",
-        total: event.total,
-        period: event.period || {},
-        group_by: event.group_by || "category",
-        buckets: event.buckets || [],
-      }];
-    }
     case "breakdown": {
       // The card lists every item inside its buckets, so a prior show_items flat
       // list of the same items would render each row twice (the grouping-question
@@ -316,12 +299,6 @@ export function clearUncreatedAlfredProposals(messages: AlfredPanelMessage[]): A
   return messages.filter((message) => message.type !== "calendar-proposal" || message.status === "created");
 }
 
-export function formatAlfredMoney(amount: unknown): string {
-  const n = Number(amount);
-  if (!Number.isFinite(n)) return "";
-  return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
 export function formatAlfredDate(isoDate: unknown): string {
   if (!isoDate) return "";
   const [y, m, d] = String(isoDate).slice(0, 10).split("-").map(Number);
@@ -389,24 +366,7 @@ export function isNearBottom(scrollTop: unknown, clientHeight: unknown, scrollHe
   return full - (top + view) <= threshold;
 }
 
-export function spendingBreakdownRows(buckets: TransactionSummaryBucket[] = []): Array<TransactionSummaryBucket & { pct: number; isOther: boolean }> {
-  const max = buckets.reduce((m, b) => Math.max(m, Math.abs(Number(b.amount) || 0)), 0);
-  return buckets.map((b) => {
-    const amount = Number(b.amount) || 0;
-    const pct = max > 0 ? (Math.abs(amount) / max) * 100 : 0;
-    // "Other" is the rollup label hardcoded in server/transactions/transactions-service.ts;
-    // matching it greys that bar. Keep in sync if the service's rollup label ever changes.
-    return {
-      label: b.label,
-      amount,
-      count: b.count,
-      pct: Math.round(pct * 10) / 10,
-      isOther: b.label === "Other",
-    };
-  });
-}
-
-// Count-based twin of spendingBreakdownRows for the group_items breakdown card.
+// Count rows for the group_items breakdown card.
 // Buckets arrive server-ordered (count desc, "Other" last); preserve that order
 // and only compute the bar percentage + the Other-greying flag.
 export function countBreakdownRows(buckets: Array<{ label: string; count: number }> = []): Array<{ label: string; count: number; pct: number; isOther: boolean }> {

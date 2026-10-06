@@ -31,7 +31,7 @@ export async function loadSnoozedEntries(userId: string, { dbClient = db }: { db
       args: [userId, ...uids],
     }),
     dbClient.execute({
-      sql: `SELECT account_id, email_id, lane, urgency, category, handled_at, provider_state, summary, action, deadline_at, escalation_badge, triage_status, bill_candidate_json
+      sql: `SELECT account_id, email_id, lane, urgency, category, handled_at, provider_state, summary, action, deadline_at, escalation_badge, triage_status
             FROM ea_email_triage WHERE user_id = ? AND email_id IN (${placeholders})`,
       args: [userId, ...uids],
     }),
@@ -45,12 +45,10 @@ export async function loadSnoozedEntries(userId: string, { dbClient = db }: { db
     const idx = indexByUid.get(row.email_id);
     const accountId = String(idx?.account_id || snap.account_id || "") || null;
     const tri = triageByUid.get(accountId + ":" + String(row.email_id));
-    const billCandidate = parseJson(tri?.bill_candidate_json) || (snap.extractedBill && typeof snap.extractedBill === "object" ? snap.extractedBill as Record<string, unknown> : null);
     const codeKind = idx?.verification_code_kind;
     return {
       account_unavailable: !accountId || !accountIds.has(accountId),
       triage_status: str(tri?.triage_status),
-      bill_candidate: billCandidate, hasBill: !!billCandidate || !!snap.hasBill,
       claude: snap.claude && typeof snap.claude === "object" ? snap.claude as SnoozedEmailEntry["claude"] : null,
       aiSummary: str(snap.aiSummary),
       verification_code: idx?.verification_code && idx.verification_code_active_until && (codeKind === "numeric" || codeKind === "alphanumeric" || codeKind === "hyphenated")

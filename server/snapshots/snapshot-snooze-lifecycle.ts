@@ -191,15 +191,12 @@ export async function attachResurfacedSnoozeToActiveSnapshot(userId: string, sna
 
   const result = await dbClient.execute({
     sql: `SELECT i.*,
-                 idx.read,
-                 t.bill_candidate_json
+                 idx.read
           FROM ea_briefing_snapshot_items i
           LEFT JOIN ea_email_index idx
             ON idx.user_id = i.user_id
            AND idx.account_id = i.account_id
            AND idx.uid = i.email_id
-          LEFT JOIN ea_email_triage t
-            ON t.id = i.triage_id
           WHERE i.snapshot_id = ?
             AND i.triage_id = ?
           LIMIT 1`,
@@ -350,7 +347,6 @@ export async function settleReadArrivalGraceRows(userId: string, {
                 model_usage_json = '{}',
                 estimated_cost_usd = NULL,
                 latency_ms = NULL,
-                bill_candidate_json = NULL,
                 last_triaged_at = ?,
                 updated_at = datetime('now')
             WHERE id = ?`,

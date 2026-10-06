@@ -37,7 +37,6 @@ describe("CalendarModal floating event create workspace behavior", () => {
       view: "events",
       onViewChange: () => {},
       eventsData: { editable: true, getEvents: () => [] },
-      billsData: {},
       deadlinesData: {},
     };
 
@@ -96,7 +95,6 @@ describe("CalendarModal floating event create workspace behavior", () => {
         focusDate="2026-09-10"
         eventCreateRequest={request}
         eventsData={{ editable: false, getEvents: () => [] }}
-        billsData={{}}
         deadlinesData={{}}
       />,
     ));
@@ -144,7 +142,6 @@ describe("CalendarModal floating event create workspace behavior", () => {
         focusDate="2026-09-10"
         eventCreateRequest={request}
         eventsData={{ editable: true, getEvents: () => [], upsertEvents: () => {} }}
-        billsData={{}}
         deadlinesData={{}}
       />,
     ));
@@ -182,7 +179,6 @@ describe("CalendarModal floating event create workspace behavior", () => {
             editable: true,
             getEvents: () => [],
           }}
-          billsData={{}}
           deadlinesData={{}}
         />,
       ));
@@ -211,7 +207,6 @@ describe("CalendarModal floating event create workspace behavior", () => {
         editable: true,
         getEvents: () => [],
       },
-      billsData: {},
       deadlinesData: {},
     };
 
@@ -257,7 +252,6 @@ describe("CalendarModal floating event create workspace behavior", () => {
           editable: true,
           getEvents: () => [],
         }}
-        billsData={{}}
         deadlinesData={{}}
       />,
     ));

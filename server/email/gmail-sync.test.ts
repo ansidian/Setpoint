@@ -27,9 +27,6 @@ beforeEach(async () => {
       "006_email_search_embedding_state.sql",
       "007_email_search_ai_usage.sql",
       "028_provider_needs_reauth.sql",
-      "041_email_transaction_imports.sql",
-      "042_transaction_import_item_subject.sql",
-      "053_transaction_import_financial_plans.sql",
     ],
   });
 });

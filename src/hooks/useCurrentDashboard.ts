@@ -8,7 +8,6 @@ import {
   syncCurrentDashboard,
 } from "../api";
 import { isDemoMode } from "../demo/config.ts";
-import { invalidateActualMetadata } from "../lib/actualMetadata";
 import { logTiming } from "../../shared/timing";
 import type {
   CurrentDashboardCacheKey,
@@ -429,8 +428,6 @@ export default function useCurrentDashboard(
     if (disabled) return undefined;
     const handleChanged = (event: Event) => {
       const payload = parseDashboardEvent(event instanceof MessageEvent ? String(event.data || "") : "");
-      if (payload?.source === "bills") invalidateActualMetadata();
-      if (payload?.reason === "financial_event_changed") window.dispatchEvent(new CustomEvent("ea-financial-event-changed"));
       if (typeof onDashboardEventRef.current === "function") {
         onDashboardEventRef.current(payload);
       }
@@ -514,7 +511,7 @@ export default function useCurrentDashboard(
   }, [current?.calendar]);
 
   // Memoize the bulk slice on `current` (+ stable refreshNow) only, so the nested
-  // data arrays (liveCalendar/liveDeadlines/liveBills/…) keep stable references
+  // data arrays (liveCalendar/liveDeadlines/…) keep stable references
   // across loading/refreshing toggles. The volatile poll flags are layered on
   // top separately — only liveData's top-level identity changes when they flip,
   // not the contained arrays, so memoized children keyed on those arrays bail out.
@@ -538,7 +535,6 @@ export default function useCurrentDashboard(
       ...liveDataBulk,
       systemStatus,
       isPolling,
-      billsLoading: liveDataBulk.actualConfigured && isPolling && !liveDataBulk.liveBills.length,
     }),
     [liveDataBulk, isPolling, systemStatus],
   );

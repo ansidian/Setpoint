@@ -3,16 +3,14 @@
 // recompute amounts/dates beyond display formatting).
 import { Fragment, memo, useMemo } from "react";
 import type { ComponentType, ReactNode } from "react";
-import { Check, CheckCircle2, ChevronRight, Circle, Clock, CreditCard, Flag, MapPin, Receipt, Video } from "lucide-react";
+import { CheckCircle2, ChevronRight, Circle, Clock, Flag, MapPin, Video } from "lucide-react";
 import {
   alfredPriorityLabel,
   formatAlfredAbsolute,
   formatAlfredAgo,
   formatAlfredDate,
-  formatAlfredMoney,
 } from "./alfredPanelModel";
 import {
-  billsTotalDue,
   deadlineDone,
   emailDotState,
   emailRowDate,
@@ -82,31 +80,6 @@ export interface AlfredLeafRowProps {
   accent?: string;
   now?: Date;
   isNext?: boolean;
-}
-
-export function BillRow({ item, onActivate, todayYmd }: AlfredLeafRowProps) {
-  const overdue = !item.paid && isOverdueYmd(item.next_date, todayYmd);
-  return (
-    <RowShell onActivate={onActivate} dim={item.paid}>
-      <CreditCard size={13} color={dimmer} />
-      <TitleCell title={item.name} sub={item.payee} />
-      <span style={{ fontSize: 12, fontWeight: 600, color: text, fontVariantNumeric: "tabular-nums" }}>
-        {formatAlfredMoney(item.amount)}
-      </span>
-      {item.paid ? (
-        <span style={{
-          display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9.5, fontWeight: 600,
-          padding: "2px 7px", borderRadius: 999, color: "var(--sp-green)",
-          background: "color-mix(in srgb, var(--sp-green) 12%, transparent)", border: "1px solid color-mix(in srgb, var(--sp-green) 25%, transparent)",
-          fontVariantNumeric: "tabular-nums",
-        }}><Check size={9} strokeWidth={3} />Paid · {formatAlfredDate(item.next_date)}</span>
-      ) : (
-        <span style={{ fontSize: 10, color: overdue ? overdueColor : "var(--color-text-faint)", fontWeight: overdue ? 600 : 400, fontVariantNumeric: "tabular-nums" }}>
-          {formatAlfredDate(item.next_date)}
-        </span>
-      )}
-    </RowShell>
-  );
 }
 
 export function EventRow({ item, accent, onActivate, now = new Date(), isNext }: AlfredLeafRowProps) {
@@ -186,25 +159,9 @@ export function EmailRow({ item, onActivate, now }: AlfredLeafRowProps) {
   );
 }
 
-export function TransactionRow({ item }: AlfredLeafRowProps) {
-  return (
-    <RowShell>
-      <Receipt size={13} color={dimmer} />
-      <TitleCell title={item.payee} sub={item.category} />
-      <span style={{ fontSize: 12, fontWeight: 600, color: text, fontVariantNumeric: "tabular-nums" }}>
-        {formatAlfredMoney(item.amount)}
-      </span>
-      <span style={{ fontSize: 10, color: "var(--color-text-faint)", fontVariantNumeric: "tabular-nums" }}>
-        {formatAlfredDate(item.date)}
-      </span>
-    </RowShell>
-  );
-}
-
 const SECTION_TONES: Record<string, { Icon: ComponentType<{ size?: number; color?: string }>; color: string }> = {
   attention: { Icon: Flag, color: "var(--sp-rose)" },
   done: { Icon: CheckCircle2, color: "var(--color-text-faint)" },
-  paid: { Icon: Check, color: "var(--color-text-faint)" },
 };
 
 function SectionHeader({ label, tone }: { label: string; tone: string }) {
@@ -242,7 +199,7 @@ export const RowsBlock = memo(function RowsBlock({ kind, items, accent, onActiva
   // const export here would trip react-refresh/only-export-components). Drift is
   // caught by AlfredBreakdown's per-kind render test.
   const Row = ({
-    bill: BillRow, event: EventRow, deadline: DeadlineRow, email: EmailRow, transaction: TransactionRow,
+    event: EventRow, deadline: DeadlineRow, email: EmailRow,
   } as Partial<Record<AlfredItemKind, ComponentType<AlfredLeafRowProps>>>)[kind] ?? UnknownRow;
   // One `now` per block mount: a surfaced block is historical, so its time buckets
   // shouldn't drift as the session ticks on (tests inject a fixed `now`).
@@ -269,7 +226,6 @@ export const RowsBlock = memo(function RowsBlock({ kind, items, accent, onActiva
       }),
     }));
   }, [kind, items, onActivateItem, stableNow]);
-  const totalDue = kind === "bill" ? billsTotalDue(items) : 0;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
       {groups.map((group, gi) => (
@@ -280,19 +236,6 @@ export const RowsBlock = memo(function RowsBlock({ kind, items, accent, onActiva
           ))}
         </Fragment>
       ))}
-      {kind === "bill" && totalDue > 0 ? (
-        <div style={{
-          display: "flex", justifyContent: "space-between", alignItems: "center",
-          marginTop: 3, padding: "5px 10px",
-          borderTop: "1px solid rgba(255,255,255,0.06)",
-          fontSize: 11, color: "var(--color-text-faint)",
-        }}>
-          <span>Total due</span>
-          <span style={{ fontWeight: 600, color: text, fontVariantNumeric: "tabular-nums" }}>
-            {formatAlfredMoney(totalDue)}
-          </span>
-        </div>
-      ) : null}
     </div>
   );
 });

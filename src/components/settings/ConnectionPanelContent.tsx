@@ -108,7 +108,7 @@ export default function ConnectionPanelContent({
             label: "OpenAI",
             inputLabel: "OpenAI API key",
             placeholder: "Enter a new API key",
-            help: "Enables OpenAI-backed triage, bill extraction, semantic email search, and configured fallbacks.",
+            help: "Enables OpenAI-backed triage, semantic email search, and configured fallbacks.",
           }]}
           {...credentialProps}
         />
@@ -125,7 +125,7 @@ export default function ConnectionPanelContent({
             label: "Anthropic",
             inputLabel: "Anthropic API key",
             placeholder: "Enter a new API key",
-            help: "Enables Anthropic-backed triage, bill extraction, Alfred, and configured fallbacks.",
+            help: "Enables Anthropic-backed triage, Alfred, and configured fallbacks.",
           }]}
           {...credentialProps}
         />

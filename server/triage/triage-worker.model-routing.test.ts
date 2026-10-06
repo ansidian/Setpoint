@@ -36,68 +36,8 @@ describe("email triage worker model routing", () => {
     });
     const result = await processNextEmailTriageJob({ dbClient, now: new Date("2026-05-03T12:30:00.000Z") });
     expect(result).toMatchObject({ processed: true, lane: "needs_attention", source: "failure_fallback", model_calls: [] });
-    const saved = await dbClient.execute("SELECT triage_status, escalation_badge, bill_candidate_json, financial_email_plan_json FROM ea_email_triage WHERE email_id = 'msg-1'");
-    expect(saved.rows[0]).toMatchObject({ triage_status: "failed", escalation_badge: "Needs Review", bill_candidate_json: null, financial_email_plan_json: null });
-  });
-
-  it("routes a receipt rule through semantic triage and persists its incomplete financial candidate", async () => {
-    const dbClient = testDb.client!;
-    await queueEmail(dbClient, {
-      subject: "Your Apple receipt",
-      body_snippet: "Order total $84.12",
-      body_text: "Your Apple order total is $84.12.",
-      from_name: "Apple",
-      from_address: "orders@apple.com",
-    });
-    const billCandidate = {
-      payee_hint: "Apple",
-      amount: 84.12,
-      amount_kind: "order_total",
-      amount_candidates: [{ kind: "order_total", value: 84.12 }],
-      event_kind: "purchase",
-      event_confidence: 0.99,
-      event_evidence: "order total",
-    };
-    const modelClient = {
-      classify: vi.fn(async ({ tier }) => ({
-        decision: {
-          lane: "fyi",
-          category: "finance",
-          urgency: "normal",
-          escalation_badge: null,
-          summary: "Apple order confirmed.",
-          action: "Review order",
-          deadline_at: null,
-          confidence: 0.98,
-          bill_candidate: billCandidate,
-        },
-        usage: { input_tokens: 80, output_tokens: 30 },
-        latency_ms: 300,
-        tier,
-      })),
-    };
-
-    await processNextEmailTriageJob({
-      dbClient,
-      modelClient,
-      now: new Date("2026-05-03T12:20:00.000Z"),
-    });
-
-    const rows = await dbClient.execute({
-      sql: `SELECT t.bill_candidate_json AS triage_candidate,
-                   t.financial_email_plan_json AS financial_plan,
-                   t2.bill_candidate_json AS snapshot_candidate
-            FROM ea_email_triage t
-            JOIN ea_briefing_snapshot_items i ON i.triage_id = t.id
-            JOIN ea_email_triage t2 ON t2.id = i.triage_id
-            WHERE t.email_id = ?`,
-      args: ["msg-1"],
-    });
-    const triageCandidate = JSON.parse(String(rows.rows[0]!.triage_candidate));
-    const snapshotCandidate = JSON.parse(String(rows.rows[0]!.snapshot_candidate));
-    expect(triageCandidate).toEqual(snapshotCandidate);
-    expect(triageCandidate).toMatchObject(billCandidate);
-    expect(rows.rows[0]!.financial_plan).toBeNull();
+    const saved = await dbClient.execute("SELECT triage_status, escalation_badge FROM ea_email_triage WHERE email_id = 'msg-1'");
+    expect(saved.rows[0]).toMatchObject({ triage_status: "failed", escalation_badge: "Needs Review" });
   });
 
   it("routes high-risk payment mail directly to the strong model and stores usage", async () => {
@@ -123,12 +63,6 @@ describe("email triage worker model routing", () => {
           action: "Review payment",
           deadline_at: "2026-05-08T16:00:00.000Z",
           confidence: 0.88,
-          bill_candidate: {
-            payee_hint: "University Billing",
-            amount: 450,
-            due_date: "2026-05-08",
-            requires_confirmation: true,
-          },
         },
         usage: { input_tokens: 120, output_tokens: 40 },
         estimated_cost_usd: 0.004,
@@ -153,7 +87,7 @@ describe("email triage worker model routing", () => {
     const rows = await dbClient.execute({
       sql: `SELECT triage_status, triage_source, model_usage_json,
                    cheap_model_result_json, strong_model_result_json,
-                   estimated_cost_usd, latency_ms, bill_candidate_json,
+                   estimated_cost_usd, latency_ms,
                    last_decision_reason
             FROM ea_email_triage
             WHERE email_id = ?`,
@@ -175,11 +109,6 @@ describe("email triage worker model routing", () => {
     expect(JSON.parse(String(rows.rows[0]!.strong_model_result_json))).toMatchObject({
       decision: { category: "finance" },
       tier: "strong",
-    });
-    expect(JSON.parse(String(rows.rows[0]!.bill_candidate_json))).toMatchObject({
-      payee_hint: "University Billing",
-      amount: 450,
-      requires_confirmation: true,
     });
     expect(events).toEqual([
       expect.objectContaining({

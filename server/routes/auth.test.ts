@@ -9,7 +9,7 @@ import type {
   GenerateAuthenticationOptionsOpts,
   GenerateRegistrationOptionsOpts,
 } from "@simplewebauthn/server";
-import { createAuthTestDb, hashApiToken, hashSessionToken, seedOwner, seedSession } from "../test-utils/auth-db.ts";
+import { createAuthTestDb, hashSessionToken, seedOwner, seedSession } from "../test-utils/auth-db.ts";
 import { createPasskeyStore } from "../auth/passkey-store.ts";
 import { createPendingAuthStore } from "../auth/pending-auth-store.ts";
 import { createRecoveryCodeStore } from "../auth/recovery-code-store.ts";
@@ -191,65 +191,6 @@ describe("auth routes", () => {
     testState.db.current = null;
   });
 
-  it("mints API tokens with a default expiry", async () => {
-    await seedSession(currentDb(), "cookie-session", Date.now() + 60_000, Date.now());
-    const before = Date.now();
-
-    const res = await request(makeApp())
-      .post("/api/auth/api-tokens")
-      .set("Cookie", ["ea_session=cookie-session"])
-      .send({ label: "Phone", scopes: ["actual:write"] });
-
-    const result = await currentDb().execute({
-      sql: "SELECT token_hash, label, scopes, created_at, expires_at FROM ea_api_tokens",
-      args: [],
-    });
-
-    expect(res.status).toBe(200);
-    expect(res.body.token).toMatch(/^eatk_/);
-    expect(res.body.expires_at).toBeGreaterThan(before + 80 * 24 * 60 * 60 * 1000);
-    expect(res.body.expires_at).toBeLessThan(before + 100 * 24 * 60 * 60 * 1000);
-    expect(result.rows).toHaveLength(1);
-    expect(result.rows[0]).toMatchObject({
-      token_hash: hashApiToken(res.body.token),
-      label: "Phone",
-      scopes: JSON.stringify(["actual:write"]),
-      expires_at: res.body.expires_at,
-    });
-    expect(result.rows[0]!.token_hash).not.toBe(res.body.token);
-    expect(result.rows[0]!.created_at).toBeGreaterThanOrEqual(before);
-  });
-
-  it("does not let unauthenticated token-mint attempts consume the rate-limit budget", async () => {
-    await seedSession(currentDb(), "cookie-session", Date.now() + 60_000, Date.now());
-    const app = makeApp();
-
-    // Fire more unauthenticated mint attempts than the 5/15min budget. With auth ahead of the
-    // limiter these are all rejected by auth (401) and never count against the IP budget.
-    for (let i = 0; i < 8; i++) {
-      const blocked = await request(app)
-        .post("/api/auth/api-tokens")
-        .send({ label: "Spoofed", scopes: ["actual:write"] });
-      expect(blocked.status).toBe(401);
-    }
-
-    // The real, authenticated user can still mint — budget was untouched (not 429).
-    const res = await request(app)
-      .post("/api/auth/api-tokens")
-      .set("Cookie", ["ea_session=cookie-session"])
-      .send({ label: "Phone", scopes: ["actual:write"] });
-
-    const tokens = await currentDb().execute({
-      sql: "SELECT label FROM ea_api_tokens",
-      args: [],
-    });
-
-    expect(res.status).toBe(200);
-    expect(res.body.token).toMatch(/^eatk_/);
-    expect(tokens.rows).toHaveLength(1);
-    expect(tokens.rows[0]!.label).toBe("Phone");
-  });
-
   it("does not allow a fresh instance to be claimed without the deployment setup secret", async () => {
     await currentDb().execute("DELETE FROM ea_owner");
 
@@ -273,13 +214,11 @@ describe("auth routes", () => {
     });
 
     const res = await request(makeApp())
-      .post("/api/auth/api-tokens")
-      .set("Cookie", ["ea_session=passkey-session"])
-      .send({ label: "Persistence", scopes: ["actual:write"] });
+      .post("/api/auth/recovery-codes/regenerate")
+      .set("Cookie", ["ea_session=passkey-session"]);
 
     expect(res.status).toBe(403);
     expect(res.body).toMatchObject({ code: "PASSWORD_STEP_UP_REQUIRED" });
-    expect((await currentDb().execute("SELECT * FROM ea_api_tokens")).rows).toEqual([]);
   });
 
   it("creates a session and recommends setup when no passkeys exist", async () => {
@@ -545,11 +484,6 @@ describe("auth routes", () => {
       token: "pending-token",
       securityGeneration: 1,
     });
-    await currentDb().execute({
-      sql: `INSERT INTO ea_api_tokens (token_hash, label, scopes, created_at, expires_at)
-            VALUES (?, 'Phone', '["actual:write"]', 1, 9999999999999)`,
-      args: [hashApiToken("surviving-token")],
-    });
 
     const recovered = await request(makeApp())
       .post("/api/auth/recovery")
@@ -570,7 +504,6 @@ describe("auth routes", () => {
       sql: "SELECT * FROM ea_sessions WHERE token = ?",
       args: [hashSessionToken("old-session")],
     })).rows).toEqual([]);
-    expect((await currentDb().execute("SELECT * FROM ea_api_tokens")).rows).toEqual([]);
 
     const replay = await request(makeApp())
       .post("/api/auth/recovery")

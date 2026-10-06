@@ -88,16 +88,11 @@ export async function updateTriageRow(email: TriageEmail, decision: TriageDecisi
   dbClient,
   now,
   status = "complete",
-  inferBillCandidate = true,
 }: {
   dbClient: TriageDb;
   now: Date;
   status?: string;
-  inferBillCandidate?: boolean;
 }): Promise<void> {
-  // Only semantic classification can admit a financial candidate. Money-related
-  // wording in a rule or failure fallback is not evidence of a recordable event.
-  const billCandidate = inferBillCandidate ? decision.bill_candidate : null;
   await dbClient.execute({
     sql: `UPDATE ea_email_triage
           SET lane = ?,
@@ -116,7 +111,6 @@ export async function updateTriageRow(email: TriageEmail, decision: TriageDecisi
               model_usage_json = ?,
               estimated_cost_usd = ?,
               latency_ms = ?,
-              bill_candidate_json = ?,
               decision_metadata_json = ?,
               last_decision_reason = ?,
               last_triaged_at = ?,
@@ -139,7 +133,6 @@ export async function updateTriageRow(email: TriageEmail, decision: TriageDecisi
       JSON.stringify(decision.model_usage || {}),
       decision.estimated_cost_usd,
       decision.latency_ms,
-      billCandidate ? JSON.stringify(billCandidate) : null,
       decision.decision_metadata ? JSON.stringify(decision.decision_metadata) : null,
       decision.last_decision_reason || null,
       nowIso(now),

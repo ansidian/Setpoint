@@ -28,6 +28,7 @@ async function ciphertexts(db: Client): Promise<string[]> {
     db.execute("SELECT todoist_api_token_encrypted AS value FROM ea_settings"),
     db.execute("SELECT todoist_oauth_refresh_token_encrypted AS value FROM ea_settings"),
     db.execute("SELECT discord_webhook_url_encrypted AS value FROM ea_settings"),
+    db.execute("SELECT actual_budget_encryption_password_encrypted AS value FROM ea_settings"),
     db.execute("SELECT active_value_encrypted AS value FROM ea_instance_credentials"),
     db.execute("SELECT pending_value_encrypted AS value FROM ea_instance_credentials"),
   ]);
@@ -48,7 +49,8 @@ describe("root key rotation", () => {
         actual_budget_password_encrypted TEXT,
         todoist_api_token_encrypted TEXT,
         todoist_oauth_refresh_token_encrypted TEXT,
-        discord_webhook_url_encrypted TEXT
+        discord_webhook_url_encrypted TEXT,
+        actual_budget_encryption_password_encrypted TEXT
       );
       CREATE TABLE ea_instance_credentials (
         credential_key TEXT PRIMARY KEY,
@@ -62,13 +64,14 @@ describe("root key rotation", () => {
       args: ["account-1", legacyEncrypt("account-secret")],
     });
     await db.execute({
-      sql: "INSERT INTO ea_settings VALUES (?, ?, ?, ?, ?)",
+      sql: "INSERT INTO ea_settings VALUES (?, ?, ?, ?, ?, ?)",
       args: [
         "owner-1",
         oldEncryption.encrypt("actual-secret", settingsCredentialContext("owner-1", "actual_budget_password_encrypted")),
         legacyEncrypt("todoist-access"),
         oldEncryption.encrypt("todoist-refresh", settingsCredentialContext("owner-1", "todoist_oauth_refresh_token_encrypted")),
         oldEncryption.encrypt("discord-secret", settingsCredentialContext("owner-1", "discord_webhook_url_encrypted")),
+        oldEncryption.encrypt("budget-key", settingsCredentialContext("owner-1", "actual_budget_encryption_password_encrypted")),
       ],
     });
     await db.execute({
@@ -90,7 +93,7 @@ describe("root key rotation", () => {
     const before = await ciphertexts(db);
     const result = await rotateRootEncryptionKey({ dbClient: db, oldKey: OLD_KEY, newKey: NEW_KEY });
 
-    expect(result).toMatchObject({ applied: false, credentialCount: 7 });
+    expect(result).toMatchObject({ applied: false, credentialCount: 8 });
     expect(await ciphertexts(db)).toEqual(before);
   });
 
@@ -102,14 +105,15 @@ describe("root key rotation", () => {
       apply: true,
     });
     const values = await ciphertexts(db);
-    expect(result).toMatchObject({ applied: true, credentialCount: 7 });
+    expect(result).toMatchObject({ applied: true, credentialCount: 8 });
     expect(values.every((value) => value.startsWith("gcm:v2:"))).toBe(true);
 
     const next = createEncryption(() => NEW_KEY);
     expect(next.decrypt(values[0]!, accountCredentialContext("account-1"))).toBe("account-secret");
     expect(next.decrypt(values[1]!, settingsCredentialContext("owner-1", "actual_budget_password_encrypted"))).toBe("actual-secret");
-    expect(next.decrypt(values[5]!, instanceCredentialContext("ai.openai_api_key"))).toBe("active-secret");
-    expect(next.decrypt(values[6]!, instanceCredentialContext("ai.openai_api_key"))).toBe("pending-secret");
+    expect(next.decrypt(values[5]!, settingsCredentialContext("owner-1", "actual_budget_encryption_password_encrypted"))).toBe("budget-key");
+    expect(next.decrypt(values[6]!, instanceCredentialContext("ai.openai_api_key"))).toBe("active-secret");
+    expect(next.decrypt(values[7]!, instanceCredentialContext("ai.openai_api_key"))).toBe("pending-secret");
   });
 
   it("rolls every update back when a mid-rotation write fails", async () => {

@@ -32,7 +32,6 @@ import { startBillsMirrorRefreshWorker, stopBillsMirrorRefreshWorker } from "./b
 import { startGmailPullWorker, stopGmailPullWorker } from "./email/gmail-pull.ts";
 import { startCalendarPushWorker, stopCalendarPushWorker } from "./calendar/calendar-push.ts";
 import { startNewsPollWorker, stopNewsPollWorker } from "./news/news-poller.ts";
-import { startTransactionImportWorker, stopTransactionImportWorker } from "./transaction-imports/transaction-import-runtime.ts";
 import { createGracefulShutdown } from "./shutdown.ts";
 import { stopActualWorker } from "./actual/actual.ts";
 import { migrate } from "./db/migrate.ts";
@@ -99,14 +98,11 @@ app.use("/api/todoist/webhook", express.raw({ type: "*/*" }), todoistWebhookRout
 app.use(cookieParser());
 
 // CSRF protection: require custom header on all state-changing API requests.
-// Bearer-authenticated requests are exempt — CSRF only applies to cookie auth,
-// and a forged request can't attach a bearer token the attacker doesn't have.
 app.use("/api", (req, res, next) => {
   if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") {
     return next();
   }
   if (req.path === "/gmail/push") return next();
-  if (req.headers.authorization?.startsWith("Bearer ")) return next();
   if (req.headers["x-requested-with"] !== "Setpoint") {
     return res.status(403).json({ message: "Forbidden" });
   }
@@ -181,7 +177,6 @@ function startOwnerRuntime(): void {
   scheduleStartupWorker("calendar-sync", startupDelays.calendarSearchMirror, () => startCalendarPushWorker());
   scheduleStartupWorker("reminders", startupDelays.reminders, () => startReminderSchedulerWorker());
   scheduleStartupWorker("news-poll", startupDelays.news, () => startNewsPollWorker());
-  scheduleStartupWorker("transaction-imports", startupDelays.news, () => startTransactionImportWorker());
   startAlfredConversationSweeper();
 }
 
@@ -240,7 +235,6 @@ timeAsync("local-engine", async () => {
         stopBillsMirrorRefreshWorker,         // Task 1
         stopCalendarPushWorker,              // durable Calendar push/recovery and mirror drain
         stopNewsPollWorker,                   // news/news-poller.js:249
-        stopTransactionImportWorker,          // durable transaction import drain
         stopAlfredConversationSweeper,        // Task 1
         stopActualWorker,                    // drain SDK after every producer has stopped
       ],

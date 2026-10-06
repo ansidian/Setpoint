@@ -51,8 +51,8 @@ describe("durable email AI call ledger", () => {
     { error: new Error("fetch timeout after 120000ms: private URL"), status: null, code: "timeout" },
     { error: new SyntaxError("private response body"), status: 200, code: "invalid_json" },
   ])("retains $code without storing raw errors", async ({ error, status, code }) => {
-    const result = withAiUsageContext({ userId: "owner", origin: "manual_extraction", dbClient: db }, () =>
-      trackedAiProviderCall({ provider: "openai", model: "test-model", purpose: "extraction", maxOutputTokens: 1600 }, async (call) => {
+    const result = withAiUsageContext({ userId: "owner", origin: "background_triage", dbClient: db }, () =>
+      trackedAiProviderCall({ provider: "openai", model: "test-model", purpose: "triage_cheap", maxOutputTokens: 1600 }, async (call) => {
         if (status !== null) call.setHttpStatus(status);
         throw error;
       }));
@@ -74,22 +74,20 @@ describe("durable email AI call ledger", () => {
     expect(JSON.parse(String(rows[0]!.diagnostics_json))).toEqual({ responseStatus: null, stopReason: null, maxOutputTokens: 1600, reasoningTokens: null, failureCode: "invalid_response" });
   });
 
-  it("bounds recent failures by category and isolates owner, production and exact window, retaining legacy unknowns", async () => {
+  it("bounds recent failures and isolates owner, production and exact window, retaining legacy unknowns", async () => {
     for (let i = 0; i < 23; i++) await recordAiUsageEvent(event({ eventId: `failure-${String(i).padStart(2, "0")}`, outcome: "parse_error" }), { dbClient: db });
     for (const fixture of [
-      { eventId: "financial", purpose: "extraction" as const },
       { eventId: "other", userId: "other" },
       { eventId: "evaluation", runContext: "evaluation" as const },
       { eventId: "old", startedAt: "2026-08-27T11:59:59.999Z" },
       { eventId: "future", startedAt: "2026-09-03T12:00:00.001Z" },
-      { eventId: "edge", startedAt: "2026-08-27T12:00:00.000Z", purpose: "extraction" as const },
+      { eventId: "edge", startedAt: "2026-08-27T12:00:00.000Z" },
     ]) await recordAiUsageEvent(event({ outcome: "provider_error", ...fixture }), { dbClient: db });
     const stats = await getEmailAiUsageStats("owner", { dbClient: db, now: NOW });
-    expect(stats.contexts.production.triage.failures).toBe(23);
+    expect(stats.contexts.production.triage.failures).toBe(24);
     expect(stats.contexts.production.triage.recentFailures).toHaveLength(20);
     expect(stats.contexts.production.triage.recentFailures.map((f) => f.eventId)).toEqual(Array.from({ length: 20 }, (_, i) => `failure-${String(22 - i).padStart(2, "0")}`));
     expect(stats.contexts.production.triage.recentFailures[0]).toMatchObject({ diagnostics: null, httpStatus: 200, inputTokens: 100 });
-    expect(stats.contexts.production.financialEmail.recentFailures.map((f) => f.eventId)).toEqual(["financial", "edge"]);
     expect(stats.contexts.evaluation.triage.recentFailures).toEqual([]);
   });
 
@@ -106,10 +104,12 @@ describe("durable email AI call ledger", () => {
     ]);
   });
 
-  it("isolates owner, exact time window, run context and financial purposes", async () => {
+  it("isolates owner, exact time window and run context, and excludes retired financial-email purposes", async () => {
+    // Historical ledger rows keep their retired purpose values; stats must ignore them.
+    const retired = (purpose: string) => purpose as AiUsageEvent["purpose"];
     const fixtures: Partial<AiUsageEvent>[] = [
-      {}, { eventId: "audit", purpose: "verification", providerLatencyMs: 3000 },
-      { eventId: "eval", purpose: "matching", runContext: "evaluation" },
+      {}, { eventId: "audit", purpose: retired("verification"), outcome: "provider_error" },
+      { eventId: "eval", purpose: retired("matching"), runContext: "evaluation" },
       { eventId: "other", userId: "other" },
       { eventId: "old", startedAt: "2026-08-27T11:59:59.999Z" },
       { eventId: "edge", startedAt: "2026-08-27T12:00:00.000Z" },
@@ -117,33 +117,32 @@ describe("durable email AI call ledger", () => {
     ];
     for (const item of fixtures) await recordAiUsageEvent(event(item), { dbClient: db });
     const stats = await getEmailAiUsageStats("owner", { dbClient: db, now: NOW });
-    expect(stats.contexts.production.triage.calls).toBe(2);
-    expect(stats.contexts.production.financialEmail).toMatchObject({ calls: 1, averageProviderLatencyMs: 3000, byPurpose: { verification: { calls: 1 } } });
-    expect(stats.contexts.evaluation.financialEmail).toMatchObject({ calls: 1, byPurpose: { matching: { calls: 1 } } });
+    expect(stats.contexts.production.triage).toMatchObject({ calls: 2, failures: 0, recentFailures: [] });
+    expect(Object.keys(stats.contexts.production.triage.byPurpose)).toEqual(["triage_cheap"]);
     expect(stats.contexts.evaluation.triage.calls).toBe(0);
   });
 
   it("keeps unknown measurements and partial estimates distinguishable from a measured zero", async () => {
     await recordAiUsageEvent(event({
       ...normalizeAiUsage("openai", undefined), estimatedCostUsd: null, pricingVersion: null,
-      purpose: "extraction", outcome: "provider_error",
+      purpose: "triage_strong", outcome: "provider_error",
     }), { dbClient: db });
-    let financial = (await getEmailAiUsageStats("owner", { dbClient: db, now: NOW })).contexts.production.financialEmail;
-    expect(financial).toMatchObject({ calls: 1, failures: 1, inputTokens: null, estimatedCostUsd: null, missingUsageCalls: 1, unpricedCalls: 1 });
-    await recordAiUsageEvent(event({ eventId: "known", purpose: "matching" }), { dbClient: db });
-    financial = (await getEmailAiUsageStats("owner", { dbClient: db, now: NOW })).contexts.production.financialEmail;
-    expect(financial).toMatchObject({ calls: 2, inputTokens: 100, missingUsageCalls: 1, unpricedCalls: 1 });
-    expect(financial.estimatedCostUsd).toBeGreaterThan(0);
-    await recordAiUsageEvent(event({ eventId: "unknown-model", model: "future-model", estimatedCostUsd: null }), { dbClient: db });
-    const triage = (await getEmailAiUsageStats("owner", { dbClient: db, now: NOW })).contexts.production.triage;
-    expect(triage).toMatchObject({ inputTokens: 100, missingUsageCalls: 0, unpricedCalls: 1, estimatedCostUsd: null });
+    let triage = (await getEmailAiUsageStats("owner", { dbClient: db, now: NOW })).contexts.production.triage;
+    expect(triage).toMatchObject({ calls: 1, failures: 1, inputTokens: null, estimatedCostUsd: null, missingUsageCalls: 1, unpricedCalls: 1 });
+    await recordAiUsageEvent(event({ eventId: "known" }), { dbClient: db });
+    triage = (await getEmailAiUsageStats("owner", { dbClient: db, now: NOW })).contexts.production.triage;
+    expect(triage).toMatchObject({ calls: 2, inputTokens: 100, missingUsageCalls: 1, unpricedCalls: 1 });
+    expect(triage.estimatedCostUsd).toBeGreaterThan(0);
+    await recordAiUsageEvent(event({ eventId: "unknown-model", userId: "second-owner", model: "future-model", estimatedCostUsd: null }), { dbClient: db });
+    const unknownModel = (await getEmailAiUsageStats("second-owner", { dbClient: db, now: NOW })).contexts.production.triage;
+    expect(unknownModel).toMatchObject({ inputTokens: 100, missingUsageCalls: 0, unpricedCalls: 1, estimatedCostUsd: null });
   });
 
   it("persists usage before parsing, retains it after downstream failure, and separates provider timing", async () => {
     let clock = 100;
     vi.spyOn(performance, "now").mockImplementation(() => clock);
-    const work = withAiUsageContext({ userId: "owner", origin: "manual_extraction", dbClient: db }, async () => {
-      await trackedAiProviderCall({ provider: "openai", model: "gpt-5.4-nano", purpose: "extraction" }, async (call) => {
+    const work = withAiUsageContext({ userId: "owner", origin: "background_triage", dbClient: db }, async () => {
+      await trackedAiProviderCall({ provider: "openai", model: "gpt-5.4-nano", purpose: "triage_cheap" }, async (call) => {
         clock = 110;
         await call.capture({ usage: { input_tokens: 10, output_tokens: 2 }, model: "gpt-5.4-nano" });
         expect((await db.execute("SELECT outcome, input_tokens FROM ea_ai_usage_events")).rows).toEqual([
@@ -164,8 +163,8 @@ describe("durable email AI call ledger", () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     const broken = createClient({ url: "file::memory:" });
     broken.close();
-    const run = (fail: boolean) => withAiUsageContext({ userId: "owner", origin: "manual_extraction", dbClient: broken }, () =>
-      trackedAiProviderCall({ provider: "openai", model: "gpt-5.4-nano", purpose: "extraction" }, async (call) => {
+    const run = (fail: boolean) => withAiUsageContext({ userId: "owner", origin: "background_triage", dbClient: broken }, () =>
+      trackedAiProviderCall({ provider: "openai", model: "gpt-5.4-nano", purpose: "triage_cheap" }, async (call) => {
         await call.capture({ usage: { input_tokens: 0, output_tokens: 0 } });
         if (fail) throw new Error("original parser failure");
         return "successful extraction";
@@ -178,8 +177,8 @@ describe("durable email AI call ledger", () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const hungDb = { execute: async () => new Promise<{ rows: Record<string, unknown>[] }>(() => {}) };
-    const result = withAiUsageContext({ userId: "owner", origin: "manual_extraction", dbClient: hungDb }, () =>
-      trackedAiProviderCall({ provider: "openai", model: "gpt-5.4", purpose: "extraction" }, async (call) => {
+    const result = withAiUsageContext({ userId: "owner", origin: "background_triage", dbClient: hungDb }, () =>
+      trackedAiProviderCall({ provider: "openai", model: "gpt-5.4", purpose: "triage_cheap" }, async (call) => {
         await call.capture({ usage: { input_tokens: 5, output_tokens: 1 } });
         return "extracted";
       }));
@@ -191,8 +190,8 @@ describe("durable email AI call ledger", () => {
       if (firstWrite) { firstWrite = false; throw new Error("temporary DB outage"); }
       return db.execute(statement);
     } };
-    await withAiUsageContext({ userId: "owner", origin: "manual_extraction", dbClient: recoveringDb }, () =>
-      trackedAiProviderCall({ provider: "openai", model: "gpt-5.4", purpose: "extraction" }, async (call) => {
+    await withAiUsageContext({ userId: "owner", origin: "background_triage", dbClient: recoveringDb }, () =>
+      trackedAiProviderCall({ provider: "openai", model: "gpt-5.4", purpose: "triage_cheap" }, async (call) => {
         await call.capture({ usage: { input_tokens: 5, output_tokens: 1 } });
       }));
     expect((await db.execute("SELECT outcome, input_tokens FROM ea_ai_usage_events")).rows).toEqual([
@@ -204,7 +203,7 @@ describe("durable email AI call ledger", () => {
     const before = (await db.execute("SELECT total_changes() AS count")).rows;
     const error = new Error(outcome);
     const result = withAiUsageContext({ userId: "owner", origin: "evaluation", runContext: "evaluation", dbClient: db }, () =>
-      trackedAiProviderCall({ provider: "openai", model: "gpt-5.4", purpose: "extraction" }, async (call) => {
+      trackedAiProviderCall({ provider: "openai", model: "gpt-5.4", purpose: "triage_cheap" }, async (call) => {
         if (outcome === "transport failure") throw error;
         call.setHttpStatus(200);
         await call.capture({ usage: { input_tokens: 100, output_tokens: 20 } });
@@ -218,16 +217,16 @@ describe("durable email AI call ledger", () => {
   });
 
   it("keeps nested evaluation calls out of the ledger while recording independent concurrent production calls", async () => {
-    const call = () => trackedAiProviderCall({ provider: "anthropic", model: "claude-haiku-4-5", purpose: "verification" }, async (capture) => {
+    const call = () => trackedAiProviderCall({ provider: "anthropic", model: "claude-haiku-4-5", purpose: "triage_strong" }, async (capture) => {
       await capture.capture({ usage: { input_tokens: 10, output_tokens: 2 } });
     });
     await Promise.all([
       withAiUsageContext({ userId: "owner", origin: "evaluation", runContext: "evaluation", runId: "eval-run", dbClient: db }, () =>
         withAiUsageContext({ userId: "owner", origin: "background_triage" }, call)),
-      withAiUsageContext({ userId: "owner", origin: "reader_adoption", runId: "reader-run", dbClient: db }, call),
+      withAiUsageContext({ userId: "owner", origin: "background_triage", runId: "triage-run", dbClient: db }, call),
     ]);
     expect((await db.execute("SELECT run_id, run_context, origin FROM ea_ai_usage_events ORDER BY run_id")).rows).toEqual([
-      { run_id: "reader-run", run_context: "production", origin: "reader_adoption" },
+      { run_id: "triage-run", run_context: "production", origin: "background_triage" },
     ]);
   });
 

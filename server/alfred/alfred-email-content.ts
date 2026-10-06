@@ -46,7 +46,7 @@ export function wrapEmailContent(uid: string, text: unknown): string {
 }
 
 // The compact per-candidate row the model reasons over. Every disambiguator the
-// re-ranker already used stays visible here (audit C1: deadline, category, bill,
+// re-ranker already used stays visible here (audit C1: deadline, category,
 // account, body lede) — otherwise near-duplicate recurring emails are told apart by
 // the ranking but indistinguishable to the model. Optional fields are omitted (not
 // null) to keep tool results small; raw fused scores are internal and never shown.
@@ -77,7 +77,6 @@ export function searchEmailResultRow(candidate: AlfredSearchCandidate): Record<s
     ...(excerpt ? { excerpt: wrapEmailContent(candidate.uid, excerpt) } : {}),
     ...(meta.category && meta.category !== "uncategorized" ? { category: meta.category } : {}),
     ...(meta.deadline_at ? { deadline_at: meta.deadline_at } : {}),
-    ...(meta.bill_candidate ? { bill: true } : {}),
     ...(meta.handled ? { handled: true } : {}),
     ...(!resolved && meta.lane && meta.lane !== "untriaged" ? { lane: meta.lane } : {}),
     ...(!resolved && meta.urgency && meta.urgency !== "normal" ? { urgency: meta.urgency } : {}),

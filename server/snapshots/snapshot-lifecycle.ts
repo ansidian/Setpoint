@@ -1,5 +1,4 @@
 import type {
-  SnapshotBillCandidate,
   SnapshotItem,
   SnapshotLane,
   SnapshotRecord,
@@ -32,7 +31,6 @@ export interface SnapshotItemRow extends Record<string, unknown> {
   source?: string | null;
   catch_up?: string | number | bigint | null;
   resurfaced_at?: string | number | bigint | null;
-  bill_candidate_json?: string | null;
   summary_at_snapshot?: string | null;
   action_at_snapshot?: string | null;
   urgency_at_snapshot?: string | null;
@@ -163,19 +161,6 @@ export function normalizeCount(value: unknown): number {
   return Number(value || 0);
 }
 
-export function normalizeBillCandidate(candidate: unknown): SnapshotBillCandidate | null {
-  if (!candidate || typeof candidate !== "object") return null;
-  const source = candidate as Record<string, unknown>;
-  const payee = snapshotString(source.payee, source.payee_hint);
-  return {
-    ...source,
-    payee,
-    amount: source.amount ?? source.amount_due ?? null,
-    due_date: snapshotString(source.due_date, source.dueDate) || null,
-    type: snapshotString(source.type) || "expense",
-  };
-}
-
 function isVerificationCodeKind(value: unknown): value is SnapshotVerificationCode["kind"] {
   return value === "numeric" || value === "alphanumeric" || value === "hyphenated";
 }
@@ -185,10 +170,6 @@ export function normalizeSnapshotItem(row: SnapshotItemRow): SnapshotItem {
   const resurfacedAt = row.resurfaced_at == null ? null : Number(row.resurfaced_at);
   const catchUp = source === "catch_up" || Number(row.catch_up || 0) === 1;
   const normalizedSource = catchUp ? "catch_up" : source;
-  const billCandidate = row.bill_candidate_json
-    ? JSON.parse(row.bill_candidate_json) as Record<string, unknown>
-    : null;
-  const extractedBill = normalizeBillCandidate(billCandidate);
   const verificationKind = row.verification_code_kind;
   const verificationCode = row.verification_code
     && row.verification_code_active_until
@@ -238,9 +219,6 @@ export function normalizeSnapshotItem(row: SnapshotItemRow): SnapshotItem {
     handled_at: row.handled_at || null,
     provider_removed_at: row.provider_removed_at || null,
     read: Boolean(row.read),
-    hasBill: Boolean(billCandidate),
-    bill_candidate: billCandidate,
-    extractedBill,
     _catchUp: catchUp,
     previous_snapshot_item_id: catchUp ? Number(row.id) : null,
     verification_code: verificationCode,

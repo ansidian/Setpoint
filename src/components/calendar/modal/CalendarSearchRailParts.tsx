@@ -134,7 +134,7 @@ export function CalendarSearchRailHeader({
           onChange={(event) => search.setQuery(event.target.value)}
           onKeyDown={onInputKeyDown}
           aria-label="Calendar search"
-          placeholder={calendarSearchPlaceholder(search.scope)}
+          placeholder={calendarSearchPlaceholder()}
           data-testid="calendar-search-input"
           style={{
             minWidth: 0,

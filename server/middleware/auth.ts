@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import db from "../db/connection.ts";
 import type { Client } from "@libsql/client";
-import type { Request, RequestHandler } from "express";
+import type { RequestHandler } from "express";
 
 const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 export const RECENT_AUTH_MAX_AGE_MS = 10 * 60 * 1000;
@@ -18,8 +18,6 @@ export type SessionSecurityContext = {
   securityGeneration: number;
   authMethod: SessionAuthMethod;
 };
-export type ApiTokenContext = { id: string | number; scopes: string[] };
-type RequestWithApiToken = Request & { apiToken?: ApiTokenContext };
 
 export function hashToken(raw: string) {
   return crypto.createHash("sha256").update(raw).digest("hex");
@@ -33,42 +31,8 @@ function stringValue(value: unknown): string | null {
   return typeof value === "string" ? value : null;
 }
 
-function identifierValue(value: unknown): string | number | null {
-  return typeof value === "string" || typeof value === "number" ? value : null;
-}
-
 function numberValue(value: unknown): number | null {
   return typeof value === "number" ? value : null;
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-export async function validateBearer(raw: string | null | undefined): Promise<ApiTokenContext | null> {
-  if (!raw) return null;
-  const result = await db.execute({
-    sql: "SELECT id, scopes, expires_at FROM ea_api_tokens WHERE token_hash = ?",
-    args: [hashToken(raw)],
-  });
-  const row = result.rows[0];
-  if (!row) return null;
-  // Fail closed: a NULL/0 expires_at (legacy rows predating API_TOKEN_TTL) is
-  // treated as expired so it cannot outlive token rotation. expires_at is ms.
-  const expiresAt = numberValue(row.expires_at);
-  const id = identifierValue(row.id);
-  if (!expiresAt || !id || Date.now() > expiresAt) return null;
-  // Fire-and-forget last_used update; don't block request on it
-  db.execute({
-    sql: "UPDATE ea_api_tokens SET last_used_at = ? WHERE id = ?",
-    args: [Date.now(), id],
-  }).catch((err: unknown) => console.error("[EA] api-token last_used update failed:", errorMessage(err)));
-  let scopes: string[] = [];
-  try {
-    const parsed: unknown = JSON.parse(stringValue(row.scopes) || "[]");
-    scopes = Array.isArray(parsed) ? parsed.filter((scope): scope is string => typeof scope === "string") : [];
-  } catch { scopes = []; }
-  return { id, scopes };
 }
 
 export async function deleteSession(token: string) {
@@ -297,12 +261,6 @@ export async function validateSession(token: string | null | undefined): Promise
   return Boolean(await getSessionSecurityContext(token));
 }
 
-function getBearerToken(req: Request) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith("Bearer ")) return null;
-  return authHeader.slice(7).trim();
-}
-
 export function createRequireCookieSession(
   dbClient: Pick<Client, "execute"> = db,
 ): RequestHandler {
@@ -351,29 +309,3 @@ export function createRequireRecentPasswordAuth(
 }
 
 export const requireRecentPasswordAuth = createRequireRecentPasswordAuth();
-
-export function requireCookieSessionOrApiTokenScope(requiredScope: string): RequestHandler {
-  return async function requireCookieOrScopedToken(req, res, next) {
-    try {
-      const raw = getBearerToken(req);
-      if (raw) {
-        const ctx = await validateBearer(raw);
-        if (ctx?.scopes.includes(requiredScope)) {
-          (req as RequestWithApiToken).apiToken = ctx;
-          return next();
-        }
-        if (await validateSession(req.cookies?.ea_session)) {
-          return next();
-        }
-        if (ctx) {
-          return res.status(403).json({ message: `Token lacks ${requiredScope} scope` });
-        }
-        return res.status(401).json({ message: "Not authenticated" });
-      }
-
-      return requireCookieSession(req, res, next);
-    } catch (err) {
-      return next(err); // forward DB faults instead of hanging (P1-12)
-    }
-  };
-}

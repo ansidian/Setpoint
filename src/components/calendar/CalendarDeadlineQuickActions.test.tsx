@@ -62,7 +62,6 @@ function renderDeadlineModal({ deadlines = [], deadlineActions = {} }: { deadlin
           onViewChange={() => {}}
           focusDate="2026-04-20"
           eventsData={{ getEvents: () => [] }}
-          billsData={{}}
           deadlinesData={{
             upcoming: currentDeadlines,
             stats: null,

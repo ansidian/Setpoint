@@ -56,7 +56,7 @@ describe("mini calendar model", () => {
       { id: "event-1", dateKey: "2026-05-12", kind: "event", color: "#89b4fa" },
       { id: "event-2", dateKey: "2026-05-12", kind: "event", sourceColor: "#a6e3a1" },
       { id: "event-3", dateKey: "2026-05-12", kind: "event", agendaSourceColor: "#f9e2af" },
-      { id: "bill-1", dateKey: "2026-05-12", kind: "bill", agendaDotColor: "#f97316" },
+      { id: "event-4", dateKey: "2026-05-12", kind: "event", markerColor: "#f97316" },
       { id: "deadline-1", dateKey: "2026-05-12", kind: "deadline", color: "#cba6da" },
       { id: "deadline-2", dateKey: "2026-05-12", kind: "deadline", color: "#f38ba8" },
     ]);

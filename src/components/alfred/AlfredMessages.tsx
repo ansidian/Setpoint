@@ -17,7 +17,6 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
-  CreditCard,
   Flag,
   Inbox,
   ListChecks,
@@ -194,7 +193,6 @@ export const ErrorLine = memo(function ErrorLine({ text: body }: { text: string 
 
 const SUGGESTION_ICONS = {
   sun: Sun,
-  bills: CreditCard,
   inbox: Inbox,
   deadlines: Flag,
   calendar: Calendar,

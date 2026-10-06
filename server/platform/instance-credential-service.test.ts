@@ -162,7 +162,7 @@ describe("instance credential service", () => {
     });
     const metadata = await service.getCredentialMetadata("ai.anthropic_api_key");
     expect(metadata).toMatchObject({ source: "environment", activeConfigured: true });
-    expect(metadata.capabilities).toEqual(["email_triage", "bill_extraction", "alfred"]);
+    expect(metadata.capabilities).toEqual(["email_triage", "alfred"]);
     expect(JSON.stringify(metadata)).not.toContain("host-anthropic-secret");
   });
 

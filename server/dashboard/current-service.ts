@@ -4,7 +4,6 @@
 // planning/scheduling, and response composition.
 import db from "../db/connection.ts";
 import { instanceCredentialService } from "../platform/instance-credential-service.ts";
-import { getBillsMirrorState } from "../bills/bills-service.ts";
 import { publishCurrentDashboardEvent } from "./current-events.ts";
 import { computeDeadlineStats } from "../tasks/deadline-helpers.ts";
 import { getActiveSnapshotView, syncActiveSnapshot } from "../snapshots/snapshot-service.ts";
@@ -12,7 +11,6 @@ import { getTodoistSyncHealth } from "../tasks/todoist.ts";
 import { getEmailSyncHealth } from "../email/email-sync-health.ts";
 import { getCalendarPushHealth } from "../calendar/calendar.ts";
 import type { Client } from "@libsql/client";
-import type { BillsMirrorHealth, BillsMirrorPayload } from "../../shared/types/bills.ts";
 import type { TodoistMirrorHealth } from "../../shared/types/tasks.ts";
 import type {
   CurrentDashboardCacheKey,
@@ -33,7 +31,6 @@ import {
   CURRENT_CACHE_KEYS,
   currentResponseContentKey,
   EMPTY_DEADLINES,
-  fallbackPayloadForKey,
   hasUsablePayload,
   parsePayload,
   summarizeCurrentDataHealth,
@@ -41,8 +38,6 @@ import {
 import { composeSystemStatus } from "./currentSystemStatusModel.ts";
 import {
   planCurrentDataRefresh,
-  applyProviderPassiveSuppression,
-  applyProviderMaintenanceRefresh,
   applyProviderManualRefresh,
   scheduledEntry,
 } from "./currentRefreshPlanModel.ts";
@@ -58,7 +53,6 @@ import {
 export {
   clearCurrentDashboardRefreshState,
 } from "./currentRefreshRunner.ts";
-export { getDashboardFinance } from "./dashboard-finance.ts";
 
 const SNAPSHOT_SYNC_TIMEOUT_MS = 2_500;
 
@@ -95,28 +89,17 @@ function asDeadlinesPayload(value: unknown): DeadlinesPayload {
   };
 }
 
-function asBillsPayload(value: unknown): Partial<BillsMirrorPayload> & Record<string, unknown> {
-  return asRecord(value) || {};
-}
-
-function unavailableBillsHealth(): BillsMirrorHealth {
-  return { state: "unavailable", configured: null, lastSuccessAt: null, lastError: "Bills sync health unavailable" };
-}
-
 async function loadProviderHealth(
   userId: string,
   rows: CurrentDashboardCacheRows,
-  { now = new Date(), dbClient = db, todoistHealth, billsHealth }: {
+  { now = new Date(), dbClient = db, todoistHealth }: {
     now?: Date;
     dbClient?: Client;
     todoistHealth?: TodoistMirrorHealth | null;
-    billsHealth?: BillsMirrorHealth;
   } = {},
 ): Promise<CurrentDashboardProviderHealth> {
-  const [todoist, bills, connections, calendarPush, email] = await Promise.all([
+  const [todoist, connections, calendarPush, email] = await Promise.all([
     todoistHealth ?? getTodoistSyncHealth(userId).catch((err) => unavailableTodoistHealth(err)),
-    billsHealth ?? getBillsMirrorState(userId, { dbClient })
-      .then((mirror) => mirror.syncHealth).catch(() => unavailableBillsHealth()),
     loadStatusConnections(userId, { dbClient }),
     getCalendarPushHealth(userId, { dbClient, nowMs: now.getTime() }).catch(() => ({
       state: "degraded" as const, message: "Calendar update checks are unavailable. Automatic checks continue.",
@@ -125,9 +108,6 @@ async function loadProviderHealth(
   ]);
   return {
     currentData: summarizeCurrentDataHealth(rows, now), todoist,
-    bills: connections.actualConfigured ? bills : {
-      state: "unconfigured", configured: false, lastSuccessAt: null, lastError: null,
-    },
     reauth: connections.reauth, configured: connections.configured,
     calendarPush, email,
   };
@@ -140,7 +120,7 @@ export async function refreshCalendarCurrentData(userId: string): Promise<void> 
   const now = new Date();
   const refreshing = await markRowsRefreshing(userId, rows, ["calendar_current"], { now });
   const refreshedRows = await refreshRows(userId, refreshing, ["calendar_current"], {
-    now, force: true, refreshReasons: { calendar_current: "calendar_provider_sync" },
+    now, force: true,
   });
   const refreshed = refreshedRows.calendar_current;
   if (refreshed?.status !== "current" || Number(refreshed.refresh_failure_count || 0) > 0) {
@@ -265,12 +245,6 @@ async function composeCurrentDashboardResponse(userId: string, rows: CurrentDash
   dbClient?: Client;
   now?: Date;
 }): Promise<CurrentDashboardResponse> {
-  const billsPayload = asBillsPayload(usablePayloadForKey(
-    "bills_current",
-    rows.bills_current,
-    fallbackPayloadForKey("bills_current"),
-  ));
-
   const nextProviderHealth = { ...providerHealth };
   if (activeSnapshotHealth) nextProviderHealth.activeSnapshot = activeSnapshotHealth;
   const fetchedAt = new Date().toISOString();
@@ -283,12 +257,6 @@ async function composeCurrentDashboardResponse(userId: string, rows: CurrentDash
     weather: usablePayloadForKey("weather_current", rows.weather_current, null),
     calendar: reminderPayloads.calendar,
     deadlines: reminderPayloads.deadlines,
-    bills: Array.isArray(billsPayload.bills) ? billsPayload.bills : [],
-    allSchedules: Array.isArray(billsPayload.allSchedules) ? billsPayload.allSchedules : [],
-    payeeMap: asRecord(billsPayload.payeeMap) || {},
-    actualConfigured: !!billsPayload.actualConfigured,
-    actualBudgetUrl: typeof billsPayload.actualBudgetUrl === "string" ? billsPayload.actualBudgetUrl : null,
-    billsSyncHealth: billsPayload.billsSyncHealth as BillsMirrorHealth || null,
     activeSnapshot,
     providerHealth: nextProviderHealth,
     systemStatus: composeSystemStatus(nextProviderHealth, { generatedAt: fetchedAt }),
@@ -307,43 +275,29 @@ function scheduledCacheKeys(refreshPlan: CurrentDashboardRefreshPlan): CurrentDa
     .filter((key): key is CurrentDashboardCacheKey => key !== "active_snapshot");
 }
 
-async function loadRefreshContext(
-  userId: string,
-  { dbClient = db }: { dbClient?: Client } = {},
-): Promise<CurrentProviderContext & { todoistHealth: TodoistMirrorHealth }> {
-  // P1-7: these two health reads are independent (todoist mirror vs bills mirror
-  // tables, no write ordering) — run them concurrently instead of serially. Keep
-  // the per-call .catch INSIDE Promise.all so one failing read still degrades
-  // gracefully rather than rejecting both.
-  const [todoistHealth, billsMirror] = await Promise.all([
-    getTodoistSyncHealth(userId).catch((err) => unavailableTodoistHealth(err)),
-    getBillsMirrorState(userId, { dbClient }).catch(() => ({ row: null, syncHealth: unavailableBillsHealth(), actualBudgetUrl: null })),
-  ]);
-  return { todoistHealth, billsMirror };
+async function loadRefreshContext(userId: string): Promise<CurrentProviderContext & { todoistHealth: TodoistMirrorHealth }> {
+  const todoistHealth = await getTodoistSyncHealth(userId).catch((err) => unavailableTodoistHealth(err));
+  return { todoistHealth };
 }
 
 export async function getCurrentDashboard(userId: string, {
   dbClient = db,
   now = new Date(),
 }: { dbClient?: Client; now?: Date } = {}): Promise<CurrentDashboardResponse> {
-  // loadCacheRows (ea_current_data_cache) and loadRefreshContext (todoist + bills
+  // loadCacheRows (ea_current_data_cache) and loadRefreshContext (todoist
   // mirror health) read disjoint tables and nothing written before this point
   // feeds either, so overlap them instead of paying two serial database round-trips
   // up front on every poll. refreshMissingRows only writes on a cold/missing row,
   // which loadRefreshContext does not read.
   const [cacheRows, context] = await Promise.all([
     loadCacheRows(userId, { dbClient }),
-    loadRefreshContext(userId, { dbClient }),
+    loadRefreshContext(userId),
   ]);
   const rows = await refreshMissingRows(userId, cacheRows, { dbClient, now });
   const refreshPlan = planCurrentDataRefresh(rows, { mode: "passive", now, context });
-  applyProviderPassiveSuppression(refreshPlan, rows, { now, context });
-  const forceKeys = new Set<CurrentDashboardCacheKey>();
-  applyProviderMaintenanceRefresh(refreshPlan, rows, { forceKeys, now, context });
   const scheduledKeys = scheduledCacheKeys(refreshPlan);
   const responseRows = await markRowsRefreshing(userId, rows, scheduledKeys, { dbClient, now });
-  const refreshReasons = Object.fromEntries(refreshPlan.scheduled.map((entry) => [entry.key, entry.reason]));
-  scheduleBackgroundCurrentRefresh(userId, responseRows, scheduledKeys, { dbClient, now, forceKeys, refreshReasons });
+  scheduleBackgroundCurrentRefresh(userId, responseRows, scheduledKeys, { dbClient, now });
   // P1-7: getActiveSnapshotView and loadProviderHealth read disjoint table sets
   // and share no write (markRowsRefreshing already completed above), so resolve
   // them concurrently instead of as serial awaits in the object literal.
@@ -355,10 +309,7 @@ export async function getCurrentDashboard(userId: string, {
   // afterward. This removes the last serial DB hop from the every-2s poll path.
   const [activeSnapshot, providerHealth, hydratedReminderPayloads] = await Promise.all([
     getActiveSnapshotView(userId),
-    loadProviderHealth(userId, responseRows, {
-      now, dbClient, todoistHealth: context.todoistHealth,
-      billsHealth: cacheRows.bills_current ? context.billsMirror?.syncHealth : undefined,
-    }),
+    loadProviderHealth(userId, responseRows, { now, dbClient, todoistHealth: context.todoistHealth }),
     hydrateCurrentReminderState(userId, {
       calendar: usablePayloadForKey("calendar_current", rows.calendar_current, []),
       deadlines: usablePayloadForKey("deadlines_current", rows.deadlines_current, EMPTY_DEADLINES),
@@ -427,7 +378,7 @@ async function refreshCurrentDashboardSource(userId: string, source: CurrentDash
   const rows = await loadCacheRows(userId, { dbClient });
   const responseRows = await markRowsRefreshing(userId, rows, [source], { dbClient, now });
   const completed = await scheduleBackgroundCurrentRefresh(userId, responseRows, [source], {
-    dbClient, now, force: true, refreshReasons: { [source]: "source_retry" },
+    dbClient, now, force: true,
   });
   if (!completed) throw new Error("Failed to finish the requested source refresh");
   // Read the completed cache directly. The general dashboard read would also
@@ -450,14 +401,13 @@ export async function requestCurrentDashboardRefresh(userId: string, {
 }: { dbClient?: Client; now?: Date; source?: CurrentDashboardCacheKey } = {}): Promise<CurrentDashboardResponse> {
   if (source) return refreshCurrentDashboardSource(userId, source, { dbClient, now });
   const rows = await loadCacheRows(userId, { dbClient });
-  const context = await loadRefreshContext(userId, { dbClient });
+  const context = await loadRefreshContext(userId);
   const refreshPlan = planCurrentDataRefresh(rows, { mode: "manual", now, context });
   const forceKeys = new Set<CurrentDashboardCacheKey>();
   applyProviderManualRefresh(refreshPlan, rows, { forceKeys, now, context });
   const scheduledKeys = scheduledCacheKeys(refreshPlan);
   const responseRows = await markRowsRefreshing(userId, rows, scheduledKeys, { dbClient, now });
-  const refreshReasons = Object.fromEntries(refreshPlan.scheduled.map((entry) => [entry.key, entry.reason]));
-  scheduleBackgroundCurrentRefresh(userId, responseRows, scheduledKeys, { dbClient, now, forceKeys, refreshReasons });
+  scheduleBackgroundCurrentRefresh(userId, responseRows, scheduledKeys, { dbClient, now, forceKeys });
   const shouldSyncSnapshot = true;
   if (shouldSyncSnapshot) {
     syncActiveSnapshot(userId)
@@ -485,7 +435,7 @@ export async function requestCurrentDashboardRefresh(userId: string, {
   // round-trips serially on every manual/return-to-dashboard refresh.
   const [activeSnapshot, providerHealth] = await Promise.all([
     getActiveSnapshotView(userId),
-    loadProviderHealth(userId, responseRows, { now, dbClient, todoistHealth: context.todoistHealth, billsHealth: context.billsMirror?.syncHealth }),
+    loadProviderHealth(userId, responseRows, { now, dbClient, todoistHealth: context.todoistHealth }),
   ]);
   return composeCurrentDashboardResponse(userId, rows, {
     activeSnapshot,
@@ -502,27 +452,6 @@ export async function requestCurrentDashboardRefresh(userId: string, {
   });
 }
 
-export async function requestBillsCurrentMaintenanceRefresh(userId: string, {
-  dbClient = db,
-  now = new Date(),
-}: { dbClient?: Client; now?: Date } = {}): Promise<{
-  scheduled: boolean;
-  due: boolean;
-  refresh?: CurrentDashboardRefreshPlan;
-}> {
-  const rows = await loadCacheRows(userId, { dbClient });
-  const billsMirror = await getBillsMirrorState(userId, { dbClient }).catch(() => null);
-  const refreshPlan: CurrentDashboardRefreshPlan = { scheduled: [], skipped: [] };
-  const forceKeys = new Set<CurrentDashboardCacheKey>();
-  applyProviderMaintenanceRefresh(refreshPlan, rows, { forceKeys, now, context: { billsMirror } });
-  const scheduledKeys = scheduledCacheKeys(refreshPlan);
-  if (!scheduledKeys.length) return { scheduled: false, due: false };
-  const responseRows = await markRowsRefreshing(userId, rows, scheduledKeys, { dbClient, now });
-  const refreshReasons = Object.fromEntries(refreshPlan.scheduled.map((entry) => [entry.key, entry.reason]));
-  scheduleBackgroundCurrentRefresh(userId, responseRows, scheduledKeys, { dbClient, now, forceKeys, refreshReasons });
-  return { scheduled: true, due: true, refresh: refreshPlan };
-}
-
 async function loadStatusConnections(userId: string, { dbClient = db }: { dbClient?: Client } = {}) {
   const [accountsResult, settingsResult, weatherCredential] = await Promise.all([
     dbClient.execute({
@@ -530,14 +459,13 @@ async function loadStatusConnections(userId: string, { dbClient = db }: { dbClie
       args: [userId],
     }),
     dbClient.execute({
-      sql: "SELECT todoist_needs_reauth, actual_budget_url FROM ea_settings WHERE user_id = ?",
+      sql: "SELECT todoist_needs_reauth FROM ea_settings WHERE user_id = ?",
       args: [userId],
     }),
     // Redacted local metadata only. If inspection fails, keep configuration unknown.
     instanceCredentialService.getCredentialMetadata("weather.pirate_weather_api_key").catch(() => null),
   ]);
   return {
-    actualConfigured: Boolean(settingsResult.rows[0]?.actual_budget_url),
     reauth: {
       accounts: accountsResult.rows.filter((row) => Boolean(row.needs_reauth))
         .map((row) => ({ id: row.id, email: row.email, type: row.type })),

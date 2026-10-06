@@ -1,8 +1,3 @@
-import type {
-  BillCandidate,
-  FinancialEmailPlan,
-  FinancialEmailReconciliation,
-} from "../../../../shared/types/bills";
 import type { Dispatch, ReactNode, RefObject, SetStateAction } from "react";
 import type { InboxAccount, InboxEmailLike } from "../inboxTypes";
 import type { InboxActionDispatcher } from "../useInboxActionDispatch";
@@ -18,33 +13,6 @@ export type EmailBodyState = (
   remoteContentIdentity?: { messageKey: string; accountId: string; senderAddress: string };
 };
 
-export interface EmailBodyStateInput {
-  loading: boolean;
-  body?: string | null;
-  error?: string | null;
-  source?: EmailBodyState["source"];
-}
-
-export type BillExtractionBody = {
-  body: string;
-  loading: boolean;
-  source: "unavailable" | "loading" | "error" | "fallback" | "loaded" | "empty";
-  error: string | null;
-};
-
-export type BillResolutionValue = {
-  plan: FinancialEmailPlan | null;
-  resolvedBill: BillCandidate | null;
-  actualStatus: FinancialEmailReconciliation | null;
-};
-
-export type BillResolutionState = BillResolutionValue & {
-  key: string | null;
-  status: "idle" | "loading" | "resolved" | "error";
-  error: unknown;
-  retry?: () => void;
-};
-
 export interface ReaderSurfaceProps {
   email: InboxEmailLike;
   account?: InboxAccount | null;
@@ -58,20 +26,14 @@ export interface ReaderSurfaceProps {
   onAskAlfred?: () => void;
   showTriage: boolean;
   showDraft?: boolean;
-  onCreateProfile: () => void;
   snoozeBtnRef?: RefObject<HTMLButtonElement | null>;
   snoozeOpen: boolean;
   setSnoozeOpen: Dispatch<SetStateAction<boolean>>;
   bodyState: EmailBodyState;
-  billResolution?: BillResolutionState;
   drafting: boolean;
   setDrafting: Dispatch<SetStateAction<boolean>>;
   readOnly?: boolean;
   taskWorkspace?: ReactNode;
   taskOpen?: boolean;
   setDraftDirty?: (dirty: boolean) => void;
-}
-
-export function asBillCandidate(value: Record<string, unknown> | null | undefined): BillCandidate | null {
-  return value as BillCandidate | null | undefined || null;
 }

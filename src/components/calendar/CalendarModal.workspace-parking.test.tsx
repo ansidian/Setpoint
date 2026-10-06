@@ -37,7 +37,6 @@ describe("CalendarModal floating detail behavior", () => {
             },
           ]),
         }}
-        billsData={{}}
         deadlinesData={{}}
       />,
     ));
@@ -82,7 +81,6 @@ describe("CalendarModal floating detail behavior", () => {
             writable: true,
           })),
         }}
-        billsData={{}}
         deadlinesData={{}}
       />,
     ));
@@ -148,7 +146,6 @@ describe("CalendarModal floating detail behavior", () => {
             writable: true,
           })),
         }}
-        billsData={{}}
         deadlinesData={{}}
       />,
     ));
@@ -218,7 +215,6 @@ describe("CalendarModal floating detail behavior", () => {
               hasUpcomingReminder: index === 6,
             })),
           }}
-          billsData={{}}
           deadlinesData={{}}
         />,
       ));

@@ -1,14 +1,14 @@
 import { AnimatePresence } from "motion/react";
 import CompletionTransition from "../CompletionTransition";
 import { useId, useState } from "react";
-import { AlertCircle, Check, CheckCircle2, ChevronDown, ChevronUp, Circle, Clock, CreditCard, Mail, MailOpen } from "lucide-react";
+import { AlertCircle, Check, CheckCircle2, ChevronDown, ChevronUp, Circle, Clock, Mail, MailOpen } from "lucide-react";
 import type { NeedsYouBandProps } from "./NeedsYouBand";
 import type { NeedsYouBreakdownSegment } from "./NeedsYouCountBlock";
 import type { NeedsYouCard } from "./needsYouModel";
 import { StartHereStrip } from "./StartHereStrip";
 import "./MobileNeedsYouList.css";
 
-const SOURCE_ICONS = { AlertCircle, Circle, CreditCard, Mail, MailOpen, Clock };
+const SOURCE_ICONS = { AlertCircle, Circle, Mail, MailOpen, Clock };
 const COLLAPSED_COUNT = 3;
 
 interface MobileNeedsYouListProps {

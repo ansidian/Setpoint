@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Client } from "@libsql/client";
-import { createAuthTestDb, hashApiToken, seedOwner, seedSession } from "../test-utils/auth-db.ts";
+import { createAuthTestDb, seedOwner, seedSession } from "../test-utils/auth-db.ts";
 import { createPendingAuthStore } from "./pending-auth-store.ts";
 import { createWebAuthnChallengeStore } from "./webauthn-challenge-store.ts";
 import { createOwnerSecurityTransitionService } from "./security-transition.ts";
@@ -24,17 +24,11 @@ describe("owner security transitions", () => {
       challenge: "challenge",
       securityGeneration: 1,
     });
-    await db.execute({
-      sql: `INSERT INTO ea_api_tokens (token_hash, label, scopes, created_at, expires_at)
-            VALUES (?, 'Phone', '["actual:write"]', 1, 9999999999999)`,
-      args: [hashApiToken("token")],
-    });
 
     const service = createOwnerSecurityTransitionService(db);
     const nextGeneration = await service.transition({
       userId: "user-1",
       expectedGeneration: 1,
-      revokeApiTokens: true,
       mutate: async (tx) => {
         await tx.execute({
           sql: "UPDATE ea_owner SET password_hash = ? WHERE singleton_id = 1",
@@ -49,7 +43,6 @@ describe("owner security transitions", () => {
     expect((await db.execute("SELECT * FROM ea_sessions")).rows).toEqual([]);
     expect((await db.execute("SELECT * FROM ea_pending_auth")).rows).toEqual([]);
     expect((await db.execute("SELECT * FROM ea_webauthn_challenges")).rows).toEqual([]);
-    expect((await db.execute("SELECT * FROM ea_api_tokens")).rows).toEqual([]);
   });
 
   it("rejects a stale generation without running the mutation", async () => {

@@ -2,12 +2,6 @@ import { useEffect, useRef, useCallback } from "react";
 import { publicAssetUrl } from "@/publicAsset";
 import type { NormalizedCalendarEvent } from "../../shared/types/calendar";
 
-interface NotificationBill {
-  isDueToday?: boolean;
-  payee?: string | null;
-  name?: string | null;
-}
-
 interface NotificationEmail {
   uid: string;
   from: string;
@@ -17,7 +11,6 @@ interface NotificationEmail {
 
 interface NotificationLiveData {
   liveCalendar?: NormalizedCalendarEvent[] | null;
-  liveBills?: NotificationBill[] | null;
   liveEmails?: NotificationEmail[] | null;
   lastFetched?: unknown;
 }
@@ -25,7 +18,6 @@ interface NotificationLiveData {
 const STORAGE_KEYS = {
   emails: "ea_notified_emails",
   events: "ea_notified_events",
-  billsDate: "ea_notified_bills_date",
 };
 
 const CALENDAR_LEAD_TIME_MS = 15 * 60 * 1000;
@@ -82,7 +74,7 @@ export default function useNotifications(liveData: NotificationLiveData | null |
   }, [requestPermission]);
 
   // Check for notifications on each data update
-  const { liveCalendar, liveBills, liveEmails, lastFetched } = liveData || {};
+  const { liveCalendar, liveEmails, lastFetched } = liveData || {};
   useEffect(() => {
     if (!lastFetched) return;
     if (permissionRef.current !== "granted") return;
@@ -107,21 +99,6 @@ export default function useNotifications(liveData: NotificationLiveData | null |
     }
     saveSet(STORAGE_KEYS.events, notifiedEvents);
 
-    // Bills due today: once per day
-    const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
-    const lastBillNotifyDate = localStorage.getItem(STORAGE_KEYS.billsDate);
-    if (lastBillNotifyDate !== today) {
-      const dueTodayBills = (liveBills || []).filter(b => b.isDueToday);
-      if (dueTodayBills.length > 0) {
-        const names = dueTodayBills.map(b => b.payee || b.name).join(", ");
-        notify(
-          `${dueTodayBills.length} bill${dueTodayBills.length !== 1 ? "s" : ""} due today`,
-          names,
-        );
-        localStorage.setItem(STORAGE_KEYS.billsDate, today);
-      }
-    }
-
     // Important sender emails
     const notifiedEmails = loadSet(STORAGE_KEYS.emails);
     for (const email of liveEmails || []) {
@@ -134,7 +111,7 @@ export default function useNotifications(liveData: NotificationLiveData | null |
       notifiedEmails.add(email.uid);
     }
     saveSet(STORAGE_KEYS.emails, notifiedEmails);
-  }, [lastFetched, liveCalendar, liveBills, liveEmails]);
+  }, [lastFetched, liveCalendar, liveEmails]);
 
   return { requestPermission };
 }

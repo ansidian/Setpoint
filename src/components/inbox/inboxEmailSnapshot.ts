@@ -23,8 +23,6 @@ export function buildEmailSnapshot(email: InboxEmailLike | null | undefined): (P
     deadline_at: email.deadline_at, escalation_badge: email.escalation_badge,
     summary: email.summary, action: email.action, lane: email.lane || email._lane, category: email.category,
     urgency: email.urgency || null,
-    hasBill: email.hasBill,
-    extractedBill: email.extractedBill,
     claude: email.claude,
     aiSummary: email.aiSummary,
   };

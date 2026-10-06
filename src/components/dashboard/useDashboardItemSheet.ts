@@ -1,5 +1,3 @@
-import { useNavigate } from 'react-router';
-import { financesHref } from '../finances/financesNavigation';
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import {
   dashboardDeadlineCalendarRequest,
@@ -11,11 +9,10 @@ import type { DashboardDeadline } from "../../context/dashboardTaskProjection";
 
 import type { NeedsYouEmail } from "./needsYou/needsYouModel";
 
-type OpenCalendar = (view: "events" | "bills", date?: string | null, itemId?: string | null, options?: CalendarOpenOptions) => void;
+type OpenCalendar = (view: "events", date?: string | null, itemId?: string | null, options?: CalendarOpenOptions) => void;
 interface DashboardSheetRecord extends Record<string, unknown> { id?: string | number }
 
 export default function useDashboardItemSheet({ tab, isMobile, openCalendar }: { tab: DashboardTab; isMobile: boolean; openCalendar: OpenCalendar }) {
-  const navigate = useNavigate();
   const [itemSheet, setItemSheet] = useState<DashboardGlanceSheet | null>(null);
   const editorDirtyRef = useRef(false);
   const setEditorDirty = useCallback((dirty: boolean) => { editorDirtyRef.current = dirty; }, []);
@@ -51,30 +48,10 @@ export default function useDashboardItemSheet({ tab, isMobile, openCalendar }: {
     }));
   }, []);
 
-  const openBillInFinances = useCallback((date?: string | null, itemId?: string | number | null) => {
-    const scheduleId = String(itemId || '').replace(/^bill:/,'').replace(/:\d{4}-\d{2}-\d{2}$/, '');
-    navigate(financesHref(scheduleId ? { view:'schedule',scheduleId,date:date || undefined } : { view:'utilities' }));
-  }, [navigate]);
-
   const openEventInCalendar = useCallback((date?: string | null, itemId?: string | number | null) => {
     const request = dashboardEventCalendarRequest(date, itemId);
     openCalendar(request.viewKey, request.focusDate, request.focusItemId, request.options);
   }, [openCalendar]);
-
-  const openBill = useCallback((date: string | null, itemId: string | number | null, item?: DashboardSheetRecord | null, anchor?: unknown) => {
-    if (editorDirtyRef.current) return;
-    if (!item) {
-      openBillInFinances(date, itemId);
-      return;
-    }
-    setItemSheet((current) => nextItemSheet(current, {
-      kind: "bill",
-      item,
-      date,
-      itemId,
-      anchorRef: { current: anchor || null },
-    }));
-  }, [openBillInFinances]);
 
   const openEvent = useCallback((date: string | null, itemId: string | number | null, item?: DashboardSheetRecord | null, anchor?: unknown) => {
     if (editorDirtyRef.current) return;
@@ -100,12 +77,10 @@ export default function useDashboardItemSheet({ tab, isMobile, openCalendar }: {
       if (!sheet.item) return;
       const request = dashboardDeadlineCalendarRequest(sheet.item as DashboardDeadline);
       openCalendar(request.viewKey, request.focusDate, request.focusItemId, request.options);
-    } else if (sheet.kind === "bill") {
-      openBillInFinances(sheet.date, sheet.itemId);
     } else if (sheet.kind === "event") {
       openEventInCalendar(sheet.date, sheet.itemId);
     }
-  }, [close, openBillInFinances, openCalendar, openEventInCalendar]);
+  }, [close, openCalendar, openEventInCalendar]);
 
   return {
     itemSheet,
@@ -113,7 +88,6 @@ export default function useDashboardItemSheet({ tab, isMobile, openCalendar }: {
     close,
     openDeadline,
     openEmail,
-    openBill,
     openEvent,
     openInCalendar,
   };

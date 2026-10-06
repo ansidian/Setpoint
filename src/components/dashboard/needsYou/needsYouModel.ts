@@ -1,6 +1,5 @@
-import { daysUntil } from "../../../lib/bill-utils";
+import { daysUntil } from "../../../lib/dashboard-helpers";
 import { formatChipDateTime } from "../../../lib/shell-helpers";
-import type { ActualBillOccurrence } from "../../../../shared/types/actual";
 import type { SnapshotItem } from "../../../../shared/types/snapshots";
 import type { DashboardDeadline } from "../../../context/dashboardTaskProjection";
 
@@ -16,7 +15,6 @@ export type NeedsYouDeadline = DashboardDeadline;
 function deadlineProjectName(deadline: DashboardDeadline): string | undefined {
   return typeof deadline.project_name === "string" ? deadline.project_name : undefined;
 }
-export type NeedsYouBill = Partial<ActualBillOccurrence>;
 export type NeedsYouDeadlines = { upcoming?: NeedsYouDeadline[] } | null;
 
 interface NeedsYouPill { label: string; tone: string }
@@ -24,16 +22,16 @@ export interface NeedsYouCard {
   id: string;
   kind: "urgent" | "backfill";
   source: string;
-  sourceIcon: "AlertCircle" | "Circle" | "CreditCard" | "Mail" | "MailOpen" | "Clock";
+  sourceIcon: "AlertCircle" | "Circle" | "Mail" | "MailOpen" | "Clock";
   tone?: string;
   email?: boolean;
   opened?: boolean;
   completable?: boolean;
   uid?: string | number | null;
-  jumpKind?: "deadline" | "bill" | "email" | null;
+  jumpKind?: "deadline" | "email" | null;
   jumpId?: string | number | null;
   date?: string | null;
-  data?: NeedsYouDeadline | NeedsYouBill | NeedsYouEmail | null;
+  data?: NeedsYouDeadline | NeedsYouEmail | null;
   chipTooltip?: string | null;
   title: string;
   meta: string;

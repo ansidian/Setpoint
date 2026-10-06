@@ -306,7 +306,7 @@ describe("triage preflight engine", () => {
     });
   });
 
-  it("handles first-wave commerce and finance profiles with audit and hidden metadata", () => {
+  it("handles first-wave commerce and finance profiles with audit", () => {
     expect(evaluateTriagePreflight(email({
       from_name: "Amazon.com",
       from_address: "return@amazon.com",
@@ -362,10 +362,7 @@ describe("triage preflight engine", () => {
       lane: "fyi",
       category: "finance",
       reasonCode: "finance_transaction_fyi",
-      metadata: {
-        finance_candidate: true,
-        finance_candidate_kind: "card_transaction",
-      },
+      metadata: null,
     });
 
     expect(evaluateTriagePreflight(email({
@@ -381,34 +378,7 @@ describe("triage preflight engine", () => {
     });
   });
 
-  it("routes financial profiles to semantic triage while finalizing unrelated noise", () => {
-    expect(evaluateTriagePreflight(email({
-      from_name: "SoFi",
-      from_address: "statements@sofi.com",
-      subject: "Your SoFi Credit Card payment is due on May 05, 2026",
-      body_snippet: "Your statement balance of $156.98 is due May 5, 2026. You're enrolled in autopay.",
-    }))).toMatchObject({
-      action: "route_model",
-      modelTier: "cheap",
-      modelSaved: false,
-      lane: "fyi",
-      category: "finance",
-      reasonCode: "autopay_due_covered_fyi",
-    });
-
-    expect(evaluateTriagePreflight(email({
-      from_name: "PayPal",
-      from_address: "service@paypal.com",
-      subject: "Mercari: $9.06 USD",
-    }))).toMatchObject({
-      action: "route_model",
-      modelTier: "cheap",
-      modelSaved: false,
-      lane: "fyi",
-      category: "finance",
-      reasonCode: "finance_transaction_fyi",
-    });
-
+  it("finalizes vendor newsletters and social notifications as noise", () => {
     expect(evaluateTriagePreflight(email({
       from_name: "OpenAI",
       from_address: "news@openai.com",

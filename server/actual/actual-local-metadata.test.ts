@@ -5,7 +5,6 @@ import { createClient } from "@libsql/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   describeLocalActualCache,
-  hydrateLocalActualCache,
   readLocalActualMetadata,
 } from "./actual-local-metadata.ts";
 
@@ -180,22 +179,6 @@ describe("readLocalActualMetadata", () => {
     })).rejects.toMatchObject({ status: 503 });
 
     // test-architecture: allow-boundary-interaction -- Disk reads must never contact the external Actual server, including on a cache miss.
-    expect(global.fetch).not.toHaveBeenCalled();
-  });
-
-  it("keeps the existing budget when bootstrap is requested again", async () => {
-    await createActualBudgetFixture();
-    global.fetch = vi.fn();
-
-    const result = await hydrateLocalActualCache("u1", {
-      dbClient: settingsDbClient(),
-      dataDir: tempDir!,
-    });
-
-    expect(result).toMatchObject({ success: true, hydrated: true, budgetId: "Budget-1" });
-    const metadata = await readLocalActualMetadata("u1", { dbClient: settingsDbClient(), dataDir: tempDir! });
-    expect(metadata.accounts).toEqual([{ id: "acct-1", name: "Checking", type: "checking" }]);
-    // test-architecture: allow-boundary-interaction -- Bootstrap reuse must not download or synchronize over the external Actual boundary.
     expect(global.fetch).not.toHaveBeenCalled();
   });
 

@@ -11,7 +11,7 @@ export function initialWorkspaceTab(pathname: string, saved: string | null, isMo
   return saved === 'inbox' ? 'inbox' : saved === 'notes' && !isMobile && !demoMode ? 'notes' : 'dashboard';
 }
 export type DashboardGlanceSheet = {
-  kind: "deadline" | "bill" | "event" | "email";
+  kind: "deadline" | "event" | "email";
   item?: DashboardDeadline | Record<string, unknown>;
   itemId?: string | number | null;
   date?: string | null;
@@ -36,7 +36,6 @@ type DeadlineFocusInput = string | number | (Partial<DashboardDeadline> & { id?:
 export function resolveCalendarOpenState({
   viewKey = null,
   currentView = "events",
-  showBills = false,
   focusDate = null,
   focusItemId = null,
   options = {},
@@ -44,7 +43,6 @@ export function resolveCalendarOpenState({
   viewKey?: string | null;
   isMobile?: boolean;
   currentView?: string;
-  showBills?: boolean;
   focusDate?: string | null;
   focusItemId?: string | number | null;
   options?: CalendarOpenOptions;
@@ -54,9 +52,7 @@ export function resolveCalendarOpenState({
     ? "events"
     : viewKey ? normalizeCalendarWorkspaceView(viewKey) : null;
   const fallbackView = normalizeCalendarWorkspaceView(currentView);
-  const view = requested === "bills" && !showBills
-    ? "events"
-    : requested || fallbackView;
+  const view = requested || fallbackView;
   const nextFocusDate = eventCreateRequest?.seed.startDate || focusDate || null;
   const nextFocusItemId = eventCreateRequest ? "new" : focusItemId ? String(focusItemId) : null;
   const forceDeadlineOverlay = !!options.forceDeadlineOverlay;
@@ -71,7 +67,6 @@ export function resolveCalendarOpenState({
     forceDeadlineOverlay,
     forceCompletedDeadlineOverlay,
     shouldLoadDeadlines: forceDeadlineOverlay,
-    shouldLoadBills: view === "bills",
     eventCreateRequest,
   };
 }
@@ -116,7 +111,7 @@ export function dashboardEventCalendarRequest(date?: string | null, itemId?: str
   };
 }
 
-// Identity key for a glance-sheet descriptor. Bills and events carry an explicit
+// Identity key for a glance-sheet descriptor. Events and emails carry an explicit
 // itemId; deadlines carry the task object (keyed by its id). One key fn so a
 // re-tap of the same card toggles the sheet shut for every kind — not only
 // deadlines, which were the sole kind wired for toggle before.

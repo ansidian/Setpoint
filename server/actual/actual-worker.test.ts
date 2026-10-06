@@ -48,7 +48,7 @@ describe("Actual worker runner", () => {
     const child = createChild();
     forkMock.mockReturnValueOnce(child);
 
-    const resultPromise = runActualWorkerOperation("getMetadata", ["user-1"], { timeoutMs: 1000 });
+    const resultPromise = runActualWorkerOperation("syncMetadata", ["user-1"], { timeoutMs: 1000 });
     await Promise.resolve();
     // test-architecture: allow-boundary-interaction -- Actual worker IPC and fork configuration are process boundaries; request correlation, replacement, and memory ceilings are observable only on child messages and fork options.
     const request = child.send.mock.calls[0]![0];
@@ -60,7 +60,7 @@ describe("Actual worker runner", () => {
 
     await expect(resultPromise).resolves.toEqual({ accounts: [{ id: "acct-1" }] });
     expect(request).toMatchObject({
-      operation: "getMetadata",
+      operation: "syncMetadata",
       args: ["user-1"],
     });
   });
@@ -69,8 +69,8 @@ describe("Actual worker runner", () => {
     const child = createChild();
     forkMock.mockReturnValueOnce(child);
 
-    const first = runActualWorkerOperation("getMetadata", ["user-1"], { timeoutMs: 1000 });
-    const second = runActualWorkerOperation("getPayees", ["user-1"], { timeoutMs: 1000 });
+    const first = runActualWorkerOperation("syncMetadata", ["user-1"], { timeoutMs: 1000 });
+    const second = runActualWorkerOperation("hydrateCache", ["user-1"], { timeoutMs: 1000 });
     await Promise.resolve();
     // test-architecture: allow-boundary-interaction -- child.send is the process IPC boundary; only one request may be admitted before the active request completes.
     expect(child.send).toHaveBeenCalledTimes(1);
@@ -100,11 +100,11 @@ describe("Actual worker runner", () => {
   it("drains admitted operations and awaits worker exit when stopping", async () => {
     const child = createChild();
     forkMock.mockReturnValueOnce(child);
-    const first = runActualWorkerOperation("createQuickTxn", ["user-1", { amount: 10 }]);
+    const first = runActualWorkerOperation("hydrateCache", ["user-1"]);
     const second = runActualWorkerOperation("syncMetadata", ["user-1"]);
     await Promise.resolve();
     const stopped = stopActualWorker();
-    await expect(runActualWorkerOperation("getMetadata", ["user-1"])).rejects.toMatchObject({ status: 503 });
+    await expect(runActualWorkerOperation("syncMetadata", ["user-1"])).rejects.toMatchObject({ status: 503 });
 
     // test-architecture: allow-boundary-interaction -- child.kill is the process lifecycle boundary; stopping must let already-admitted writes finish before sending SIGTERM.
     expect(child.kill).not.toHaveBeenCalled();
@@ -133,7 +133,7 @@ describe("Actual worker runner", () => {
     vi.useFakeTimers();
     const child = createChild();
     forkMock.mockReturnValueOnce(child);
-    const operation = runActualWorkerOperation("clearMetadataCache", []);
+    const operation = runActualWorkerOperation("shutdownActual", []);
     await Promise.resolve();
     // test-architecture: allow-boundary-interaction -- child.send is the process IPC boundary; the matching response leaves an idle worker eligible for shutdown.
     const request = child.send.mock.calls[0]![0];
@@ -152,7 +152,7 @@ describe("Actual worker runner", () => {
     const child = createChild();
     forkMock.mockReturnValueOnce(child);
 
-    const resultPromise = runActualWorkerOperation("getMetadata", ["user-1"], { timeoutMs: 1000 });
+    const resultPromise = runActualWorkerOperation("syncMetadata", ["user-1"], { timeoutMs: 1000 });
     await Promise.resolve();
     child.stderr.emit("data", "FATAL ERROR: Reached heap limit");
     child.emit("exit", 134, null);
@@ -164,32 +164,17 @@ describe("Actual worker runner", () => {
     });
   });
 
-  it("preserves a committed local write when synchronization fails", async () => {
-    const child = createChild();
-    forkMock.mockReturnValueOnce(child);
-    const result = runActualWorkerOperation("createQuickTxn", ["user-1", { amount: 10 }]);
-    await Promise.resolve();
-    // test-architecture: allow-boundary-interaction -- child.send is the process IPC boundary; the worker response identifies a write that must be reconciled rather than replayed.
-    const request = child.send.mock.calls[0]![0];
-    child.emit("message", {
-      id: request.id,
-      ok: false,
-      error: { message: "Saved locally in Actual; synchronization is pending", status: 502, code: "ACTUAL_SYNC_FAILED", localWriteApplied: true },
-    });
-    await expect(result).rejects.toMatchObject({ status: 502, code: "ACTUAL_SYNC_FAILED", localWriteApplied: true });
-  });
-
   it("starts a fresh worker after a crash", async () => {
     const firstChild = createChild();
     const secondChild = createChild();
     forkMock.mockReturnValueOnce(firstChild).mockReturnValueOnce(secondChild);
 
-    const first = runActualWorkerOperation("getMetadata", ["user-1"], { timeoutMs: 1000 });
+    const first = runActualWorkerOperation("syncMetadata", ["user-1"], { timeoutMs: 1000 });
     await Promise.resolve();
     firstChild.emit("exit", 134, null);
     await expect(first).rejects.toMatchObject({ code: "ACTUAL_WORKER_EXITED" });
 
-    const second = runActualWorkerOperation("getMetadata", ["user-1"], { timeoutMs: 1000 });
+    const second = runActualWorkerOperation("syncMetadata", ["user-1"], { timeoutMs: 1000 });
     await Promise.resolve();
     // test-architecture: allow-boundary-interaction -- Actual worker IPC and fork configuration are process boundaries; request correlation, replacement, and memory ceilings are observable only on child messages and fork options.
     const secondRequest = secondChild.send.mock.calls[0]![0];
@@ -208,7 +193,7 @@ describe("Actual worker runner", () => {
     const child = createChild();
     forkMock.mockReturnValueOnce(child);
 
-    const resultPromise = runActualWorkerOperation("getMetadata", ["user-1"], { timeoutMs: 1000 });
+    const resultPromise = runActualWorkerOperation("syncMetadata", ["user-1"], { timeoutMs: 1000 });
     await Promise.resolve();
     // test-architecture: allow-boundary-interaction -- Actual worker IPC and fork configuration are process boundaries; request correlation, replacement, and memory ceilings are observable only on child messages and fork options.
     const request = child.send.mock.calls[0]![0];
@@ -231,7 +216,7 @@ describe("Actual worker runner", () => {
     const child = createChild();
     forkMock.mockReturnValueOnce(child);
 
-    const resultPromise = runActualWorkerOperation("createQuickTxn", ["user-1", { amount: 10 }], {
+    const resultPromise = runActualWorkerOperation("hydrateCache", ["user-1"], {
       shutdownAfterOperation: true,
       timeoutMs: 1000,
     });
@@ -256,7 +241,7 @@ describe("Actual worker runner", () => {
     const secondChild = createChild();
     forkMock.mockReturnValueOnce(firstChild).mockReturnValueOnce(secondChild);
 
-    const first = runActualWorkerOperation("getMetadata", ["user-1"], { timeoutMs: 25 });
+    const first = runActualWorkerOperation("syncMetadata", ["user-1"], { timeoutMs: 25 });
     await Promise.resolve();
     await vi.advanceTimersByTimeAsync(25);
 
@@ -267,7 +252,7 @@ describe("Actual worker runner", () => {
     // test-architecture: allow-boundary-interaction -- child.kill is the process lifecycle boundary; a timed-out worker must receive SIGTERM before replacement work is admitted.
     expect(firstChild.kill).toHaveBeenCalledWith("SIGTERM");
 
-    const second = runActualWorkerOperation("getPayees", ["user-1"], { timeoutMs: 5000 });
+    const second = runActualWorkerOperation("hydrateCache", ["user-1"], { timeoutMs: 5000 });
     await Promise.resolve();
     // test-architecture: allow-boundary-interaction -- secondChild.send is the replacement-process IPC boundary; replacement IPC must wait until the retired process has exited.
     expect(secondChild.send).not.toHaveBeenCalled();
@@ -288,13 +273,13 @@ describe("Actual worker runner", () => {
     await expect(second).resolves.toEqual([]);
   });
 
-  it("keeps the production worker alive between writes with a bounded heap", async () => {
+  it("keeps the production worker alive between operations with a bounded heap", async () => {
     vi.useFakeTimers();
     process.env.NODE_ENV = "production";
     const child = createChild();
     forkMock.mockReturnValueOnce(child);
 
-    const resultPromise = runActualWorkerOperation("createQuickTxn", ["user-1", { amount: 10 }], { timeoutMs: 1000 });
+    const resultPromise = runActualWorkerOperation("hydrateCache", ["user-1"], { timeoutMs: 1000 });
     await Promise.resolve();
 
     // test-architecture: allow-boundary-interaction -- Actual worker IPC and fork configuration are process boundaries; request correlation, replacement, and memory ceilings are observable only on child messages and fork options.
@@ -312,7 +297,7 @@ describe("Actual worker runner", () => {
     // test-architecture: allow-boundary-interaction -- child.kill is the process lifecycle boundary; production must retain the loaded SDK session after the former idle deadline.
     expect(child.kill).not.toHaveBeenCalled();
 
-    const nextWrite = runActualWorkerOperation("createQuickTxn", ["user-1", { amount: 20 }], { timeoutMs: 1000 });
+    const nextWrite = runActualWorkerOperation("hydrateCache", ["user-1", { amount: 20 }], { timeoutMs: 1000 });
     await Promise.resolve();
     // test-architecture: allow-boundary-interaction -- child.send is the process IPC boundary; the retained process must accept a subsequent write after the idle interval.
     const nextRequest = child.send.mock.calls[1]![0];
@@ -326,7 +311,7 @@ describe("Actual worker runner", () => {
     const child = createChild();
     forkMock.mockReturnValueOnce(child);
 
-    const resultPromise = runActualWorkerOperation("getMetadata", ["user-1"], { timeoutMs: 1000 });
+    const resultPromise = runActualWorkerOperation("syncMetadata", ["user-1"], { timeoutMs: 1000 });
     await Promise.resolve();
 
     // test-architecture: allow-boundary-interaction -- Actual worker IPC and fork configuration are process boundaries; request correlation, replacement, and memory ceilings are observable only on child messages and fork options.

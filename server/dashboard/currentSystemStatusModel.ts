@@ -1,5 +1,4 @@
 // Pure domain/cache-health -> user-facing system status. No DB/IO.
-import type { BillsMirrorHealth } from "../../shared/types/bills.ts";
 import type {
   CurrentDashboardDataHealth,
   CurrentDashboardCacheKey,
@@ -14,9 +13,6 @@ import type { TodoistMirrorHealth } from "../../shared/types/tasks.ts";
 interface SystemStatusProviderHealthInput {
   currentData: Pick<CurrentDashboardDataHealth, "state"> & Partial<CurrentDashboardDataHealth>;
   todoist: Pick<TodoistMirrorHealth, "state"> & Partial<TodoistMirrorHealth>;
-  bills: Pick<BillsMirrorHealth, "state"> & Partial<BillsMirrorHealth> & {
-    severity?: CurrentDashboardSystemSource["severity"];
-  };
   reauth?: CurrentDashboardProviderHealth["reauth"];
   configured?: CurrentDashboardProviderHealth["configured"];
   calendarPush?: CurrentDashboardProviderHealth["calendarPush"];
@@ -31,24 +27,21 @@ const SUCCESS_DEADLINE_MS: Record<string, number> = {
   weather: 60 * 60_000,
   calendar: 60 * 60_000,
   todoist: 60 * 60_000,
-  bills: 15 * 60_000,
 };
 const STATE_PRIORITY: Record<CurrentDashboardHealthState, number> = {
   needs_reauth: 7, unavailable: 6, degraded: 5, needs_sync: 4, stale: 4,
   refreshing: 3, syncing: 3, current: 1, unconfigured: 0,
 };
 
-function mirrorEvidence(health: SystemStatusProviderHealthInput["todoist"] | SystemStatusProviderHealthInput["bills"]): HealthEvidence {
+function mirrorEvidence(health: SystemStatusProviderHealthInput["todoist"]): HealthEvidence {
   const failedChecks = "failedCheckCount" in health && Number(health.failedCheckCount) > 0 && health.lastCheckFailedAt;
   // A local mirror read can succeed after its provider refresh failed. Preserve
   // that failed-check evidence, including inside Todoist's normal grace window.
-  const pendingBills = "pendingRefreshAt" in health && Boolean(health.pendingRefreshAt);
   const state = failedChecks && health.state === "current" ? "degraded"
-    : pendingBills && health.state === "current" ? "needs_sync"
     : health.state === "stale" ? "needs_sync" : health.state as CurrentDashboardHealthState;
   return {
     state,
-    severity: failedChecks && state === "degraded" ? "warning" : health.severity ?? (
+    severity: failedChecks && state === "degraded" ? "warning" : (
       state === "unavailable" || state === "needs_reauth" ? "error"
         : state === "degraded" || state === "needs_sync" ? "warning"
           : state === "syncing" || state === "refreshing" ? "info" : "none"
@@ -60,7 +53,6 @@ function mirrorEvidence(health: SystemStatusProviderHealthInput["todoist"] | Sys
 function sourceImpact(label: string): string {
   return label === "Calendar" ? "New or changed events may be missing."
     : label === "Tasks" ? "New tasks, due-date changes, or completions may be missing."
-      : label === "Bills" ? "Schedules and payment status may be out of date."
         : label === "Weather" ? "Conditions and forecasts may be out of date."
           : "Some information may be out of date.";
 }
@@ -76,10 +68,10 @@ function sourceMessage(label: string, state: CurrentDashboardHealthState, hasSav
 }
 
 const RETRY_SOURCES: Record<string, CurrentDashboardCacheKey> = {
-  weather: "weather_current", calendar: "calendar_current", todoist: "deadlines_current", bills: "bills_current",
+  weather: "weather_current", calendar: "calendar_current", todoist: "deadlines_current",
 };
 
-function activeRefreshStartedAt(cache: CurrentDashboardSourceHealth | undefined, mirror: SystemStatusProviderHealthInput["todoist"] | SystemStatusProviderHealthInput["bills"] | undefined, now: number): string | null {
+function activeRefreshStartedAt(cache: CurrentDashboardSourceHealth | undefined, mirror: SystemStatusProviderHealthInput["todoist"] | undefined, now: number): string | null {
   const timestamps = [cache?.refreshStartedAt,
     mirror && "syncStartedAt" in mirror ? mirror.syncStartedAt : null,
     mirror && "refreshStartedAt" in mirror ? mirror.refreshStartedAt : null,
@@ -87,7 +79,7 @@ function activeRefreshStartedAt(cache: CurrentDashboardSourceHealth | undefined,
   return timestamps.sort()[0] ?? null;
 }
 
-function healthCache(cache: CurrentDashboardSourceHealth | undefined, now: number, key: string, mirror?: SystemStatusProviderHealthInput["todoist"] | SystemStatusProviderHealthInput["bills"]): CurrentDashboardSourceHealth | undefined {
+function healthCache(cache: CurrentDashboardSourceHealth | undefined, now: number, key: string, mirror?: SystemStatusProviderHealthInput["todoist"]): CurrentDashboardSourceHealth | undefined {
   if (!cache?.fetchedAt) return cache;
   // The delivered data and its upstream mirror must both have been checked.
   // Local reads cannot renew the provider's successful-check deadline.
@@ -112,7 +104,7 @@ function domainSource({ key, label, connection, cache, mirror, configured, now }
   label: string;
   connection: string;
   cache?: CurrentDashboardSourceHealth;
-  mirror?: SystemStatusProviderHealthInput["todoist"] | SystemStatusProviderHealthInput["bills"];
+  mirror?: SystemStatusProviderHealthInput["todoist"];
   configured?: boolean;
   now: number;
 }): CurrentDashboardSystemSource {
@@ -177,7 +169,6 @@ export function composeSystemStatus(
   }];
   sources.push(
     domainSource({ now, key: "todoist", label: "Tasks", connection: "todoist", cache: cache("deadlines_current"), mirror: providerHealth.todoist }),
-    domainSource({ now, key: "bills", label: "Bills", connection: "actual-budget", cache: cache("bills_current"), mirror: providerHealth.bills }),
   );
   if (providerHealth.email === null) {
     sources.push({

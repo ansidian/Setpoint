@@ -11,7 +11,7 @@ import type {
   ActualWorkerOptions,
 } from "./actual-worker-protocol.ts";
 
-type WorkerError = Error & { status?: number; code?: string; localWriteApplied?: boolean };
+type WorkerError = Error & { status?: number; code?: string };
 interface PendingRequest {
   resolve: (value: unknown) => void;
   reject: (reason: unknown) => void;
@@ -145,7 +145,6 @@ function deserializeError(errorPayload: Partial<ActualWorkerErrorPayload> = {}):
   if (errorPayload.status) error.status = errorPayload.status;
   if (errorPayload.code) error.code = errorPayload.code;
   if (errorPayload.stack) error.stack = errorPayload.stack;
-  if (errorPayload.localWriteApplied) error.localWriteApplied = true;
   return error;
 }
 

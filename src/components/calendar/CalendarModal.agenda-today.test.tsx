@@ -58,7 +58,6 @@ describe("CalendarModal today agenda behavior", () => {
             },
           ]),
         }}
-        billsData={{}}
         deadlinesData={{}}
       />,
     ));
@@ -112,7 +111,6 @@ describe("CalendarModal today agenda behavior", () => {
           view="events"
           onViewChange={() => {}}
           eventsData={{ getEvents: () => [] }}
-          billsData={{}}
           deadlinesData={{}}
         />,
       ));
@@ -156,7 +154,6 @@ describe("CalendarModal today agenda behavior", () => {
             ),
             isMonthLoading: (year: number, month: number) => year === 2026 && month === 4,
           }}
-          billsData={{}}
           deadlinesData={{}}
         />,
       ));
@@ -217,7 +214,6 @@ function renderNavigationCalendar({
       onViewChange={() => {}}
       focusDate={focusDate}
       eventsData={eventsData}
-      billsData={{}}
       deadlinesData={{}}
     />,
   ));
@@ -233,7 +229,6 @@ function MobileCalendarRetapHarness() {
     setCalendarMounted,
     liveData: { actualConfigured: false } as never,
     loadCalendarDeadlines: () => {},
-    loadCalendarBills: () => {},
   });
   return (
     <>
@@ -245,7 +240,6 @@ function MobileCalendarRetapHarness() {
         focusDate="2026-09-10"
         jumpTodayRequestId={workspace.calendarJumpTodayRequestId}
         eventsData={{ getEvents: () => [] }}
-        billsData={{}}
         deadlinesData={{}}
       />
       <MobileBottomNav
@@ -327,8 +321,6 @@ describe("CalendarModal navigation behavior", () => {
         onViewChange={() => {}}
         focusDate="2026-09-10"
         eventsData={{ getEvents: () => [] }}
-        billsData={{}}
-        billsRangeData={{ ensureRange: vi.fn().mockResolvedValue(null) }}
         deadlinesData={{}}
       />,
     ));

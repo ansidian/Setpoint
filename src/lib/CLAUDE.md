@@ -6,21 +6,13 @@ Shared, mostly-pure helpers with no owning feature directory — cross-cutting u
 
 - `clientId.ts` — UUID v4 request identifiers using Web Crypto, including plain-HTTP LAN development where randomUUID is unavailable
 
-- `actualMetadata.ts` — shared Actual Budget metadata cache (accounts/payees/categories), single fetch, invalidated on the bills SSE change signal
 - `apiFetch.ts` — shared JSON request transport, timeout/auth error handling, and build-time demo adapter boundary
 - `alfredApi.ts` — Alfred context preparation/discard, conversation deletion, identity-only proposal Created acknowledgement, and demo-gated POST/SSE run transport
-- `bill-utils.ts` — bill amount/date formatting helpers
 - `breakpoints.ts` — `MOBILE_MAX_WIDTH` — single source of truth for the app's mobile gate
 - `calendar-links.ts` — URL/href/bare-URL detection and Zoom-link resolution for event descriptions
 - `dashboard-helpers.ts` — urgency style tokens, greeting pools, Pacific-time epoch helpers
 - `email-links.ts` — builds a Gmail web URL from an email's uid + account
 - `emailAttachmentApi.ts` — demo-safe authenticated URL/blob transport for lazy email attachment downloads and previews
-- `financialCorrectionApi.ts` — correction inspection/preview/confirm/status transport through the demo-safe API boundary
-- `financialActivityApi.ts` — demo-safe shared activity list/detail and explicit binding inspection transport
-- `financialEmailApi.ts` — managed plan reads, owner record requests and revision-bound owner completion; completion refreshes reader status and has a fictional in-memory demo adapter
-- `financialProfileSeed.ts` — client-only selected-email identity and available target projection into a partial, unsaved profile seed; excludes monetary/source-body fields, rejects another message’s plan
-- `financialReviewApi.ts` — demo-safe managed attention-change reads and direct Finance record URLs
-- `financialReviewNotifications.ts` — browser delivery owner: bounded change-feed draining, overlap cursor recovery, stable per-record/action deduplication, and clickable Finance alerts; no demo or server delivery
 - `gmailPubSubSetupApi.ts` — authenticated Gmail Pub/Sub setup/status client calls through the demo-safe API boundary
 - `instanceCredentialPendingApi.ts` — version-bound pending-credential discard calls shared by Settings and the central API export surface
 - `motion.ts` — shared Motion React durations, ease-out curve, and reduced-motion-aware transition builders; height changes use the event notes field's 160ms CSS-ease curve, with a 250ms measured resize-burst budget and immediate following of animated descendants
@@ -37,7 +29,6 @@ Shared, mostly-pure helpers with no owning feature directory — cross-cutting u
 - `triageSoundPlayback.ts` — Web Audio playback constants + the audio-unlock/gain/fade-out mechanics for triage sounds
 - `triageSoundRouter.ts` — resolves which triage sound plays for a given trigger against the user's sound settings
 - `triageSoundSettings.ts` — triage sound lane-scope constants + settings normalization
-- `transactionImportApi.ts` — typed per-email transaction-import and managed financial status client call
 - `utils.ts` — `cn()` — clsx + tailwind-merge className combinator
 
 (Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)

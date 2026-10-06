@@ -226,16 +226,14 @@ describe("scoreEmailSearchRow per-signal contributions", () => {
       expect(deltaFor(s, "deadline_signal")).toBe(0);
     });
 
-    it("keeps urgency_low demotion and bill/category traits for handled rows", () => {
+    it("keeps urgency_low demotion and category traits for handled rows", () => {
       const s = scoreOf({
         triage_urgency: "low",
         triage_category: "finance",
-        triage_bill_candidate_json: "{\"amount\":1}",
         ...handled,
       });
       expect(deltaFor(s, "urgency_low")).toBe(-2);
       expect(deltaFor(s, "useful_category")).toBe(8);
-      expect(deltaFor(s, "bill_candidate")).toBe(16);
     });
 
     it("expires attention signals when the deadline has passed even if unhandled", () => {
@@ -304,19 +302,6 @@ describe("scoreEmailSearchRow per-signal contributions", () => {
     it("drops the recent_interaction signal entirely past 7 days", () => {
       const scoring = interactionScoring(7.01);
       expect(scoring.details.some((d) => d.label === "recent_interaction")).toBe(false);
-    });
-  });
-
-  describe("bill_candidate JSON gate", () => {
-    it("awards bill_candidate +16 only for a non-empty JSON payload", () => {
-      expect(deltaFor(scoreOf({ triage_bill_candidate_json: "{\"amount\":42}" }), "bill_candidate")).toBe(16);
-    });
-
-    it("does not fire for empty-object, null, or missing payloads", () => {
-      expect(deltaFor(scoreOf({ triage_bill_candidate_json: "{}" }), "bill_candidate")).toBe(0);
-      expect(deltaFor(scoreOf({ triage_bill_candidate_json: "null" }), "bill_candidate")).toBe(0);
-      expect(deltaFor(scoreOf({ triage_bill_candidate_json: "" }), "bill_candidate")).toBe(0);
-      expect(deltaFor(scoreOf({}), "bill_candidate")).toBe(0);
     });
   });
 

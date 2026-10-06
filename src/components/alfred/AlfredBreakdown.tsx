@@ -7,7 +7,7 @@ import AnimatedCollapse from "../shared/AnimatedCollapse";
 import type { ComponentType } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { countBreakdownRows } from "./alfredPanelModel";
-import { BillRow, DeadlineRow, EmailRow, EventRow, TransactionRow } from "./AlfredRows";
+import { DeadlineRow, EmailRow, EventRow } from "./AlfredRows";
 import { resolveAlfredChipAction } from "./alfredChipActionModel";
 import { pacificYMD } from "../calendar/calendarDateUtils.ts";
 import type { AlfredItemKind } from "../../../shared/types/alfred";
@@ -20,10 +20,10 @@ const subtle = "var(--color-text-faint)";
 const INLINE_THRESHOLD = 5;
 
 // Local kind→row map. The leaf rows are shared from AlfredRows (which keeps its
-// own inline map); duplicating this 5-key literal avoids a non-component export
+// own inline map); duplicating this 3-key literal avoids a non-component export
 // from AlfredRows that would break Fast Refresh (react-refresh/only-export-components).
 const ROW_COMPONENTS: Record<AlfredItemKind, ComponentType<AlfredLeafRowProps>> = {
-  bill: BillRow, event: EventRow, deadline: DeadlineRow, email: EmailRow, transaction: TransactionRow,
+  event: EventRow, deadline: DeadlineRow, email: EmailRow,
 };
 
 interface CountRow { label: string; count: number; pct: number; isOther: boolean }
@@ -71,7 +71,7 @@ function Bucket({ row, items, kind, accent, onActivateItem, todayYmd, now }: Buc
           {items.map((item, i) => {
             const action = onActivateItem ? resolveAlfredChipAction(kind, item) : null;
             // Superset of props: each leaf row reads only what it needs (EmailRow
-            // ignores now/todayYmd/isNext; bill/deadline use todayYmd; event uses
+            // ignores now/todayYmd/isNext; deadline uses todayYmd; event uses
             // now). Harmless extras keep one render path across kinds.
             return (
               <Row

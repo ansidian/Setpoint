@@ -70,17 +70,16 @@ function fetchScript(turns: SseTestEvent[][]) {
 describe("looksLikeGroupingQuestion", () => {
   it("treats a split into 2+ categories as a grouping question", () => {
     expect(looksLikeGroupingQuestion("how many were rejections, how many ghosts?")).toBe(true);
-    expect(looksLikeGroupingQuestion("break my spending down by category")).toBe(true);
-    expect(looksLikeGroupingQuestion("group my bills by status")).toBe(true);
+    expect(looksLikeGroupingQuestion("break my mail down by category")).toBe(true);
+    expect(looksLikeGroupingQuestion("group my deadlines by status")).toBe(true);
     expect(looksLikeGroupingQuestion("what's the distribution of my deadlines?")).toBe(true);
     expect(looksLikeGroupingQuestion("rejections vs ghosts in the last 3 months")).toBe(true);
   });
 
   it("does not treat a single count or a magnitude as a grouping question", () => {
-    // A lone "how many" is one number, and "how much" is a sum — both read fine in
-    // one line; nudging them toward a breakdown card would force a 1-bucket card.
+    // A lone "how many" is one number that reads fine in one line; nudging it
+    // toward a breakdown card would force a 1-bucket card.
     expect(looksLikeGroupingQuestion("how many deadlines do I have?")).toBe(false);
-    expect(looksLikeGroupingQuestion("how much did I spend on coffee?")).toBe(false);
     expect(looksLikeGroupingQuestion("what's on my calendar tomorrow?")).toBe(false);
   });
 });
@@ -177,33 +176,33 @@ describe("runAlfred", () => {
 
   it("executes tool calls between turns and threads results back", async () => {
     const fetchImpl = fetchScript([
-      toolUseTurn("get_upcoming_bills", { start: "2026-06-12", end: "2026-07-12" }),
-      textTurn("One bill is due."),
+      toolUseTurn("get_deadlines", { start: "2026-06-12", end: "2026-07-12" }),
+      textTurn("One deadline is due."),
     ]);
-    const readBillsMirrorRange = vi.fn().mockResolvedValue({
-      schedules: [{ id: "b-1", name: "Car insurance", payee: "Geico", amount: 182.13, next_date: "2026-06-21", paid: false, type: "bill" }],
-      syncHealth: { state: "current" },
+    const readCalendarDeadlineRange = vi.fn().mockResolvedValue({
+      payload: { upcoming: [{ id: "td-1", content: "Renew car insurance", due_date: "2026-06-21", status: "incomplete" }] },
+      errors: [],
     });
 
     await runAlfred({
       userId: "user-1",
       conversation,
-      message: "Any bills coming up?",
+      message: "Any deadlines coming up?",
       emit,
       fetchImpl,
       apiKey: "key",
-      deps: testDeps({ readBillsMirrorRange }),
+      deps: testDeps({ readCalendarDeadlineRange }),
       recordUsage,
     });
 
-    // The prose-only answer about a retrieved bill triggers the show_items
+    // The prose-only answer about a retrieved deadline triggers the show_items
     // nudge once; the scripted model answers in prose again and the run ends.
     expect(events.map((event) => event.type)).toEqual([
       "tool_start", "tool_result", "text_delta", "text_delta", "run_end",
     ]);
     expect(events[1]).toEqual(expect.objectContaining({
       ok: true,
-      summary: "Bills · 1 upcoming",
+      summary: "Deadlines · 1 open",
     }));
     // Transcript: user, assistant(tool_use), user(tool_result),
     // assistant(text), user(nudge), assistant(text)
@@ -220,29 +219,29 @@ describe("runAlfred", () => {
 
   it("records an alfred_tool_call usage row per tool call (T1)", async () => {
     const fetchImpl = fetchScript([
-      toolUseTurn("get_upcoming_bills", { start: "2026-06-12", end: "2026-07-12" }),
-      textTurn("One bill is due."),
+      toolUseTurn("get_deadlines", { start: "2026-06-12", end: "2026-07-12" }),
+      textTurn("One deadline is due."),
     ]);
-    const readBillsMirrorRange = vi.fn().mockResolvedValue({
-      schedules: [{ id: "b-1", name: "Car insurance", payee: "Geico", amount: 182.13, next_date: "2026-06-21", paid: false, type: "bill" }],
-      syncHealth: { state: "current" },
+    const readCalendarDeadlineRange = vi.fn().mockResolvedValue({
+      payload: { upcoming: [{ id: "td-1", content: "Renew car insurance", due_date: "2026-06-21", status: "incomplete" }] },
+      errors: [],
     });
 
     await runAlfred({
       userId: "user-1",
       conversation,
-      message: "Any bills coming up?",
+      message: "Any deadlines coming up?",
       emit,
       fetchImpl,
       apiKey: "key",
-      deps: testDeps({ readBillsMirrorRange }),
+      deps: testDeps({ readCalendarDeadlineRange }),
       recordUsage,
     });
 
     const toolRow = usageRows.find((arg) => arg.eventType === "alfred_tool_call");
     expect(toolRow).toBeTruthy();
     if (!toolRow) throw new Error("Expected Alfred tool usage row");
-    expect(toolRow.metadata.tool).toBe("get_upcoming_bills");
+    expect(toolRow.metadata.tool).toBe("get_deadlines");
     expect(toolRow.metadata.ok).toBe(true);
     expect(typeof toolRow.metadata.duration_ms).toBe("number");
     expect(toolRow.metadata.conversation_id).toBe(conversation.id);
@@ -276,19 +275,19 @@ describe("runAlfred", () => {
 
   it("moves the cache breakpoint onto the tool_result block on follow-up turns", async () => {
     const fetchImpl = fetchScript([
-      toolUseTurn("get_upcoming_bills", { start: "2026-06-12", end: "2026-07-12" }),
-      textTurn("One bill is due."),
+      toolUseTurn("get_deadlines", { start: "2026-06-12", end: "2026-07-12" }),
+      textTurn("One deadline is due."),
     ]);
-    const readBillsMirrorRange = vi.fn().mockResolvedValue({ schedules: [], syncHealth: { state: "current" } });
+    const readCalendarDeadlineRange = vi.fn().mockResolvedValue({ payload: { upcoming: [] }, errors: [] });
 
     await runAlfred({
       userId: "user-1",
       conversation,
-      message: "Any bills coming up?",
+      message: "Any deadlines coming up?",
       emit,
       fetchImpl,
       apiKey: "key",
-      deps: testDeps({ readBillsMirrorRange }),
+      deps: testDeps({ readCalendarDeadlineRange }),
       recordUsage,
     });
 
@@ -306,24 +305,24 @@ describe("runAlfred", () => {
 
   it("nudges the model once when it answers about retrieved items without show_items", async () => {
     const fetchImpl = fetchScript([
-      toolUseTurn("get_upcoming_bills", { start: "2026-06-12", end: "2026-07-12" }),
-      textTurn("Your car insurance is due June 21."),
-      toolUseTurn("show_items", { kind: "bill", ids: ["b-1"] }, "tu_2"),
+      toolUseTurn("get_deadlines", { start: "2026-06-12", end: "2026-07-12" }),
+      textTurn("Your car insurance renewal is due June 21."),
+      toolUseTurn("show_items", { kind: "deadline", ids: ["td-1"] }, "tu_2"),
       textTurn("Due in nine days."),
     ]);
-    const readBillsMirrorRange = vi.fn().mockResolvedValue({
-      schedules: [{ id: "b-1", name: "Car insurance", payee: "Geico", amount: 182.13, next_date: "2026-06-21", paid: false, type: "bill" }],
-      syncHealth: { state: "current" },
+    const readCalendarDeadlineRange = vi.fn().mockResolvedValue({
+      payload: { upcoming: [{ id: "td-1", content: "Renew car insurance", due_date: "2026-06-21", status: "incomplete" }] },
+      errors: [],
     });
 
     await runAlfred({
       userId: "user-1",
       conversation,
-      message: "When is my car insurance due?",
+      message: "When is my car insurance renewal due?",
       emit,
       fetchImpl,
       apiKey: "key",
-      deps: testDeps({ readBillsMirrorRange }),
+      deps: testDeps({ readCalendarDeadlineRange }),
       recordUsage,
     });
 
@@ -364,23 +363,23 @@ describe("runAlfred", () => {
 
   it("does not nudge when the run grouped retrieved items via group_items", async () => {
     const fetchImpl = fetchScript([
-      toolUseTurn("get_upcoming_bills", { start: "2026-06-12", end: "2026-07-12" }),
-      toolUseTurn("group_items", { kind: "bill", title: "By status", groups: [{ label: "Unpaid", ids: ["b-1"] }] }, "tu_2"),
-      textTurn("One unpaid bill."),
+      toolUseTurn("get_deadlines", { start: "2026-06-12", end: "2026-07-12" }),
+      toolUseTurn("group_items", { kind: "deadline", title: "By status", groups: [{ label: "Open", ids: ["td-1"] }] }, "tu_2"),
+      textTurn("One open deadline."),
     ]);
-    const readBillsMirrorRange = vi.fn().mockResolvedValue({
-      schedules: [{ id: "b-1", name: "Car insurance", payee: "Geico", amount: 182.13, next_date: "2026-06-21", paid: false, type: "bill" }],
-      syncHealth: { state: "current" },
+    const readCalendarDeadlineRange = vi.fn().mockResolvedValue({
+      payload: { upcoming: [{ id: "td-1", content: "Renew car insurance", due_date: "2026-06-21", status: "incomplete" }] },
+      errors: [],
     });
 
     await runAlfred({
       userId: "user-1",
       conversation,
-      message: "group my bills by status",
+      message: "group my deadlines by status",
       emit,
       fetchImpl,
       apiKey: "key",
-      deps: testDeps({ readBillsMirrorRange }),
+      deps: testDeps({ readCalendarDeadlineRange }),
       recordUsage,
     });
 
@@ -430,35 +429,6 @@ describe("runAlfred", () => {
     expect(nudge.content).toContain("<system-reminder>");
     // The nudge drove a real breakdown card, then the run ended cleanly.
     expect(events.some((e) => e.type === "breakdown")).toBe(true);
-    expect(events.at(-1).type).toBe("run_end");
-  });
-
-  it("does not nudge when summarize_transactions returns a low dollar total (its total is a dollar sum, not a row count)", async () => {
-    const fetchImpl = fetchScript([
-      toolUseTurn("summarize_transactions", { start: "2026-05-01", end: "2026-05-31" }),
-      textTurn("You spent $5.00 on coffee in May."),
-    ]);
-    const summarizeTransactions = vi.fn().mockResolvedValue({
-      total: 5,
-      period: { start: "2026-05-01", end: "2026-05-31" },
-      group_by: "category",
-      buckets: [{ label: "Coffee", amount: 5, count: 1 }],
-    });
-
-    await runAlfred({
-      userId: "user-1",
-      conversation,
-      message: "how much did I spend on coffee?",
-      emit,
-      fetchImpl,
-      apiKey: "key",
-      deps: testDeps({ summarizeTransactions }),
-      recordUsage,
-    });
-
-    expect(conversation.messages.find(
-      (m) => m.role === "user" && typeof m.content === "string" && m.content.includes("show_items"),
-    )).toBeUndefined();
     expect(events.at(-1).type).toBe("run_end");
   });
 

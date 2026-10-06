@@ -68,14 +68,12 @@ describe("calendarModalSearchModel", () => {
     };
 
     expect(calendarSearchStateLabel({
-      scope: "events",
       query: "final",
       coverage: initializingCoverage,
       results: [],
     })).toBe("Calendar events indexing");
 
     expect(calendarSearchStateLabel({
-      scope: "events",
       query: "final",
       coverage: initializingCoverage,
       results: [{ id: "deadline:1", type: "deadline" }],
@@ -96,14 +94,12 @@ describe("calendarModalSearchModel", () => {
     };
 
     expect(calendarSearchStateLabel({
-      scope: "events",
       query: "final",
       coverage: staleCoverage,
       results: [{ id: "event:1", type: "event" }],
     })).toBe("Showing available results");
 
     expect(calendarSearchStateLabel({
-      scope: "events",
       query: "final",
       coverage: staleCoverage,
       results: [],

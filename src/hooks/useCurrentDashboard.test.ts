@@ -95,11 +95,6 @@ const currentPayload = {
     upcoming: [{ id: "deadline-1" }],
     stats: { total: 1 },
   },
-  bills: [{ id: "bill-1", payee: "Power" }],
-  allSchedules: [{ id: "schedule-1" }],
-  payeeMap: { payee_1: "Power" },
-  actualConfigured: true,
-  actualBudgetUrl: "https://actual.example.test",
   activeSnapshot: {
     snapshot: { id: 42 },
     lanes: { needs_attention: [], fyi: [], noise: [] },
@@ -369,12 +364,12 @@ describe("useCurrentDashboard", () => {
         ...currentPayload.providerHealth,
         currentData: {
           state: "current",
-          sources: [{ key: "bills_current", state: "refreshing", severity: "info" }],
+          sources: [{ key: "deadlines_current", state: "refreshing", severity: "info" }],
         },
       },
       refresh: {
         mode: "manual",
-        scheduled: [{ key: "bills_current", reason: "manual_bills_sync" }],
+        scheduled: [{ key: "deadlines_current", reason: "manual_todoist_sync" }],
         skipped: [],
       },
     };
@@ -411,13 +406,13 @@ describe("useCurrentDashboard", () => {
         ...currentPayload.providerHealth,
         currentData: {
           state: "current",
-          sources: [{ key: "bills_current", state: "refreshing", severity: "info" }],
+          sources: [{ key: "deadlines_current", state: "refreshing", severity: "info" }],
         },
         activeSnapshot: { state: "syncing", reason: "background" },
       },
       refresh: {
         mode: "manual",
-        scheduled: [{ key: "bills_current", reason: "manual_bills_sync" }],
+        scheduled: [{ key: "deadlines_current", reason: "manual_todoist_sync" }],
         skipped: [],
       },
     });
@@ -435,7 +430,7 @@ describe("useCurrentDashboard", () => {
             ...currentPayload.providerHealth,
             currentData: {
               state: "current",
-              sources: [{ key: "bills_current", state: "refreshing", severity: "info" }],
+              sources: [{ key: "deadlines_current", state: "refreshing", severity: "info" }],
             },
           },
           refresh: { mode: "passive", scheduled: [], skipped: [] },
@@ -443,12 +438,11 @@ describe("useCurrentDashboard", () => {
       }
       return {
         ...currentPayload,
-        allSchedules: [{ id: "water", payee: "SGV Water" }],
         providerHealth: {
           ...currentPayload.providerHealth,
           currentData: {
             state: "current",
-            sources: [{ key: "bills_current", state: "current", severity: "none" }],
+            sources: [{ key: "deadlines_current", state: "current", severity: "none" }],
           },
         },
         refresh: { mode: "passive", scheduled: [], skipped: [] },
@@ -469,7 +463,6 @@ describe("useCurrentDashboard", () => {
     });
 
     expect(result.current.current!.fetchedAt).toBe("2026-05-05T00:40:00.000Z");
-    expect(result.current.liveData.allSchedules).toEqual([{ id: "water", payee: "SGV Water" }]);
     unmount();
   });
 

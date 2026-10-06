@@ -31,7 +31,6 @@ describe("CalendarModal agenda scroll and selection behavior", () => {
             },
           ]),
         }}
-        billsData={{}}
         deadlinesData={{}}
       />,
     ));
@@ -100,7 +99,6 @@ describe("CalendarModal agenda scroll and selection behavior", () => {
           view="events"
           onViewChange={() => {}}
           eventsData={eventsData}
-          billsData={{}}
           deadlinesData={{}}
         />,
       ));
@@ -116,7 +114,6 @@ describe("CalendarModal agenda scroll and selection behavior", () => {
           view="events"
           onViewChange={() => {}}
           eventsData={eventsData}
-          billsData={{}}
           deadlinesData={{}}
         />,
       ));
@@ -154,7 +151,6 @@ describe("CalendarModal agenda scroll and selection behavior", () => {
           view="events"
           onViewChange={() => {}}
           eventsData={eventsData}
-          billsData={{}}
           deadlinesData={{}}
         />,
       ));
@@ -218,7 +214,6 @@ describe("CalendarModal agenda scroll and selection behavior", () => {
             },
           ]),
         }}
-        billsData={{}}
         deadlinesData={{}}
       />,
     ));
@@ -297,7 +292,6 @@ describe("CalendarModal agenda scroll and selection behavior", () => {
               },
             ]),
           }}
-          billsData={{}}
           deadlinesData={{}}
         />,
       ));
@@ -364,7 +358,6 @@ describe("CalendarModal agenda scroll and selection behavior", () => {
             },
           ]),
         }}
-        billsData={{}}
         deadlinesData={{}}
       />,
     ));

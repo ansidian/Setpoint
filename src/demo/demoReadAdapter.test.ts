@@ -29,13 +29,11 @@ describe("demo mode read adapter", () => {
     const calendarRange = await api.getCalendarRange("2026-05-01", "2026-05-31");
     const calendarSearch = await api.getCalendarSearch({ scope: "events", q: "review" });
     const deadlines = await api.getCalendarDeadlinesRange("2026-05-01", "2026-05-31");
-    const bills = await api.getCalendarBillsRange("2026-05-01", "2026-05-31");
     const settings = await api.getSettings();
     const accounts = await api.getAccounts();
-    const actual = await api.getActualMetadata();
     const importantSenders = await api.getImportantSenders();
     const models = await api.getModels();
-    const billModels = await api.getBillExtractModels();
+    const fastTriageModels = await api.getTriageFastModels();
 
     expect(current.fetchedAt).toBe("2026-05-12T15:30:00.000Z");
     expect(current.weather).toMatchObject({
@@ -68,15 +66,6 @@ describe("demo mode read adapter", () => {
       itemDate: "2026-05-12",
     });
     expect(deadlines.upcoming.some((task) => task.title === "Send portfolio demo link")).toBe(true);
-    expect(bills.schedules.some((bill) => bill.payee === "Demo Electric")).toBe(true);
-    expect(bills.schedules.find((bill) => bill.payee === "Everyday Card")).toMatchObject({ next_date: "2026-05-12", type: "transfer" });
-    expect(bills.schedules.find((bill) => bill.payee === "Demo Electric")?.next_date).toBe("2026-05-13");
-    expect(bills.transactions).toEqual(expect.arrayContaining([
-      expect.objectContaining({ direction: "income", payee: "Northstar Payroll" }),
-      expect.objectContaining({ direction: "expense", payee: "Corner Market" }),
-    ]));
-    expect(bills.transactionsTruncated).toBe(false);
-    expect("recentTransactions" in bills).toBe(false);
     expect(settings).toMatchObject({
       email_triage_mode: "auto",
       email_triage_classify_read_arrivals: false,
@@ -84,7 +73,6 @@ describe("demo mode read adapter", () => {
     });
     const accountList = Array.isArray(accounts) ? accounts : accounts.accounts;
     expect(accountList).toHaveLength(2);
-    expect(actual.accounts?.[0]).toMatchObject({ name: "Demo Checking" });
     expect(importantSenders).toEqual(expect.arrayContaining([
       { address: "morgan@northstar.example", name: "Morgan Lee", source: "auto" },
     ]));
@@ -93,9 +81,9 @@ describe("demo mode read adapter", () => {
       provider: "demo",
       defaultModel: "demo-triage-model",
     });
-    expect(billModels[0]).toMatchObject({
+    expect(fastTriageModels[0]).toMatchObject({
       provider: "demo",
-      defaultModel: "demo-bill-extract-model",
+      defaultModel: "demo-triage-fast-model",
     });
     expect(networkAttempted).toBe(false);
   });
@@ -120,7 +108,6 @@ describe("demo mode read adapter", () => {
     const snapshot = await api.getActiveSnapshot();
     const calendarRange = await api.getCalendarRange("2026-05-01", "2026-05-31");
     const deadlines = await api.getCalendarDeadlinesRange("2026-05-01", "2026-05-31");
-    const bills = await api.getCalendarBillsRange("2026-05-01", "2026-05-31");
 
     const rows = [
       ...(snapshot.carryover || []),
@@ -136,7 +123,6 @@ describe("demo mode read adapter", () => {
     expect(calendarRange.events.some((event) => event.title === "Incident review: webhook retries")).toBe(true);
     expect(deadlines.upcoming.length).toBeGreaterThanOrEqual(12);
     expect([...deadlineProjects]).toEqual(expect.arrayContaining(["Engineering", "Product", "Career"]));
-    expect(bills.schedules.length).toBeGreaterThanOrEqual(6);
     expect(rows.length).toBeGreaterThanOrEqual(18);
     expect(snapshot.laneCounts).toMatchObject({
       queued: expect.any(Number),

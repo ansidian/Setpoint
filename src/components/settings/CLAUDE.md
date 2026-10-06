@@ -1,13 +1,13 @@
 # Settings Map
 
-The settings surface: a Connections directory plus Automation, Finance, and System sections inside the centered `/settings` modal. The viewport-responsive shell grows to 1920×1600 CSS pixels with wider navigation spacing; form content stays within 1280px and scrolls independently. Financial workflows live at `/finance`, owned by `src/components/financial/`; Settings is visited only for connection repair and finance preferences. `src/pages/WorkspaceRoute.tsx` keeps Dashboard mounted beneath it and owns close/history/focus return. Connections owns external-service setup and health; the feature tabs retain behavior and owner-security controls. `settings-core.ts` owns tab routing and `settings-ui.tsx` owns shared layout primitives, persistent heading, responsive section navigation, and independently scrolling content.
+The settings surface: a Connections directory plus Automation and System sections inside the centered `/settings` modal. The viewport-responsive shell grows to 1920×1600 CSS pixels with wider navigation spacing; form content stays within 1280px and scrolls independently. The read-only Finances page lives at `/finances`; Settings owns only its Actual Budget connection. Legacy `?tab=finance` and `?tab=actual` links land on Connections. `src/pages/WorkspaceRoute.tsx` keeps Dashboard mounted beneath it and owns close/history/focus return. Connections owns external-service setup and health; the feature tabs retain behavior and owner-security controls. `settings-core.ts` owns tab routing and `settings-ui.tsx` owns shared layout primitives, persistent heading, responsive section navigation, and independently scrolling content.
 
 ## Files
 
 ### Chrome + core
 - `SettingsChrome.tsx` — loading skeletons during settings fetch/transition
 - `settings-core.ts` — button class constants, tab definitions, tab-from-URL routing
-- `settings-ui.tsx` — StatusPill, SaveStatus, SettingsCard, SettingsNotice, SkeletonCard, SettingsLayout; shared section hierarchy and labeled feedback
+- `settings-ui.tsx` — StatusPill, SaveStatus, SettingsCard, SkeletonCard, SettingsLayout; shared section hierarchy and labeled feedback
 - `settingsTypes.ts` — shared Settings card state, patch, and account prop contracts
 - `connectionModel.ts` — fixed connection definitions plus pure service-level status projection
 - `connectionDirectoryModel.ts` — canonical/legacy connection hash parsing, allowlisted advanced targets, and directory summary/action projection
@@ -16,30 +16,22 @@ The settings surface: a Connections directory plus Automation, Finance, and Syst
 - `ConnectionDependencyPrompt.tsx` — concise setup/repair prerequisite prompt with canonical Connections deep links
 - `SensitiveActionStepUp.tsx` — reusable inline recent-password confirmation that retries a deferred credential action without losing form state
 - `sensitiveActionStepUpModel.ts` — deferred sensitive-action state and password-step-up retry controller
-- `featureDependencyModel.ts` — pure Automation/Finance visibility and AI provider-selection projection
+- `featureDependencyModel.ts` — pure Automation visibility and AI provider-selection projection
 - `AccountsList.tsx` — draggable, editable provider-filtered account rows with icon/color pickers
 
 ### Sections (one per tab)
 - `sections/ConnectionsSettingsSection.tsx` — directory shell that binds projected service rows, onboarding progress, and advanced deep links to connection panels
-- `sections/ActualBudgetSettingsSection.tsx` — Finance preferences: unified financial providers and browser alerts, with automatic budget-scoped Actual metadata, explicit failure retry, and one-time unsaved review-draft or partial email-seed navigation
 - `sections/EmailAutomationSettingsSection.tsx` — triage mode, sounds, AI models, extraction, interests
-- `sections/SystemSettingsSection.tsx` — passkeys and API tokens
+- `sections/SystemSettingsSection.tsx` — passkeys and canonical domain
 
 ### Cards: AI + automation
 - `cards/AlfredAiModelCard.tsx` — Alfred provider/model selection for new conversations; remains available without an email connection
 - `cards/EmailAiModelCard.tsx` — email triage LLM provider/model selection with fallbacks
 - `cards/EmailTriageModeCard.tsx` — triage automation toggle (auto/real/no-model/paused) with a labeled legacy usage glance; current usage lives in AI analytics
-- `cards/BillExtractionAiCard.tsx` — bill extraction model choice, separate from triage model
-- `cards/TriageSoundSettingsCard.tsx` — sound lanes, shared volume, per-trigger playback; Finance renders its scoped Actual recording control
+- `cards/TriageFastModelCard.tsx` — fast (first-pass) triage model choice, separate from the escalation Inbox Triage AI model
+- `cards/TriageSoundSettingsCard.tsx` — sound lanes, shared volume, per-trigger playback
 - `cards/ImportantSendersCard.tsx` — auto-learned and manual important sender lists
 - `cards/TrustedRemoteContentCard.tsx` — persisted exact-sender + receiving-account remote-image trust list and removal
-
-### Cards: financial preferences
-- `cards/FinancialProfilesCard.tsx` — unified financial-provider setup with revision-checked awaited saves, migration readiness, dedicated provider choices, email authority, utility grouping and payment links; preserves unsaved email seeds and shows destination/migration warnings
-- `cards/financialProfileModel.ts` — unified connection form defaults, legacy navigation-draft projection, validation, target options and destination summaries; payment-link-only entries grant no automation authority
-
-- `cards/UtilityPayLinksCard.tsx` — shared payment-URL field and domain summary used by the unified financial-provider editor
-- `cards/utilitySettingsModel.ts` — payment-URL parsing shared by the financial-provider form and summary
 
 ### Cards: connections + security
 - `cards/GoogleWorkspaceAccountsPanel.tsx` — Gmail/Calendar account add, reconnect, edit, reorder, and removal
@@ -49,10 +41,8 @@ The settings surface: a Connections directory plus Automation, Finance, and Syst
 - `cards/DiscordRemindersCard.tsx` — Discord webhook URL + user ID for private reminder delivery, with test-send
 - `cards/WeatherLocationCard.tsx` — city geocode → lat/lng patch for dashboard weather snapshots
 - `cards/HomeLocationCard.tsx` — Places-backed atomic Home selection/removal for driving Time-to-Leave estimates
-- `cards/ActualBudgetConnectionCard.tsx` — Actual server URL/auth config, budget cache hydration
-- `cards/financial-review/FinancialReviewNotificationsControl.tsx` — explicit browser permission control and delivery availability; demo is inert
+- `cards/ActualBudgetConnectionCard.tsx` — Actual server URL/password/sync ID plus optional write-only end-to-end encryption password (sent only when entered; blank keeps the stored one), encrypted-budget indicator, budget cache hydration
 - `cards/BriefingSchedulesCard.tsx` — snapshot window boundaries with FLIP reorder animation
-- `cards/ApiTokensCard.tsx` — API token list/create/revoke with scopes and expiry
 - `cards/PasskeysCard.tsx` — passkey registration/deletion, explicit auth mode, password step-up/change, and recovery-code regeneration
 - `cards/CanonicalDomainCard.tsx` — recent-auth-gated canonical URL preview/change flow with passkey and provider callback impact
 - `cards/CoreProviderCredentialsCard.tsx` — shared write-only test-and-save rows for AI, weather, and Places instance credentials
@@ -68,8 +58,7 @@ The settings surface: a Connections directory plus Automation, Finance, and Syst
 
 ## Local patterns
 
-- Sections share a sentence-style heading, muted icon, bounded description, and stronger divider; local form state synced via patch(). Finance puts unified Financial providers before notification preferences. Legacy profile route seeds and anchor IDs remain compatibility entry points.
-- Finance feedback uses SettingsNotice for a labeled icon + message, with danger for errors and warning for incomplete setup. The global danger/warning utilities map to the existing rose/cream tokens.
+- Sections share a sentence-style heading, muted icon, bounded description, and stronger divider; local form state synced via patch().
 - Provider/model pairs degrade through fallback chains when an API key is unconfigured.
 
 ## Related

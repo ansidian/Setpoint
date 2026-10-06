@@ -3,15 +3,14 @@ import { createClient, type Client } from '@libsql/client';
 import { readFileSync } from 'node:fs';
 import { readPaymentOrganization, savePaymentOrganization } from './payment-groups.ts';
 import { buildPaymentCatalog, readRetainedPaymentSchedules } from './payment-catalog.ts';
-import { initializePaymentOrganization, reconcilePaymentOrganization } from '../../shared/payment-groups.ts';
-import type { FinancialProfile } from '../../shared/types/financial-profiles.ts';
+import { reconcilePaymentOrganization } from '../../shared/payment-groups.ts';
 import type { PaymentItem, PaymentOrganization } from '../../shared/types/payment-groups.ts';
 
 let dbClient: Client;
 const items: PaymentItem[] = [
-  { id: 'utility:electricity', name: 'Electricity', provider: 'Power company', kind: 'utility', utilityId: 'electricity' },
-  { id: 'schedule:card', name: 'Card', provider: 'Card issuer', kind: 'credit_card', scheduleId: 'card' },
-  { id: 'schedule:retirement', name: 'Retirement', provider: '', kind: 'recurring', scheduleId: 'retirement' },
+  { id: 'schedule:power', name: 'Electricity', provider: 'Power company', scheduleId: 'power' },
+  { id: 'schedule:card', name: 'Card', provider: 'Card issuer', scheduleId: 'card' },
+  { id: 'schedule:retirement', name: 'Retirement', provider: '', scheduleId: 'retirement' },
 ];
 const read = (catalog = items, user = 'owner', budget = 'budget') => readPaymentOrganization(user, budget, catalog, { dbClient });
 const save = (organization: unknown, user = 'owner') => savePaymentOrganization(user, organization, { dbClient });
@@ -28,15 +27,15 @@ describe('saved payment organization', () => {
   it('derives starters without writing, and persists only the complete saved draft', async () => {
     const initial = await read();
     expect(initial).toMatchObject({ revision: 0, groups: [
-      { id: 'utilities', itemIds: ['utility:electricity'] },
-      { id: 'credit-cards', itemIds: ['schedule:card'] },
+      { id: 'utilities', itemIds: [] },
+      { id: 'credit-cards', itemIds: [] },
       { id: 'subscriptions', itemIds: [] },
-      { id: 'ungrouped', itemIds: ['schedule:retirement'] },
+      { id: 'ungrouped', itemIds: ['schedule:power', 'schedule:card', 'schedule:retirement'] },
     ] });
     expect((await dbClient.execute('SELECT * FROM ea_payment_organizations')).rows).toEqual([]);
     initial.groups[3]!.name = 'Investments';
     initial.groups.reverse();
-    initial.groups[0]!.itemIds.push(initial.groups[2]!.itemIds.pop()!);
+    initial.groups[1]!.itemIds.push(initial.groups[0]!.itemIds.pop()!);
     expect((await read()).groups[0]!.name).toBe('Utilities');
     const saved = await save(initial);
     expect(saved).toEqual({ ...initial, revision: 1 });
@@ -48,14 +47,29 @@ describe('saved payment organization', () => {
     original.groups.find(group => group.id === 'ungrouped')!.name = 'Later';
     const saved = await save(original);
     expect(await read([])).toEqual(saved);
-    const incoming: PaymentItem = { id: 'schedule:insurance', name: 'Annual insurance', provider: '', kind: 'recurring', scheduleId: 'insurance' };
+    const incoming: PaymentItem = { id: 'schedule:insurance', name: 'Annual insurance', provider: '', scheduleId: 'insurance' };
     const discovered = await read([incoming]);
     expect(discovered.groups.find(group => group.id === 'ungrouped')).toEqual({
-      id: 'ungrouped', name: 'Later', itemIds: ['schedule:retirement', 'schedule:insurance'],
+      id: 'ungrouped', name: 'Later', itemIds: ['schedule:power', 'schedule:card', 'schedule:retirement', 'schedule:insurance'],
     });
-    expect(discovered.groups.find(group => group.id === 'credit-cards')!.itemIds).toEqual(['schedule:card']);
     expect(await read()).toEqual(saved);
     expect(reconcilePaymentOrganization(saved, [incoming, incoming])).toEqual(discovered);
+  });
+
+  it('reads groups saved with retired utility identities, returning their schedules to the default group', async () => {
+    await dbClient.execute({
+      sql: 'INSERT INTO ea_payment_organizations (user_id, budget_id, revision, groups_json, updated_at) VALUES (?, ?, 3, ?, ?)',
+      args: ['owner', 'budget', JSON.stringify([
+        { id: 'utilities', name: 'Utilities', itemIds: ['utility:electricity'] },
+        { id: 'credit-cards', name: 'Credit cards', itemIds: ['schedule:card'] },
+        { id: 'ungrouped', name: 'Ungrouped', itemIds: [] },
+      ]), '2026-10-01T00:00:00.000Z'],
+    });
+    expect(await read()).toEqual({ budgetId: 'budget', revision: 3, groups: [
+      { id: 'utilities', name: 'Utilities', itemIds: [] },
+      { id: 'credit-cards', name: 'Credit cards', itemIds: ['schedule:card'] },
+      { id: 'ungrouped', name: 'Ungrouped', itemIds: ['schedule:power', 'schedule:retirement'] },
+    ] });
   });
 
   it('allows only one competing save at each revision', async () => {
@@ -146,33 +160,20 @@ describe('stable payment catalog', () => {
     ]);
   });
 
-  it('includes off-month and retained schedules, aggregates utility membership, and requires exact evidence for starter cards', () => {
-    const profile = (id: string, overrides: Partial<FinancialProfile> = {}): FinancialProfile => ({
-      id, name: id, enabled: true, budgetId: 'budget', senderAddresses: ['billing@example.test'],
-      target: { kind: 'card_payment', fromAccountId: 'checking', toAccountId: 'card-account', scheduleId: id }, ...overrides,
-    });
+  it('includes active off-month and retained schedules with Actual payee names', () => {
     const catalog = buildPaymentCatalog({
-      budgetId: 'budget',
-      utilities: [{ id: 'electricity', label: 'Electricity', provider: 'Power company', budgetId: 'budget', payeeId: 'power', scheduleIds: ['power-1', 'power-2'], sourceSenders: [] }],
       schedules: [
-        { id: 'power-1', name: 'Power' }, { id: 'power-2', name: 'Replacement power' },
         { id: 'annual', name: 'Annual insurance', next_date: '2027-04-01' },
-        { id: 'card', name: 'Card payment', type: 'transfer' },
-        { id: 'retirement', name: 'Credit card sounding transfer', type: 'transfer' },
-        { id: 'disabled', type: 'transfer' }, { id: 'wrong-budget', type: 'transfer' },
-        { id: 'repurposed', type: 'bill' },
+        { id: 'power', name: '', conditions: [{ field: 'payee', op: 'is', value: 'payee-power' }] },
         { id: 'retired', completed: true },
       ],
+      payees: [{ id: 'payee-power', name: 'Power company' }],
       occurrences: [{ scheduleId: 'old', name: 'Past payment', payee: 'Past provider', next_date: '2025-01-01' }],
-      profiles: [profile('card'), profile('disabled', { enabled: false }), profile('wrong-budget', { budgetId: 'other' }), profile('repurposed')],
     });
-    expect(catalog.map(item => item.id)).toEqual([
-      'utility:electricity', 'schedule:annual', 'schedule:card', 'schedule:retirement', 'schedule:disabled', 'schedule:wrong-budget', 'schedule:repurposed', 'schedule:old',
-    ]);
-    const organization = initializePaymentOrganization('budget', catalog);
-    expect(organization.groups.find(group => group.id === 'credit-cards')!.itemIds).toEqual(['schedule:card']);
-    expect(organization.groups.find(group => group.id === 'ungrouped')!.itemIds).toEqual([
-      'schedule:annual', 'schedule:retirement', 'schedule:disabled', 'schedule:wrong-budget', 'schedule:repurposed', 'schedule:old',
+    expect(catalog).toEqual([
+      { id: 'schedule:annual', name: 'Annual insurance', provider: '', scheduleId: 'annual' },
+      { id: 'schedule:power', name: 'Power company', provider: 'Power company', scheduleId: 'power' },
+      { id: 'schedule:old', name: 'Past payment', provider: 'Past provider', scheduleId: 'old' },
     ]);
   });
 });

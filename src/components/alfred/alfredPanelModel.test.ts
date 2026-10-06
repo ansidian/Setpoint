@@ -5,6 +5,9 @@ import {
 } from "./alfredPanelModel";
 import type { AlfredPanelMessage } from "./alfredPanelModel";
 import type { AlfredRunEvent } from "../../../shared/types/alfred";
+import type { DeadlineOccurrence } from "../../../shared/types/tasks";
+
+const RENT_DEADLINE = { id: "td-1", content: "Pay rent", due_date: "2026-06-14", status: "incomplete" } as unknown as DeadlineOccurrence;
 
 function play(events: AlfredRunEvent[]): AlfredPanelMessage[] {
   return events.reduce<AlfredPanelMessage[]>((messages, event) => applyAlfredEvent(messages, event), []);
@@ -101,8 +104,8 @@ describe("applyAlfredEvent", () => {
   it("keeps the between-tool preamble as a quiet say and coalesces consecutive tool calls", () => {
     const ms = play([
       { type: "text_delta", text: "Checking." },
-      { type: "tool_start", tool_id: "t1", name: "get_upcoming_bills" },
-      { type: "tool_result", tool_id: "t1", name: "get_upcoming_bills", ok: true, summary: "Bills · 6 upcoming" },
+      { type: "tool_start", tool_id: "t1", name: "get_deadlines" },
+      { type: "tool_result", tool_id: "t1", name: "get_deadlines", ok: true, summary: "Deadlines · 6 open" },
       { type: "tool_start", tool_id: "t2", name: "show_items" },
     ]);
     // The "Checking." preamble survives as a tagged say (quiet prose, not promoted),
@@ -111,7 +114,7 @@ describe("applyAlfredEvent", () => {
     expect(ms[0]).toMatchObject({ type: "say", text: "Checking.", done: true, preamble: true });
     expect(messageAt(ms, 1, "tools").done).toBe(false); // live while the run is in flight
     expect(messageAt(ms, 1, "tools").tools).toEqual([
-      { toolId: "t1", name: "get_upcoming_bills", state: "done", summary: "Bills · 6 upcoming" },
+      { toolId: "t1", name: "get_deadlines", state: "done", summary: "Deadlines · 6 open" },
       { toolId: "t2", name: "show_items", state: "running", summary: null },
     ]);
   });
@@ -191,8 +194,8 @@ describe("applyAlfredEvent", () => {
     const ms = play([
       { type: "text_delta", text: "Let me pull those up." },
       { type: "tool_start", tool_id: "t1", name: "show_items" },
-      { type: "rows", kind: "bill", items: [{ id: "b1", scheduleId: "s1", name: "Rent", payee: "Oakwood", amount: 1850, next_date: "2026-06-14", paid: false, type: "bill", openActionDisabled: false }] },
-      { type: "tool_result", tool_id: "t1", name: "show_items", ok: true, summary: "Bills · 1 upcoming" },
+      { type: "rows", kind: "deadline", items: [RENT_DEADLINE] },
+      { type: "tool_result", tool_id: "t1", name: "show_items", ok: true, summary: "Deadlines · 1 open" },
       { type: "text_delta", text: "Now checking your deadlines." },
       { type: "tool_start", tool_id: "t2", name: "get_deadlines" },
       { type: "tool_result", tool_id: "t2", name: "get_deadlines", ok: true, summary: "Deadlines · 2" },
@@ -232,11 +235,11 @@ describe("applyAlfredEvent", () => {
   it("appends rows messages and closes the open say", () => {
     const ms = play([
       { type: "text_delta", text: "Here:" },
-      { type: "rows", kind: "bill", items: [{ id: "b1", scheduleId: "s1", name: "Rent", payee: "Oakwood", amount: 1850, next_date: "2026-06-14", paid: false, type: "bill", openActionDisabled: false }] },
+      { type: "rows", kind: "deadline", items: [RENT_DEADLINE] },
     ]);
     expect(ms.map((m) => m.type)).toEqual(["say", "rows"]);
-    expect(messageAt(ms, 1, "rows").kind).toBe("bill");
-    expect(messageAt(ms, 1, "rows").items[0]?.name).toBe("Rent");
+    expect(messageAt(ms, 1, "rows").kind).toBe("deadline");
+    expect(messageAt(ms, 1, "rows").items[0]?.content).toBe("Pay rent");
   });
 
   it("ignores run_start and unknown events", () => {
@@ -244,28 +247,6 @@ describe("applyAlfredEvent", () => {
       { type: "run_start", conversation_id: "c", provider: "anthropic", model: "claude-sonnet-4-6" },
       { type: "mystery" } as unknown as AlfredRunEvent,
     ])).toEqual([]);
-  });
-});
-
-describe("applyAlfredEvent summary case", () => {
-  it("appends a summary message and closes the open say", () => {
-    const ms: AlfredPanelMessage[] = [
-      { id: "am1", type: "say", text: "Here:", done: false },
-    ];
-    const result = applyAlfredEvent(ms, {
-      type: "summary",
-      total: 200,
-      period: { start: "2026-06-01", end: "2026-06-30" },
-      group_by: "category",
-      buckets: [{ label: "Groceries", amount: 82, count: 2 }],
-    });
-    expect(result.map((m) => m.type)).toEqual(["say", "summary"]);
-    expect(messageAt(result, 0, "say").done).toBe(true);
-    const summary = messageAt(result, 1, "summary");
-    expect(summary.total).toBe(200);
-    expect(summary.group_by).toBe("category");
-    expect(summary.buckets[0]?.label).toBe("Groceries");
-    expect(summary.period).toEqual({ start: "2026-06-01", end: "2026-06-30" });
   });
 });
 
@@ -308,7 +289,7 @@ describe("applyAlfredEvent breakdown", () => {
 
   it("keeps a flat rows block the card does not fully contain (different kind or extra items)", () => {
     const differentKind = play([
-      { type: "rows", kind: "bill", items: [{ id: "b1", scheduleId: "s1", name: "Rent", payee: "Oakwood", amount: 1850, next_date: "2026-06-14", paid: false, type: "bill", openActionDisabled: false }] },
+      { type: "rows", kind: "deadline", items: [RENT_DEADLINE] },
       { type: "breakdown", kind: "email", title: "x", total: 1, buckets: [{ label: "A", count: 1, items: [{ uid: "em-1" }] }] },
     ]);
     expect(differentKind.filter((m) => m.type === "rows")).toHaveLength(1);

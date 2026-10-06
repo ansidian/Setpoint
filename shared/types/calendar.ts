@@ -3,7 +3,7 @@ import type { UpcomingReminderState } from "./reminders.ts";
 export type CalendarId = string;
 export type CalendarEventId = string;
 export type CalendarRecurrenceScope = "one" | "following" | "all";
-export type CalendarView = "events" | "bills";
+export type CalendarView = "events";
 
 export interface CalendarAccount {
   id: string;
@@ -240,7 +240,7 @@ export interface CalendarRangeResponse {
   fetchedAt?: string;
 }
 
-export type CalendarSearchResultType = "event" | "deadline" | "bill";
+export type CalendarSearchResultType = "event" | "deadline";
 
 export interface CalendarSearchActivation {
   view: CalendarView;
@@ -250,7 +250,6 @@ export interface CalendarSearchActivation {
   itemId: string;
   eventId?: string;
   deadlineId?: string;
-  scheduleId?: string | null;
   accountId?: string | null;
   calendarId?: string | null;
   originalStartTime?: string | null;
@@ -285,9 +284,6 @@ export interface CalendarSearchPayload {
   originalStartTime?: string | null;
   dueDate?: string | null;
   status?: string | null;
-  scheduleId?: string | null;
-  nextDate?: string | null;
-  paid?: boolean;
 }
 
 export interface CalendarSearchCandidate extends CalendarSearchResult {

@@ -1,6 +1,5 @@
 import type { PaymentItem, PaymentOrganization } from './payment-groups.ts';
 import type { ActualBillOccurrence } from './actual.ts';
-import type { FinancialActivityReference } from './financial-activity.ts';
 
 export interface JournalTransaction {
   id: string;
@@ -30,59 +29,12 @@ export interface JournalRange {
   relatives: JournalTransaction[];
   truncated: boolean;
 }
-export interface UtilityIdentity {
-  id: string;
-  label: string;
-  provider: string;
-  budgetId: string;
-  payeeId: string;
-  scheduleIds: string[];
-  sourceSenders: string[];
-  sourceIdentityText?: string;
-}
-export interface PaymentStatement {
-  id: string;
-  emailUid: string;
-  subject: string;
-  receivedAt: string;
-  statementDate: string | null;
-  dueDate: string | null;
-  amountCents: number | null;
-  amountKind: string | null;
-  originalStatement?: { amountCents: number | null; dueDate: string | null };
-  nothingDue: boolean;
-  creditCents: number | null;
-  newChargesCents: number | null;
-  carriedBalanceCents: number | null;
-  providerReference: string | null;
-  activity: FinancialActivityReference | null;
-  paymentTransactionIds: string[];
-  paymentRecorded?: boolean;
-  paymentDate: string | null;
-  recordedTotalCents: number | null;
-  feeCents: number | null;
-  issue: string | null;
-}
-export interface UtilityStatement extends PaymentStatement {
-  utilityId: string;
-}
-export interface RecurringStatement extends PaymentStatement {
-  scheduleId: string;
-  budgetId: string;
-}
-export interface FinanceUtility {
-  identity: UtilityIdentity;
-  statements: UtilityStatement[];
-  occurrences: ActualBillOccurrence[];
-}
 export interface FinanceWorkspace {
   budgetId: string | null;
   actualBudgetUrl?: string | null;
-  /** Bounded Actual history independent of email statements; absent when unavailable. Preserve relatives and truncation when deriving payments. */
+  /** Bounded Actual history; absent when unavailable. Preserve relatives and truncation when deriving payments. */
   recordedHistory?: JournalRange;
-  utilities: FinanceUtility[];
   recurring: ActualBillOccurrence[];
-  recurringStatements?: RecurringStatement[];
   paymentItems?: PaymentItem[];
   paymentOrganization?: PaymentOrganization;
   start: string;

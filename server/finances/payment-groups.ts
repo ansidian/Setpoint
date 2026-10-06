@@ -6,6 +6,15 @@ import type { PaymentItem, PaymentOrganization } from '../../shared/types/paymen
 type OrganizationDb = Pick<Client, 'execute'>;
 const fail = (status: number, message: string): never => { throw Object.assign(new Error(message), { status }); };
 
+// Utility identities were retired with email statements. Their Actual schedules
+// return as schedule items in the default group until the owner saves again.
+function withoutRetiredUtilityItems(groups: unknown): unknown {
+  if (!Array.isArray(groups)) return groups;
+  return groups.map(group => group && typeof group === 'object' && Array.isArray(Reflect.get(group, 'itemIds'))
+    ? { ...group, itemIds: (Reflect.get(group, 'itemIds') as unknown[]).filter(id => !(typeof id === 'string' && id.startsWith('utility:'))) }
+    : group);
+}
+
 /** A missing document is a read-only starter layout; reading never persists it. */
 export async function readPaymentOrganization(
   userId: string, budgetId: string, items: PaymentItem[], { dbClient = db }: { dbClient?: OrganizationDb } = {},
@@ -19,7 +28,7 @@ export async function readPaymentOrganization(
   let groups: unknown;
   try { groups = JSON.parse(String(row.groups_json)); }
   catch { fail(503, 'Saved payment groups could not be read. Try loading Payments again.'); }
-  const parsed = validatePaymentOrganization({ budgetId, revision: Number(row.revision), groups });
+  const parsed = validatePaymentOrganization({ budgetId, revision: Number(row.revision), groups: withoutRetiredUtilityItems(groups) });
   if (!parsed.valid) return fail(503, 'Saved payment groups could not be read. Try loading Payments again.');
   return reconcilePaymentOrganization(parsed.value, items);
 }

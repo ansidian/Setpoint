@@ -97,41 +97,6 @@ describe("retrieveInboxAiSearch", () => {
     });
   });
 
-  it("exposes bill_candidate in candidate metadata so the tool layer can surface it", async () => {
-    db = await createRetrievalTestDb();
-    await seedIndexedEmail(db, {
-      uid: "bill-stmt",
-      subject: "Your statement is ready",
-      body_text: "Statement balance $238.80 minimum payment due",
-      email_date: "2026-06-15T12:00:00Z",
-    });
-    await seedIndexedEmail(db, {
-      uid: "plain-stmt",
-      subject: "Your statement archive",
-      body_text: "Statement archive notice",
-      email_date: "2026-06-10T12:00:00Z",
-    });
-    await db.execute({
-      sql: `INSERT INTO ea_email_triage
-              (user_id, account_id, email_id, lane, category, urgency, triage_status, bill_candidate_json)
-            VALUES (?, ?, ?, 'fyi', 'finance', 'medium', 'complete', ?)`,
-      args: ["user-1", "gmail-work", "bill-stmt", JSON.stringify({ amount: 238.8, due_date: "2026-07-07" })],
-    });
-
-    const result = await retrieveInboxAiSearch("user-1", {
-      q: "statement",
-      dbClient: db,
-      embeddingClient: { embed: vi.fn(async () => [[1, 0, 0]]) },
-      capability: { mode: "fallback" },
-      limit: 5,
-    });
-
-    const withBill = result.candidates.find((c) => c.uid === "bill-stmt");
-    const withoutBill = result.candidates.find((c) => c.uid === "plain-stmt");
-    expect(withBill!.metadata.bill_candidate).toBe(true);
-    expect(withoutBill!.metadata.bill_candidate).toBe(false);
-  });
-
   it("records a query_embedding usage event on vector search", async () => {
     db = await createRetrievalTestDb();
     const row = await seedIndexedEmail(db, {

@@ -53,7 +53,6 @@ describe("CalendarModal Mini Calendar activation", () => {
           onViewChange={() => {}}
           focusDate="2026-05-01"
           eventsData={emptyEventsData()}
-          billsData={{}}
           deadlinesData={{}}
         />,
       ));
@@ -149,7 +148,6 @@ describe("CalendarModal Mini Calendar activation", () => {
               },
             ],
           }}
-          billsData={{}}
           deadlinesData={{}}
         />,
       ));
@@ -195,7 +193,6 @@ describe("CalendarModal Mini Calendar activation", () => {
         onViewChange={() => {}}
         focusDate="2026-05-01"
         eventsData={emptyEventsData()}
-        billsData={{}}
         deadlinesData={{}}
       />,
     ));
@@ -209,31 +206,6 @@ describe("CalendarModal Mini Calendar activation", () => {
     });
   });
 
-  it("double-click creates a calendar event seeded to the Mini Calendar date from Bills", async () => {
-    window.innerWidth = 1900;
-
-    render(wrapWithDashboard(
-      <CalendarModal
-        open
-        onClose={() => {}}
-        view="bills"
-        onViewChange={() => {}}
-        focusDate="2026-05-05"
-        eventsData={emptyEventsData()}
-        billsData={{ schedules: [] }}
-        deadlinesData={{}}
-      />,
-    ));
-
-    const calendar = await screen.findByTestId("calendar-mini-calendar", {}, { timeout: 5000 });
-    const date = within(calendar).getByRole("button", { name: /Wednesday, May 20/i });
-    fireEvent.click(date);
-    fireEvent.doubleClick(date);
-
-    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
-    expect(screen.getByTestId("calendar-event-start-date").textContent).toMatch(/may 20, 2026/i);
-  });
-
   it("blocks Mini Calendar activation and create when the floating event editor is dirty", async () => {
     window.innerWidth = 1900;
 
@@ -245,7 +217,6 @@ describe("CalendarModal Mini Calendar activation", () => {
         onViewChange={() => {}}
         focusDate="2026-05-05"
         eventsData={emptyEventsData()}
-        billsData={{}}
         deadlinesData={{}}
       />,
     ));
@@ -284,7 +255,6 @@ describe("CalendarModal Mini Calendar activation", () => {
         onViewChange={() => {}}
         focusDate="2026-05-05"
         eventsData={emptyEventsData()}
-        billsData={{}}
         deadlinesData={{}}
       />,
     ));

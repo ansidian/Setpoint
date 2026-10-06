@@ -1,15 +1,14 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { getCalendarBillsRange, getCalendarDeadlines, getCalendarDeadlinesRange } from "../api";
+import { getCalendarDeadlines, getCalendarDeadlinesRange } from "../api";
 import LoadingSkeleton from "../components/layout/LoadingSkeleton";
 import WorkspaceLoading from "../components/shared/WorkspaceLoading";
 import { initialWorkspaceTab } from "../components/dashboard/dashboardShellModel";
 import { readDemoSafeLocalStorage } from "../demo/demoSafeLocalStorage";
 import { isDemoMode } from "../demo/config";
 import useIsMobile from "../hooks/useIsMobile";
-import { useWorkspaceLocation } from "../context/WorkspaceLocationContext";
 import ErrorState from "../components/layout/ErrorState";
 import { Sun } from "lucide-react";
-import { Link } from "react-router";
+import { Link, useLocation } from "react-router";
 import { DashboardProvider } from "../context/DashboardContext";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -20,7 +19,6 @@ import useTriageNotificationSounds from "../hooks/useTriageNotificationSounds";
 import useStaleDomainCache from "../hooks/calendar/useStaleDomainCache";
 import useCalendarRange from "../hooks/calendar/useCalendarRange";
 import { DashboardShell, DashboardBody } from "../components/dashboard/DashboardShell";
-import { makeCalendarBillsData } from "../components/dashboard/calendarBillsData";
 import EmptyStateSplash from "../components/shared/EmptyStateSplash";
 import { resolveDashboardBriefingState } from "./Dashboard.bootState";
 import {
@@ -30,13 +28,11 @@ import {
 } from "./Dashboard.refreshModel";
 import type { CurrentDashboardEventInput } from "../../shared/types/dashboard";
 import type { DashboardDeadlineRoot } from "../context/dashboardTaskProjection";
-import type { DashboardCalendarBillsData } from "../components/dashboard/calendarBillsData";
 import type { DashboardCalendarWorkspaceState } from "../components/dashboard/useCalendarWorkspaceState";
 import type { DashboardCalendarModalMountProps } from "../components/dashboard/DashboardCalendarModalMount";
 
 interface DashboardDomainLoadOptions {
   force?: boolean;
-  refreshLive?: boolean;
 }
 interface DashboardDomainCache<T> {
   data: T | null;
@@ -48,7 +44,6 @@ interface DashboardDomainCache<T> {
 }
 interface DashboardDomainCacheOptions<T> {
   fetchDomain: (options?: DashboardDomainLoadOptions) => T | Promise<T>;
-  initialData?: T | null;
   seed?: T | null;
   fetchRange?: unknown;
   emptyData?: null;
@@ -69,7 +64,7 @@ function withSyncWatchdog<T>(promise: Promise<T>) {
 }
 
 export default function Dashboard() {
-  const workspaceLocation = useWorkspaceLocation();
+  const workspaceLocation = useLocation();
   const isMobile = useIsMobile();
   const triageNotificationSounds = useTriageNotificationSounds();
   const dashboardEventHandlerRef = useRef<((event: CurrentDashboardEventInput | null) => void) | null>(null);
@@ -80,15 +75,10 @@ export default function Dashboard() {
   const liveData = currentDashboard.liveData;
   const activeSnapshot = currentDashboard.activeSnapshot;
   const calendarRange = useCalendarRange();
-  const calendarBillsRefreshRequestedRef = useRef(false);
   const refreshLiveDataNow = liveData.refreshNow;
   const currentDomainSources = liveData.providerHealth?.currentData?.sources || [];
-  const billsCurrentRefreshing = currentDomainSources.some((source) =>
-    source.key === "bills_current" && source.state === "refreshing",
-  );
   const domainRefreshing = currentDomainSources.some((source) =>
-    (source.key === "bills_current" || source.key === "deadlines_current")
-      && source.state === "refreshing",
+    source.key === "deadlines_current" && source.state === "refreshing",
   );
   const deadlinesCache = useDashboardDomainCache<DashboardDeadlineRoot>({
     fetchDomain: async () => await getCalendarDeadlines() as DashboardDeadlineRoot,
@@ -98,29 +88,10 @@ export default function Dashboard() {
     cacheMode: "month",
     prefetchMonthRadius: 1,
   });
-  const billsCache = useDashboardDomainCache<DashboardCalendarBillsData>({
-    fetchDomain: (opts?: DashboardDomainLoadOptions) => {
-      if (opts?.refreshLive) {
-        calendarBillsRefreshRequestedRef.current = true;
-        refreshLiveDataNow?.();
-      }
-      return makeCalendarBillsData(liveData, { pendingUpdate: billsCurrentRefreshing });
-    },
-    initialData: null,
-    fetchRange: getCalendarBillsRange,
-    emptyData: null,
-    // Per-month caching (like deadlines): a wide ensure range is split into
-    // <=2-month server fetches and merged, so bills span the whole mounted month
-    // window instead of just the active month. prefetch warms the next edge month.
-    cacheMode: "month",
-    prefetchMonthRadius: 1,
-  });
   const loadCalendarDeadlines = deadlinesCache.load;
-  const loadCalendarBills = billsCache.load;
-  const refreshCalendarDomains = useCallback(({ force = false, includeBills = true }: { force?: boolean; includeBills?: boolean } = {}) => {
+  const refreshCalendarDomains = useCallback(({ force = false }: { force?: boolean } = {}) => {
     loadCalendarDeadlines({ force });
-    if (includeBills) loadCalendarBills({ force });
-  }, [loadCalendarBills, loadCalendarDeadlines]);
+  }, [loadCalendarDeadlines]);
   useNotifications(liveData);
   const liveCalendar = liveData.liveCalendar;
   const liveLastFetched = liveData.lastFetched;
@@ -138,7 +109,6 @@ export default function Dashboard() {
   const [lastQuickRefreshAt, setLastQuickRefreshAt] = useState<number | null>(null);
   const calendarWorkspaceRef = useRef<DashboardCalendarWorkspaceState>({ open: false, view: "events", eventsRange: null });
   const markDeadlineRangeStale = deadlinesCache.range.markStale;
-  const markBillRangeStale = billsCache.range.markStale;
   const markCalendarRangeStale = calendarRange.markStale;
   const refreshCalendarRangeInPlace = calendarRange.refreshRangeInPlace;
   // Sync the SSE dashboard-event handler into its ref from an effect (not during
@@ -153,12 +123,6 @@ export default function Dashboard() {
       }
       if (plan.refreshVisibleEvents) {
         void refreshCalendarRangeInPlace(plan.refreshVisibleEvents.start, plan.refreshVisibleEvents.end);
-      }
-      if (plan.markBillsRefreshRequested) {
-        calendarBillsRefreshRequestedRef.current = true;
-      }
-      if (plan.markBillRangeStale) {
-        markBillRangeStale?.();
       }
       if (plan.markDeadlineRangeStale) {
         markDeadlineRangeStale?.();
@@ -183,20 +147,14 @@ export default function Dashboard() {
     if (plan.markCalendarEventsStale) {
       markCalendarRangeStale?.(undefined, undefined);
     }
-    if (plan.markBillsRefreshRequested) {
-      calendarBillsRefreshRequestedRef.current = true;
-    }
     if (plan.markDeadlineRangeStale) {
       markDeadlineRangeStale?.();
-    }
-    if (plan.markBillRangeStale) {
-      markBillRangeStale?.();
     }
     if (plan.refreshCalendarDomains) {
       refreshCalendarDomains(plan.refreshCalendarDomains);
     }
     return withSyncWatchdog(activeSnapshot.sync()).finally(() => setCurrentSyncing(false));
-  }, [activeSnapshot, currentSyncing, sourceRetryPending, markBillRangeStale, markCalendarRangeStale, markDeadlineRangeStale, refreshCalendarDomains, refreshCalendarRangeInPlace]);
+  }, [activeSnapshot, currentSyncing, sourceRetryPending, markCalendarRangeStale, markDeadlineRangeStale, refreshCalendarDomains, refreshCalendarRangeInPlace]);
   const handleTimerQuickRefresh = useCallback(() => {
     setLastQuickRefreshAt(Date.now());
     return refreshLiveDataNow?.() ?? Promise.resolve();
@@ -235,20 +193,6 @@ export default function Dashboard() {
 
   const [historyOpen, setHistoryOpen] = useState(false);
   const historyTriggerRef = useRef<HTMLDivElement | null>(null);
-
-  // Re-snapshot bills once the live refresh requested via {refreshLive} lands.
-  useEffect(() => {
-    if (!calendarBillsRefreshRequestedRef.current) return;
-    calendarBillsRefreshRequestedRef.current = false;
-    loadCalendarBills({ force: true });
-  }, [billsCurrentRefreshing, liveData.actualBudgetUrl, liveData.allSchedules, liveData.billsSyncHealth, liveData.lastFetched, liveData.payeeMap, loadCalendarBills]);
-
-  // Clear a pendingUpdate snapshot once the bills_current source settles.
-  const calendarBillsPendingUpdate = billsCache.data?.pendingUpdate;
-  useEffect(() => {
-    if (!calendarBillsPendingUpdate || billsCurrentRefreshing) return;
-    loadCalendarBills({ force: true });
-  }, [billsCurrentRefreshing, calendarBillsPendingUpdate, loadCalendarBills]);
 
   const updateCalendarWorkspace = useCallback((snapshot: DashboardCalendarWorkspaceState) => {
     calendarWorkspaceRef.current = {
@@ -324,10 +268,7 @@ export default function Dashboard() {
           calendarDeadlinesError={deadlinesCache.error}
           domainRefreshing={domainRefreshing}
           loadCalendarDeadlines={loadCalendarDeadlines}
-          calendarBillsData={billsCache.data}
-          calendarBillRange={billsCache.range as DashboardCalendarModalMountProps["calendarBillRange"]}
           calendarDeadlineRange={deadlinesCache.range as DashboardCalendarModalMountProps["calendarDeadlineRange"]}
-          loadCalendarBills={loadCalendarBills}
           onCalendarWorkspaceChange={updateCalendarWorkspace}
         />
       </DashboardProvider>

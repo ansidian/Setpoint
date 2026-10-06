@@ -41,6 +41,7 @@ export const ENCRYPTED_CREDENTIAL_TARGETS: readonly EncryptedCredentialTarget[] 
     context: accountCredentialContext,
   },
   settingsTarget("actual_budget_password_encrypted"),
+  settingsTarget("actual_budget_encryption_password_encrypted"),
   settingsTarget("todoist_api_token_encrypted"),
   settingsTarget("todoist_oauth_refresh_token_encrypted"),
   settingsTarget("discord_webhook_url_encrypted"),

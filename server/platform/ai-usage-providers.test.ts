@@ -8,12 +8,6 @@ import { routeEmailForTriage } from "../triage/triage-worker.ts";
 import { runTriageEval } from "../triage/triage-eval.ts";
 import runtimeDb from "../db/connection.ts";
 import { createTestTempDir, removeTempDir } from "../test-utils/temp-dir.ts";
-import { createOpenAiProvider } from "../bills/bill-extractors/openai.ts";
-import { createAnthropicProvider } from "../bills/bill-extractors/anthropic.ts";
-import { createBillCandidateVerificationService } from "../bills/bill-candidate-verification-service.ts";
-import { resolveFinancialEmailSeed } from "../bills/financial-email-adoption-service.ts";
-import { FINANCIAL_CANDIDATE_SEMANTICS_VERSION } from "../bills/bill-semantic-prompt.ts";
-import { FINANCIAL_TARGET_INFERENCE_VERSION } from "../bills/financialEmailTargetInference.ts";
 
 // This integration seam owns the consequential contract: actual provider
 // attempts survive as durable ledger rows, regardless of downstream decisions.
@@ -28,7 +22,7 @@ const email = {
 const decision = {
   lane: "fyi", category: "personal", urgency: "normal", confidence: 0.95,
   summary: "Meeting request", action: "Read", deadline_at: null,
-  escalation_badge: null, bill_candidate: null,
+  escalation_badge: null,
 };
 const model = "gpt-5.4-mini";
 const config = {
@@ -37,7 +31,7 @@ const config = {
 };
 
 function scoped<T>(work: () => T) {
-  return withAiUsageContext({ userId, origin: "manual_extraction", dbClient }, work);
+  return withAiUsageContext({ userId, origin: "background_triage", dbClient }, work);
 }
 
 function response(body: unknown, status = 200) {
@@ -50,10 +44,6 @@ function triageResponse(value = decision, responseModel = model) {
     usage: { input_tokens: 100, output_tokens: 20, input_tokens_details: { cached_tokens: 40 } },
     output: [{ type: "function_call", name: "submit_email_triage", arguments: JSON.stringify(value) }],
   });
-}
-
-function billResponse(fields: Record<string, unknown> = {}) {
-  return response({ model, output_text: JSON.stringify(fields), usage: { input_tokens: 80, output_tokens: 10 } });
 }
 
 async function events() {
@@ -137,61 +127,9 @@ describe("provider attempts to durable AI accounting", () => {
     expect(rows.every((row) => row.run_context === "production" && row.origin === "background_triage")).toBe(true);
   });
 
-  it.each(["openai", "anthropic"] as const)("preserves %s envelope usage when extraction parsing fails", async (providerId) => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    vi.stubGlobal("fetch", async () => response(providerId === "openai"
-      ? { model, output_text: "invalid-json", usage: { input_tokens: 80, output_tokens: 10 } }
-      : { model: "claude-haiku-4-5", content: [], usage: { input_tokens: 80, output_tokens: 10, cache_read_input_tokens: 25, cache_creation_input_tokens: 5 } }));
-    const provider = providerId === "openai" ? createOpenAiProvider({ resolveApiKey }) : createAnthropicProvider({ resolveApiKey });
-    await expect(scoped(() => provider.extract({ model, systemPrompt: "test", content: "test" }))).rejects.toThrow("Extraction failed");
-    expect(await events()).toMatchObject([{
-      provider: providerId, purpose: "extraction", outcome: "parse_error", output_tokens: 10,
-      input_tokens: providerId === "openai" ? 80 : 110,
-      cached_input_tokens: providerId === "openai" ? 0 : 25,
-    }]);
-    expect(JSON.parse(String((await events())[0]!.diagnostics_json))).toMatchObject({
-      maxOutputTokens: providerId === "openai" ? 1600 : 1400, failureCode: "invalid_response",
-    });
-  });
-
-  it("counts amount and event audits independently", async () => {
-    vi.stubGlobal("fetch", async () => billResponse({
-      amount: 20, amount_kind: "order_total", amount_candidates: [{ kind: "minimum_due", value: 10, evidence: "Minimum payment $10" }, { kind: "order_total", value: 20, evidence: "Your purchase total $20" }],
-      event_kind: "purchase", event_confidence: 0.99, event_evidence: "purchase",
-      type: "expense", type_confidence: 0.99, type_evidence: "purchase",
-    }));
-    const service = createBillCandidateVerificationService({ credentialResolver: resolveApiKey });
-    const verified = await scoped(() => service.verifyEmailCandidate({
-      email: { body: "Your purchase total $20. Minimum payment $10." },
-      candidate: { amount: 10, amount_kind: "payment_amount", event_kind: "other" },
-      providerId: "openai", model,
-    }));
-    expect(verified).toMatchObject({ amount: 20, event_kind: "purchase" });
-    const rows = await events();
-    expect(rows.map((row) => row.purpose)).toEqual(["verification", "verification"]);
-    expect(rows.every((row) => row.outcome === "succeeded" && row.input_tokens === 80)).toBe(true);
-  });
-
-  it("does not count deterministic repairs or unavailable credentials as provider calls", async () => {
-    const service = createBillCandidateVerificationService({ credentialResolver: async () => null });
-    const candidate = await scoped(() => service.verifyEmailCandidate({
-      email: { body: "Your utility bill is ready. Minimum payment $40.00. Statement balance $391.20." },
-      candidate: {
-        amount: 40, amount_kind: "payment_amount", amount_candidates: [{ kind: "minimum_due", value: 40, evidence: "Minimum payment $40.00" }, { kind: "statement_balance", value: 391.2, evidence: "Statement balance $391.20" }],
-        event_kind: "bill_issued", event_confidence: 0.99,
-        type: "bill", type_confidence: 0.99, type_evidence: "utility bill",
-      }, providerId: "openai", model,
-    }));
-    expect(candidate).toMatchObject({ amount: 391.2, amount_verification: { status: "corrected" } });
-    const provider = createOpenAiProvider({ resolveApiKey: async () => null });
-    await expect(scoped(() => provider.extract({ model, systemPrompt: "test", content: "test" }))).rejects.toThrow("OPENAI_API_KEY not set");
-    expect(await events()).toEqual([]);
-  });
-
-  it("persists concurrent attempts independently even when their candidate content is identical", async () => {
-    vi.stubGlobal("fetch", async () => billResponse({ payee: "Household", amount: 20 }));
-    const provider = createOpenAiProvider({ resolveApiKey });
-    const run = () => scoped(() => provider.extract({ model, systemPrompt: "same", content: "same" }));
+  it("persists concurrent attempts independently even when their email content is identical", async () => {
+    const client = createTriageModelClient({ fetchImpl: async () => triageResponse(), config, credentialResolver: resolveApiKey });
+    const run = () => scoped(() => client.classify({ tier: "cheap", email, reason: "same" }));
     await Promise.all([run(), run()]);
     const rows = await events();
     expect(rows).toHaveLength(2);
@@ -229,43 +167,5 @@ describe("provider attempts to durable AI accounting", () => {
     } finally {
       await removeTempDir(directory);
     }
-  });
-
-  it("reuses a stored financial plan without creating a provider event", async () => {
-    await migrate("013_email_index_normalized_date.sql");
-    await migrate("025_email_thread_identity.sql");
-    await migrate("052_financial_email_plans.sql");
-    await migrate("054_email_sender_authentication.sql");
-    await migrate("062_financial_events.sql");
-    await migrate("068_financial_candidate_dismissal.sql");
-    await migrate("069_financial_profiles.sql");
-    await migrate("080_financial_connections.sql");
-    await migrate("081_provider_financial_assessments.sql");
-    await migrate("083_financial_owner_requests.sql");
-    await migrate("084_retire_legacy_financial_documents.sql");
-    for (const file of ["030_owner_bootstrap.sql", "041_email_transaction_imports.sql", "042_transaction_import_item_subject.sql", "053_transaction_import_financial_plans.sql", "055_generic_financial_email_imports.sql", "056_generic_financial_email_automation.sql", "058_generic_financial_email_income_automation.sql", "059_generic_financial_email_transfer_automation.sql", "063_financial_activity.sql", "064_financial_corrections.sql"]) await migrate(file);
-    const candidate = {
-      amount: 20, type: "expense", type_confidence: 0.99, type_evidence: "purchase",
-      event_kind: "purchase", event_confidence: 0.99,
-    };
-    const plan = {
-      version: 1, identity: { version: 1, status: "resolved", key: "financial-email:test" },
-      candidateSemanticsVersion: FINANCIAL_CANDIDATE_SEMANTICS_VERSION,
-      targetInferenceVersion: FINANCIAL_TARGET_INFERENCE_VERSION,
-      profile: { status: "missing", revision: 0, budgetId: null },
-      candidate, classification: { documentKind: "one_time_transaction" },
-      operation: { intended: "create_transaction", kind: "review" }, targets: {},
-      reconciliation: { status: "not_checked", disposition: "review" },
-      automation: { eligible: false, operationClass: "one_time_expense", gates: [] },
-    };
-    await dbClient.execute({
-      sql: "INSERT INTO ea_email_triage (user_id, account_id, email_id, bill_candidate_json, financial_email_plan_json) VALUES (?, ?, ?, ?, ?)",
-      args: [userId, email.account_id, email.email_id, JSON.stringify(candidate), JSON.stringify(plan)],
-    });
-    const result = await scoped(() => resolveFinancialEmailSeed(userId, {
-      accountId: email.account_id, emailId: email.email_id, dbClient,
-    }));
-    expect(result).toEqual(plan);
-    expect(await events()).toEqual([]);
   });
 });

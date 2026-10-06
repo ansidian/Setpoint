@@ -1,8 +1,6 @@
 import type { CalendarAccount, NormalizedCalendarEvent } from "../../shared/types/calendar.ts";
 import type { EmailBody } from "../../shared/types/email.ts";
 import type { DeadlineRangeResult } from "../../shared/types/tasks.ts";
-import type { ActualBillOccurrence } from "../../shared/types/actual.ts";
-import type { TransactionQueryResult, TransactionSummaryResult } from "../../shared/types/transactions.ts";
 import type {
   AlfredCalendarProposal,
   AlfredItem,
@@ -85,7 +83,6 @@ export interface AlfredSearchCandidate extends Record<string, unknown> {
     category?: string | null;
     urgency?: string | null;
     deadline_at?: string | null;
-    bill_candidate?: unknown;
     handled?: boolean;
   } | null;
   account?: { email?: string | null; label?: string | null } | null;
@@ -123,12 +120,6 @@ export interface AlfredDependencies {
     }>;
   }>>;
   readCalendarDeadlineRange(userId: string, range: { start: string; end: string }): Promise<DeadlineRangeResult>;
-  readBillsMirrorRange(userId: string, range: { start: string; end: string }): Promise<{
-    schedules?: ActualBillOccurrence[];
-    syncHealth?: { state?: string };
-  }>;
-  queryTransactions(userId: string, filters: Record<string, unknown>): Promise<TransactionQueryResult>;
-  summarizeTransactions(userId: string, filters: Record<string, unknown>): Promise<TransactionSummaryResult>;
 }
 
 export interface AlfredUsageInput {

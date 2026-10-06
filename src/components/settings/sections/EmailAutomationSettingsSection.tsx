@@ -6,7 +6,7 @@ import { SETTINGS_PRIMARY_BUTTON_CLASS } from "@/components/settings/settings-co
 import EmailTriageModeCard from "@/components/settings/cards/EmailTriageModeCard";
 import TriageSoundSettingsCard from "@/components/settings/cards/TriageSoundSettingsCard";
 import EmailAiModelCard from "@/components/settings/cards/EmailAiModelCard";
-import BillExtractionAiCard from "@/components/settings/cards/BillExtractionAiCard";
+import TriageFastModelCard from "@/components/settings/cards/TriageFastModelCard";
 import AlfredAiModelCard from "@/components/settings/cards/AlfredAiModelCard";
 import BriefingSchedulesCard from "@/components/settings/cards/BriefingSchedulesCard";
 import ImportantSendersCard from "@/components/settings/cards/ImportantSendersCard";
@@ -100,7 +100,7 @@ export default function EmailAutomationSettingsSection({
             connections={connections}
             showRepairLink={dependencies.ai === "connected"}
           />
-          <BillExtractionAiCard
+          <TriageFastModelCard
             settings={settings}
             setSettings={setSettings}
             patch={patch}

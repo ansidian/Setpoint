@@ -19,22 +19,6 @@ const strong: AiUsageTotals = {
   cachedInputTokens: 4000, cacheCreationInputTokens: 1000,
   estimatedCostUsd: 0.038, totalProviderLatencyMs: 7600, averageProviderLatencyMs: 1900,
 };
-const extraction: AiUsageTotals = {
-  ...empty, calls: 3, failures: 1, missingUsageCalls: 1, unpricedCalls: 1,
-  inputTokens: 2400, outputTokens: 240, cachedInputTokens: 1000,
-  cacheCreationInputTokens: 0, estimatedCostUsd: 0.004,
-  totalProviderLatencyMs: 3000, averageProviderLatencyMs: 1000,
-};
-const verification: AiUsageTotals = {
-  ...empty, calls: 1, pendingCalls: 1, inputTokens: 600, outputTokens: 60,
-  cachedInputTokens: 400, cacheCreationInputTokens: 0, estimatedCostUsd: 0.002,
-  totalProviderLatencyMs: 1200, averageProviderLatencyMs: 1200,
-};
-const matching: AiUsageTotals = {
-  ...empty, calls: 2, inputTokens: 1000, outputTokens: 80,
-  cachedInputTokens: 400, cacheCreationInputTokens: 0, estimatedCostUsd: 0.002,
-  totalProviderLatencyMs: 1600, averageProviderLatencyMs: 800,
-};
 const noCalls: AiUsageCategory = { ...empty, byPurpose: {}, models: [], recentFailures: [] };
 
 // Fictional, in-memory samples only. The UI labels this data as demo usage.
@@ -42,8 +26,8 @@ export function demoEmailAiUsageStats(): EmailAiUsageStats {
   const now = new Date();
   const stats: EmailAiUsageStats = {
     byProvider: {
-      openai: { production: { triage: structuredClone(noCalls), financialEmail: structuredClone(noCalls) }, evaluation: { triage: structuredClone(noCalls), financialEmail: structuredClone(noCalls) } },
-      anthropic: { production: { triage: structuredClone(noCalls), financialEmail: structuredClone(noCalls) }, evaluation: { triage: structuredClone(noCalls), financialEmail: structuredClone(noCalls) } },
+      openai: { production: { triage: structuredClone(noCalls) }, evaluation: { triage: structuredClone(noCalls) } },
+      anthropic: { production: { triage: structuredClone(noCalls) }, evaluation: { triage: structuredClone(noCalls) } },
     },
     generatedAt: now.toISOString(), windowDays: 7,
     ledgerStartedAt: new Date(now.getTime() - 7 * 86400000).toISOString(),
@@ -54,31 +38,18 @@ export function demoEmailAiUsageStats(): EmailAiUsageStats {
           cachedInputTokens: 22000, cacheCreationInputTokens: 1000,
           estimatedCostUsd: 0.05, totalProviderLatencyMs: 23600, averageProviderLatencyMs: 23600 / 24,
           recentFailures: [{
-            eventId: "demo-triage-call", runId: "demo-import-run", purpose: "triage_strong", origin: "transaction_import",
+            eventId: "demo-triage-call", runId: "demo-triage-run", purpose: "triage_strong", origin: "background_triage",
             provider: "openai", model: "demo-strong-model", startedAt: new Date(now.getTime() - 3600000).toISOString(),
             providerLatencyMs: 2400, outcome: "parse_error", httpStatus: 200, inputTokens: 2000, outputTokens: 1600,
             diagnostics: { responseStatus: "incomplete", stopReason: "max_output_tokens", maxOutputTokens: 1600, reasoningTokens: 1200, failureCode: "output_limit" },
           }],
           byPurpose: { triage_cheap: cheap, triage_strong: strong }, models: ["demo-cheap-model", "demo-strong-model"],
         },
-        financialEmail: {
-          ...empty, calls: 6, failures: 1, pendingCalls: 1, missingUsageCalls: 1, unpricedCalls: 1,
-          inputTokens: 4000, outputTokens: 380, cachedInputTokens: 1800, cacheCreationInputTokens: 0,
-          estimatedCostUsd: 0.008, totalProviderLatencyMs: 5800, averageProviderLatencyMs: 5800 / 6,
-          recentFailures: [{
-            eventId: "demo-financial-call", runId: "demo-extraction-run", purpose: "extraction", origin: "manual_extraction",
-            provider: "anthropic", model: "demo-financial-model", startedAt: new Date(now.getTime() - 7200000).toISOString(),
-            providerLatencyMs: 500, outcome: "provider_error", httpStatus: 429, inputTokens: null, outputTokens: null,
-            diagnostics: { responseStatus: null, stopReason: null, maxOutputTokens: 1400, reasoningTokens: null, failureCode: "http_error" },
-          }],
-          byPurpose: { extraction, verification, matching }, models: ["demo-financial-model"],
-        },
       },
-      evaluation: { triage: structuredClone(noCalls), financialEmail: structuredClone(noCalls) },
+      evaluation: { triage: structuredClone(noCalls) },
     },
   };
   stats.byProvider.openai.production.triage = structuredClone(stats.contexts.production.triage);
-  stats.byProvider.anthropic.production.financialEmail = structuredClone(stats.contexts.production.financialEmail);
   return stats;
 }
 

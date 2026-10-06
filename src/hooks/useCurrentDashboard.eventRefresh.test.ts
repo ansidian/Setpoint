@@ -93,11 +93,6 @@ const currentPayload = {
     upcoming: [{ id: "deadline-1" }],
     stats: { total: 1 },
   },
-  bills: [{ id: "bill-1", payee: "Power" }],
-  allSchedules: [{ id: "schedule-1" }],
-  payeeMap: { payee_1: "Power" },
-  actualConfigured: true,
-  actualBudgetUrl: "https://actual.example.test",
   activeSnapshot: {
     snapshot: { id: 42 },
     lanes: { needs_attention: [], fyi: [], noise: [] },

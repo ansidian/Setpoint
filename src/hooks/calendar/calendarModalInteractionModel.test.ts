@@ -11,7 +11,6 @@ import {
 describe("calendar modal interaction model", () => {
   it("normalizes retired workspace preferences to Events", () => {
     expect(normalizeCalendarWorkspaceView("events")).toBe("events");
-    expect(normalizeCalendarWorkspaceView("bills")).toBe("events");
     expect(normalizeCalendarWorkspaceView("legacy")).toBe("events");
     expect(normalizeCalendarWorkspaceView("todoist")).toBe("events");
     expect(normalizeCalendarWorkspaceView(null)).toBe("events");
@@ -88,24 +87,10 @@ describe("calendar modal interaction model", () => {
       usesFloatingEditor: true,
       view: "events",
     })).toBeNull();
-
-    expect(dashboardDetailFocusRequest({
-      open: true,
-      focusOpenDetail: true,
-      focusItemId: "bill-1",
-      focusDate: "2026-05-08",
-      openRequestId: 4,
-      usesFloatingEditor: true,
-      view: "bills",
-    })).toMatchObject({
-      view: "events",
-      itemId: "bill-1",
-    });
   });
 
   it("forces the deadline overlay only for open Events requests", () => {
     expect(shouldForceDeadlineOverlay({ open: true, view: "events", forceDeadlineOverlay: true })).toBe(true);
-    expect(shouldForceDeadlineOverlay({ open: true, view: "bills", forceDeadlineOverlay: true })).toBe(false);
     expect(shouldForceDeadlineOverlay({ open: false, view: "events", forceDeadlineOverlay: true })).toBe(false);
   });
 });

@@ -17,8 +17,8 @@ function emptyCategory(): AiUsageCategory {
 
 function emptyContexts(): EmailAiUsageStats["contexts"] {
   return {
-    production: { triage: emptyCategory(), financialEmail: emptyCategory() },
-    evaluation: { triage: emptyCategory(), financialEmail: emptyCategory() },
+    production: { triage: emptyCategory() },
+    evaluation: { triage: emptyCategory() },
   };
 }
 
@@ -45,14 +45,17 @@ function addRow(totals: AiUsageTotals, row: Record<string, unknown>) {
 
 // Bounded rollup, not email reconstruction. Existing evaluation records stay
 // separate for compatibility; the UI reads only production and new evaluations
-// bypass accounting entirely.
+// bypass accounting entirely. Historical rows from the retired financial-email
+// purposes (extraction/verification/matching) are excluded.
+const TRIAGE_PURPOSES = "purpose IN ('triage_cheap', 'triage_strong')";
+
 export async function getEmailAiUsageStats(userId: string, {
   dbClient = db,
   now = new Date(),
   windowDays = 7,
 }: { dbClient?: AiUsageDb; now?: Date; windowDays?: number } = {}): Promise<EmailAiUsageStats> {
   const cutoff = new Date(now.getTime() - windowDays * 86_400_000).toISOString();
-  const [boundary, result, triageFailures, financialFailures] = await Promise.all([
+  const [boundary, result, triageFailures] = await Promise.all([
     dbClient.execute({ sql: "SELECT started_at FROM ea_ai_usage_cutover WHERE id = 1", args: [] }),
     dbClient.execute({
       sql: `SELECT run_context, purpose, provider, model, COUNT(*) AS calls,
@@ -67,19 +70,20 @@ export async function getEmailAiUsageStats(userId: string, {
           OR cache_creation_input_tokens IS NULL) AS missing_usage_calls,
         SUM(estimated_cost_usd IS NULL) AS unpriced_calls
         FROM ea_ai_usage_events WHERE user_id = ? AND started_at >= ? AND started_at <= ?
+          AND ${TRIAGE_PURPOSES}
         GROUP BY run_context, purpose, provider, model`,
       args: [userId, cutoff, now.toISOString()],
     }),
-    ...["purpose IN ('triage_cheap', 'triage_strong')", "purpose IN ('extraction', 'verification', 'matching')"].map((purposes) => dbClient.execute({
+    dbClient.execute({
       sql: `SELECT * FROM (SELECT event_id, run_id, purpose, origin, provider, model, started_at,
         provider_latency_ms, outcome, http_status, input_tokens, output_tokens, diagnostics_json,
         ROW_NUMBER() OVER (PARTITION BY provider ORDER BY started_at DESC, event_id DESC) AS provider_rank
         FROM ea_ai_usage_events
         WHERE user_id = ? AND run_context = 'production' AND started_at >= ? AND started_at <= ?
-          AND outcome IN ('provider_error', 'parse_error') AND ${purposes})
+          AND outcome IN ('provider_error', 'parse_error') AND ${TRIAGE_PURPOSES})
         WHERE provider_rank <= 20 ORDER BY started_at DESC, event_id DESC`,
       args: [userId, cutoff, now.toISOString()],
-    })),
+    }),
   ]);
   const response: EmailAiUsageStats = {
     generatedAt: now.toISOString(), windowDays,
@@ -87,22 +91,20 @@ export async function getEmailAiUsageStats(userId: string, {
     contexts: emptyContexts(),
     byProvider: { openai: emptyContexts(), anthropic: emptyContexts() },
   };
-  for (const [category, failures] of [["triage", triageFailures], ["financialEmail", financialFailures]] as const) {
-    const recentFailures = (failures?.rows ?? []).map((row): AiUsageFailure => ({
-      eventId: String(row.event_id), runId: String(row.run_id),
-      purpose: row.purpose as AiUsagePurpose, origin: row.origin as AiUsageFailure["origin"],
-      provider: row.provider as AiUsageFailure["provider"], model: String(row.model),
-      startedAt: String(row.started_at), providerLatencyMs: Number(row.provider_latency_ms),
-      outcome: row.outcome as AiUsageFailure["outcome"],
-      httpStatus: row.http_status == null ? null : Number(row.http_status),
-      inputTokens: row.input_tokens == null ? null : Number(row.input_tokens),
-      outputTokens: row.output_tokens == null ? null : Number(row.output_tokens),
-      diagnostics: row.diagnostics_json == null ? null : JSON.parse(String(row.diagnostics_json)),
-    }));
-    response.contexts.production[category].recentFailures = recentFailures.slice(0, 20);
-    for (const provider of ["openai", "anthropic"] as const) {
-      response.byProvider[provider].production[category].recentFailures = recentFailures.filter((failure) => failure.provider === provider);
-    }
+  const recentFailures = triageFailures.rows.map((row): AiUsageFailure => ({
+    eventId: String(row.event_id), runId: String(row.run_id),
+    purpose: row.purpose as AiUsagePurpose, origin: row.origin as AiUsageFailure["origin"],
+    provider: row.provider as AiUsageFailure["provider"], model: String(row.model),
+    startedAt: String(row.started_at), providerLatencyMs: Number(row.provider_latency_ms),
+    outcome: row.outcome as AiUsageFailure["outcome"],
+    httpStatus: row.http_status == null ? null : Number(row.http_status),
+    inputTokens: row.input_tokens == null ? null : Number(row.input_tokens),
+    outputTokens: row.output_tokens == null ? null : Number(row.output_tokens),
+    diagnostics: row.diagnostics_json == null ? null : JSON.parse(String(row.diagnostics_json)),
+  }));
+  response.contexts.production.triage.recentFailures = recentFailures.slice(0, 20);
+  for (const provider of ["openai", "anthropic"] as const) {
+    response.byProvider[provider].production.triage.recentFailures = recentFailures.filter((failure) => failure.provider === provider);
   }
   for (const row of result.rows) {
     const purpose = row.purpose as AiUsagePurpose;
@@ -110,7 +112,7 @@ export async function getEmailAiUsageStats(userId: string, {
     if (row.provider === "openai" || row.provider === "anthropic") contexts.push(response.byProvider[row.provider]);
     for (const scope of contexts) {
       const context = row.run_context === "evaluation" ? scope.evaluation : scope.production;
-      const category = purpose.startsWith("triage_") ? context.triage : context.financialEmail;
+      const category = context.triage;
       addRow(category, row);
       const detail = category.byPurpose[purpose] ??= emptyTotals();
       addRow(detail, row);
@@ -121,7 +123,6 @@ export async function getEmailAiUsageStats(userId: string, {
   for (const scope of [response.contexts, ...Object.values(response.byProvider)]) {
     for (const context of Object.values(scope)) {
       context.triage.models.sort();
-      context.financialEmail.models.sort();
     }
   }
   return response;

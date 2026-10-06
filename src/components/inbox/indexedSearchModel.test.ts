@@ -189,40 +189,4 @@ describe("normalizeIndexedSearchResults", () => {
     expect(normalized.total).toBe(2);
     expect(normalized.hasMore).toBe(false);
   });
-
-  it("preserves triaged bill metadata for bill-pay form seeding", () => {
-    const normalized = normalizeIndexedSearchResults({
-      query: "payment",
-      results: [{
-        uid: "bill-email",
-        account_id: "gmail-work",
-        account_label: "Work",
-        account_email: "work@example.com",
-        from_name: "Power Utility",
-        from_address: "billing@example.com",
-        subject: "Payment due",
-        body_snippet: "Your bill is ready.",
-        email_date: "2026-05-08T12:00:00Z",
-        read: false,
-        hasBill: true,
-        extractedBill: {
-          payee: "Power Utility",
-          amount: 25,
-          due_date: "2026-05-10",
-          type: "expense",
-        },
-      }],
-      accounts: [],
-    }, {});
-
-    expect(normalized.emails[0]).toMatchObject({
-      hasBill: true,
-      extractedBill: {
-        payee: "Power Utility",
-        amount: 25,
-        due_date: "2026-05-10",
-        type: "expense",
-      },
-    });
-  });
 });
