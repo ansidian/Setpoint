@@ -111,6 +111,9 @@ export function extractMigrationTables(migrations: MigrationSource[]): Migration
   const createRe = /CREATE\s+(?:VIRTUAL\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)/gi
   const alterRe = /ALTER\s+TABLE\s+(\w+)/gi
   const renameRe = /ALTER\s+TABLE\s+(\w+)\s+RENAME\s+TO\s+(\w+)/gi
+  const dropRe = /DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?(\w+)/gi
+  const lastEvent = new Map<string, { seq: number; live: boolean }>()
+  let sequence = 0
 
   const record = (table: string | undefined, file: string) => {
     if (!table) return
@@ -129,6 +132,14 @@ export function extractMigrationTables(migrations: MigrationSource[]): Migration
       const to = m[2]
       if (from && to) renames.set(from, to)
     }
+    // Statement order decides whether a name ends dropped: a rebuild drops the
+    // old table before renaming its replacement onto the same name.
+    const events = [
+      ...[...sql.matchAll(createRe), ...sql.matchAll(alterRe)].map((m) => ({ at: m.index, name: m[1], live: true })),
+      ...[...sql.matchAll(renameRe)].map((m) => ({ at: m.index, name: m[2], live: true })),
+      ...[...sql.matchAll(dropRe)].map((m) => ({ at: m.index, name: m[1], live: false })),
+    ].sort((a, b) => a.at - b.at)
+    for (const event of events) if (event.name) lastEvent.set(event.name, { seq: ++sequence, live: event.live })
   }
 
   for (const [from, to] of renames) {
@@ -140,6 +151,8 @@ export function extractMigrationTables(migrations: MigrationSource[]): Migration
     map.set(to, merged)
     map.delete(from)
   }
+
+  for (const [table, event] of lastEvent) if (!event.live) map.delete(table)
 
   return Array.from(map, ([table, migrations]) => ({ table, migrations })).sort(
     (a, b) => a.table.localeCompare(b.table),

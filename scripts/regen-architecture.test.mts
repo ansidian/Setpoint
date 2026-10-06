@@ -82,6 +82,17 @@ describe("extractMigrationTables", () => {
     ])
   })
 
+  it("omits tables whose last statement drops them but keeps rebuilt tables", () => {
+    const result = extractMigrationTables([
+      { file: "001_init.sql", source: "CREATE TABLE ea_settings (id TEXT); CREATE TABLE ea_retired (id TEXT);" },
+      { file: "002_rebuild.sql", source: "CREATE TABLE ea_settings_next (id TEXT); DROP TABLE ea_settings; ALTER TABLE ea_settings_next RENAME TO ea_settings;" },
+      { file: "003_drop.sql", source: "DROP TABLE IF EXISTS ea_retired;" },
+    ])
+    expect(result).toEqual([
+      { table: "ea_settings", migrations: ["001_init.sql", "002_rebuild.sql"] },
+    ])
+  })
+
   it("treats a RENAME TO target as the canonical table name", () => {
     const result = extractMigrationTables([
       {
