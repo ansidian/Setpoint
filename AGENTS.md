@@ -71,5 +71,5 @@ Commands: `npm test -- <test-file> ...` for focused tests, `npx eslint <file> ..
 
 - Demo mode is build-time only (`VITE_EA_DEMO=1`), never a URL/query/runtime toggle.
 - Every new `src/api.ts` export needs explicit demo behavior: fictional data, an in-memory mutation, an inert response, or intentional `DEMO_API_UNHANDLED` failure.
-- Never fall through to real `/api/*`, SSE/EventSource, provider authentication/connectivity checks, AI calls, webhooks, Actual SDK work, token management, bill-pay provider actions, or external service navigation.
+- Never fall through to real `/api/*`, SSE/EventSource, provider authentication/connectivity checks, AI calls, webhooks, Actual SDK work, token management, or external service navigation.
 - Demo mutations stay in memory, reset on refresh, and never persist to localStorage, IndexedDB, or a server. See `src/demo/CLAUDE.md` for implementation ownership.

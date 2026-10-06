@@ -9,9 +9,9 @@ A personal dashboard for email, calendar, tasks, and finances. Built for daily u
 ## What it does
 
 - **Email** — Triage multiple Gmail and iCloud inboxes, surface actionable messages, and search indexed mail by keywords or meaning.
-- **Calendar and tasks** — Plan the day with Google Calendar events, Todoist tasks, deadlines, bills, and reminders in one workspace. Create and edit events and tasks without switching apps.
-- **Finances** — Track upcoming payments, spending, utility statements, and transactions through Actual Budget. Extract financial details from email, reconcile existing activity, and record supported transactions and bill schedules, with a review workspace for missing details.
-- **Alfred** — Ask questions across email, calendar, tasks, bills, and transactions. Follow answers back to their sources and review proposed calendar events before adding them.
+- **Calendar and tasks** — Plan the day with Google Calendar events, Todoist tasks, deadlines, and reminders in one workspace. Create and edit events and tasks without switching apps.
+- **Finances** — A read-only view of Actual Budget: upcoming and recorded payments from Actual schedules, a monthly payment chart, and a journal of recorded transactions. Setpoint never writes to Actual; end-to-end encrypted budgets are supported.
+- **Alfred** — Ask questions across email, calendar, and tasks. Follow answers back to their sources and review proposed calendar events before adding them.
 
 The demo uses fictional data, requires no login, and resets changes on refresh. It showcases the interface without connecting to live accounts or AI services; Alfred is available in the private desktop app.
 

@@ -77,7 +77,7 @@ migration. Production data access from development machines also needs Tailscale
 Read `/srv/actual/OPERATIONS.md` for Actual recovery and the host's current
 configuration; its maintained Mac source is
 `actual-migration/OPERATIONS.md` in the private home-server workspace.
-Check health without issuing finance writes:
+Check Actual's health (Setpoint only reads Actual and never writes to it):
 
 ```sh
 curl --fail https://actual.example.com/health
@@ -112,6 +112,14 @@ Host scripts, Compose and Nginx configuration still require deliberate updates;
 do not blindly sync the deployment folder over installed files or the image
 override. If Nginx changes, validate with `docker compose --profile production
 exec -T nginx nginx -t` before reloading. Code rollback does not undo migrations.
+
+Migration `085_remove_financial_flows.sql` irreversibly drops Setpoint's former
+finance tables (financial events/documents, corrections, transaction imports,
+financial connections, utilities), `ea_api_tokens`, and the finance columns on
+`ea_settings`/`ea_email_triage`. Before the release that first applies it, make
+sure a fresh verified backup exists and keep it: that archive is the only copy
+of the removed history, and an image older than this migration must not run
+against the migrated database.
 
 ## Backups and isolated restore
 
@@ -158,9 +166,9 @@ Do not publish ports or enable provider network access in the rehearsal.
 After a host loss, restore the authoritative Actual server and verify its private
 HTTPS/authentication before rebuilding Setpoint's cache. Cache reconstruction
 uses the existing controlled `actual:hydrate-cache` procedure with the restored
-owner ID before accepting finance operations. The Setpoint cutover copied a
-consistent live cache; routine Setpoint backups intentionally omit it. Keep
-Setpoint's finance workers paused until Actual and the rebuilt cache are ready.
+owner ID. The Setpoint cutover copied a consistent live cache; routine Setpoint
+backups intentionally omit it. Keep Setpoint's background workers (including the
+Actual mirror refresh) paused until Actual and the rebuilt cache are ready.
 
 ## Recovery target
 
@@ -170,7 +178,7 @@ For application release failures, follow the reviewed recovery procedure in
 [automatic releases](AUTOMATIC-DEPLOYMENT.md), preserving current data and checking
 schema compatibility before any code rollback. For disk or host loss, use the
 verified encrypted Setpoint and Actual backups described above to rebuild Debian.
-Restore Actual before rehydrating Setpoint's cache and enabling finance workers.
+Restore Actual before rehydrating Setpoint's cache and enabling background workers.
 Preserve the shared private HTTPS configuration and exact Setpoint encryption key.
 If the latest data is unavailable, report the available backup timestamp before
 accepting data loss. Do not make Actual public.

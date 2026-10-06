@@ -1,6 +1,6 @@
 # AI usage pricing
 
-Checked 2026-09-22. Rates are USD per million tokens for standard direct API requests. `server/platform/ai-usage-tokens.ts` is the shared calculator for Alfred, triage, and financial email. This is an estimate of recorded usage, not an invoice reconciliation.
+Checked 2026-09-22. Rates are USD per million tokens for standard direct API requests. `server/platform/ai-usage-tokens.ts` is the shared calculator for Alfred and triage. This is an estimate of recorded usage, not an invoice reconciliation.
 
 ## OpenAI
 
@@ -48,5 +48,5 @@ Five-minute writes cost 1.25× base input; one-hour writes cost 2×. Claude 4.6+
 - Alfred stores normalized tokens, estimated cost, net cache savings, and pricing version in the existing usage metadata. Historical rows without snapshots use their provider-shaped counts and today's calculator; cache writes never recorded cannot be reconstructed. Historical default cache writes use the five-minute rate used by Alfred's requests.
 - Net savings compare actual estimated token cost to the same request without caching, including write premiums. Savings can be negative.
 - Unknown usage, unknown models, unsupported tiers, and unsupported context sizes stay unpriced. Mixed totals show known cost with an unpriced count; entirely unpriced Alfred totals are unavailable.
-- Alfred records completed model turns; interrupted/failed streams may be absent. Triage and financial email track provider attempts, including failures.
+- Alfred records completed model turns; interrupted/failed streams may be absent. Triage tracks provider attempts, including failures.
 - Existing email-ledger cost snapshots are not rewritten. Provider discounts, taxes, credits, regional uplifts, and unrecorded calls are outside the estimate. No provider defaults or model selections changed.

@@ -28,9 +28,9 @@ See [Debian operations](deploy/OPERATIONS-LIVE.md) for live access and recovery 
 timer pulls and activates verified releases. Use the Debian database for current
 diagnosis and repair.
 
-Back up **both the database and its exact `EA_ENCRYPTION_KEY`**. The app cannot recover that key, and the database alone cannot decrypt stored credentials. Back up uploaded Notes media separately from `EA_TLDRAW_ASSET_DIR`. Production Notes also requires a tldraw license configured in Settings → Connections. Database migrations run at server startup.
+Back up **both the database and its exact `EA_ENCRYPTION_KEY`**. The app cannot recover that key, and the database alone cannot decrypt stored credentials. Back up uploaded Notes media separately from `EA_TLDRAW_ASSET_DIR`. Production Notes also requires a tldraw license configured in Settings → Connections. Database migrations run at server startup. Migration 085 irreversibly drops the former finance tables, `ea_api_tokens` and finance columns; back up the database (and keep that backup) before deploying it — see [Debian operations](deploy/OPERATIONS-LIVE.md#development-and-releases).
 
-Normal provider configuration lives in Settings. After connecting Actual, configure Financial providers in Settings → Finance: choose each utility’s existing schedule, funding/card endpoints for credit-card payments, and reusable receipt/refund destinations. Actual target names load automatically; unavailable targets show a readable status and retry instead of internal identifiers. Create profile appears for emails with a recognized financial event classification other than `other`. It seeds an unsaved, disabled provider draft with its sender and available context; select missing targets before saving. Migration 069 starts with no enabled profiles and does not adopt retired mappings or Utilities membership. Unmatched receipts/refunds wait for review; reminder and completed-payment notices are ignored. Review can also suggest an unsaved provider draft that starts disabled for explicit setup. Card profiles schedule the full statement balance on an explicitly supported due date, or the numeric payment amount/date from a scheduled-payment confirmation. Missing or conflicting statement facts stay in review. Minimum due, current balance and AutoPay enrollment alone cannot supply the scheduled amount. Optional host-managed credentials and startup/backfill timing switches remain documented in `.env.example`.
+Normal provider configuration lives in Settings. Settings → Connections → Actual Budget takes the server URL, server password and sync ID, plus an optional **Encryption password** for end-to-end encrypted budgets. Save and Check verify it against the budget's key test; it is stored encrypted, included in root-key rotation, and never sent to the Actual server. Finances is read-only: Setpoint never writes to Actual, and transaction import and bill updates are handled outside Setpoint. Optional host-managed credentials and startup/backfill timing switches remain documented in `.env.example`.
 
 ### Fresh installations
 
@@ -50,7 +50,7 @@ boot; workers remain inactive until the owner claim succeeds.
 
 Password or passkey login is the default. Settings → System can enable password-plus-passkey login. Security changes require recent password confirmation.
 
-An offline recovery code replaces the password, clears passkeys, revokes sessions and API tokens, and displays replacement codes once. If normal sign-in and offline recovery are unavailable, the operator can reset passkeys against the intended database:
+An offline recovery code replaces the password, clears passkeys, revokes sessions, and displays replacement codes once. If normal sign-in and offline recovery are unavailable, the operator can reset passkeys against the intended database:
 
 ```bash
 npm run auth:reset-passkeys -- --dry-run
@@ -88,11 +88,9 @@ Both need `EA_USER_ID`; the backfill also needs `OPENAI_API_KEY` and always requ
 
 Use [AGENTS.md](AGENTS.md#verification) for targeted checks and the required pre-push `npm run verify` gate. All available commands are in [package.json](package.json).
 
-- `npm run financial-email:observe` reports financial-email coverage and event outcomes, separating expected manual review from active operational failures and retired historical state. Parser breakdowns include provider, template, parser version and disposition; counts retain the owner/time-window boundary.
-- `npm run financial-provider:replay -- <sources.json>` replays the current deterministic registry with writes disabled. Input is an array of normalized `{ fromAddress, subject, body, emailDate? }` sources or `{ source }` fixtures (optional extracted attachment text is supported). Output identifies rows by position and includes parser provenance/dispositions only; it omits source bodies, identifiers and candidate facts. It opens no database, loads no credentials, calls no AI and never connects to Actual. Use complete private originals from gitignored storage; commit only sanitized fixtures. The old `transaction-import:equivalence` tool is retired.
 - `npm run triage:preflight` checks triage rules; `npm run triage:eval` evaluates models. Real evaluations need the owner's `EA_USER_ID` to load model settings and are excluded from production AI usage analytics.
 - `npm run actual -- <command>` is for ad-hoc inspection. Runtime integrations use the in-process Actual API.
-- The Actual SDK runs in one persistent serialized worker. Production defaults to a 1024 MiB old-space ceiling (not reserved memory); `EA_ACTUAL_WORKER_MAX_OLD_SPACE_MB` overrides it. `EA_ACTUAL_WORKER_IDLE_SHUTDOWN_MS=0` keeps the worker warm; a positive value enables idle retirement. Missing caches bootstrap through the bounded downloader before SDK synchronization. The old `EA_ACTUAL_SDK_WRITE_FALLBACK` and `EA_ACTUAL_ALLOW_COLD_SDK_DOWNLOAD` switches are retired. Ordinary reads remain local, finance maintenance runs every five minutes with one-minute failed-sync backoff, and health becomes stale after 15 minutes without a successful check. Successful writes publish immediately with a durable reconciliation fallback. Connection changes close the old SDK session; graceful app shutdown drains the worker.
+- The Actual SDK runs in one persistent serialized worker. Production defaults to a 1024 MiB old-space ceiling (not reserved memory); `EA_ACTUAL_WORKER_MAX_OLD_SPACE_MB` overrides it. `EA_ACTUAL_WORKER_IDLE_SHUTDOWN_MS=0` keeps the worker warm; a positive value enables idle retirement. The worker loads the budget with the SDK's `downloadBudget` (supplying the encryption password when configured); a local copy that can no longer decrypt is replaced once with a fresh download. Ordinary reads use the local copy, and the bills mirror refreshes every five minutes with one-minute failed-sync backoff. Setpoint performs no Actual writes. Connection changes close the old SDK session; graceful app shutdown drains the worker.
 
 
 ## Gmail outbound notification delivery
@@ -155,22 +153,6 @@ NODE_ENV=production npm run email:acknowledge-history -- --job-ids 123,456 --rea
 Review the account identities and errors, then repeat the exact IDs/reason with `--apply --expect <revision>` using the returned fingerprint. Any changed job rejects the entire selection; rerun the preview. Repeating an already-applied identical acknowledgment preserves its original metadata. A different reason cannot overwrite it. The command defaults to a read-only preview; it never selects every failure implicitly.
 
 This repair does not require a restart: the existing health query excludes `acknowledged`. The dashboard reflects it on its next health read. Apply the additive migration through the normal migration runner so the migration ledger stays consistent; never mark historical failures `complete` merely to clear the indicator.
-
-## Provider parser activation
-
-Financial mail is assessed only by the deterministic company registry; there is no automatic AI assessment or planning. The eBay parser owns only the supported packing-update template; other eBay mail is treated like an unknown sender. Registry policy upgrades recheck eligible unsubmitted assessments through the existing bounded worker; dismissed, confirmed and attempted history remains protected.
-
-Migrations 080–082 prepare inert schema. Deploy the verified runtime before activating. Known companies have dedicated modules in `server/financial-parsers/`; add grounded, sanitized fixtures and register a module there to extend coverage. Configuration controls authority independently of recognition. Unknown or unsupported templates require review.
-
-1. Against the intended database, run `EA_USER_ID=<owner> node server/scripts/migrate-financial-connections.ts` for a read-only inventory and fingerprint. It merges existing profiles, utility identities and pay links without changing history or Actual.
-2. Review the inventory, then repeat with `--apply --fingerprint <exact fingerprint>`. Concurrent legacy changes reject the migration. IDs, target permissions and utility history survive; the verified Citi statement sender alias and matching merchant label are explicitly corrected. Thereafter the unified revision/budget-bound API owns edits; retired legacy Settings and utility-mapping routes return HTTP 410.
-3. Stop financial workers, verify no pending owner-confirmed work or active leases, then run `EA_USER_ID=<owner> node server/scripts/activate-financial-provider-parsers.ts --revision <migrated revision>`. Resume the verified runtime. Activation is one-way: never move this timestamp to replay history.
-4. Observe only newly received and first-indexed mail. Historical emails are a write-disabled test corpus. Already attempted operations recover their immutable payload; historical unattempted automatic jobs cannot acquire new write authority.
-
-Fresh installations and unmigrated development databases use the same explicit preview/apply steps after connecting Actual; an empty configuration becomes canonical without enabling any providers. Runtime reads retain legacy compatibility only until migration (including older offline schema snapshots). Do not delete archived input columns or utility rows, and do not use the retired writers to initialize setup.
-
-For the disposable Actual lab, use its sanitized `lab/run.mjs` launcher. An inherited production environment takes precedence over `--env-file`; never use that flag alone to isolate an Actual write test. Verify both saved and process Actual URLs point to `127.0.0.1:5007` and that the budget ID is the clone before running acceptance.
-
 
 ## Debian self-hosted deployment
 

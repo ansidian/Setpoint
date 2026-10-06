@@ -28,10 +28,6 @@ _Avoid_: Login session, recovery token
 The final dashboard session granted only after all required authentication steps are complete.
 _Avoid_: Pending auth, partial login
 
-**Scoped API Token**:
-A bearer credential for explicitly opted-in automation routes, not a dashboard login credential.
-_Avoid_: Session token, dashboard token
-
 **Session Boundary Rotation**:
 The rule that existing dashboard sessions are revoked or rotated when passkey requirements materially change.
 _Avoid_: Passive session carryover
@@ -230,7 +226,6 @@ _Avoid_: Nearby event, adjacent event, all surrounding schedule context
 - A **Dashboard Password** can create **Pending Password Authentication** when a **Registered Passkey** exists.
 - A **Passkey** verifies against exactly one **Registered Passkey** record.
 - An **Authenticated Session** is created only after **Pending Password Authentication** is followed by successful **Passkey** verification.
-- A **Scoped API Token** can remain valid for its narrow automation scope after passkey enforcement, but it does not create or replace an **Authenticated Session**.
 - **Session Boundary Rotation** happens when the first **Registered Passkey** is added or a **Registered Passkey** is deleted, so old sessions do not outlive a material authentication boundary change.
 - **Passkey Storage Separation** is an owner operating rule and product-copy requirement, not a reliable browser-enforceable guarantee.
 - **Pending Password Authentication** is held in an `httpOnly`, 5-minute cookie; browser JavaScript should only receive flow state, not a reusable pending-auth token.
@@ -248,7 +243,7 @@ _Avoid_: Nearby event, adjacent event, all surrounding schedule context
 - Deleting an individual **Registered Passkey** revokes existing authenticated sessions and may issue a fresh current-browser session for the authenticated browser performing the deletion.
 - **Calendar Search** opens from the calendar modal header or Cmd/Ctrl+F and shows matches in a **Search Results Rail**.
 - **Calendar Search** may fetch a bounded multi-month window instead of only filtering the visible month.
-- **Calendar Search Scope** follows the active view: Events searches events plus deadline data, Bills searches bills only.
+- **Calendar Search Scope** follows the Events view: it searches events plus deadline data. Calendar has no Bills view or bills search scope.
 - A **Calendar Search Endpoint** is the preferred implementation path for search because the owner values broader lookup more than a bounded cache-only compromise.
 - A **Calendar Search Mirror** may answer Events search, but it does not replace live Google Calendar reads for the normal Events calendar range or dashboard surfaces.
 - A **Calendar Search Mirror** owns the same rolling Events search window as **Calendar Search Coverage**: 12 months back and 18 months forward from today.
@@ -262,9 +257,9 @@ _Avoid_: Nearby event, adjacent event, all surrounding schedule context
 - **Calendar Search** opens immediately when the **Calendar Search Mirror** is uninitialized; initial indexing is reported through coverage rather than blocking the search request.
 - **Calendar Search Coverage** is per source: Events search may return deadline-overlay matches while Google event mirror coverage is initializing, stale, or degraded.
 - A mirror-backed **Calendar Search Endpoint** preserves **Calendar Search Ranking**; the mirror changes freshness and provider-call behavior, not the result ordering contract.
-- **Calendar Search Coverage** is source-specific: Events may use provider-backed Google Calendar search, Events deadlines use server-available deadline data, and Bills searches the local Bills mirror.
+- **Calendar Search Coverage** is source-specific: Events may use provider-backed Google Calendar search, and Events deadlines use server-available deadline data.
 - **Calendar Search** is workspace discovery, not only a filter over currently visible layers. Events search may include **Deadline Occurrences** and **Completed Deadline History** even when the **Deadline Overlay** is hidden.
-- **Calendar Search Coverage** must be honest in empty or limited states; Bills mirror coverage is not the same as searching all of Actual forever.
+- **Calendar Search Coverage** must be honest in empty or limited states.
 - **Calendar Search Activation** navigates the modal to the result month, selects the result date and item, and opens the existing calendar detail behavior.
 - **Calendar Search Activation** for a deadline result targets Events with **Deadline Detail** focus; **Mini Calendar Activity Markers** and ordinary agenda visibility still obey the **Deadline Overlay** toggle.
 - **Calendar Search Activation** for a deadline result may temporarily focus that deadline even when the **Deadline Overlay** is hidden, but it does not permanently turn the overlay back on or change the owner’s overlay toggle preference.
@@ -297,7 +292,7 @@ _Avoid_: Nearby event, adjacent event, all surrounding schedule context
 - Pasting recurring events from a **Calendar Event Clipboard** creates standalone Google Calendar events, not new recurring series.
 - Copying and pasting a **Calendar Event Clipboard** is a silent power-user flow; partial failures do not roll back successful Google Calendar creates and do not automatically retry.
 - A **Search Results Rail** is not the agenda rail; choosing a result should route through the existing calendar selection and detail behavior.
-- A **Search Results Rail** uses agenda-like date headers and source-colored result markers; it should not render standalone source-type text when a more specific result detail such as event location, course/project, or bill metadata is available.
+- A **Search Results Rail** uses agenda-like date headers and source-colored result markers; it should not render standalone source-type text when a more specific result detail such as event location or course/project is available.
 - A **Search Results Rail** dims result rows dated before today in the dashboard timezone, but date headers remain full-strength timeline anchors.
 - A **Search Results Rail** keeps chronological result order but initially centers completed result sets near today, preferring today's date group, then the first future group, then the most recent past group.
 - A **Three-Rail Calendar Workspace** is the desktop target when search is open; smaller or stacked layouts may replace the agenda rail only when there is not enough room.
@@ -306,7 +301,7 @@ _Avoid_: Nearby event, adjacent event, all surrounding schedule context
 - A **Mini Calendar** controls the same visible calendar month as the main calendar workspace; it does not maintain an independent preview month.
 - **Mini Calendar Activation** updates calendar selection and moves the agenda rail to the activated date; the agenda rail should finish landed on that target date rather than stopping between dates.
 - **Mini Calendar Activation** prioritizes accurate target landing over animation; long-distance agenda jumps should be instant or distance-aware rather than forced smooth.
-- A **Mini Calendar Activity Marker** is a count or density signal, not a replacement for agenda rows, event chips, bill rows, or deadline rows.
+- A **Mini Calendar Activity Marker** is a count or density signal, not a replacement for agenda rows, event chips, or deadline rows.
 - A **Mini Calendar Activity Marker** represents content in the active calendar workspace, not all calendar-related feeds at once.
 - **Mini Calendar Activity Markers** reflect the agenda rail's filtered content model rather than a separate month-grid cache.
 - **Mini Calendar Activity Markers** still render on adjacent-month dates inside the stable six-row **Mini Calendar** grid when the active workspace has confirmed content there.
@@ -385,7 +380,7 @@ _Avoid_: Floating modal, editor dialog, detail drawer
 - Dirty create/edit workspaces do not park or snap elsewhere; they keep their fixed position while the grid scrolls.
 
 **Alfred**:
-The Setpoint assistant: a conversational surface that answers owner questions by reading Setpoint's existing domains (mail, calendar, deadlines, bills) and synthesizing an answer with cited items.
+The Setpoint assistant: a conversational surface that answers owner questions by reading Setpoint's existing domains (mail, calendar, deadlines) and synthesizing an answer with cited items.
 _Avoid_: Chat layer, chatbot, AI search, Ask AI, generic "assistant"
 
 **Alfred Panel**:
@@ -410,7 +405,7 @@ _Avoid_: Knows everything Setpoint knows, silent best-effort
 
 - **Alfred** is read-only in its first release: no **Alfred Tool** mutates Setpoint or any provider.
 - **Alfred** and the **Alfred Panel** are desktop-only. Mobile exposes no Alfred launcher, inbox handoff, reader attachment action, panel, or shortcut.
-- **Alfred Coverage** in the first release is indexed inbox mail, calendar events, deadlines, and upcoming bills; budget metadata/transactions, focus windows, and weather are out of scope and Alfred should say so when asked.
+- **Alfred Coverage** is indexed inbox mail, calendar events, and deadlines; bills, budget metadata/transactions, focus windows, and weather are out of scope and Alfred should say so when asked.
 - **Alfred** answers email questions through the existing email search retrieval engine; it replaces the inbox Ask-AI answer surface, not the inbox keyword search.
 - The desktop inbox AI entry points (Sparkles, Cmd/Ctrl+Enter) become an Alfred handoff: the **Alfred Panel** opens and runs the inbox query immediately, with no intermediate confirmation step.
 - The desktop reader's `Ask Alfred` action opens the panel with **Pending Email Context** but does not run a model until the owner sends a prompt. It never forces a new **Alfred Conversation**; demo builds omit this action.
@@ -428,7 +423,7 @@ _Avoid_: Knows everything Setpoint knows, silent best-effort
 - "Pending auth token" was resolved as cookie-held **Pending Password Authentication**, not a JSON token the frontend stores or passes manually.
 - "Delete passkey" includes deleting the final **Registered Passkey**; this is a deliberate recovery path, not an invalid state.
 - "Search in the calendar modal" was resolved as **Calendar Search**, not a visible-month filter: the happy path is broader calendar lookup, with an acceptable bounded multi-month search window when needed for performance.
-- "Global calendar search" was rejected for the first calendar modal search: **Calendar Search Scope** stays active-view based, with Events including deadline items and Bills staying Bills-only.
+- "Global calendar search" was rejected for the first calendar modal search: **Calendar Search Scope** stays active-view based, with Events including deadline items. (The Bills view and its scope were later removed.)
 - "Server search" was chosen over a bounded client-cache search as the preferred path for **Calendar Search**, even if individual sources still need explicit provider or mirror boundaries.
 - "Global" in **Calendar Search** was resolved as best available source-wide search with explicit **Calendar Search Coverage**, not live-querying every provider with no boundary.
 - "Calendar event mirror" was resolved as a **Calendar Search Mirror** first, not a new source of truth for all calendar event reads.
@@ -484,6 +479,6 @@ _Avoid_: Knows everything Setpoint knows, silent best-effort
 - "Model emits row JSON" was rejected for Alfred answers; embedded rows are resolved by reference from real domain data so Alfred cannot mistype an amount, date, or sender into an authoritative-looking row.
 - "Durable Alfred chat history" was rejected for the first release; an **Alfred Conversation** is a single ephemeral rolling thread.
 - The email search evidence floor was resolved as a shared token-budget gate that keeps strong lexical matches even at low vector similarity, fixed once for every caller rather than special-cased for Alfred.
-- Focus windows, budget metadata/transactions, and weather were deferred from first-release **Alfred Coverage**; the email tie-breaker plus calendar, deadlines, and bills is the v1 boundary.
+- Focus windows, budget metadata/transactions, and weather were deferred from first-release **Alfred Coverage**; the email tie-breaker plus calendar, deadlines, and bills was the v1 boundary. Bills were later removed with Setpoint's financial flows.
 - The mock's ⌘J/⌘⇧O hotkeys were replaced by Cmd/Ctrl+\ (toggle) and Cmd/Ctrl+Shift+\ (new chat); the panel overlays rather than reflows because dismissal is cheap.
 - The mock's floating launcher pill was rejected; permanent chrome competing with dashboard content is not worth near-zero discoverability gains in a single-owner app.
