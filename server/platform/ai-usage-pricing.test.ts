@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { OPENAI_MODELS, ANTHROPIC_FALLBACK_MODELS } from '../ai-model-catalog.ts';
 import { estimateAiUsageCost, normalizeAiUsage } from './ai-usage-tokens.ts';
 
-// Official standard USD/1M input, cache-read, output prices checked 2026-09-22.
+// Official standard USD/1M input, cache-read, output prices checked 2026-10-07.
 const prices = [
   ['openai', 'gpt-6-astra', 10, 1, 50],
   ['openai', 'gpt-6-sol', 2, 0.2, 10],
@@ -25,6 +25,7 @@ const prices = [
   ['anthropic', 'claude-opus-4-8', 5, 0.5, 25],
   ['anthropic', 'claude-opus-5', 5, 0.5, 25],
   ['anthropic', 'claude-sonnet-5', 2, 0.2, 10],
+  ['anthropic', 'claude-haiku-5-5', 0.1, 0.01, 0.5],
   ['anthropic', 'claude-fable-5', 10, 1, 50],
   ['anthropic', 'claude-mythos-5', 10, 1, 50],
   ['anthropic', 'claude-fable-5-1', 10, 0.25, 50],
@@ -39,7 +40,7 @@ describe('source-checked pricing', () => {
     const estimate = estimateAiUsageCost(provider, model, tokens);
     expect(estimate.estimatedCostUsd).toBeCloseTo((input + cached + output) / 1000, 10);
     expect(estimate.estimatedSavingsUsd).toBeCloseTo((input - cached) / 1000, 10);
-    expect(estimate.pricingVersion).toBe('standard-text-2026-09-22');
+    expect(estimate.pricingVersion).toBe('standard-text-2026-10-07');
   });
 
   it('has known standard pricing for every curated and fallback model', () => {
@@ -77,6 +78,20 @@ describe('source-checked pricing', () => {
       expect(estimate.estimatedSavingsUsd).toBeCloseTo(
         (1000 * (inputPrice - cachePrice) - 2000 * inputPrice * 0.25) * inputMultiplier / 1000000, 10,
       );
+    }
+  });
+
+  it('charges Haiku 5.5 5x on every bucket only above a 100K-token prompt', () => {
+    for (const input of [100000, 100001]) {
+      const tokens = normalizeAiUsage('anthropic', {
+        input_tokens: input - 3000, output_tokens: 1000, cache_read_input_tokens: 1000,
+        cache_creation_input_tokens: 2000,
+        cache_creation: { ephemeral_5m_input_tokens: 1000, ephemeral_1h_input_tokens: 1000 },
+      });
+      const multiplier = input > 100000 ? 5 : 1;
+      const expected = ((input - 3000) * 0.1 + 1000 * 0.01 + 1000 * 0.125 + 1000 * 0.2 + 1000 * 0.5)
+        * multiplier / 1000000;
+      expect(estimateAiUsageCost('anthropic', 'claude-haiku-5-5', tokens).estimatedCostUsd).toBeCloseTo(expected, 12);
     }
   });
 

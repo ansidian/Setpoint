@@ -89,6 +89,8 @@ describe("AI model catalog", () => {
       data: [
         { id: "claude-opus-4-6", display_name: "Claude Opus 4.6" },
         { id: "claude-opus-5-5", display_name: "Claude Opus 5.5" },
+        { id: "claude-sonnet-5-5", display_name: "Claude Sonnet 5.5" },
+        { id: "claude-haiku-5-5", display_name: "Claude Haiku 5.5" },
         { id: "claude-fable-5-1", display_name: "Claude Fable 5.1" },
         { id: "claude-mythos-5-1", display_name: "Claude Mythos 5.1" },
         { id: "not-a-claude-model", display_name: "Ignore me" },
@@ -107,6 +109,7 @@ describe("AI model catalog", () => {
 
     expect(first[0]?.models).toEqual([
       { id: "claude-opus-4-6", label: "Claude Opus 4.6" },
+      { id: "claude-haiku-5-5", label: "Claude Haiku 5.5" },
       { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
     ]);
     expect(second[0]?.models).toEqual(first[0]?.models);
@@ -204,12 +207,13 @@ describe("AI model catalog", () => {
   });
 
   it.each(["email_triage", "triage_fast", "alfred"] as const)("excludes incompatible Claude choices for %s while preserving stored settings", (useCase) => {
-    for (const model of ["claude-opus-5-5", "claude-fable-5-1", "claude-mythos-5-1"]) {
+    for (const model of ["claude-opus-5-5", "claude-sonnet-5-5", "claude-fable-5-1", "claude-mythos-5-1"]) {
       expect(isSelectableAiModel("anthropic", model, useCase)).toBe(false);
       expect(resolveStoredAiModelConfig({ provider: "anthropic", model, useCase }))
         .toEqual({ provider: "anthropic", model });
     }
     expect(isSelectableAiModel("anthropic", "claude-sonnet-5", useCase)).toBe(true);
     expect(isSelectableAiModel("anthropic", "claude-opus-5", useCase)).toBe(true);
+    expect(isSelectableAiModel("anthropic", "claude-haiku-5-5", useCase)).toBe(true);
   });
 });

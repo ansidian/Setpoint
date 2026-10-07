@@ -82,6 +82,7 @@ function openAiModelsForUseCase(useCase: AiModelUseCase): readonly ProviderModel
 }
 
 export const ANTHROPIC_FALLBACK_MODELS: readonly ProviderModelOption[] = [
+  { id: "claude-haiku-5-5", label: "Claude Haiku 5.5" },
   { id: "claude-sonnet-5", label: "Claude Sonnet 5" },
   { id: "claude-opus-5", label: "Claude Opus 5" },
   { id: "claude-opus-4-8", label: "Claude Opus 4.8" },
@@ -94,7 +95,7 @@ export const ANTHROPIC_FALLBACK_MODELS: readonly ProviderModelOption[] = [
 // Every current use case can force a named tool. These models reject that
 // request, so discovery must not advertise them until the adapters support them.
 const ANTHROPIC_UNSUPPORTED_MODELS = new Set([
-  "claude-opus-5-5", "claude-fable-5-1", "claude-mythos-5-1",
+  "claude-opus-5-5", "claude-sonnet-5-5", "claude-fable-5-1", "claude-mythos-5-1",
 ]);
 
 function supportsAnthropicToolChoice(model: string): boolean {

@@ -58,12 +58,12 @@ export function normalizeAiUsage(provider: "openai" | "anthropic", raw: unknown)
   };
 }
 
-// Standard text API prices, USD / 1M tokens, checked 2026-09-22.
+// Standard text API prices, USD / 1M tokens, checked 2026-10-07.
 // https://developers.openai.com/api/docs/pricing
 // https://platform.claude.com/docs/en/about-claude/pricing
 // Deliberately do not prefix-match arbitrary variants. Unknown
 // models, nonstandard service tiers, and unsupported long contexts stay unpriced.
-const PRICING_VERSION = "standard-text-2026-09-22";
+const PRICING_VERSION = "standard-text-2026-10-07";
 type Price = { input: number; cached: number; output: number };
 const OPENAI: Record<string, Price> = {
   "gpt-6-astra": { input: 10, cached: 1, output: 50 },
@@ -89,6 +89,8 @@ const ANTHROPIC: Record<string, Price> = {
   "claude-opus-4-8": { input: 5, cached: 0.5, output: 25 },
   "claude-opus-5": { input: 5, cached: 0.5, output: 25 },
   "claude-sonnet-5": { input: 2, cached: 0.2, output: 10 },
+  // Prompts above 100K tokens bill every bucket at 5x; see estimateAiUsageCost.
+  "claude-haiku-5-5": { input: 0.1, cached: 0.01, output: 0.5 },
   "claude-fable-5": { input: 10, cached: 1, output: 50 },
   "claude-mythos-5": { input: 10, cached: 1, output: 50 },
   "claude-fable-5-1": { input: 10, cached: 0.25, output: 50 },
@@ -119,8 +121,11 @@ export function estimateAiUsageCost(provider: "openai" | "anthropic", model: str
     : fiveMin * price.input * 1.25 + oneHour * price.input * 2;
   // GPT-5.6 and GPT-6 premiums apply to the full request above 272K. Older OpenAI
   // session-wide premiums remain unpriced because this ledger is per call.
-  const inputMultiplier = openAiLongContext && input > 272_000 ? 2 : 1;
-  const outputMultiplier = inputMultiplier === 2 ? 1.5 : 1;
+  const openAiPremium = openAiLongContext && input > 272_000;
+  // Haiku 5.5 prices by prompt length: above 100K, every bucket costs 5x.
+  const haikuPremium = provider === "anthropic" && base === "claude-haiku-5-5" && input > 100_000;
+  const inputMultiplier = openAiPremium ? 2 : haikuPremium ? 5 : 1;
+  const outputMultiplier = openAiPremium ? 1.5 : haikuPremium ? 5 : 1;
   const cost = (((input - cached - created) * price.input + cached * price.cached
     + writesCost) * inputMultiplier + output * price.output * outputMultiplier) / 1_000_000;
   // Savings are net of cache-write premiums, relative to all input at base price.

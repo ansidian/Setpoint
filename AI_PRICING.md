@@ -1,6 +1,6 @@
 # AI usage pricing
 
-Checked 2026-09-22. Rates are USD per million tokens for standard direct API requests. `server/platform/ai-usage-tokens.ts` is the shared calculator for Alfred and triage. This is an estimate of recorded usage, not an invoice reconciliation.
+Checked 2026-10-07. Rates are USD per million tokens for standard direct API requests. `server/platform/ai-usage-tokens.ts` is the shared calculator for Alfred and triage. This is an estimate of recorded usage, not an invoice reconciliation.
 
 ## OpenAI
 
@@ -29,7 +29,7 @@ All twelve curated models have rates from the [official pricing page](https://de
 
 The catalog discovers Claude models dynamically. The calculator includes these source-checked entries and their dated snapshots. Future or unrecognized IDs remain unpriced. Rates from [official Claude pricing](https://platform.claude.com/docs/en/about-claude/pricing):
 
-Fallback choices include Sonnet 5, Opus 5, Opus 4.8, Sonnet 4.6/4.5, and Haiku 4.5. Requests explicitly disable thinking to preserve the named-tool contract on Sonnet 5 and Opus 5. New selections exclude Opus 5.5 and Fable/Mythos 5.1 because they reject forced tool use and require adapter changes; existing saved model IDs are preserved. See [Opus 5.5 compatibility changes](https://platform.claude.com/docs/en/models/opus-5-5/overview).
+Fallback choices include Haiku 5.5, Sonnet 5, Opus 5, Opus 4.8, Sonnet 4.6/4.5, and Haiku 4.5. Requests explicitly disable thinking to preserve the named-tool contract on Sonnet 5 and Opus 5. New selections exclude Opus 5.5, Sonnet 5.5, and Fable/Mythos 5.1 because they reject forced tool use and disabled thinking and require adapter changes; existing saved model IDs are preserved. See [Opus 5.5 compatibility changes](https://platform.claude.com/docs/en/models/opus-5-5/overview).
 
 | Models | Input | Cache read | Output |
 | --- | ---: | ---: | ---: |
@@ -37,10 +37,12 @@ Fallback choices include Sonnet 5, Opus 5, Opus 4.8, Sonnet 4.6/4.5, and Haiku 4
 | Sonnet 4.5 / 4.6 | 3 | 0.30 | 15 |
 | Opus 4.5 / 4.6 / 4.7 / 4.8 / 5 | 5 | 0.50 | 25 |
 | Sonnet 5 | 2 | 0.20 | 10 |
+| Haiku 5.5 (prompts ≤100K) | 0.10 | 0.01 | 0.50 |
+| Haiku 5.5 (prompts >100K) | 0.50 | 0.05 | 2.50 |
 | Fable 5 / Mythos 5 | 10 | 1 | 50 |
 | Fable 5.1 / Mythos 5.1 | 10 | 0.25 | 50 |
 
-Five-minute writes cost 1.25× base input; one-hour writes cost 2×. Claude 4.6+ uses standard rates through 1M context. Sonnet 5's $2/$10 introductory rates became standard; the proposed September increase did not occur. Anthropic input usage excludes cache reads and writes, so total input adds all three buckets.
+Five-minute writes cost 1.25× base input; one-hour writes cost 2×. Claude 4.6+ uses standard rates through 1M context, except Haiku 5.5: a prompt over 100K total input tokens bills input, cache reads, cache writes, and output at 5× for the whole request. Sonnet 5's $2/$10 introductory rates became standard; the proposed September increase did not occur. Anthropic input usage excludes cache reads and writes, so total input adds all three buckets.
 
 ## Accounting contract
 
